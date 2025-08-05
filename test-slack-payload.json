@@ -1,0 +1,13 @@
+{
+  "channel": "C08QG87U3D0",
+  "text": "Art Battle Slack Integration is Working!",
+  "blocks": [
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "✅ *Art Battle Slack Integration is Working!*\\n\\nThis message was sent directly from the Supabase Edge Function."
+      }
+    }
+  ]
+}

@@ -1,0 +1,95 @@
+name: Process Slack Notification Queue
+
+on:
+  schedule:
+    # Run every 2 minutes
+    - cron: '*/2 * * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  process-queue:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Process Slack Queue
+      run: |
+        response=$(curl -X POST \
+          https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/manual_process_slack_queue \
+          -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+          -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+          -H "Content-Type: application/json" \
+          -d '{}')
+        
+        echo "Queue processing result: $response"
+        
+        # Parse the response to check if any notifications were processed
+        processed=$(echo $response | jq -r '.processed // 0')
+        ready=$(echo $response | jq -r '.ready_to_send.count // 0')
+        
+        if [ "$ready" -gt 0 ]; then
+          echo "Found $ready notifications ready to send"
+          
+          # Get the notifications
+          notifications=$(curl -X POST \
+            https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/send_slack_notification_batch \
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{}')
+          
+          echo "Notifications to send: $notifications"
+          
+          # Process each notification
+          echo $notifications | jq -r '.notifications[]? // empty' | while IFS= read -r notification; do
+            id=$(echo $notification | jq -r '.id')
+            channel=$(echo $notification | jq -r '.channel')
+            text=$(echo $notification | jq -r '.text')
+            blocks=$(echo $notification | jq -c '.blocks')
+            
+            echo "Sending notification $id to channel $channel"
+            
+            # Send to Slack via Edge Function
+            send_response=$(curl -X POST \
+              https://xsqdkubgyqwpyvfltnrf.supabase.co/functions/v1/slack-webhook \
+              -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+              -H "Content-Type: application/json" \
+              -d "{\"channel\":\"$channel\",\"text\":\"$text\",\"blocks\":$blocks}")
+            
+            if echo $send_response | jq -e '.success == true' > /dev/null; then
+              echo "Successfully sent notification $id"
+              
+              # Mark as sent
+              curl -X POST \
+                https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/mark_notifications_sent \
+                -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+                -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+                -H "Content-Type: application/json" \
+                -d "{\"p_notification_ids\":[\"$id\"]}"
+            else
+              echo "Failed to send notification $id: $send_response"
+              error=$(echo $send_response | jq -r '.error // "Unknown error"')
+              
+              # Mark as failed
+              curl -X POST \
+                https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/mark_notification_failed \
+                -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+                -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+                -H "Content-Type: application/json" \
+                -d "{\"p_notification_id\":\"$id\",\"p_error\":\"$error\"}"
+            fi
+          done
+        else
+          echo "No notifications to process"
+        fi
+    
+    - name: Check Auction Closing
+      run: |
+        # Check for auctions closing soon
+        curl -X POST \
+          https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_auction_closing \
+          -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+          -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+          -H "Content-Type: application/json" \
+          -d '{}'
+        
+        echo "Auction closing check complete"
