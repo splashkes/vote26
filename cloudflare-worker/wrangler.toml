@@ -11,9 +11,9 @@ vars = { ALLOWED_ORIGINS = "http://localhost:5173,http://localhost:3000" }
 
 # Production settings  
 [env.production]
-vars = { ALLOWED_ORIGINS = "https://artb.art,https://artbattle.com,https://vote.artbattle.com" }
+vars = { ALLOWED_ORIGINS = "https://artb.art,https://artbattle.com,https://vote.artbattle.com,https://artb.tor1.cdn.digitaloceanspaces.com" }
 
 # Environment variables to be set via wrangler secret
 # wrangler secret put CLOUDFLARE_API_TOKEN
 # wrangler secret put SUPABASE_URL
-# wrangler secret put SUPABASE_SERVICE_KEY
+# wrangler secret put SUPABASE_ANON_KEY
