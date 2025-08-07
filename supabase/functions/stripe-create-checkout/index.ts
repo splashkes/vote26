@@ -43,20 +43,15 @@ serve(async (req) => {
       throw new Error('Unauthorized')
     }
 
-    // Get person record by person_hash (consistent with AuthContext)
-    const personHash = user.user_metadata?.person_hash
-    if (!personHash) {
-      throw new Error('No person hash in user metadata')
-    }
-
+    // Get person record by auth_user_id (consistent with payment-status function)
     const { data: person, error: personError } = await supabase
       .from('people')
       .select('id, first_name, last_name, email, phone, nickname')
-      .eq('hash', personHash)
+      .eq('auth_user_id', user.id)
       .single()
 
     if (personError || !person) {
-      throw new Error('Person not found - invalid hash')
+      throw new Error('Person not found - user not properly linked')
     }
 
     // Get artwork details with event info
