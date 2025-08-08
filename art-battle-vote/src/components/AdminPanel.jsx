@@ -1227,13 +1227,13 @@ const AdminPanel = ({
                       </Box>
                       <Box>
                         <Text size="3" weight="bold" style={{ display: 'block', color: 'var(--green-11)' }}>
-                          {Object.keys(currentBids).length}
+                          {Object.keys(auctionBids).length}
                         </Text>
                         <Text size="1" color="gray">With Bids</Text>
                       </Box>
                       <Box>
                         <Text size="3" weight="bold" style={{ display: 'block', color: 'var(--orange-11)' }}>
-                          ${Object.values(currentBids).reduce((sum, bid) => sum + bid, 0).toFixed(0)}
+                          ${auctionArtworks.reduce((sum, artwork) => sum + (artwork.current_bid || 0), 0).toFixed(0)}
                         </Text>
                         <Text size="1" color="gray">Total Value</Text>
                       </Box>
