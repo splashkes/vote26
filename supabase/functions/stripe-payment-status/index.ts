@@ -140,7 +140,9 @@ serve(async (req) => {
       has_payment: !!paymentStatus,
       payment_status: paymentStatus?.status || null,
       payment_method: paymentStatus?.payment_method || null,
-      amount: paymentStatus?.amount_with_tax || artwork.current_bid,
+      amount: paymentStatus?.amount || artwork.current_bid,  // Base amount without tax
+      amount_with_tax: paymentStatus?.amount_with_tax || null,
+      tax_amount: paymentStatus?.tax_amount || null,
       currency: paymentStatus?.currency || 'USD',
       created_at: paymentStatus?.created_at || null,
       completed_at: paymentStatus?.completed_at || null,

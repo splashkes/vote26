@@ -207,8 +207,8 @@ serve(async (req) => {
         ],
       } : {}),
       mode: 'payment',
-      success_url: success_url || `https://artb.art/v25/app/payment/{CHECKOUT_SESSION_ID}`,
-      cancel_url: cancel_url || `https://artb.art/v25/app/event/${event.id}?payment=cancelled`,
+      success_url: success_url || `https://artb.art/payment/{CHECKOUT_SESSION_ID}`,
+      cancel_url: cancel_url || `https://artb.art/event/${event.id}?payment=cancelled`,
       customer_email: person.email,
       metadata: {
         art_id: artwork.id,

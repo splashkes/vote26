@@ -25,7 +25,7 @@ serve(async (req) => {
     if (!sessionId) {
       console.error('No session_id provided')
       // Redirect to main app even if no session ID
-      return Response.redirect('https://artb.art/v25/app/?error=no_session', 302)
+      return Response.redirect('https://artb.art/?error=no_session', 302)
     }
 
     console.log('Processing payment success for session:', sessionId)
@@ -53,7 +53,7 @@ serve(async (req) => {
     if (findError || !payment) {
       console.error('Payment not found for session:', sessionId, findError)
       // Redirect to main app with error
-      return Response.redirect('https://artb.art/v25/app/?error=payment_not_found', 302)
+      return Response.redirect('https://artb.art/?error=payment_not_found', 302)
     }
 
     console.log('Found payment record:', payment.id, 'Status:', payment.status)
@@ -61,7 +61,7 @@ serve(async (req) => {
     // If payment is already completed, just redirect to success
     if (payment.status === 'completed') {
       console.log('Payment already completed, redirecting to event')
-      return Response.redirect(`https://artb.art/v25/app/event/${payment.event_id}?payment=success&art_id=${payment.art_id}`, 302)
+      return Response.redirect(`https://artb.art/event/${payment.event_id}?payment=success&art_id=${payment.art_id}`, 302)
     }
 
     // If payment is still pending, try to complete it via RPC
@@ -85,7 +85,7 @@ serve(async (req) => {
     }
 
     // Redirect to the event page with success parameters
-    const redirectUrl = `https://artb.art/v25/app/event/${payment.event_id}?payment=success&session_id=${sessionId}&art_id=${payment.art_id}`
+    const redirectUrl = `https://artb.art/event/${payment.event_id}?payment=success&session_id=${sessionId}&art_id=${payment.art_id}`
     console.log('Redirecting to:', redirectUrl)
     
     return Response.redirect(redirectUrl, 302)
@@ -93,6 +93,6 @@ serve(async (req) => {
   } catch (error) {
     console.error('Payment success handler error:', error)
     // Always redirect to main app, even on error
-    return Response.redirect('https://artb.art/v25/app/?error=processing_error', 302)
+    return Response.redirect('https://artb.art/?error=processing_error', 302)
   }
 })
