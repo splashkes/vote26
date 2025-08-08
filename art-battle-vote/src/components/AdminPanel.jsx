@@ -1233,11 +1233,29 @@ const AdminPanel = ({
                       </Box>
                       <Box>
                         <Text size="3" weight="bold" style={{ display: 'block', color: 'var(--orange-11)' }}>
-                          ${auctionArtworks.reduce((sum, artwork) => sum + (artwork.current_bid || 0), 0).toFixed(0)}
+                          ${auctionArtworks
+                            .filter(artwork => artwork.artist_id) // Only artworks with artists
+                            .reduce((sum, artwork) => sum + (artwork.current_bid || 0), 0)
+                            .toFixed(0)}
                         </Text>
                         <Text size="1" color="gray">Total Value</Text>
                       </Box>
                     </Grid>
+                  </Flex>
+                  
+                  {/* Restore 12min auction button */}
+                  <Flex gap="2" mt="3">
+                    <Button 
+                      size="2" 
+                      variant="solid"
+                      onClick={() => handleTimerAction('start', 12)}
+                      disabled={timerActionLoading || auctionArtworks.filter(a => a.artist_id).length === 0}
+                    >
+                      Start 12min Auction
+                    </Button>
+                    <Text size="1" color="gray" style={{ alignSelf: 'center' }}>
+                      Note: Button may have errors - investigate if issues occur
+                    </Text>
                   </Flex>
                 </Box>
               )}
