@@ -808,22 +808,10 @@ const AdminPanel = ({
 
   const fetchEventAdmins = async () => {
     try {
-      const { data, error } = await supabase
-        .from('event_admins')
-        .select(`
-          id,
-          phone,
-          admin_level,
-          people!left (
-            id,
-            first_name,
-            last_name,
-            name,
-            nickname
-          )
-        `)
-        .eq('event_id', eventId)
-        .order('admin_level', { ascending: false });
+      // Use a manual JOIN since we can't enforce foreign key due to orphaned phone numbers
+      const { data, error } = await supabase.rpc('get_event_admins_with_people', {
+        p_event_id: eventId
+      });
       
       if (error) throw error;
       setEventAdmins(data || []);
