@@ -65,6 +65,13 @@ const AdminPanel = ({
   const [adminPhoneSearch, setAdminPhoneSearch] = useState('');
   const [peopleSearchResults, setPeopleSearchResults] = useState([]);
   const [selectedAdminLevel, setSelectedAdminLevel] = useState('voting');
+  const [adminMessage, setAdminMessage] = useState(null); // { type: 'success' | 'error', text: string }
+
+  // Helper function to show temporary messages
+  const showAdminMessage = (type, text) => {
+    setAdminMessage({ type, text });
+    setTimeout(() => setAdminMessage(null), 4000); // Auto-dismiss after 4 seconds
+  };
 
   // Update local time for countdown
   useEffect(() => {
@@ -1527,9 +1534,10 @@ const AdminPanel = ({
                                     
                                     if (error) throw error;
                                     fetchEventAdmins();
+                                    showAdminMessage('success', 'Admin removed successfully');
                                   } catch (error) {
                                     console.error('Error removing admin:', error);
-                                    alert('Failed to remove admin');
+                                    showAdminMessage('error', 'Failed to remove admin');
                                   }
                                 }
                               }}
@@ -1546,6 +1554,17 @@ const AdminPanel = ({
                 {/* Add New Admin */}
                 <Card size="1">
                   <Heading size="3" mb="3">Add Administrator</Heading>
+                  
+                  {/* Message Display */}
+                  {adminMessage && (
+                    <Callout.Root color={adminMessage.type === 'success' ? 'green' : 'red'} mb="3">
+                      <Callout.Icon>
+                        {adminMessage.type === 'success' ? <InfoCircledIcon /> : <ExclamationTriangleIcon />}
+                      </Callout.Icon>
+                      <Callout.Text>{adminMessage.text}</Callout.Text>
+                    </Callout.Root>
+                  )}
+                  
                   <Flex direction="column" gap="3">
                     <Box>
                       <Text size="2" mb="1" weight="medium">Phone Number</Text>
@@ -1609,7 +1628,7 @@ const AdminPanel = ({
                                 .single();
                               
                               if (existing) {
-                                alert('This phone number is already an admin for this event');
+                                showAdminMessage('error', 'This phone number is already an admin for this event');
                                 return;
                               }
                               
@@ -1627,10 +1646,10 @@ const AdminPanel = ({
                               setAdminPhoneSearch('');
                               setPeopleSearchResults([]);
                               fetchEventAdmins();
-                              alert('Admin added successfully');
+                              showAdminMessage('success', 'Admin added successfully');
                             } catch (error) {
                               console.error('Error adding admin:', error);
-                              alert('Failed to add admin: ' + error.message);
+                              showAdminMessage('error', 'Failed to add admin: ' + error.message);
                             }
                           }}
                         >
