@@ -1212,26 +1212,32 @@ const AdminPanel = ({
                   <Text size="2" color="gray" style={{ display: 'block', marginBottom: '1rem' }}>
                     No active auction timers
                   </Text>
-                  <Text size="2" style={{ display: 'block', marginBottom: '1rem' }}>
-                    {auctionTimerStatus?.active_artworks || 0} artwork{(auctionTimerStatus?.active_artworks || 0) !== 1 ? 's' : ''} available for auction
-                  </Text>
-                  <Flex gap="2">
-                    <Button 
-                      size="2" 
-                      variant="solid"
-                      onClick={() => handleTimerAction('start', 12)}
-                      disabled={timerActionLoading || (auctionTimerStatus?.active_artworks || 0) === 0}
-                    >
-                      Start 12min Auction
-                    </Button>
-                    <Button 
-                      size="2" 
-                      variant="soft"
-                      onClick={() => handleTimerAction('start', 20)}
-                      disabled={timerActionLoading || (auctionTimerStatus?.active_artworks || 0) === 0}
-                    >
-                      Start 20min Auction
-                    </Button>
+                  
+                  {/* Auction Statistics */}
+                  <Flex direction="column" gap="2" mb="3">
+                    <Text size="3" weight="bold" style={{ display: 'block' }}>
+                      Auction Statistics
+                    </Text>
+                    <Grid columns="3" gap="4" style={{ maxWidth: '400px' }}>
+                      <Box>
+                        <Text size="3" weight="bold" style={{ display: 'block', color: 'var(--blue-11)' }}>
+                          {auctionArtworks.length}
+                        </Text>
+                        <Text size="1" color="gray">Artworks</Text>
+                      </Box>
+                      <Box>
+                        <Text size="3" weight="bold" style={{ display: 'block', color: 'var(--green-11)' }}>
+                          {Object.keys(currentBids).length}
+                        </Text>
+                        <Text size="1" color="gray">With Bids</Text>
+                      </Box>
+                      <Box>
+                        <Text size="3" weight="bold" style={{ display: 'block', color: 'var(--orange-11)' }}>
+                          ${Object.values(currentBids).reduce((sum, bid) => sum + bid, 0).toFixed(0)}
+                        </Text>
+                        <Text size="1" color="gray">Total Value</Text>
+                      </Box>
+                    </Grid>
                   </Flex>
                 </Box>
               )}
