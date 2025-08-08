@@ -107,16 +107,18 @@ const AuthModal = ({ open, onOpenChange, redirectTo = null }) => {
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Content 
         style={{ 
-          maxWidth: 400,
-          width: '90vw',
+          width: 'min(400px, 90vw)',
           maxHeight: '80vh',
           position: 'fixed',
           top: '50%',
           left: '50%',
           transform: 'translate(-50%, -50%)',
           margin: 0,
-          padding: '20px',
-          overflow: 'auto'
+          padding: '16px',
+          overflow: 'auto',
+          // Ensure it stays within viewport bounds
+          maxWidth: 'calc(100vw - 32px)',
+          right: 'auto'
         }}
       >
         <Dialog.Title>

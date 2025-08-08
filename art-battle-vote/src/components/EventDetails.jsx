@@ -1351,6 +1351,10 @@ const EventDetails = () => {
           if (value === 'admin' && !adminTabLoaded && isAdmin) {
             setAdminTabLoaded(true);
           }
+          // Clear hash from URL when manually switching tabs to prevent sticking
+          if (window.location.hash) {
+            window.history.replaceState(null, '', window.location.pathname + window.location.search);
+          }
         }}
       >
         <Tabs.List size="2">
