@@ -814,7 +814,7 @@ const AdminPanel = ({
           id,
           phone,
           admin_level,
-          people!event_admins_phone_fkey (
+          people!left (
             id,
             first_name,
             last_name,
@@ -829,6 +829,7 @@ const AdminPanel = ({
       setEventAdmins(data || []);
     } catch (error) {
       console.error('Error fetching event admins:', error);
+      showAdminMessage('error', 'Failed to load current admins: ' + error.message);
     }
   };
 
@@ -1505,12 +1506,20 @@ const AdminPanel = ({
                       eventAdmins.map(admin => (
                         <Flex key={admin.id} justify="between" align="center" p="2" style={{ borderBottom: '1px solid var(--gray-5)' }}>
                           <Box>
-                            <Text size="2" weight="medium">
-                              {admin.people?.first_name && admin.people?.last_name ? 
-                                `${admin.people.first_name} ${admin.people.last_name}` : 
-                                admin.people?.name || admin.people?.nickname || admin.phone}
-                            </Text>
+                            <Flex gap="2" align="center">
+                              <Text size="2" weight="medium">
+                                {admin.people?.first_name && admin.people?.last_name ? 
+                                  `${admin.people.first_name} ${admin.people.last_name}` : 
+                                  admin.people?.name || admin.people?.nickname || admin.phone}
+                              </Text>
+                              {!admin.people && (
+                                <Badge color="orange" size="1">Not signed up</Badge>
+                              )}
+                            </Flex>
                             <Text size="1" color="gray">{admin.phone}</Text>
+                            {!admin.people && (
+                              <Text size="1" color="orange">This admin needs to sign up at artb.art</Text>
+                            )}
                           </Box>
                           <Flex gap="2" align="center">
                             <Badge size="2" color={
