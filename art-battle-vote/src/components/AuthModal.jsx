@@ -107,18 +107,8 @@ const AuthModal = ({ open, onOpenChange, redirectTo = null }) => {
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Content 
         style={{ 
-          width: 'min(400px, 90vw)',
-          maxHeight: '80vh',
-          position: 'fixed',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          margin: 0,
-          padding: '16px',
-          overflow: 'auto',
-          // Ensure it stays within viewport bounds
-          maxWidth: 'calc(100vw - 32px)',
-          right: 'auto'
+          maxWidth: '400px',
+          width: '90vw'
         }}
       >
         <Dialog.Title>
@@ -162,7 +152,7 @@ const AuthModal = ({ open, onOpenChange, redirectTo = null }) => {
                     value={phone}
                     onChange={handlePhoneChange}
                     onKeyPress={(e) => e.key === 'Enter' && handleSendOtp()}
-                    style={{ flex: 1, maxWidth: '200px' }}
+                    style={{ flex: 1 }}
                     type="tel"
                     inputMode="numeric"
                     autoComplete="tel"
