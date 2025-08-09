@@ -21,6 +21,32 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
+    // Get client IP for rate limiting
+    const clientIP = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 
+                    req.headers.get('x-real-ip') || 
+                    'unknown'
+
+    // Basic rate limiting: 30 requests per minute for QR generation
+    const { data: isOverLimit, error: rateLimitError } = await supabase
+      .rpc('check_rate_limit', { 
+        p_ip_address: clientIP,
+        p_window_minutes: 1,
+        p_max_attempts: 30
+      })
+
+    if (rateLimitError) {
+      console.error('Error checking rate limit:', rateLimitError)
+    } else if (isOverLimit) {
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          error: 'Rate limit exceeded',
+          message: 'Too many QR generation requests. Please wait a moment before trying again.'
+        }),
+        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     // Extract secret token from URL path or request body
     const url = new URL(req.url)
     const pathParts = url.pathname.split('/')
