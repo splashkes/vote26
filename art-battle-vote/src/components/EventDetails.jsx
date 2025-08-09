@@ -366,7 +366,7 @@ const EventDetails = () => {
   // Check for auto payment modal when all dependencies are ready
   useEffect(() => {
     if (person && artworks.length > 0 && bidHistory && Object.keys(bidHistory).length > 0 && !paymentModalChecked) {
-      console.log('All dependencies ready, checking for auto payment modal...');
+      // Auto payment modal check (production-ready)
       checkForAutoPaymentModal();
       setPaymentModalChecked(true);
     }
@@ -427,8 +427,6 @@ const EventDetails = () => {
       // TODO: This separate query could be optimized by including created_at datetime 
       // information in the main artwork query above
       const artIds = artworks.map(a => a.id);
-      console.log('Art IDs for bid lookup:', artIds);
-      console.log('Filtered artworks debug:', artworks.map(a => ({ id: a.id, round: a.round, easel: a.easel, artist: a.artist_profiles?.name })));
       const { data: mediaData, error: mediaError } = await supabase
         .from('art_media')
         .select(`
@@ -483,8 +481,6 @@ const EventDetails = () => {
       }
 
       // Get highest bid and history for each artwork
-      console.log('Bids data received:', bidsData?.length || 0, 'bids');
-      console.log('Bids sample:', bidsData?.[0]);
       const bidsByArt = {};
       const historyByArt = {};
       if (bidsData) {
@@ -510,10 +506,8 @@ const EventDetails = () => {
       
       setCurrentBids(bidsByArt);
       setBidHistory(historyByArt);
-      console.log('Current bids set:', Object.keys(bidsByArt).length, 'artworks with actual bids');
       
       // Check for automatic payment modal after bid history is loaded
-      console.log('About to check for auto payment modal - person:', person?.id, 'artworks with sold status:', artworks.filter(a => a.status === 'sold').map(a => a.art_code));
       setTimeout(() => {
         checkForAutoPaymentModal();
       }, 1000);
@@ -551,19 +545,16 @@ const EventDetails = () => {
       // Create a map of art_id to vote weight data
       const voteWeightMap = {};
       if (voteData) {
-        console.log('Vote data from RPC:', voteData);
         voteData.forEach(vote => {
           voteWeightMap[vote.art_id] = {
             totalWeight: vote.weighted_vote_total || 0,
             voteCount: vote.raw_vote_count || 0
           };
         });
-        console.log('Vote weight map:', voteWeightMap);
       }
       
       // Add range data to the map
       if (rangeData) {
-        console.log('Range data from RPC:', rangeData);
         rangeData.forEach(range => {
           if (voteWeightMap[range.art_id]) {
             voteWeightMap[range.art_id].ranges = {
@@ -672,7 +663,6 @@ const EventDetails = () => {
 
       // Fetch media files with created_at for sorting
       const artIds = artworks.map(a => a.id);
-      console.log('Background refresh - Filtered artworks debug:', artworks.map(a => ({ id: a.id, round: a.round, easel: a.easel, artist: a.artist_profiles?.name })));
       const { data: mediaData, error: mediaError } = await supabase
         .from('art_media')
         .select(`
@@ -821,42 +811,30 @@ const EventDetails = () => {
 
   // Check if user needs to see automatic payment modal
   const checkForAutoPaymentModal = () => {
-    console.log('checkForAutoPaymentModal called - person:', person?.id, 'user:', user?.id, 'user.phone:', user?.phone, 'artworks:', artworks.length, 'bidHistory keys:', Object.keys(bidHistory));
-    
     // Don't show payment modal for events before August 1, 2025
     const eventDate = event?.event_start_datetime ? new Date(event.event_start_datetime) : null;
     const cutoffDate = new Date('2025-08-01T00:00:00Z');
     const isOlderEvent = eventDate && eventDate < cutoffDate;
     if (isOlderEvent) {
-      console.log('Skipping auto payment modal for event before Aug 1, 2025:', event?.eid, eventDate);
       return;
     }
     
     if (!person || !artworks.length || !bidHistory || Object.keys(bidHistory).length === 0) {
-      console.log('Early return - missing data. person:', !!person, 'artworks.length:', artworks.length, 'bidHistory keys:', Object.keys(bidHistory).length);
       return;
     }
     
     // Find artwork where current user is winning bidder and needs to pay
-    console.log('DETAILED DEBUG - artworks to check:', artworks.map(a => ({code: a.art_code, status: a.status, id: a.id})));
-    console.log('DETAILED DEBUG - bidHistory keys:', Object.keys(bidHistory));
-    console.log('DETAILED DEBUG - person.id:', person.id);
     
     const winningArtwork = artworks.find(artwork => {
-      console.log('Checking artwork:', artwork.art_code, 'status:', artwork.status, 'artwork.id:', artwork.id);
-      
       // Check if artwork needs payment (sold or closed with bids)
       if (artwork.status !== 'sold' && artwork.status !== 'closed') {
-        console.log('Not sold or closed:', artwork.art_code);
         return false;
       }
       
       // If status is closed, only show payment modal if there are actual bids
       if (artwork.status === 'closed') {
         const history = bidHistory[artwork.id];
-        console.log('Closed status - bid history for', artwork.id, ':', history);
         if (!history || history.length === 0) {
-          console.log('Closed but no bids:', artwork.art_code);
           return false;
         }
       }
@@ -864,35 +842,24 @@ const EventDetails = () => {
       // Get bid history for this artwork (already checked above for closed status)
       const history = bidHistory[artwork.id];
       if (!history || history.length === 0) {
-        console.log('No bid history for:', artwork.art_code, 'artwork.id:', artwork.id, 'available keys:', Object.keys(bidHistory));
         return false;
       }
-      
-      console.log('Bid history for', artwork.art_code, '- top bid:', history[0], 'current person:', person.id);
-      console.log('FULL BID HISTORY for', artwork.art_code, ':', history);
       
       // Check if current user is the top bidder
       const topBid = history[0]; // Assuming sorted by amount DESC
       if (!topBid || topBid.person_id !== person.id) {
-        console.log('Not top bidder for:', artwork.art_code, 'top bidder:', topBid?.person_id, 'current user:', person.id);
         return false;
       }
       
       // Check if payment is not already completed
       if (artwork.status === 'paid') {
-        console.log('Already paid:', artwork.art_code);
         return false;
       }
-      
-      console.log('Found winning artwork!', artwork.art_code);
       return true;
     });
     
     if (winningArtwork) {
-      console.log('Setting auto payment modal for:', winningArtwork.art_code);
       setAutoPaymentModal(winningArtwork);
-    } else {
-      console.log('No winning artwork found for payment modal');
     }
   };
 
@@ -945,7 +912,6 @@ const EventDetails = () => {
         
       if (error) throw error;
       
-      console.log('Winners data from round_contestants:', winners);
       
       // Organize winners by round
       const winnersByRound = {};
@@ -1760,7 +1726,6 @@ const EventDetails = () => {
                   // TODO: Re-enable with better performance optimization
                   /*
                   // First, get user's bid artworks
-                  console.log('Debug My Auctions - person:', person?.id, 'bidHistory keys:', Object.keys(bidHistory), 'artworks:', artworks.length);
                   const myBidArtworks = artworks.filter(artwork => {
                     const history = bidHistory[artwork.id] || [];
                     const hasUserBid = history.some(bid => bid.bidder_person_id === person?.id);

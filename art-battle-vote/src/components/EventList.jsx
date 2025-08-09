@@ -45,7 +45,7 @@ const EventList = () => {
   const fetchEvents = async () => {
     try {
       const now = new Date();
-      console.log('Current date:', now);
+      // Event categorization by date
       const eighteenHoursAgo = new Date(now.getTime() - 18 * 60 * 60 * 1000);
       const eighteenHoursFromNow = new Date(now.getTime() + 18 * 60 * 60 * 1000);
 
@@ -73,7 +73,7 @@ const EventList = () => {
 
       if (error) throw error;
       
-      console.log('Events received:', data?.length || 0, 'events');
+      // Processing event list data
 
       // Check for actual duplicates by ID
       const uniqueIds = new Set();
@@ -120,12 +120,7 @@ const EventList = () => {
       
       // Active and future are already sorted ascending from the query
 
-      console.log('Categorized events:', {
-        active: categorized.active.length,
-        recent: categorized.recent.length,
-        future: categorized.future.length,
-        total: categorized.active.length + categorized.recent.length + categorized.future.length
-      });
+      // Event categorization complete
 
       setEvents(categorized);
     } catch (error) {
