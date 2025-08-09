@@ -6,6 +6,7 @@ import EventDetails from './components/EventDetails';
 import PaymentReceipt from './components/PaymentReceipt';
 import TestCloudflare from './components/TestCloudflare';
 import EidResolver from './components/EidResolver';
+import UpgradeHandler from './components/UpgradeHandler';
 import { AuthProvider } from './contexts/AuthContext';
 import './App.css';
 
@@ -27,6 +28,7 @@ function App() {
               <Route path="/event/:eventId" element={<EventDetails />} />
               <Route path="/e/:eid/:tab" element={<EidResolver />} />
               <Route path="/e/:eid" element={<EidResolver />} />
+              <Route path="/upgrade/:qrCode" element={<UpgradeHandler />} />
               <Route path="/payment/:sessionId" element={<PaymentReceipt />} />
               <Route path="/test-cloudflare" element={<TestCloudflare />} />
               <Route path="/index.html" element={<EventList />} />

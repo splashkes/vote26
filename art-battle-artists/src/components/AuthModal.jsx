@@ -112,13 +112,13 @@ const AuthModal = ({ open, onOpenChange, redirectTo = null }) => {
         }}
       >
         <Dialog.Title>
-          <Heading size="6">🚀 Power Up Your Votes!</Heading>
+          <Heading size="6">Sign in to vote</Heading>
         </Dialog.Title>
         
         <Dialog.Description size="2" mb="4">
           {step === 'phone' 
-            ? 'Enter your phone to get your boost code'
-            : 'Enter the code we just texted you'
+            ? 'Enter your phone number to receive a verification code'
+            : 'Enter the 6-digit code we sent to your phone'
           }
         </Dialog.Description>
 

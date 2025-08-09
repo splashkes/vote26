@@ -1,0 +1,445 @@
+import { useState, useEffect, useRef } from 'react';
+import {
+  Heading,
+  Text,
+  Card,
+  Flex,
+  TextField,
+  TextArea,
+  Button,
+  Badge,
+  Separator,
+  Box,
+  Callout,
+  Grid,
+} from '@radix-ui/themes';
+import { PersonIcon, InfoCircledIcon, CheckIcon } from '@radix-ui/react-icons';
+import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
+import AuthModal from './AuthModal';
+import SampleWorksUpload from './SampleWorksUpload';
+
+const ProfileEditor = () => {
+  const { user, person, loading } = useAuth();
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [profile, setProfile] = useState({
+    name: '',
+    bio: '',
+    website: '',
+    instagram: '',
+    facebook: '',
+    twitter: '',
+    city: '',
+    country: '',
+    email: '',
+    phone: '',
+    years_experience: '',
+    specialties: [],
+    studio_location: '',
+  });
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState('');
+  const [error, setError] = useState('');
+  const [artistProfileId, setArtistProfileId] = useState(null);
+  const isEditingRef = useRef(false);
+
+  useEffect(() => {
+    if (!loading && user && person) {
+      fetchProfile();
+    } else if (!loading && !user) {
+      setProfileLoading(false);
+    }
+  }, [user, person, loading]);
+
+  const fetchProfile = async () => {
+    // Don't reload profile if user is actively editing
+    if (isEditingRef.current) {
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('artist_profiles')
+        .select('*')
+        .eq('person_id', person.id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        throw error;
+      }
+
+      if (data) {
+        setArtistProfileId(data.id);
+        setProfile({
+          name: data.name || '',
+          bio: data.bio || '',
+          website: data.website || '',
+          instagram: data.instagram || '',
+          facebook: data.facebook || '',
+          twitter: data.twitter || '',
+          city: data.city || data.city_text || '',
+          country: data.country || '',
+          email: data.email || '',
+          phone: data.phone || user.phone || '',
+          years_experience: data.years_experience?.toString() || '',
+          specialties: data.specialties || [],
+          studio_location: data.studio_location || '',
+        });
+      } else {
+        // Pre-populate with user info if no profile exists
+        setProfile(prev => ({
+          ...prev,
+          phone: user.phone || '',
+          email: user.email || '',
+          name: person.name || '',
+        }));
+      }
+    } catch (err) {
+      setError('Failed to load profile: ' + err.message);
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!user || !person) return;
+
+    setSaving(true);
+    setError('');
+
+    try {
+      const profileData = {
+        person_id: person.id,
+        name: profile.name,
+        bio: profile.bio,
+        website: profile.website,
+        instagram: profile.instagram,
+        facebook: profile.facebook,
+        twitter: profile.twitter,
+        city: profile.city,
+        city_text: profile.city,
+        country: profile.country,
+        email: profile.email,
+        phone: profile.phone,
+        years_experience: profile.years_experience ? parseInt(profile.years_experience) : null,
+        specialties: profile.specialties,
+        studio_location: profile.studio_location,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { data, error } = await supabase
+        .from('artist_profiles')
+        .upsert(profileData, { 
+          onConflict: 'person_id',
+          ignoreDuplicates: false 
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Set the artist profile ID if we just created it
+      if (data && !artistProfileId) {
+        setArtistProfileId(data.id);
+      }
+
+      setSaveMessage('Profile saved successfully!');
+      setTimeout(() => setSaveMessage(''), 3000);
+    } catch (err) {
+      setError('Failed to save profile: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleInputChange = (field, value) => {
+    isEditingRef.current = true;
+    setProfile(prev => ({ ...prev, [field]: value }));
+    if (saveMessage) setSaveMessage('');
+    if (error) setError('');
+  };
+
+  const handleInputBlur = () => {
+    // Clear editing flag after a short delay to allow for saves
+    setTimeout(() => {
+      isEditingRef.current = false;
+    }, 100);
+  };
+
+  const addSpecialty = (specialty) => {
+    if (specialty && !profile.specialties.includes(specialty)) {
+      setProfile(prev => ({
+        ...prev,
+        specialties: [...prev.specialties, specialty]
+      }));
+    }
+  };
+
+  const removeSpecialty = (specialty) => {
+    setProfile(prev => ({
+      ...prev,
+      specialties: prev.specialties.filter(s => s !== specialty)
+    }));
+  };
+
+  if (loading || profileLoading) {
+    return (
+      <Flex direction="column" gap="4" align="center">
+        <Text>Loading...</Text>
+      </Flex>
+    );
+  }
+
+  if (!user) {
+    return (
+      <>
+        <Card size="3">
+          <Flex direction="column" gap="4" align="center">
+            <PersonIcon width="48" height="48" />
+            <Heading size="6">Artist Profile Management</Heading>
+            <Text size="3" color="gray" align="center">
+              Sign in to create and manage your artist profile
+            </Text>
+            <Button size="3" onClick={() => setShowAuthModal(true)}>
+              Sign In / Sign Up
+            </Button>
+          </Flex>
+        </Card>
+        <AuthModal 
+          open={showAuthModal} 
+          onOpenChange={setShowAuthModal}
+        />
+      </>
+    );
+  }
+
+  return (
+    <Flex direction="column" gap="6">
+      <Flex direction="column" gap="2">
+        <Heading size="6">Artist Profile</Heading>
+        <Text size="3" color="gray">
+          Create and manage your professional artist profile
+        </Text>
+      </Flex>
+
+        {error && (
+          <Callout.Root color="red">
+            <Callout.Icon>
+              <InfoCircledIcon />
+            </Callout.Icon>
+            <Callout.Text>{error}</Callout.Text>
+          </Callout.Root>
+        )}
+
+        {saveMessage && (
+          <Callout.Root color="green">
+            <Callout.Icon>
+              <CheckIcon />
+            </Callout.Icon>
+            <Callout.Text>{saveMessage}</Callout.Text>
+          </Callout.Root>
+        )}
+
+        <Grid columns="1" gap="6">
+          <Card size="3">
+            <Flex direction="column" gap="4">
+              <Heading size="5">Basic Information</Heading>
+              
+              <Flex direction="column" gap="2">
+                <Text size="2" weight="medium">Name *</Text>
+                <TextField.Root
+                  placeholder="Your full name"
+                  value={profile.name}
+                  onChange={(e) => handleInputChange('name', e.target.value)}
+                />
+              </Flex>
+
+              <Flex direction="column" gap="2">
+                <Text size="2" weight="medium">Bio</Text>
+                <TextArea
+                  placeholder="Tell us about yourself, your artistic journey, and what inspires you..."
+                  value={profile.bio}
+                  onChange={(e) => handleInputChange('bio', e.target.value)}
+                  onBlur={handleInputBlur}
+                  rows={4}
+                />
+              </Flex>
+
+              <Flex gap="3">
+                <Flex direction="column" gap="2" style={{ flex: 1 }}>
+                  <Text size="2" weight="medium">Years of Experience</Text>
+                  <TextField.Root
+                    type="number"
+                    placeholder="5"
+                    value={profile.years_experience}
+                    onChange={(e) => handleInputChange('years_experience', e.target.value)}
+                  />
+                </Flex>
+                <Flex direction="column" gap="2" style={{ flex: 1 }}>
+                  <Text size="2" weight="medium">Studio Location</Text>
+                  <TextField.Root
+                    placeholder="Where you create"
+                    value={profile.studio_location}
+                    onChange={(e) => handleInputChange('studio_location', e.target.value)}
+                  />
+                </Flex>
+              </Flex>
+            </Flex>
+          </Card>
+
+          <Card size="3">
+            <Flex direction="column" gap="4">
+              <Heading size="5">Location</Heading>
+              
+              <Flex gap="3">
+                <Flex direction="column" gap="2" style={{ flex: 1 }}>
+                  <Text size="2" weight="medium">City</Text>
+                  <TextField.Root
+                    placeholder="Your city"
+                    value={profile.city}
+                    onChange={(e) => handleInputChange('city', e.target.value)}
+                  />
+                </Flex>
+                <Flex direction="column" gap="2" style={{ flex: 1 }}>
+                  <Text size="2" weight="medium">Country</Text>
+                  <TextField.Root
+                    placeholder="Your country"
+                    value={profile.country}
+                    onChange={(e) => handleInputChange('country', e.target.value)}
+                  />
+                </Flex>
+              </Flex>
+            </Flex>
+          </Card>
+
+          <Card size="3">
+            <Flex direction="column" gap="4">
+              <Heading size="5">Contact Information</Heading>
+              
+              <Flex gap="3">
+                <Flex direction="column" gap="2" style={{ flex: 1 }}>
+                  <Text size="2" weight="medium">Email</Text>
+                  <TextField.Root
+                    type="email"
+                    placeholder="your@email.com"
+                    value={profile.email}
+                    onChange={(e) => handleInputChange('email', e.target.value)}
+                  />
+                </Flex>
+                <Flex direction="column" gap="2" style={{ flex: 1 }}>
+                  <Text size="2" weight="medium">Phone</Text>
+                  <TextField.Root
+                    type="tel"
+                    placeholder="+1234567890"
+                    value={profile.phone}
+                    onChange={(e) => handleInputChange('phone', e.target.value)}
+                  />
+                </Flex>
+              </Flex>
+            </Flex>
+          </Card>
+
+          <Card size="3">
+            <Flex direction="column" gap="4">
+              <Heading size="5">Online Presence</Heading>
+              
+              <Flex direction="column" gap="2">
+                <Text size="2" weight="medium">Website</Text>
+                <TextField.Root
+                  placeholder="https://yourwebsite.com"
+                  value={profile.website}
+                  onChange={(e) => handleInputChange('website', e.target.value)}
+                />
+              </Flex>
+
+              <Flex gap="3">
+                <Flex direction="column" gap="2" style={{ flex: 1 }}>
+                  <Text size="2" weight="medium">Instagram</Text>
+                  <TextField.Root
+                    placeholder="@yourusername"
+                    value={profile.instagram}
+                    onChange={(e) => handleInputChange('instagram', e.target.value)}
+                  />
+                </Flex>
+                <Flex direction="column" gap="2" style={{ flex: 1 }}>
+                  <Text size="2" weight="medium">Facebook</Text>
+                  <TextField.Root
+                    placeholder="facebook.com/yourpage"
+                    value={profile.facebook}
+                    onChange={(e) => handleInputChange('facebook', e.target.value)}
+                  />
+                </Flex>
+              </Flex>
+
+              <Flex direction="column" gap="2">
+                <Text size="2" weight="medium">Twitter/X</Text>
+                <TextField.Root
+                  placeholder="@yourusername"
+                  value={profile.twitter}
+                  onChange={(e) => handleInputChange('twitter', e.target.value)}
+                />
+              </Flex>
+            </Flex>
+          </Card>
+
+          <Card size="3">
+            <Flex direction="column" gap="4">
+              <Heading size="5">Specialties</Heading>
+              <Text size="2" color="gray">
+                Add artistic mediums, techniques, or styles you specialize in
+              </Text>
+              
+              {profile.specialties.length > 0 && (
+                <Flex wrap="wrap" gap="2">
+                  {profile.specialties.map((specialty, index) => (
+                    <Badge key={index} color="crimson" style={{ cursor: 'pointer' }}
+                           onClick={() => removeSpecialty(specialty)}>
+                      {specialty} ×
+                    </Badge>
+                  ))}
+                </Flex>
+              )}
+              
+              <TextField.Root
+                placeholder="Add a specialty (press Enter)"
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    addSpecialty(e.target.value.trim());
+                    e.target.value = '';
+                  }
+                }}
+              />
+            </Flex>
+          </Card>
+
+          {/* Sample Works Section */}
+          {artistProfileId && (
+            <SampleWorksUpload 
+              artistProfileId={artistProfileId}
+              onWorksChange={(works) => {
+                // Optional: could do something with the works data here
+                console.log('Sample works updated:', works.length);
+              }}
+            />
+          )}
+        </Grid>
+
+        <Separator size="4" />
+
+        <Flex justify="end" gap="3">
+          <Button 
+            size="3" 
+            onClick={handleSave} 
+            disabled={saving}
+            loading={saving}
+          >
+            {saving ? 'Saving...' : 'Save Profile'}
+          </Button>
+        </Flex>
+      </Flex>
+    </Flex>
+  );
+};
+
+export default ProfileEditor;

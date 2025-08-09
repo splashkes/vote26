@@ -21,6 +21,7 @@ import {
 import { Cross2Icon, PlusIcon, InfoCircledIcon, ExclamationTriangleIcon } from '@radix-ui/react-icons';
 import { supabase } from '../lib/supabase';
 import EventEditor from './EventEditor';
+import QRAdminPanel from './QRAdminPanel';
 import { getArtworkImageUrls } from '../lib/imageHelpers';
 import { injectFlashStyles, applyFlashClass } from '../utils/realtimeFlash';
 
@@ -925,6 +926,7 @@ const AdminPanel = ({
           <Tabs.Trigger value="rounds">Rounds</Tabs.Trigger>
           <Tabs.Trigger value="voting" style={{ color: 'var(--purple-11)' }}>Voting</Tabs.Trigger>
           <Tabs.Trigger value="auction">Auction</Tabs.Trigger>
+          <Tabs.Trigger value="qr">QR Codes</Tabs.Trigger>
           {adminLevel === 'super' && (
             <Tabs.Trigger value="event">Event</Tabs.Trigger>
           )}
@@ -1786,6 +1788,11 @@ const AdminPanel = ({
             </Flex>
           </Tabs.Content>
         )}
+
+        {/* QR Codes Tab */}
+        <Tabs.Content value="qr">
+          <QRAdminPanel eventId={eventId} />
+        </Tabs.Content>
       </Tabs.Root>
       
       {/* Artist Selection Dialog */}
