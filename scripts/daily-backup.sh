@@ -153,6 +153,13 @@ Environment:
 - BACKUP_BASE_DIR: $BACKUP_BASE_DIR
 - RETENTION_DAYS: $RETENTION_DAYS
 - LOG_FILE: $LOG_FILE
+
+COMPONENTS TO BACKUP:
+- Database tables and data
+- Edge functions (Supabase functions)  
+- Database migrations
+- Application configurations
+- Backup and cleanup scripts
 EOF
 }
 
@@ -266,23 +273,43 @@ export_data() {
     echo "Total rows exported: $total_rows" >> "$BACKUP_DIR/backup_info.txt"
 }
 
-# Backup configuration
+# Backup configuration and edge functions
 backup_config() {
     log_info "Backing up configuration files..."
     
-    # Backup Supabase configuration
+    # Backup Supabase configuration and edge functions
     if [ -d "$PROJECT_DIR/supabase" ]; then
         cp -r "$PROJECT_DIR/supabase" "$BACKUP_DIR/config/" 2>/dev/null || log_warn "Could not copy supabase config"
+        
+        # Verify edge functions were backed up
+        if [ -d "$BACKUP_DIR/config/supabase/functions" ]; then
+            local function_count=$(find "$BACKUP_DIR/config/supabase/functions" -name "index.ts" | wc -l)
+            log_info "  └── Edge functions backed up: $function_count functions"
+            
+            # List all backed up functions
+            find "$BACKUP_DIR/config/supabase/functions" -maxdepth 1 -type d -not -name "functions" | while read -r func_dir; do
+                if [ -f "$func_dir/index.ts" ]; then
+                    local func_name=$(basename "$func_dir")
+                    log_info "      ✓ $func_name"
+                fi
+            done
+        else
+            log_warn "Edge functions directory not found in backup"
+        fi
     fi
     
     # Backup migrations
     if [ -d "$PROJECT_DIR/migrations" ]; then
         cp -r "$PROJECT_DIR/migrations" "$BACKUP_DIR/config/" 2>/dev/null || log_warn "Could not copy migrations"
+        local migration_count=$(find "$BACKUP_DIR/config/migrations" -name "*.sql" | wc -l)
+        log_info "  └── Database migrations: $migration_count files"
     fi
     
     # Backup app migrations
     if [ -d "$PROJECT_DIR/art-battle-vote/migrations" ]; then
         cp -r "$PROJECT_DIR/art-battle-vote/migrations" "$BACKUP_DIR/config/app-migrations/" 2>/dev/null || log_warn "Could not copy app migrations"
+        local app_migration_count=$(find "$BACKUP_DIR/config/app-migrations" -name "*.sql" | wc -l)
+        log_info "  └── App migrations: $app_migration_count files"
     fi
     
     # Backup environment files (without sensitive data)
@@ -293,9 +320,75 @@ backup_config() {
     # Backup scripts
     if [ -d "$PROJECT_DIR/scripts" ]; then
         cp -r "$PROJECT_DIR/scripts" "$BACKUP_DIR/config/" 2>/dev/null || log_warn "Could not copy scripts"
+        local script_count=$(find "$BACKUP_DIR/config/scripts" -name "*.sh" -o -name "*.sql" | wc -l)
+        log_info "  └── Backup/cleanup scripts: $script_count files"
+    fi
+    
+    # Also backup any edge functions from art-battle-vote directory
+    if [ -d "$PROJECT_DIR/art-battle-vote/supabase/functions" ]; then
+        mkdir -p "$BACKUP_DIR/config/art-battle-vote-functions"
+        cp -r "$PROJECT_DIR/art-battle-vote/supabase/functions"/* "$BACKUP_DIR/config/art-battle-vote-functions/" 2>/dev/null || log_warn "Could not copy art-battle-vote functions"
+        local vote_func_count=$(find "$BACKUP_DIR/config/art-battle-vote-functions" -name "index.ts" | wc -l)
+        if [ "$vote_func_count" -gt 0 ]; then
+            log_info "  └── Art Battle Vote functions: $vote_func_count additional functions"
+        fi
     fi
     
     log_success "Configuration backup completed"
+}
+
+# Verify edge functions backup
+verify_edge_functions() {
+    log_info "Verifying edge functions backup..."
+    
+    local main_functions_dir="$BACKUP_DIR/config/supabase/functions"
+    local vote_functions_dir="$BACKUP_DIR/config/art-battle-vote-functions"
+    
+    if [ -d "$main_functions_dir" ]; then
+        log_success "✓ Main Supabase functions directory backed up"
+        
+        # Check for critical edge functions
+        local critical_functions=(
+            "stripe-create-checkout"
+            "stripe-payment-status" 
+            "stripe-webhook-handler"
+            "send-sms"
+            "generate-qr-code"
+            "validate-qr-scan"
+            "slack-webhook"
+        )
+        
+        local found_functions=0
+        for func in "${critical_functions[@]}"; do
+            if [ -f "$main_functions_dir/$func/index.ts" ]; then
+                log_info "  ✓ $func - OK"
+                ((found_functions++))
+            else
+                log_warn "  ✗ $func - MISSING"
+            fi
+        done
+        
+        log_info "Edge functions verification: $found_functions/${#critical_functions[@]} critical functions found"
+        
+        # Update backup info with edge functions details
+        echo "" >> "$BACKUP_DIR/backup_info.txt"
+        echo "EDGE FUNCTIONS BACKUP:" >> "$BACKUP_DIR/backup_info.txt"
+        echo "Critical functions found: $found_functions/${#critical_functions[@]}" >> "$BACKUP_DIR/backup_info.txt"
+        
+        # List all functions in backup
+        echo "All functions backed up:" >> "$BACKUP_DIR/backup_info.txt"
+        find "$main_functions_dir" -maxdepth 1 -type d -not -name "functions" | while read -r func_dir; do
+            if [ -f "$func_dir/index.ts" ]; then
+                echo "- $(basename "$func_dir")" >> "$BACKUP_DIR/backup_info.txt"
+            fi
+        done
+        
+    else
+        log_error "Edge functions directory not found in backup!"
+        return 1
+    fi
+    
+    log_success "Edge functions verification completed"
 }
 
 # Compress backup
@@ -416,6 +509,9 @@ main() {
     
     # Backup configuration
     backup_config
+    
+    # Verify edge functions were backed up properly
+    verify_edge_functions
     
     # Compress backup
     compress_backup
