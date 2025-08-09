@@ -75,7 +75,7 @@ const PaymentButton = ({
   };
 
   // Don't show button if not sold status
-  if (artwork.status !== 'sold' && artwork.status !== 'paid') {
+  if (artwork.status !== 'sold' && artwork.status !== 'paid' && artwork.status !== 'closed') {
     return null;
   }
 

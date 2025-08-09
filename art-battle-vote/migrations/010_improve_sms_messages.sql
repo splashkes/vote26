@@ -23,6 +23,7 @@ DECLARE
   v_message TEXT;
   v_message_id UUID;
   v_event_id TEXT;
+  v_round_num TEXT;
 BEGIN
   -- Extract user data
   v_phone := p_user_data->>'PhoneNumber';
@@ -36,8 +37,9 @@ BEGIN
     RETURN NULL;
   END IF;
 
-  -- Extract event ID from art_code (e.g., "AB2900-1-1" -> "AB2900")
+  -- Extract event ID and round from art_code (e.g., "AB2900-1-1" -> "AB2900", "1")
   v_event_id := split_part(p_art_id, '-', 1);
+  v_round_num := split_part(p_art_id, '-', 2);
 
   -- Construct auction tab URL
   v_auction_url := format('%s/e/%s/auction',
@@ -45,12 +47,12 @@ BEGIN
     v_event_id
   );
 
-  -- Format improved message
-  v_message := format('Your %s%s bid on %s''s artwork is confirmed! View auction: %s',
+  -- Format improved message with round information
+  v_message := format('Your %s%s bid on %s''s Round %s artwork is confirmed!',
     p_currency_symbol,
     p_amount,
     p_artist_name,
-    v_auction_url
+    v_round_num
   );
 
   RAISE NOTICE 'Sending SMS to % with message: %', v_phone, v_message;

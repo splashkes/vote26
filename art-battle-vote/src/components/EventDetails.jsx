@@ -194,6 +194,16 @@ const EventDetails = () => {
           return newBids;
         });
         
+        // Reset bid input to new minimum bid when someone else bids
+        setBidAmounts(prev => {
+          const updated = { ...prev };
+          // Don't reset if this bid is from the current user
+          if (payload.new.person_id !== person?.id) {
+            delete updated[artId]; // This will make getMinimumBid() recalculate
+          }
+          return updated;
+        });
+        
         // Update bid history
         fetchBidHistory([artId]);
       })
@@ -463,23 +473,10 @@ const EventDetails = () => {
         });
       }
 
-      // Fetch all bids with person info
-      const { data: bidsData, error: bidsError } = await supabase
-        .from('bids')
-        .select(`
-          art_id, 
-          amount,
-          created_at,
-          person_id,
-          people!bids_person_id_fkey (
-            name,
-            first_name,
-            last_name,
-            nickname
-          )
-        `)
-        .in('art_id', artIds)
-        .order('created_at', { ascending: false });
+      // Fetch all bids with person info using RPC (bypasses RLS)
+      const { data: bidsData, error: bidsError } = await supabase.rpc('get_bid_history_with_names', {
+        p_art_ids: artIds
+      });
 
       if (bidsError) {
         console.error('Error fetching bids:', bidsError);
@@ -500,24 +497,12 @@ const EventDetails = () => {
           if (!historyByArt[bid.art_id]) {
             historyByArt[bid.art_id] = [];
           }
-          // Format bidder name: First name + last initial for regular UI
-          let bidderName = 'Anonymous';
-          if (bid.people) {
-            if (bid.people.first_name && bid.people.last_name) {
-              bidderName = `${bid.people.first_name} ${bid.people.last_name.charAt(0)}.`;
-            } else if (bid.people.nickname) {
-              bidderName = bid.people.nickname;
-            } else if (bid.people.name) {
-              bidderName = bid.people.name;
-            }
-          }
+          // Use display_name from RPC function (already formatted)
           historyByArt[bid.art_id].push({
             amount: bid.amount,
             created_at: bid.created_at,
-            bidder_name: bidderName,
-            full_name: bid.people ? (bid.people.first_name ? 
-              `${bid.people.first_name} ${bid.people.last_name ? bid.people.last_name.charAt(0) : ''}` : 
-              'Anonymous') : 'Anonymous',
+            bidder_name: bid.display_name || 'Anonymous',
+            display_name: bid.display_name || 'Anonymous',
             person_id: bid.person_id
           });
         });
@@ -731,23 +716,10 @@ const EventDetails = () => {
         });
       }
 
-      // Fetch all bids with person info
-      const { data: bidsData, error: bidsError } = await supabase
-        .from('bids')
-        .select(`
-          art_id, 
-          amount,
-          created_at,
-          person_id,
-          people!bids_person_id_fkey (
-            name,
-            first_name,
-            last_name,
-            nickname
-          )
-        `)
-        .in('art_id', artIds)
-        .order('created_at', { ascending: false });
+      // Fetch all bids with person info using RPC (bypasses RLS)
+      const { data: bidsData, error: bidsError } = await supabase.rpc('get_bid_history_with_names', {
+        p_art_ids: artIds
+      });
 
       if (bidsError) {
         console.error('Error fetching bids in background:', bidsError);
@@ -765,23 +737,12 @@ const EventDetails = () => {
             historyByArt[bid.art_id] = [];
           }
           
-          let bidderName = 'Anonymous';
-          if (bid.people) {
-            if (bid.people.first_name && bid.people.last_name) {
-              bidderName = `${bid.people.first_name} ${bid.people.last_name.charAt(0)}.`;
-            } else if (bid.people.nickname) {
-              bidderName = bid.people.nickname;
-            } else if (bid.people.name) {
-              bidderName = bid.people.name;
-            }
-          }
+          // Use display_name from RPC function (already formatted)
           historyByArt[bid.art_id].push({
             amount: bid.amount,
             created_at: bid.created_at,
-            bidder_name: bidderName,
-            full_name: bid.people ? (bid.people.first_name ? 
-              `${bid.people.first_name} ${bid.people.last_name ? bid.people.last_name.charAt(0) : ''}` : 
-              'Anonymous') : 'Anonymous',
+            bidder_name: bid.display_name || 'Anonymous',
+            display_name: bid.display_name || 'Anonymous',
             person_id: bid.person_id
           });
         });
@@ -939,11 +900,10 @@ const EventDetails = () => {
     if (!artIds || artIds.length === 0) return;
     
     try {
-      const { data, error } = await supabase
-        .from('bids')
-        .select('*')
-        .in('art_id', artIds)
-        .order('amount', { ascending: false });
+      // Use RPC function to get bid history with proper names (bypasses RLS)
+      const { data, error } = await supabase.rpc('get_bid_history_with_names', {
+        p_art_ids: artIds
+      });
       
       if (error) {
         console.error('Error fetching bid history:', error);
@@ -1149,46 +1109,196 @@ const EventDetails = () => {
   const getBiddingStatus = (artwork) => {
     if (!artwork) return null;
 
-    // Status values: "active", "sold", "cancelled", "inactive"
-    if (artwork.status === 'cancelled') {
-      return {
-        text: 'Cancelled',
-        color: 'gray',
-        canBid: false
-      };
-    } else if (artwork.status === 'sold') {
-      const closedTime = artwork.updated_at;
-      return {
-        text: `Sold${closedTime ? ' at ' + new Date(closedTime).toLocaleTimeString() : ''}`,
-        color: 'red',
-        canBid: false
-      };
-    } else if (artwork.status === 'active') {
-      return {
-        text: 'Bidding Open',
-        color: 'green',
-        canBid: true
-      };
-    } else if (artwork.status === 'inactive') {
-      return {
-        text: 'Not Started',
-        color: 'yellow',
-        canBid: false
-      };
+    // Handle all known status values: sold, active, inactive, cancelled, closed, paid
+    switch (artwork.status) {
+      case 'active':
+        return {
+          text: 'Bidding Open',
+          color: 'green',
+          canBid: true
+        };
+      case 'sold':
+        return {
+          text: 'Artwork Sold',
+          color: 'red',
+          canBid: false
+        };
+      case 'paid':
+        return {
+          text: 'Buyer has PAID',
+          color: 'green',
+          canBid: false
+        };
+      case 'closed':
+        return {
+          text: 'Bidding Closed',
+          color: 'orange',
+          canBid: false
+        };
+      case 'cancelled':
+        return {
+          text: 'Cancelled',
+          color: 'gray',
+          canBid: false
+        };
+      case 'inactive':
+        return {
+          text: 'Not Started',
+          color: 'yellow',
+          canBid: false
+        };
+      default:
+        // For any unknown status, log it and show a safe default
+        console.warn('Unknown artwork status:', artwork.status);
+        return {
+          text: 'Unavailable',
+          color: 'gray',
+          canBid: false
+        };
     }
-
-    // Default case - no status or unknown status
-    return {
-      text: 'Status Unknown',
-      color: 'gray',
-      canBid: false
-    };
   };
 
   const getMinimumBid = (artId) => {
     const currentBid = currentBids[artId] || 0;
+    const startingBid = event?.auction_start_bid || 0;
+    
+    // If there are no current bids, the minimum bid is the starting bid
+    if (currentBid === 0) {
+      return startingBid;
+    }
+    
+    // If there are current bids, add the increment to the current highest bid
     const increment = calculateBidIncrement(currentBid);
     return currentBid + increment;
+  };
+
+  // Helper function to get voting-specific messages
+  const getVotingMessage = (artwork) => {
+    if (!artwork) return null;
+
+    // Voting-specific messages only
+    if (!user) {
+      return { 
+        text: "Sign in to vote", 
+        color: "gray", 
+        icon: <InfoCircledIcon /> 
+      };
+    }
+
+    if (voteError) {
+      return { 
+        text: voteError, 
+        color: "red", 
+        icon: <ExclamationTriangleIcon /> 
+      };
+    }
+
+    if (votingInProgress) {
+      return { 
+        text: "Casting vote...", 
+        color: "blue", 
+        icon: <InfoCircledIcon /> 
+      };
+    }
+
+    return null;
+  };
+
+  // Helper function to get bidding-specific messages
+  const getBiddingMessage = (artwork) => {
+    if (!artwork) return null;
+
+    // Bidding-specific messages only
+    if (!user) {
+      return { 
+        text: "Sign in to place bids", 
+        color: "gray", 
+        icon: <InfoCircledIcon /> 
+      };
+    }
+
+    if (bidError) {
+      return { 
+        text: bidError, 
+        color: "red", 
+        icon: <ExclamationTriangleIcon /> 
+      };
+    }
+
+    if (bidSuccess) {
+      return { 
+        text: "Bid placed successfully!", 
+        color: "green", 
+        icon: <InfoCircledIcon /> 
+      };
+    }
+
+    if (biddingInProgress) {
+      return { 
+        text: "Placing bid...", 
+        color: "blue", 
+        icon: <InfoCircledIcon /> 
+      };
+    }
+
+    // Time remaining info for bidding
+    if (artwork.closing_time && isBiddingAvailable(artwork)) {
+      const timeMsg = getTimeRemainingMessage(artwork.closing_time, artwork.status);
+      if (timeMsg) {
+        return { 
+          text: timeMsg, 
+          color: "orange", 
+          icon: <InfoCircledIcon /> 
+        };
+      }
+    }
+
+    return null;
+  };
+
+  // Helper function for time remaining message
+  const getTimeRemainingMessage = (closingTime, artworkStatus) => {
+    if (!closingTime) return null;
+    const now = new Date();
+    const closeTime = new Date(closingTime);
+    const diffMs = closeTime - now;
+    
+    // If time has passed, show status based on artwork state
+    if (diffMs <= 0) {
+      if (artworkStatus === 'paid') return "Paid";
+      if (artworkStatus === 'sold') return "Sold";
+      return "Bidding closed";
+    }
+    
+    const diffMinutes = Math.ceil(diffMs / (1000 * 60));
+    if (diffMinutes < 60) {
+      return `${diffMinutes} min remaining`;
+    } else {
+      const diffHours = Math.floor(diffMinutes / 60);
+      const remainingMins = diffMinutes % 60;
+      if (remainingMins === 0) {
+        return `${diffHours}h remaining`;
+      } else {
+        return `${diffHours}h ${remainingMins}m remaining`;
+      }
+    }
+  };
+
+  // Helper function to check if bidding is actually available
+  const isBiddingAvailable = (artwork) => {
+    if (!artwork) return false;
+    
+    // Must be active status
+    if (artwork.status !== 'active') return false;
+    
+    // Check if auction hasn't closed
+    if (artwork.closing_time) {
+      const now = new Date();
+      const closeTime = new Date(artwork.closing_time);
+      if (closeTime <= now) return false;
+    }
+    
+    return true;
   };
 
   const handleBidIncrement = (artId, direction) => {
@@ -2132,48 +2242,51 @@ const EventDetails = () => {
                 <Flex direction="column" gap="4">
                   {/* Voting Section */}
                   <Box>
-                    <Flex justify="between" align="center" mb="3">
-                      <Heading size="4">Vote</Heading>
+                    <Flex justify="center" align="center" mb="3">
                       <Button
                         size="3"
                         variant={votedArtIds.has(selectedArt.id) ? "solid" : "soft"}
                         onClick={() => handleVoteClick(selectedArt)}
-                        disabled={votedArtIds.has(selectedArt.id)}
+                        disabled={votedArtIds.has(selectedArt.id) || (!user && !votedArtIds.has(selectedArt.id))}
                       >
                         {votedArtIds.has(selectedArt.id) ? (
                           <><HeartFilledIcon /> Voted</>
+                        ) : !user ? (
+                          <><HeartIcon /> Sign in to vote</>
                         ) : (
-                          <><HeartIcon /> Vote for this artwork</>
+                          <><HeartIcon /> Vote for {selectedArt.artist_profiles?.name || 'this artwork'}</>
                         )}
                       </Button>
                     </Flex>
                     
-                    {/* Vote error message */}
-                    {voteError && (
-                      <Callout.Root color="red" size="1" mb="3">
-                        <Callout.Icon>
-                          <ExclamationTriangleIcon />
-                        </Callout.Icon>
-                        <Callout.Text>{voteError}</Callout.Text>
-                      </Callout.Root>
-                    )}
+                    {/* Voting-specific message area */}
+                    {(() => {
+                      const message = getVotingMessage(selectedArt);
+                      return message && (
+                        <Callout.Root color={message.color} size="1" mb="3">
+                          <Callout.Icon>
+                            {message.icon}
+                          </Callout.Icon>
+                          <Callout.Text>{message.text}</Callout.Text>
+                        </Callout.Root>
+                      );
+                    })()}
                   </Box>
 
                   <Separator size="4" />
 
                   {/* Bidding Section */}
                   <Box>
-                    <Flex justify="between" align="center" mb="3">
-                      <Heading size="4">Place a Bid</Heading>
+                    <Flex justify="center" align="center" mb="3">
                       {(() => {
                         const status = getBiddingStatus(selectedArt);
                         return (
                           <Box>
-                            <Badge color={status.color} size="2">
+                            <Badge color={status.color} size="3">
                               {status.text}
                             </Badge>
                             {status.subtext && (
-                              <Text size="1" color="gray" style={{ display: 'block', marginTop: '2px' }}>
+                              <Text size="1" color="gray" style={{ display: 'block', marginTop: '2px', textAlign: 'center' }}>
                                 {status.subtext}
                               </Text>
                             )}
@@ -2182,78 +2295,18 @@ const EventDetails = () => {
                       })()}
                     </Flex>
                     
-                    {currentBids[selectedArt.id] && (
-                      <Callout.Root size="1" mb="3">
-                        <Callout.Icon>
-                          <InfoCircledIcon />
-                        </Callout.Icon>
-                        <Callout.Text>
-                          Current highest bid: ${currentBids[selectedArt.id].toFixed(2)}
-                        </Callout.Text>
-                      </Callout.Root>
-                    )}
-
-                    {/* Closing time display */}
-                    {selectedArt.closing_time && (() => {
-                      const getTimeRemaining = (closingTime, artworkStatus, hasBids) => {
-                        if (!closingTime) return null;
-                        const now = new Date();
-                        const closeTime = new Date(closingTime);
-                        const diffMs = closeTime - now;
-                        
-                        // If time has passed, show status based on artwork state
-                        if (diffMs <= 0) {
-                          if (artworkStatus === 'paid') return "Paid";
-                          if (artworkStatus === 'sold' && hasBids) return "Sold";
-                          return "Closed";
-                        }
-                        
-                        const diffMinutes = Math.ceil(diffMs / (1000 * 60));
-                        if (diffMinutes < 60) {
-                          return `${diffMinutes} min to close`;
-                        } else {
-                          const diffHours = Math.floor(diffMinutes / 60);
-                          const remainingMins = diffMinutes % 60;
-                          if (remainingMins === 0) {
-                            return `${diffHours}h to close`;
-                          } else {
-                            return `${diffHours}h ${remainingMins}m to close`;
-                          }
-                        }
-                      };
-
-                      const hasBids = currentBids[selectedArt.id] > 0;
-                      return (
-                        <Callout.Root size="1" mb="3" color="orange">
+                    {/* Bidding-specific message area */}
+                    {(() => {
+                      const message = getBiddingMessage(selectedArt);
+                      return message && (
+                        <Callout.Root color={message.color} size="1" mb="3">
                           <Callout.Icon>
-                            <InfoCircledIcon />
+                            {message.icon}
                           </Callout.Icon>
-                          <Callout.Text>
-                            {getTimeRemaining(selectedArt.closing_time, selectedArt.status, hasBids)}
-                          </Callout.Text>
+                          <Callout.Text>{message.text}</Callout.Text>
                         </Callout.Root>
                       );
                     })()}
-                    
-                    {/* Bid error message */}
-                    {bidError && (
-                      <Callout.Root color="red" size="1" mb="3">
-                        <Callout.Icon>
-                          <ExclamationTriangleIcon />
-                        </Callout.Icon>
-                        <Callout.Text>{bidError}</Callout.Text>
-                      </Callout.Root>
-                    )}
-                    
-                    {/* Bid success message */}
-                    {bidSuccess && (
-                      <Callout.Root color="green" size="1" mb="3">
-                        <Callout.Icon>
-                          <InfoCircledIcon />
-                        </Callout.Icon>
-                        <Callout.Text>Bid placed successfully!</Callout.Text>
-                      </Callout.Root>
-                    )}
                     
                     {/* Payment Button for winning bidder */}
                     {(selectedArt.status === 'sold' || selectedArt.status === 'paid') && !(eventId && parseInt(eventId.replace('AB', '')) < 2936) && (
@@ -2275,21 +2328,18 @@ const EventDetails = () => {
                       />
                     )}
                     
-                    {/* Show bidding controls only if not sold/paid */}
-                    {selectedArt.status !== 'sold' && selectedArt.status !== 'paid' && (
+                    {/* Show bidding controls only when bidding is actually available */}
+                    {isBiddingAvailable(selectedArt) && (
                     <>
                     <Box mb="3">
-                      <Text size="2" color="gray" mb="2">
-                        Your bid amount:
-                      </Text>
-                      <Flex align="center" gap="3">
+                      <Flex align="center" gap="3" justify="center">
                         <IconButton
                           size="3"
                           variant="soft"
                           onClick={() => handleBidIncrement(selectedArt.id, 'down')}
                           disabled={!user || (bidAmounts[selectedArt.id] || getMinimumBid(selectedArt.id)) <= getMinimumBid(selectedArt.id)}
                         >
-                          <ChevronLeftIcon />
+                          <MinusIcon />
                         </IconButton>
                         
                         <Box style={{ minWidth: '120px', textAlign: 'center' }}>
@@ -2304,12 +2354,12 @@ const EventDetails = () => {
                           onClick={() => handleBidIncrement(selectedArt.id, 'up')}
                           disabled={!user}
                         >
-                          <ChevronRightIcon />
+                          <PlusIcon />
                         </IconButton>
                       </Flex>
                       
                       <Text size="1" color="gray" style={{ display: 'block', marginTop: '0.5rem', textAlign: 'center' }}>
-                        Increment: ${calculateBidIncrement(currentBids[selectedArt.id] || 0)} (5% or $5, whichever is higher)
+                        Next minimum bid: ${getMinimumBid(selectedArt.id)}
                       </Text>
                     </Box>
                     
@@ -2324,17 +2374,26 @@ const EventDetails = () => {
                           <Spinner size="1" />
                           {' '}Placing Bid...
                         </>
+                      ) : !user ? (
+                        'Sign in to bid'
                       ) : (
                         'Place Bid'
                       )}
                     </Button>
-                    
-                    {!user && (
-                      <Text size="2" color="gray" style={{ display: 'block', marginTop: '0.5rem' }}>
-                        Please log in to vote or place bids
-                      </Text>
-                    )}
                     </>
+                    )}
+
+                    {/* Show alternative button when bidding not available */}
+                    {!isBiddingAvailable(selectedArt) && selectedArt.status !== 'sold' && selectedArt.status !== 'paid' && (
+                      <Button 
+                        size="3"
+                        style={{ width: '100%' }}
+                        disabled={true}
+                        variant="soft"
+                        color="gray"
+                      >
+                        Bidding Closed
+                      </Button>
                     )}
                     
                     {/* Bid History */}
@@ -2343,10 +2402,10 @@ const EventDetails = () => {
                         <Separator size="4" mb="3" />
                         <Heading size="3" mb="3">Bid History</Heading>
                         <Flex direction="column" gap="2">
-                          {bidHistory[selectedArt.id].slice(0, 10).map((bid, index) => (
+                          {bidHistory[selectedArt.id].map((bid, index) => (
                             <Flex key={index} justify="between" align="center">
                               <Text size="2">
-                                {bid.full_name || bid.bidder_name}
+                                {bid.display_name}
                               </Text>
                               <Flex gap="3" align="center">
                                 <Text size="2" weight="medium">
@@ -2358,11 +2417,6 @@ const EventDetails = () => {
                               </Flex>
                             </Flex>
                           ))}
-                          {bidHistory[selectedArt.id].length > 10 && (
-                            <Text size="1" color="gray" style={{ textAlign: 'center', marginTop: '8px' }}>
-                              Showing 10 of {bidHistory[selectedArt.id].length} bids
-                            </Text>
-                          )}
                         </Flex>
                       </Box>
                     )}

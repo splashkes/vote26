@@ -27,16 +27,19 @@ const InternationalPhoneInput = forwardRef(({
     { code: 'GB', name: 'United Kingdom', dialCode: '+44', flag: '🇬🇧' },
     { code: 'AU', name: 'Australia', dialCode: '+61', flag: '🇦🇺' },
     { code: 'FR', name: 'France', dialCode: '+33', flag: '🇫🇷' },
-    { code: 'DE', name: 'Germany', dialCode: '+49', flag: '🇩🇪' },
     { code: 'JP', name: 'Japan', dialCode: '+81', flag: '🇯🇵' },
-    { code: 'CN', name: 'China', dialCode: '+86', flag: '🇨🇳' },
     { code: 'IN', name: 'India', dialCode: '+91', flag: '🇮🇳' },
     { code: 'BR', name: 'Brazil', dialCode: '+55', flag: '🇧🇷' },
     { code: 'MX', name: 'Mexico', dialCode: '+52', flag: '🇲🇽' },
     { code: 'ES', name: 'Spain', dialCode: '+34', flag: '🇪🇸' },
     { code: 'IT', name: 'Italy', dialCode: '+39', flag: '🇮🇹' },
     { code: 'NL', name: 'Netherlands', dialCode: '+31', flag: '🇳🇱' },
-    { code: 'CH', name: 'Switzerland', dialCode: '+41', flag: '🇨🇭' },
+    { code: 'VE', name: 'Venezuela', dialCode: '+58', flag: '🇻🇪' },
+    { code: 'TH', name: 'Thailand', dialCode: '+66', flag: '🇹🇭' },
+    { code: 'NZ', name: 'New Zealand', dialCode: '+64', flag: '🇳🇿' },
+    { code: 'ME', name: 'Montenegro', dialCode: '+382', flag: '🇲🇪' },
+    { code: 'KZ', name: 'Kazakhstan', dialCode: '+7', flag: '🇰🇿' },
+    { code: 'RS', name: 'Serbia', dialCode: '+381', flag: '🇷🇸' },
   ];
 
   // Auto-detect user country based on timezone/IP
