@@ -80,6 +80,7 @@ const EventDetails = () => {
   const [confirmBid, setConfirmBid] = useState(null);
   const [biddingInProgress, setBiddingInProgress] = useState(false);
   const [autoPaymentModal, setAutoPaymentModal] = useState(null); // For automatic payment modal
+  const [paymentModalChecked, setPaymentModalChecked] = useState(false); // Prevent duplicate modals
   // Initialize activeTab from hash or tab parameter
   const getInitialTab = () => {
     const hash = window.location.hash.replace('#', '');
@@ -312,10 +313,37 @@ const EventDetails = () => {
     }
   }, [person, eventId]);
 
-  // Update current time for countdown
+  // Update current time for countdown and check for expired timers
   useEffect(() => {
+    let lastExpiredCheck = new Set();
+    
     countdownInterval.current = setInterval(() => {
-      setCurrentTime(Date.now());
+      const now = Date.now();
+      setCurrentTime(now);
+      
+      // Check for newly expired auctions
+      const currentlyExpired = new Set();
+      artworks.forEach(artwork => {
+        if (artwork.closing_time) {
+          const closeTime = new Date(artwork.closing_time);
+          const diffMs = closeTime - now;
+          if (diffMs <= 0 && artwork.status === 'active') {
+            currentlyExpired.add(artwork.id);
+          }
+        }
+      });
+      
+      // If we have newly expired timers, refresh data after a short delay
+      const newlyExpired = [...currentlyExpired].filter(id => !lastExpiredCheck.has(id));
+      if (newlyExpired.length > 0) {
+        console.log('Detected newly expired auctions:', newlyExpired);
+        // Small delay to allow backend processing
+        setTimeout(() => {
+          refreshEventDataSilently();
+        }, 2000);
+      }
+      
+      lastExpiredCheck = currentlyExpired;
     }, 1000);
 
     return () => {
@@ -323,7 +351,16 @@ const EventDetails = () => {
         clearInterval(countdownInterval.current);
       }
     };
-  }, []);
+  }, [artworks]);
+
+  // Check for auto payment modal when all dependencies are ready
+  useEffect(() => {
+    if (person && artworks.length > 0 && bidHistory && Object.keys(bidHistory).length > 0 && !paymentModalChecked) {
+      console.log('All dependencies ready, checking for auto payment modal...');
+      checkForAutoPaymentModal();
+      setPaymentModalChecked(true);
+    }
+  }, [person, artworks, bidHistory, paymentModalChecked]);
 
   const fetchEventDetails = async () => {
     try {
@@ -480,7 +517,8 @@ const EventDetails = () => {
             bidder_name: bidderName,
             full_name: bid.people ? (bid.people.first_name ? 
               `${bid.people.first_name} ${bid.people.last_name ? bid.people.last_name.charAt(0) : ''}` : 
-              'Anonymous') : 'Anonymous'
+              'Anonymous') : 'Anonymous',
+            person_id: bid.person_id
           });
         });
       }
@@ -822,38 +860,55 @@ const EventDetails = () => {
 
   // Check if user needs to see automatic payment modal
   const checkForAutoPaymentModal = () => {
-    console.log('checkForAutoPaymentModal called - person:', person?.id, 'artworks:', artworks.length, 'bidHistory keys:', Object.keys(bidHistory));
+    console.log('checkForAutoPaymentModal called - person:', person?.id, 'user:', user?.id, 'user.phone:', user?.phone, 'artworks:', artworks.length, 'bidHistory keys:', Object.keys(bidHistory));
     
-    // Don't show payment modal for older events
-    const isOlderEvent = eventId && parseInt(eventId.replace('AB', '')) < 2936;
+    // Don't show payment modal for events before August 1, 2025
+    const eventDate = event?.event_start_datetime ? new Date(event.event_start_datetime) : null;
+    const cutoffDate = new Date('2025-08-01T00:00:00Z');
+    const isOlderEvent = eventDate && eventDate < cutoffDate;
     if (isOlderEvent) {
-      console.log('Skipping auto payment modal for older event:', eventId);
+      console.log('Skipping auto payment modal for event before Aug 1, 2025:', event?.eid, eventDate);
       return;
     }
     
-    if (!person || !artworks.length || !bidHistory) {
-      console.log('Early return - missing data');
+    if (!person || !artworks.length || !bidHistory || Object.keys(bidHistory).length === 0) {
+      console.log('Early return - missing data. person:', !!person, 'artworks.length:', artworks.length, 'bidHistory keys:', Object.keys(bidHistory).length);
       return;
     }
     
     // Find artwork where current user is winning bidder and needs to pay
+    console.log('DETAILED DEBUG - artworks to check:', artworks.map(a => ({code: a.art_code, status: a.status, id: a.id})));
+    console.log('DETAILED DEBUG - bidHistory keys:', Object.keys(bidHistory));
+    console.log('DETAILED DEBUG - person.id:', person.id);
+    
     const winningArtwork = artworks.find(artwork => {
-      console.log('Checking artwork:', artwork.art_code, 'status:', artwork.status);
+      console.log('Checking artwork:', artwork.art_code, 'status:', artwork.status, 'artwork.id:', artwork.id);
       
-      // Check if artwork is sold and awaiting payment
-      if (artwork.status !== 'sold') {
-        console.log('Not sold:', artwork.art_code);
+      // Check if artwork needs payment (sold or closed with bids)
+      if (artwork.status !== 'sold' && artwork.status !== 'closed') {
+        console.log('Not sold or closed:', artwork.art_code);
         return false;
       }
       
-      // Check if there's bid history for this artwork
+      // If status is closed, only show payment modal if there are actual bids
+      if (artwork.status === 'closed') {
+        const history = bidHistory[artwork.id];
+        console.log('Closed status - bid history for', artwork.id, ':', history);
+        if (!history || history.length === 0) {
+          console.log('Closed but no bids:', artwork.art_code);
+          return false;
+        }
+      }
+      
+      // Get bid history for this artwork (already checked above for closed status)
       const history = bidHistory[artwork.id];
       if (!history || history.length === 0) {
-        console.log('No bid history for:', artwork.art_code);
+        console.log('No bid history for:', artwork.art_code, 'artwork.id:', artwork.id, 'available keys:', Object.keys(bidHistory));
         return false;
       }
       
       console.log('Bid history for', artwork.art_code, '- top bid:', history[0], 'current person:', person.id);
+      console.log('FULL BID HISTORY for', artwork.art_code, ':', history);
       
       // Check if current user is the top bidder
       const topBid = history[0]; // Assuming sorted by amount DESC
@@ -905,16 +960,7 @@ const EventDetails = () => {
       });
       
       // Update bid history state
-      setBidHistory(prev => {
-        const newBidHistory = { ...prev, ...historyByArt };
-        
-        // Check for automatic payment modal after bid history is updated
-        setTimeout(() => {
-          checkForAutoPaymentModal();
-        }, 100);
-        
-        return newBidHistory;
-      });
+      setBidHistory(prev => ({ ...prev, ...historyByArt }));
     } catch (error) {
       console.error('Error in fetchBidHistory:', error);
     }
@@ -1705,6 +1751,34 @@ const EventDetails = () => {
                         return bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                       }
                     };
+
+                    // Calculate time remaining until closing
+                    const getTimeRemaining = (closingTime, artworkStatus, hasBids) => {
+                      if (!closingTime) return null;
+                      const now = new Date();
+                      const closeTime = new Date(closingTime);
+                      const diffMs = closeTime - now;
+                      
+                      // If time has passed, show status based on artwork state
+                      if (diffMs <= 0) {
+                        if (artworkStatus === 'paid') return "Paid";
+                        if (artworkStatus === 'sold' && hasBids) return "Sold";
+                        return "Closed";
+                      }
+                      
+                      const diffMinutes = Math.ceil(diffMs / (1000 * 60));
+                      if (diffMinutes < 60) {
+                        return `${diffMinutes} min to close`;
+                      } else {
+                        const diffHours = Math.floor(diffMinutes / 60);
+                        const remainingMins = diffMinutes % 60;
+                        if (remainingMins === 0) {
+                          return `${diffHours}h to close`;
+                        } else {
+                          return `${diffHours}h ${remainingMins}m to close`;
+                        }
+                      }
+                    };
                     
                     return (
                       <div key={artwork.id}>
@@ -1763,6 +1837,11 @@ const EventDetails = () => {
                                     {history.length} bid{history.length !== 1 ? 's' : ''}
                                     {lastBid && ` • ${getTimeAgo(lastBid.created_at)}`}
                                   </Text>
+                                  {artwork.closing_time && (
+                                    <Text size="1" color="orange" weight="medium" style={{ display: 'block', marginTop: '2px' }}>
+                                      {getTimeRemaining(artwork.closing_time, artwork.status, currentBid > 0)}
+                                    </Text>
+                                  )}
                                 </Box>
                               </Flex>
                             </Box>
@@ -1776,26 +1855,28 @@ const EventDetails = () => {
                             style={{ 
                               marginTop: '12px',
                               border: '3px solid #16a34a',
-                              background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)',
-                              boxShadow: '0 4px 12px rgba(22, 163, 74, 0.15)'
+                              background: 'linear-gradient(135deg, #22c55e, #16a34a)',
+                              color: 'white',
+                              boxShadow: '0 4px 12px rgba(22, 163, 74, 0.3)'
                             }}
                           >
                             <Flex direction="column" gap="3" align="center">
                               <Box style={{ textAlign: 'center' }}>
-                                <Text size="6" weight="bold" style={{ color: '#15803d', display: 'block' }}>
+                                <Text size="6" weight="bold" style={{ color: 'white', display: 'block' }}>
                                   ✅ PAYMENT CONFIRMED
                                 </Text>
-                                <Text size="2" color="gray" style={{ marginTop: '4px' }}>
+                                <Text size="2" style={{ color: 'rgba(255, 255, 255, 0.8)', marginTop: '4px' }}>
                                   Receipt for Auction Purchase
                                 </Text>
                               </Box>
                               
                               <Box 
                                 style={{ 
-                                  background: 'white',
+                                  background: 'rgba(0, 0, 0, 0.7)',
+                                  color: 'white',
                                   padding: '16px',
                                   borderRadius: '8px',
-                                  border: '1px solid #d1d5db',
+                                  border: '1px solid rgba(255, 255, 255, 0.2)',
                                   width: '100%',
                                   maxWidth: '400px'
                                 }}
@@ -1819,10 +1900,10 @@ const EventDetails = () => {
                                   </Flex>
                                   <Flex justify="between">
                                     <Text size="2" weight="medium">Status:</Text>
-                                    <Text size="2" style={{ color: '#15803d' }} weight="bold">PAID IN FULL</Text>
+                                    <Text size="2" style={{ color: '#22c55e' }} weight="bold">PAID IN FULL</Text>
                                   </Flex>
-                                  <Box style={{ borderTop: '1px solid #e5e7eb', marginTop: '8px', paddingTop: '8px' }}>
-                                    <Text size="1" color="gray" style={{ textAlign: 'center' }}>
+                                  <Box style={{ borderTop: '1px solid rgba(255, 255, 255, 0.2)', marginTop: '8px', paddingTop: '8px' }}>
+                                    <Text size="1" style={{ color: 'rgba(255, 255, 255, 0.7)', textAlign: 'center' }}>
                                       Thank you for participating in Art Battle!
                                     </Text>
                                   </Box>
@@ -2111,6 +2192,48 @@ const EventDetails = () => {
                         </Callout.Text>
                       </Callout.Root>
                     )}
+
+                    {/* Closing time display */}
+                    {selectedArt.closing_time && (() => {
+                      const getTimeRemaining = (closingTime, artworkStatus, hasBids) => {
+                        if (!closingTime) return null;
+                        const now = new Date();
+                        const closeTime = new Date(closingTime);
+                        const diffMs = closeTime - now;
+                        
+                        // If time has passed, show status based on artwork state
+                        if (diffMs <= 0) {
+                          if (artworkStatus === 'paid') return "Paid";
+                          if (artworkStatus === 'sold' && hasBids) return "Sold";
+                          return "Closed";
+                        }
+                        
+                        const diffMinutes = Math.ceil(diffMs / (1000 * 60));
+                        if (diffMinutes < 60) {
+                          return `${diffMinutes} min to close`;
+                        } else {
+                          const diffHours = Math.floor(diffMinutes / 60);
+                          const remainingMins = diffMinutes % 60;
+                          if (remainingMins === 0) {
+                            return `${diffHours}h to close`;
+                          } else {
+                            return `${diffHours}h ${remainingMins}m to close`;
+                          }
+                        }
+                      };
+
+                      const hasBids = currentBids[selectedArt.id] > 0;
+                      return (
+                        <Callout.Root size="1" mb="3" color="orange">
+                          <Callout.Icon>
+                            <InfoCircledIcon />
+                          </Callout.Icon>
+                          <Callout.Text>
+                            {getTimeRemaining(selectedArt.closing_time, selectedArt.status, hasBids)}
+                          </Callout.Text>
+                        </Callout.Root>
+                      );
+                    })()}
                     
                     {/* Bid error message */}
                     {bidError && (

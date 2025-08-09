@@ -10,11 +10,11 @@ const EidResolver = () => {
   useEffect(() => {
     const resolveEidToEventId = async () => {
       try {
-        // Look up the event by EID to get the UUID
+        // Look up the event by EID to get the UUID (case insensitive)
         const { data: event, error } = await supabase
           .from('events')
           .select('id')
-          .eq('eid', eid)
+          .ilike('eid', eid)
           .single();
 
         if (error || !event) {

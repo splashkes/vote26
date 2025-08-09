@@ -73,13 +73,42 @@ const AdminPanel = ({
     setTimeout(() => setAdminMessage(null), 4000); // Auto-dismiss after 4 seconds
   };
 
-  // Update local time for countdown
+  // Update local time for countdown and check for expired timers
   useEffect(() => {
+    let lastExpiredCheck = new Set();
+    
     const interval = setInterval(() => {
-      setLocalTime(Date.now());
+      const now = Date.now();
+      setLocalTime(now);
+      
+      // Check for newly expired auctions (admin panel)
+      if (adminMode === 'auction' && auctionArtworks.length > 0) {
+        const currentlyExpired = new Set();
+        auctionArtworks.forEach(artwork => {
+          if (artwork.closing_time) {
+            const closeTime = new Date(artwork.closing_time);
+            const diffMs = closeTime - now;
+            if (diffMs <= 0 && artwork.status === 'active') {
+              currentlyExpired.add(artwork.id);
+            }
+          }
+        });
+        
+        // If we have newly expired timers, refresh data after a short delay
+        const newlyExpired = [...currentlyExpired].filter(id => !lastExpiredCheck.has(id));
+        if (newlyExpired.length > 0) {
+          console.log('Admin panel detected newly expired auctions:', newlyExpired);
+          // Small delay to allow backend processing
+          setTimeout(() => {
+            fetchAuctionData();
+          }, 2000);
+        }
+        
+        lastExpiredCheck = currentlyExpired;
+      }
     }, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [adminMode, auctionArtworks]);
 
   // Make refreshVoteWeights available globally for realtime updates
   useEffect(() => {
@@ -598,7 +627,11 @@ const AdminPanel = ({
                           {/* Payment status badges */}
                           {status === 'paid' && (
                             <Badge color="green" size="1" style={{ marginTop: '4px' }}>
-                              ✓ PAID
+                              {artwork.payment_statuses?.code === 'admin_paid' 
+                                ? `✓ MARKED PAID BY ${artwork.payment_logs?.find(log => log.payment_type === 'admin_marked')?.admin_phone || 'ADMIN'}`
+                                : artwork.payment_statuses?.code === 'stripe_paid' 
+                                ? '✓ PAID via STRIPE' 
+                                : '✓ PAID'}
                             </Badge>
                           )}
                           {status === 'sold' && !artwork.buyer_pay_recent_status_id && (
@@ -658,8 +691,41 @@ const AdminPanel = ({
 
       if (artworksError) throw artworksError;
 
-      // Get art IDs
+      // Get art IDs and payment status IDs
       const artIds = artworksData?.map(a => a.id) || [];
+      const paymentStatusIds = artworksData?.map(a => a.buyer_pay_recent_status_id).filter(Boolean) || [];
+
+      // Fetch payment statuses
+      let paymentStatusesData = [];
+      if (paymentStatusIds.length > 0) {
+        const { data: statusData } = await supabase
+          .from('payment_statuses')
+          .select('id, code, description')
+          .in('id', paymentStatusIds);
+        paymentStatusesData = statusData || [];
+      }
+
+      // Fetch payment logs
+      const { data: paymentLogsData } = await supabase
+        .from('payment_logs')
+        .select('art_id, admin_phone, metadata, created_at, payment_type')
+        .in('art_id', artIds);
+
+      // Create maps for payment data
+      const paymentStatusMap = {};
+      paymentStatusesData.forEach(status => {
+        paymentStatusMap[status.id] = status;
+      });
+
+      const paymentLogsMap = {};
+      if (paymentLogsData) {
+        paymentLogsData.forEach(log => {
+          if (!paymentLogsMap[log.art_id]) {
+            paymentLogsMap[log.art_id] = [];
+          }
+          paymentLogsMap[log.art_id].push(log);
+        });
+      }
 
       // Fetch media for all artworks
       const { data: mediaData } = await supabase
@@ -740,13 +806,15 @@ const AdminPanel = ({
         });
       }
 
-      // Attach media to artworks
-      const artworksWithMedia = (artworksData || []).map(artwork => ({
+      // Attach media and payment info to artworks
+      const artworksWithAllData = (artworksData || []).map(artwork => ({
         ...artwork,
-        media: mediaByArt[artwork.id] || []
+        media: mediaByArt[artwork.id] || [],
+        payment_statuses: artwork.buyer_pay_recent_status_id ? paymentStatusMap[artwork.buyer_pay_recent_status_id] : null,
+        payment_logs: paymentLogsMap[artwork.id] || []
       }));
 
-      setAuctionArtworks(artworksWithMedia);
+      setAuctionArtworks(artworksWithAllData);
       setAuctionBids(bidsByArt);
     } catch (error) {
       console.error('Error fetching auction data:', error);
@@ -775,7 +843,7 @@ const AdminPanel = ({
   const handleTimerAction = async (action, duration = 12) => {
     setTimerActionLoading(true);
     try {
-      console.log('Timer action:', action, 'Duration:', duration, 'Event ID:', eventId);
+      console.log('Timer action:', action, 'Duration:', duration, 'Event ID:', eventId, 'Event ID type:', typeof eventId);
       
       if (!eventId) {
         throw new Error('Event ID is missing');
@@ -785,18 +853,23 @@ const AdminPanel = ({
         .rpc('manage_auction_timer', {
           p_event_id: eventId,
           p_action: action,
-          p_duration_minutes: duration
+          p_duration_minutes: duration,
+          p_admin_phone: null // Optional parameter
         });
       
       console.log('Timer RPC response:', { data, error });
-      if (error) throw error;
+      if (error) {
+        console.error('RPC Error details:', error);
+        throw error;
+      }
       
       if (data?.success) {
-        alert(data.message + (data.sms_sent ? ` (${data.sms_sent} SMS notifications sent)` : ''));
+        showAdminMessage('success', data.message + (data.sms_sent ? ` (${data.sms_sent} SMS notifications sent)` : ''));
         await fetchAuctionTimerStatus();
         await fetchAuctionData();
       } else {
-        alert(data?.error || 'Failed to update timer');
+        console.error('Function returned error:', data);
+        showAdminMessage('error', data?.error || 'Failed to update timer');
       }
     } catch (error) {
       console.error('Error managing timer:', error);
@@ -1231,32 +1304,25 @@ const AdminPanel = ({
                         </Text>
                         <Text size="1" color="gray">With Bids</Text>
                       </Box>
-                      <Box>
-                        <Text size="3" weight="bold" style={{ display: 'block', color: 'var(--orange-11)' }}>
-                          ${auctionArtworks
-                            .filter(artwork => artwork.artist_id) // Only artworks with artists
-                            .reduce((sum, artwork) => sum + (artwork.current_bid || 0), 0)
-                            .toFixed(0)}
-                        </Text>
-                        <Text size="1" color="gray">Total Value</Text>
-                      </Box>
                     </Grid>
                   </Flex>
                   
-                  {/* Restore 12min auction button */}
-                  <Flex gap="2" mt="3">
-                    <Button 
-                      size="2" 
-                      variant="solid"
-                      onClick={() => handleTimerAction('start', 12)}
-                      disabled={timerActionLoading || auctionArtworks.filter(a => a.artist_id).length === 0}
-                    >
-                      Start 12min Auction
-                    </Button>
-                    <Text size="1" color="gray" style={{ alignSelf: 'center' }}>
-                      Note: Button may have errors - investigate if issues occur
-                    </Text>
-                  </Flex>
+                  {/* 12min auction button - only show if there are active artworks with artists that don't have timers */}
+                  {auctionArtworks.filter(a => a.artist_id && a.status === 'active' && !a.closing_time).length > 0 && (
+                    <Flex gap="2" mt="3">
+                      <Button 
+                        size="2" 
+                        variant="solid"
+                        onClick={() => handleTimerAction('start', 12)}
+                        disabled={timerActionLoading}
+                      >
+                        Start 12min Auction
+                      </Button>
+                      <Text size="1" color="gray" style={{ alignSelf: 'center' }}>
+                        Note: Button may have errors - investigate if issues occur
+                      </Text>
+                    </Flex>
+                  )}
                 </Box>
               )}
               
@@ -2607,7 +2673,8 @@ const AdminPanel = ({
                             
                             // Show more detailed message if there's a winner
                             if (data.winner) {
-                              alert(`Bidding closed successfully!\nWinner: ${data.winner.nickname}\nAmount: $${data.winner.amount}\nTotal (incl tax): $${data.winner.total_with_tax}${data.winner.sms_sent ? '\nPayment notification sent via SMS' : ''}`);
+                              const smsStatus = data.sms_sent > 0 ? '\nPayment notification sent via SMS' : '';
+                              alert(`Bidding closed successfully!\nWinner: ${data.winner.nickname || 'Winner'}\nAmount: $${data.winner.amount}\nTotal (incl tax): $${data.winner.total_with_tax}${smsStatus}`);
                             } else {
                               alert('Bidding closed successfully (no bids)');
                             }
@@ -2709,7 +2776,10 @@ const AdminPanel = ({
                       selectedAuctionItem.status === 'active' ? 'green' :
                       'gray'
                     }>
-                      {selectedAuctionItem.buyer_pay_recent_status_id ? 'PAID' : 
+                      {selectedAuctionItem.buyer_pay_recent_status_id ? 
+                        (selectedAuctionItem.payment_statuses?.code === 'admin_paid' ? 
+                          `MARKED PAID BY ${selectedAuctionItem.payment_logs?.find(log => log.payment_type === 'admin_marked')?.admin_phone || 'ADMIN'}` :
+                         selectedAuctionItem.payment_statuses?.code === 'stripe_paid' ? 'PAID via STRIPE' : 'PAID') : 
                        (selectedAuctionItem.status || 'UNKNOWN').toUpperCase()}
                     </Badge>
                   </Flex>
@@ -2773,10 +2843,33 @@ const AdminPanel = ({
                   <Flex direction="column" gap="3">
                     {selectedAuctionItem.buyer_pay_recent_status_id ? (
                       <Box>
-                        <Badge size="2" color="blue" mb="2">PAID</Badge>
-                        <Text size="2" color="gray">
-                          Paid on: {new Date(selectedAuctionItem.buyer_pay_recent_date).toLocaleString()}
-                        </Text>
+                        <Badge size="2" color="blue" mb="2">
+                          {selectedAuctionItem.payment_statuses?.code === 'admin_paid' ? 
+                            `MARKED PAID BY ${selectedAuctionItem.payment_logs?.find(log => log.payment_type === 'admin_marked')?.admin_phone || 'ADMIN'}` :
+                           selectedAuctionItem.payment_statuses?.code === 'stripe_paid' ? 'PAID via STRIPE' : 'PAID'}
+                        </Badge>
+                        <Flex direction="column" gap="2">
+                          <Text size="2" color="gray">
+                            Paid on: {new Date(selectedAuctionItem.buyer_pay_recent_date).toLocaleString()}
+                          </Text>
+                          {selectedAuctionItem.payment_statuses && (
+                            <Text size="2" color="gray">
+                              Payment Type: {selectedAuctionItem.payment_statuses.description}
+                            </Text>
+                          )}
+                          {selectedAuctionItem.payment_logs?.find(log => log.payment_type === 'admin_marked') && (
+                            <Box>
+                              <Text size="2" color="gray">
+                                Admin Phone: {selectedAuctionItem.payment_logs.find(log => log.payment_type === 'admin_marked').admin_phone}
+                              </Text>
+                              {selectedAuctionItem.payment_logs.find(log => log.payment_type === 'admin_marked').metadata && (
+                                <Text size="1" color="gray" style={{ fontFamily: 'monospace', marginTop: '4px' }}>
+                                  {JSON.stringify(selectedAuctionItem.payment_logs.find(log => log.payment_type === 'admin_marked').metadata, null, 2)}
+                                </Text>
+                              )}
+                            </Box>
+                          )}
+                        </Flex>
                       </Box>
                     ) : (
                       <Box>
@@ -2787,24 +2880,27 @@ const AdminPanel = ({
                             variant="solid"
                             onClick={async () => {
                               try {
-                                // Mark as paid
-                                const { error } = await supabase
-                                  .from('art')
-                                  .update({
-                                    buyer_pay_recent_status_id: '00000000-0000-0000-0000-000000000001', // Default paid status
-                                    buyer_pay_recent_date: new Date().toISOString()
-                                  })
-                                  .eq('id', selectedAuctionItem.id);
+                                // Mark as paid using admin function
+                                const { data, error } = await supabase
+                                  .rpc('admin_update_art_status', {
+                                    p_art_code: selectedAuctionItem.art_code,
+                                    p_new_status: 'paid',
+                                    p_admin_phone: user?.phone
+                                  });
 
                                 if (error) throw error;
 
-                                // Refresh auction data
-                                fetchAuctionData();
-                                setSelectedAuctionItem(null);
-                                alert('Marked as paid successfully');
+                                if (data?.success) {
+                                  // Refresh auction data
+                                  fetchAuctionData();
+                                  setSelectedAuctionItem(null);
+                                  alert(`Marked as paid successfully by ${user?.phone || 'admin'}`);
+                                } else {
+                                  throw new Error(data?.error || 'Failed to mark as paid');
+                                }
                               } catch (error) {
                                 console.error('Error marking as paid:', error);
-                                alert('Failed to mark as paid');
+                                alert('Failed to mark as paid: ' + error.message);
                               }
                             }}
                           >

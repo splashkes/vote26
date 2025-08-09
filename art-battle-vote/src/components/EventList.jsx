@@ -313,46 +313,58 @@ const EventList = () => {
                       <Spinner size="2" />
                     </Flex>
                   ) : topArtworks[event.id]?.length > 0 ? (
-                    <Grid columns="4" gap="2">
-                      {topArtworks[event.id].map((artwork) => (
-                        <Flex
-                          key={artwork.id}
-                          direction="column"
-                          gap="1"
-                          style={{ cursor: 'pointer' }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/event/${event.id}`);
-                          }}
-                        >
-                          <Box 
-                            style={{ 
-                              position: 'relative',
-                              paddingBottom: '100%',
-                              backgroundColor: 'var(--gray-3)',
-                              borderRadius: '4px',
-                              overflow: 'hidden'
-                            }}
-                          >
-                            <img
-                              src={artwork.thumbnail}
-                              alt={artwork.artistName}
-                              style={{
-                                position: 'absolute',
-                                top: 0,
-                                left: 0,
-                                width: '100%',
-                                height: '100%',
-                                objectFit: 'cover'
-                              }}
-                            />
-                          </Box>
-                          <Text size="1" color="gray" style={{ textAlign: 'center' }}>
-                            {artwork.artistName}
-                          </Text>
-                        </Flex>
-                      ))}
-                    </Grid>
+                    (() => {
+                      // Calculate total votes in the event
+                      const totalVotes = topArtworks[event.id].reduce((sum, artwork) => sum + artwork.voteCount, 0);
+                      
+                      // Only show thumbnails if there are at least 10 votes total
+                      if (totalVotes >= 10) {
+                        return (
+                          <Grid columns="4" gap="2">
+                            {topArtworks[event.id].map((artwork) => (
+                              <Flex
+                                key={artwork.id}
+                                direction="column"
+                                gap="1"
+                                style={{ cursor: 'pointer' }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate(`/event/${event.id}`);
+                                }}
+                              >
+                                <Box 
+                                  style={{ 
+                                    position: 'relative',
+                                    paddingBottom: '100%',
+                                    backgroundColor: 'var(--gray-3)',
+                                    borderRadius: '4px',
+                                    overflow: 'hidden'
+                                  }}
+                                >
+                                  <img
+                                    src={artwork.thumbnail}
+                                    alt={artwork.artistName}
+                                    style={{
+                                      position: 'absolute',
+                                      top: 0,
+                                      left: 0,
+                                      width: '100%',
+                                      height: '100%',
+                                      objectFit: 'cover'
+                                    }}
+                                  />
+                                </Box>
+                                <Text size="1" color="gray" style={{ textAlign: 'center' }}>
+                                  {artwork.artistName}
+                                </Text>
+                              </Flex>
+                            ))}
+                          </Grid>
+                        );
+                      } else {
+                        return null; // Show nothing if less than 10 votes
+                      }
+                    })()
                   ) : (
                     <Text size="2" color="gray">No votes yet</Text>
                   )}
