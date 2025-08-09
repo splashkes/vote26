@@ -89,8 +89,8 @@ serve(async (req) => {
       throw new Error('Artwork not found')
     }
 
-    // Verify artwork is available for payment (sold, closed, or paid status)
-    if (!['sold', 'closed', 'paid'].includes(artwork.status)) {
+    // Verify artwork is available for payment (sold or closed status)
+    if (!['sold', 'closed'].includes(artwork.status)) {
       throw new Error('Artwork is not available for payment')
     }
 
