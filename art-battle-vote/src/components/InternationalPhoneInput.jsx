@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef, forwardRef } from 'react';
-import { Flex, Text, Badge } from '@radix-ui/themes';
-import IntlTelInput from 'intl-tel-input/react';
-import { parsePhoneNumber, isPossiblePhoneNumber } from 'libphonenumber-js';
-import 'intl-tel-input/build/css/intlTelInput.css';
+import { Flex, Text, Badge, Select, TextField } from '@radix-ui/themes';
+import { parsePhoneNumber, isPossiblePhoneNumber, getCountries, getCountryCallingCode } from 'libphonenumber-js';
+import { supabase } from '../lib/supabase';
 
 const InternationalPhoneInput = forwardRef(({ 
   value, 
@@ -17,9 +16,28 @@ const InternationalPhoneInput = forwardRef(({
   const [validationResult, setValidationResult] = useState(null);
   const [validationLoading, setValidationLoading] = useState(false);
   const [countryGuess, setCountryGuess] = useState('');
-  const [selectedCountry, setSelectedCountry] = useState('us');
+  const [selectedCountry, setSelectedCountry] = useState('CA'); // Start with Canada since user is detected there
   const validationTimeoutRef = useRef(null);
-  const intlInputRef = useRef(null);
+  const inputRef = useRef(null);
+
+  // Country data for dropdown
+  const countryData = [
+    { code: 'CA', name: 'Canada', dialCode: '+1', flag: '🇨🇦' },
+    { code: 'US', name: 'United States', dialCode: '+1', flag: '🇺🇸' },
+    { code: 'GB', name: 'United Kingdom', dialCode: '+44', flag: '🇬🇧' },
+    { code: 'AU', name: 'Australia', dialCode: '+61', flag: '🇦🇺' },
+    { code: 'FR', name: 'France', dialCode: '+33', flag: '🇫🇷' },
+    { code: 'DE', name: 'Germany', dialCode: '+49', flag: '🇩🇪' },
+    { code: 'JP', name: 'Japan', dialCode: '+81', flag: '🇯🇵' },
+    { code: 'CN', name: 'China', dialCode: '+86', flag: '🇨🇳' },
+    { code: 'IN', name: 'India', dialCode: '+91', flag: '🇮🇳' },
+    { code: 'BR', name: 'Brazil', dialCode: '+55', flag: '🇧🇷' },
+    { code: 'MX', name: 'Mexico', dialCode: '+52', flag: '🇲🇽' },
+    { code: 'ES', name: 'Spain', dialCode: '+34', flag: '🇪🇸' },
+    { code: 'IT', name: 'Italy', dialCode: '+39', flag: '🇮🇹' },
+    { code: 'NL', name: 'Netherlands', dialCode: '+31', flag: '🇳🇱' },
+    { code: 'CH', name: 'Switzerland', dialCode: '+41', flag: '🇨🇭' },
+  ];
 
   // Auto-detect user country based on timezone/IP
   useEffect(() => {
@@ -28,169 +46,165 @@ const InternationalPhoneInput = forwardRef(({
         // Primary: Timezone-based detection
         const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
         const timezoneCountryMap = {
-          'America/New_York': 'us', 'America/Chicago': 'us', 'America/Denver': 'us', 'America/Los_Angeles': 'us',
-          'America/Toronto': 'ca', 'America/Vancouver': 'ca', 'America/Montreal': 'ca',
-          'Europe/London': 'gb', 'Europe/Paris': 'fr', 'Europe/Berlin': 'de', 'Europe/Rome': 'it',
-          'Europe/Madrid': 'es', 'Europe/Amsterdam': 'nl', 'Europe/Brussels': 'be',
-          'Asia/Tokyo': 'jp', 'Asia/Shanghai': 'cn', 'Asia/Hong_Kong': 'hk', 'Asia/Singapore': 'sg',
-          'Asia/Seoul': 'kr', 'Asia/Kolkata': 'in', 'Asia/Dubai': 'ae',
-          'Australia/Sydney': 'au', 'Australia/Melbourne': 'au', 'Australia/Perth': 'au',
-          'America/Sao_Paulo': 'br', 'America/Mexico_City': 'mx', 'America/Buenos_Aires': 'ar',
-          'Africa/Cairo': 'eg', 'Africa/Lagos': 'ng', 'Africa/Johannesburg': 'za'
+          'America/New_York': 'US', 'America/Chicago': 'US', 'America/Denver': 'US', 'America/Los_Angeles': 'US',
+          'America/Toronto': 'CA', 'America/Vancouver': 'CA', 'America/Montreal': 'CA',
+          'Europe/London': 'GB', 'Europe/Paris': 'FR', 'Europe/Berlin': 'DE', 'Europe/Rome': 'IT',
+          'Europe/Madrid': 'ES', 'Europe/Amsterdam': 'NL', 'Europe/Brussels': 'BE',
+          'Asia/Tokyo': 'JP', 'Asia/Shanghai': 'CN', 'Asia/Hong_Kong': 'HK', 'Asia/Singapore': 'SG',
+          'Australia/Sydney': 'AU', 'Australia/Melbourne': 'AU', 'Australia/Perth': 'AU',
+          'America/Sao_Paulo': 'BR', 'America/Mexico_City': 'MX'
         };
         
-        let detectedCountry = timezoneCountryMap[timezone] || 'us';
-        
-        // Secondary: IP geolocation fallback
-        if (!timezoneCountryMap[timezone]) {
-          try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 3000);
-            
-            const response = await fetch('https://ipapi.co/json/', { 
-              signal: controller.signal,
-              headers: { 'Accept': 'application/json' }
-            });
-            clearTimeout(timeoutId);
-            
-            if (response.ok) {
-              const data = await response.json();
-              if (data.country_code) {
-                detectedCountry = data.country_code.toLowerCase();
-              }
-            }
-          } catch (geoError) {
-            console.log('IP geolocation failed, using timezone fallback');
-          }
-        }
+        let detectedCountry = timezoneCountryMap[timezone] || 'CA'; // Default to Canada as user detected there
+        console.log('🌍 Detected country:', detectedCountry, 'from timezone:', timezone);
         
         setCountryGuess(detectedCountry);
         setSelectedCountry(detectedCountry);
       } catch (error) {
-        console.log('Country detection failed, using US default');
-        setSelectedCountry('us');
+        console.log('Country detection failed, using Canada default');
+        setSelectedCountry('CA');
       }
     };
 
     detectUserCountry();
   }, []);
 
-  // Debounced validation with Twilio integration
-  const validatePhoneNumber = async (phoneNumber, countryCode) => {
+  // Enhanced validation using Supabase edge function 
+  const callEnhancedValidation = async (phoneNumber, countryCode) => {
     if (!phoneNumber || phoneNumber.length < 8) {
-      setValidationResult(null);
       return;
     }
 
     setValidationLoading(true);
-    
+
     try {
-      // Basic validation with libphonenumber-js
-      let basicResult = {
-        valid: false,
-        source: 'basic',
-        confidence: 'low'
-      };
-
-      if (isPossiblePhoneNumber(phoneNumber)) {
-        try {
-          const parsed = parsePhoneNumber(phoneNumber);
-          basicResult = {
-            valid: parsed.isValid(),
-            phoneNumber: parsed.format('E.164'),
-            nationalFormat: parsed.formatNational(),
-            countryCode: parsed.country,
-            phoneType: parsed.getType(),
-            isMobile: parsed.getType() === 'MOBILE',
-            source: 'basic',
-            confidence: 'medium'
-          };
-        } catch (parseError) {
-          console.log('Phone parsing failed:', parseError);
+      const { data, error } = await supabase.functions.invoke('phone-validation', {
+        body: {
+          phoneNumber: phoneNumber,
+          countryCode: countryCode
         }
-      }
-
-      // Try Twilio Lookup API if credentials available
-      const twilioAccountSid = import.meta.env.VITE_TWILIO_ACCOUNT_SID;
-      const twilioAuthToken = import.meta.env.VITE_TWILIO_AUTH_TOKEN;
-      
-      if (twilioAccountSid && twilioAuthToken && basicResult.valid) {
-        try {
-          const url = `https://lookups.twilio.com/v2/PhoneNumbers/${encodeURIComponent(basicResult.phoneNumber)}`;
-          const params = new URLSearchParams({
-            Fields: 'line_type_intelligence,validation'
-          });
-          
-          if (countryCode) {
-            params.append('CountryCode', countryCode.toUpperCase());
-          }
-
-          const response = await fetch(`${url}?${params}`, {
-            method: 'GET',
-            headers: {
-              'Authorization': `Basic ${btoa(`${twilioAccountSid}:${twilioAuthToken}`)}`,
-              'Accept': 'application/json'
-            },
-            ...(typeof AbortSignal.timeout === 'function' ? { signal: AbortSignal.timeout(5000) } : {})
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            setValidationResult({
-              valid: data.validation?.valid || basicResult.valid,
-              phoneNumber: data.phone_number || basicResult.phoneNumber,
-              nationalFormat: data.national_format || basicResult.nationalFormat,
-              countryCode: data.country_code || basicResult.countryCode,
-              carrierName: data.carrier?.name,
-              lineType: data.line_type_intelligence?.type,
-              isMobile: data.line_type_intelligence?.type === 'mobile',
-              validationErrors: data.validation?.validation_errors || [],
-              source: 'twilio',
-              confidence: 'high'
-            });
-            return;
-          }
-        } catch (twilioError) {
-          console.log('Twilio validation failed, using basic result:', twilioError);
-        }
-      }
-
-      setValidationResult(basicResult);
-    } catch (error) {
-      console.error('Validation error:', error);
-      setValidationResult({
-        valid: false,
-        error: 'Validation failed',
-        source: 'error',
-        confidence: 'low'
       });
+
+      if (error) {
+        console.log('Enhanced validation error:', error);
+        return;
+      }
+
+      if (data) {
+        console.log('📞 Enhanced validation result:', data);
+        setValidationResult(data);
+        
+        // Update country flag based on Twilio's detected country
+        if (data.countryCode && data.countryCode !== selectedCountry) {
+          console.log('🌍 Updating country from', selectedCountry, 'to', data.countryCode, 'based on Twilio response');
+          // Twilio returns 2-letter codes (US, CA), our dropdown uses 2-letter codes too
+          const detectedCountry = data.countryCode.toUpperCase();
+          if (countryData.find(c => c.code === detectedCountry)) {
+            setSelectedCountry(detectedCountry);
+          }
+        }
+        
+        // Update parent component with enhanced validation
+        if (onChange) {
+          onChange({
+            target: { value: phone },
+            phone: data.phoneNumber || phone,
+            country: data.countryCode || selectedCountry, // Use Twilio's detected country
+            inputValue: phone,
+            isValid: data.valid,
+            nationalFormat: data.nationalFormat || phone,
+            e164Format: data.phoneNumber,
+            validationResult: data
+          });
+        }
+      }
+    } catch (error) {
+      console.log('Enhanced validation failed:', error);
     } finally {
       setValidationLoading(false);
     }
   };
 
-  // Handle phone input changes
-  const handlePhoneChange = (value, country) => {
-    setPhone(value);
-    setSelectedCountry(country?.iso2 || 'us');
+
+  // Handle phone input changes - SIMPLE VERSION THAT WORKS
+  const handlePhoneInput = (inputValue) => {
+    console.log('📱 Phone input:', inputValue);
     
-    // Debounce validation
+    // Clean input but keep basic formatting chars
+    const cleanedInput = inputValue.replace(/[^\d\s\-\(\)\+]/g, '');
+    
+    let isValid = false;
+    let e164Phone = '';
+    let nationalFormat = cleanedInput;
+    
+    if (cleanedInput && cleanedInput.length >= 3) {
+      try {
+        // Try to parse with selected country context
+        const fullNumber = cleanedInput.startsWith('+') ? cleanedInput : cleanedInput;
+        
+        let phoneToValidate = fullNumber;
+        // If no country code, add the selected country's code
+        if (!fullNumber.startsWith('+')) {
+          const country = countryData.find(c => c.code === selectedCountry);
+          phoneToValidate = `${country?.dialCode || '+1'}${cleanedInput}`;
+        }
+        
+        console.log('📱 Validating:', phoneToValidate, 'for country:', selectedCountry);
+        
+        if (isPossiblePhoneNumber(phoneToValidate)) {
+          const parsed = parsePhoneNumber(phoneToValidate);
+          if (parsed && parsed.isValid()) {
+            isValid = true;
+            e164Phone = parsed.format('E.164');
+            nationalFormat = parsed.formatNational();
+            console.log('✅ Valid phone:', { e164Phone, nationalFormat });
+            
+            // Update the display with formatted version
+            setPhone(nationalFormat);
+          } else {
+            setPhone(cleanedInput); // Keep as entered if not valid
+          }
+        } else {
+          setPhone(cleanedInput); // Keep as entered if not possible
+        }
+      } catch (error) {
+        console.log('📱 Parse error:', error);
+        // Fallback validation for reasonable numbers
+        const digitsOnly = cleanedInput.replace(/\D/g, '');
+        if (digitsOnly.length >= 10) {
+          isValid = true;
+          e164Phone = selectedCountry === 'CA' || selectedCountry === 'US' ? `+1${digitsOnly}` : `+${digitsOnly}`;
+          nationalFormat = cleanedInput;
+        }
+        setPhone(cleanedInput); // Update display
+      }
+    } else {
+      setPhone(cleanedInput); // Update display for short input
+    }
+    
+    console.log('📱 Final result:', { isValid, e164Phone, nationalFormat });
+    
+    // Debounce enhanced validation
     if (validationTimeoutRef.current) {
       clearTimeout(validationTimeoutRef.current);
     }
     
-    validationTimeoutRef.current = setTimeout(() => {
-      validatePhoneNumber(value, country?.iso2);
-    }, 500);
+    if (isValid && e164Phone) {
+      validationTimeoutRef.current = setTimeout(() => {
+        callEnhancedValidation(e164Phone, selectedCountry);
+      }, 750);
+    }
     
-    // Notify parent component
+    // Notify parent
     if (onChange) {
       onChange({
-        target: { value },
-        phone: value,
-        country: country?.iso2 || 'us',
-        inputValue: value,
-        isValid: validationResult?.valid || false,
+        target: { value: nationalFormat },
+        phone: e164Phone,
+        country: selectedCountry,
+        inputValue: nationalFormat,
+        isValid: isValid,
+        nationalFormat: nationalFormat,
+        e164Format: e164Phone,
         validationResult: validationResult
       });
     }
@@ -205,63 +219,103 @@ const InternationalPhoneInput = forwardRef(({
     };
   }, []);
 
+  // Ensure input gets focus, not the flag dropdown
+  useEffect(() => {
+    const focusInput = () => {
+      try {
+        // Multiple strategies to find and focus the input
+        let inputElement = null;
+        
+        // Strategy 1: Use the container class
+        const phoneContainer = document.querySelector('.phone-input-container');
+        if (phoneContainer) {
+          inputElement = phoneContainer.querySelector('input[type="tel"]');
+        }
+        
+        // Strategy 2: Find any tel input if container approach fails
+        if (!inputElement) {
+          const telInputs = document.querySelectorAll('input[type="tel"]');
+          if (telInputs.length > 0) {
+            inputElement = telInputs[telInputs.length - 1]; // Get the last one (likely our component)
+          }
+        }
+        
+        // Strategy 3: Use our ref if available
+        if (!inputElement && intlInputRef.current) {
+          try {
+            const inputFromRef = intlInputRef.current.querySelector?.('input[type="tel"]');
+            if (inputFromRef) {
+              inputElement = inputFromRef;
+            }
+          } catch (refError) {
+            // Ref approach failed, continue with other methods
+          }
+        }
+        
+        // Focus the input if found
+        if (inputElement && inputElement.focus && document.activeElement !== inputElement) {
+          inputElement.focus();
+        }
+      } catch (error) {
+        console.log('Focus management error (non-critical):', error);
+      }
+    };
+    
+    // Try immediately, then with delays to handle different rendering scenarios
+    focusInput();
+    setTimeout(focusInput, 100);
+    setTimeout(focusInput, 300);
+  }, []);
+
   return (
     <Flex direction="column" gap="2">
-      {/* Phone Input Container */}
-      <div style={{ 
-        position: 'relative',
-        minHeight: '44px' // Mobile-friendly touch target
-      }}>
-        <IntlTelInput
+      {/* Simple Country + Phone Input */}
+      <Flex gap="2" align="center">
+        <Select.Root 
+          value={selectedCountry} 
+          onValueChange={(newCountry) => {
+            console.log('🌍 Country changed to:', newCountry);
+            setSelectedCountry(newCountry);
+            // Re-validate current phone with new country
+            if (phone) {
+              handlePhoneInput(phone);
+            }
+          }}
+        >
+          <Select.Trigger style={{ minWidth: '120px' }}>
+            {countryData.find(c => c.code === selectedCountry)?.flag} {selectedCountry}
+          </Select.Trigger>
+          <Select.Content>
+            {countryData.map((country) => (
+              <Select.Item key={country.code} value={country.code}>
+                {country.flag} {country.name} {country.dialCode}
+              </Select.Item>
+            ))}
+          </Select.Content>
+        </Select.Root>
+
+        <TextField.Root
           ref={(el) => {
-            intlInputRef.current = el;
+            inputRef.current = el;
             if (ref) {
               if (typeof ref === 'function') {
                 ref(el);
-              } else {
+              } else if (ref && typeof ref === 'object' && 'current' in ref) {
                 ref.current = el;
               }
             }
           }}
           value={phone}
-          onChangeNumber={handlePhoneChange}
-          onChangeCountry={handlePhoneChange}
-          initOptions={{
-            initialCountry: selectedCountry,
-            preferredCountries: ['us', 'ca', 'gb', 'au'],
-            utilsScript: '/intl-tel-input/js/utils.js', // For formatting
-            autoInsertDialCode: false,
-            separateDialCode: false,
-            nationalMode: false,
-            // Mobile optimizations
-            allowDropdown: true,
-            autoHideDialCode: false,
-            // Styling
-            customContainer: 'phone-input-container',
-            customPlaceholder: function(selectedCountryPlaceholder) {
-              return placeholder || selectedCountryPlaceholder;
-            }
-          }}
-          inputProps={{
-            placeholder,
-            disabled,
-            autoComplete,
-            onKeyPress,
-            style: {
-              width: '100%',
-              height: '44px', // Mobile touch target
-              fontSize: '16px', // Prevent iOS zoom
-              padding: '0 54px 0 12px', // Account for flag dropdown
-              border: '1px solid var(--gray-7)',
-              borderRadius: 'var(--radius-2)',
-              backgroundColor: 'var(--color-surface)',
-              color: 'var(--gray-12)',
-              touchAction: 'manipulation'
-            },
-            ...props
-          }}
+          onChange={(e) => handlePhoneInput(e.target.value)}
+          onKeyPress={onKeyPress}
+          placeholder={placeholder || "Enter phone number"}
+          disabled={disabled}
+          autoComplete={autoComplete}
+          style={{ flex: 1 }}
+          size="3"
+          {...props}
         />
-      </div>
+      </Flex>
 
       {/* Validation Status */}
       {validationLoading && (
@@ -305,17 +359,11 @@ const InternationalPhoneInput = forwardRef(({
           )}
           
           <Text size="1" color="gray">
-            {validationResult.source === 'twilio' ? '🔒 Verified by Twilio' : 
+            {countryGuess && selectedCountry !== countryGuess ? '📍 ' : ''}
+            {validationResult.source === 'twilio' ? '🔒 Enhanced verification' : 
              validationResult.source === 'basic' ? '⚡ Basic validation' : ''}
           </Text>
         </Flex>
-      )}
-
-      {/* Country Detection Info */}
-      {countryGuess && selectedCountry !== countryGuess && (
-        <Text size="1" color="gray">
-          📍 Detected location: {countryGuess.toUpperCase()} - Click flag to change
-        </Text>
       )}
       
       {!validationResult && !validationLoading && (
@@ -323,67 +371,6 @@ const InternationalPhoneInput = forwardRef(({
           💡 Select country and enter your phone number
         </Text>
       )}
-      
-      {/* Custom CSS */}
-      <style jsx>{`
-        .phone-input-container {
-          width: 100%;
-        }
-        
-        .iti {
-          width: 100% !important;
-        }
-        
-        .iti__flag-container {
-          right: auto !important;
-          left: 0 !important;
-        }
-        
-        .iti__selected-flag {
-          height: 44px !important;
-          padding: 0 8px !important;
-          border-right: 1px solid var(--gray-7) !important;
-          background: var(--color-surface) !important;
-        }
-        
-        .iti__selected-flag:hover {
-          background: var(--gray-3) !important;
-        }
-        
-        .iti__country-list {
-          background: var(--color-surface) !important;
-          border: 1px solid var(--gray-7) !important;
-          border-radius: var(--radius-2) !important;
-          box-shadow: var(--shadow-4) !important;
-          max-height: 200px !important;
-          z-index: 9999 !important;
-        }
-        
-        .iti__country {
-          padding: 8px 12px !important;
-          border-bottom: 1px solid var(--gray-4) !important;
-        }
-        
-        .iti__country:hover {
-          background: var(--gray-3) !important;
-        }
-        
-        .iti__country.iti__highlight {
-          background: var(--accent-9) !important;
-          color: white !important;
-        }
-        
-        @media (max-width: 768px) {
-          .iti__selected-flag {
-            height: 48px !important;
-          }
-          
-          .phone-input-container input {
-            height: 48px !important;
-            font-size: 16px !important;
-          }
-        }
-      `}</style>
     </Flex>
   );
 });

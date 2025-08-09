@@ -32,13 +32,41 @@ const AuthModal = ({ open, onOpenChange, redirectTo = null }) => {
   // Auto-focus inputs when step changes
   useEffect(() => {
     if (open) {
-      setTimeout(() => {
-        if (step === 'phone' && phoneInputRef.current) {
-          phoneInputRef.current.focus();
-        } else if (step === 'otp' && otpInputRef.current) {
-          otpInputRef.current.focus();
+      const focusActiveInput = () => {
+        try {
+          if (step === 'phone') {
+            // Multiple strategies to find and focus the phone input
+            let inputElement = null;
+            
+            // Strategy 1: Use container class
+            const phoneContainer = document.querySelector('.phone-input-container');
+            if (phoneContainer) {
+              inputElement = phoneContainer.querySelector('input[type="tel"]');
+            }
+            
+            // Strategy 2: Find all tel inputs and use the last one
+            if (!inputElement) {
+              const telInputs = document.querySelectorAll('input[type="tel"]');
+              if (telInputs.length > 0) {
+                inputElement = telInputs[telInputs.length - 1];
+              }
+            }
+            
+            if (inputElement && inputElement.focus) {
+              inputElement.focus();
+            }
+          } else if (step === 'otp' && otpInputRef.current) {
+            otpInputRef.current.focus();
+          }
+        } catch (error) {
+          console.log('Focus error (non-critical):', error);
         }
-      }, 100);
+      };
+      
+      // Try multiple times with different delays to handle async rendering
+      setTimeout(focusActiveInput, 100);
+      setTimeout(focusActiveInput, 300);
+      setTimeout(focusActiveInput, 500);
     }
   }, [open, step]);
 
@@ -101,9 +129,26 @@ const AuthModal = ({ open, onOpenChange, redirectTo = null }) => {
 
   // Handle phone input changes from international phone component
   const handlePhoneChange = (data) => {
-    setPhone(data.inputValue || data.phone || ''); // Display value
-    setRawPhone(data.validationResult?.phoneNumber || data.phone || ''); // E.164 formatted value
-    setPhoneValid(data.isValid || (data.validationResult?.valid && data.phone?.length >= 8));
+    console.log('📞 AuthModal: Phone change data received:', {
+      inputValue: data.inputValue,
+      phone: data.phone,
+      nationalFormat: data.nationalFormat,
+      e164Format: data.e164Format,
+      isValid: data.isValid,
+      validationResult: data.validationResult
+    });
+    console.log('📞 AuthModal: Current phoneValid state:', phoneValid);
+    
+    // Use formatted national version for display (like "(416) 302-5959")
+    setPhone(data.nationalFormat || data.inputValue || data.phone || ''); // Formatted display value
+    setRawPhone(data.e164Format || data.phone || ''); // E.164 for backend (+14163025959)
+    const newValid = data.isValid || false;
+    setPhoneValid(newValid);
+    
+    console.log('📞 AuthModal: Setting phoneValid to:', newValid);
+    console.log('📞 AuthModal: Display phone:', data.nationalFormat);
+    console.log('📞 AuthModal: Backend phone:', data.e164Format);
+    console.log('📞 AuthModal: Button should be enabled:', !loading && newValid);
   };
 
   return (
@@ -154,7 +199,7 @@ const AuthModal = ({ open, onOpenChange, redirectTo = null }) => {
               <Button 
                 size="3" 
                 onClick={handleSendOtp}
-                disabled={loading || !phoneValid || !rawPhone}
+                disabled={loading || !phoneValid}
                 loading={loading}
               >
                 Send Verification Code
