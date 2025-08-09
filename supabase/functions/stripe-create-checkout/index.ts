@@ -89,8 +89,8 @@ serve(async (req) => {
       throw new Error('Artwork not found')
     }
 
-    // Verify artwork is sold and user is the winner
-    if (artwork.status !== 'sold') {
+    // Verify artwork is available for payment (sold, closed, or paid status)
+    if (!['sold', 'closed', 'paid'].includes(artwork.status)) {
       throw new Error('Artwork is not available for payment')
     }
 
@@ -158,54 +158,44 @@ serve(async (req) => {
     })
 
     // Create checkout session
+    const lineItems = [
+      {
+        price_data: {
+          currency: currency.toLowerCase(),
+          product_data: {
+            name: `${artwork.art_code} - ${artwork.artist_profiles?.name || 'Artist'}`,
+            description: `Art Battle artwork from Round ${artwork.round}, Easel ${artwork.easel}`,
+            metadata: {
+              art_id: artwork.id,
+              art_code: artwork.art_code,
+              event_id: event.id,
+              event_name: event.name,
+            },
+          },
+          unit_amount: Math.round(baseAmount * 100), // Convert to cents
+        },
+        quantity: 1,
+      },
+    ];
+
+    // Add tax as a separate line item if applicable
+    if (taxAmount > 0) {
+      lineItems.push({
+        price_data: {
+          currency: currency.toLowerCase(),
+          product_data: {
+            name: `Tax (${taxRate}%)`,
+            description: 'Sales tax',
+          },
+          unit_amount: Math.round(taxAmount * 100),
+        },
+        quantity: 1,
+      });
+    }
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
-      line_items: [
-        {
-          price_data: {
-            currency: currency.toLowerCase(),
-            product_data: {
-              name: `${artwork.art_code} - ${artwork.artist_profiles?.name || 'Artist'}`,
-              description: `Art Battle artwork from Round ${artwork.round}, Easel ${artwork.easel}`,
-              metadata: {
-                art_id: artwork.id,
-                art_code: artwork.art_code,
-                event_id: event.id,
-                event_name: event.name,
-              },
-            },
-            unit_amount: Math.round(baseAmount * 100), // Convert to cents
-          },
-          quantity: 1,
-        },
-      ],
-      // Add tax as a separate line item if applicable
-      ...(taxAmount > 0 ? {
-        line_items: [
-          {
-            price_data: {
-              currency: currency.toLowerCase(),
-              product_data: {
-                name: `${artwork.art_code} - ${artwork.artist_profiles?.name || 'Artist'}`,
-                description: `Art Battle artwork from Round ${artwork.round}, Easel ${artwork.easel}`,
-              },
-              unit_amount: Math.round(baseAmount * 100),
-            },
-            quantity: 1,
-          },
-          {
-            price_data: {
-              currency: currency.toLowerCase(),
-              product_data: {
-                name: `Tax (${taxRate}%)`,
-                description: 'Sales tax',
-              },
-              unit_amount: Math.round(taxAmount * 100),
-            },
-            quantity: 1,
-          },
-        ],
-      } : {}),
+      line_items: lineItems,
       mode: 'payment',
       success_url: success_url || `https://artb.art/payment/{CHECKOUT_SESSION_ID}`,
       cancel_url: cancel_url || `https://artb.art/event/${event.id}?payment=cancelled`,
