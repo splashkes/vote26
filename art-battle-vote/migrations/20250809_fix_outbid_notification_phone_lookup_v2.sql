@@ -29,8 +29,8 @@ BEGIN
   END IF;
 
   -- Extract event code from art_id (e.g., AB2900 from AB2900-1-5)
-  -- Construct auction URL format: https://artb.art/AB2900/auction
-  v_vote_url := format('%s/%s/auction',
+  -- Construct auction URL format: https://artb.art/e/AB2900/auction
+  v_vote_url := format('%s/e/%s/auction',
     COALESCE(current_setting('app.site_url', true), 'https://artb.art'),
     split_part(p_art_id, '-', 1)
   );
