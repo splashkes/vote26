@@ -27,91 +27,9 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    // Get client IP first for security checks
-    const clientIP = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 
-                    req.headers.get('x-real-ip') || 
-                    'unknown'
-
-    // Security Check 1: IP Blocking
-    const { data: isBlocked, error: blockCheckError } = await supabase
-      .rpc('is_ip_blocked', { p_ip_address: clientIP })
-
-    if (blockCheckError) {
-      console.error('Error checking IP block:', blockCheckError)
-    } else if (isBlocked) {
-      // Record the blocked attempt
-      await supabase.rpc('record_validation_attempt', {
-        p_ip_address: clientIP,
-        p_user_id: null,
-        p_qr_code: 'blocked',
-        p_is_successful: false,
-        p_user_agent: req.headers.get('user-agent') || null
-      }).catch(console.error)
-
-      return new Response(
-        JSON.stringify({ 
-          success: false,
-          error: 'Access temporarily blocked',
-          message: 'Too many failed attempts. Please try again later.',
-          is_valid: false
-        }),
-        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    // Security Check 2: Rate Limiting (10 attempts per 5 minutes)
-    const { data: isOverLimit, error: rateLimitError } = await supabase
-      .rpc('check_rate_limit', { 
-        p_ip_address: clientIP,
-        p_window_minutes: 5,
-        p_max_attempts: 10
-      })
-
-    if (rateLimitError) {
-      console.error('Error checking rate limit:', rateLimitError)
-    } else if (isOverLimit) {
-      // Auto-block IP for 1 hour due to rate limiting
-      await supabase.rpc('block_ip_address', {
-        p_ip_address: clientIP,
-        p_duration_minutes: 60,
-        p_reason: 'rate_limit'
-      }).catch(console.error)
-
-      // Record the rate-limited attempt
-      await supabase.rpc('record_validation_attempt', {
-        p_ip_address: clientIP,
-        p_user_id: null,
-        p_qr_code: 'rate_limited',
-        p_is_successful: false,
-        p_user_agent: req.headers.get('user-agent') || null
-      }).catch(console.error)
-
-      return new Response(
-        JSON.stringify({ 
-          success: false,
-          error: 'Rate limit exceeded',
-          message: 'Too many requests. Your IP has been temporarily blocked.',
-          is_valid: false
-        }),
-        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
     // Get user from JWT token
     const authHeader = req.headers.get('Authorization')
-    let user = null
-    let userId = null
-
     if (!authHeader) {
-      // Record unauthenticated attempt
-      await supabase.rpc('record_validation_attempt', {
-        p_ip_address: clientIP,
-        p_user_id: null,
-        p_qr_code: 'unauthenticated',
-        p_is_successful: false,
-        p_user_agent: req.headers.get('user-agent') || null
-      }).catch(console.error)
-
       return new Response(
         JSON.stringify({ 
           success: false,
@@ -125,20 +43,10 @@ serve(async (req) => {
 
     // Extract JWT and get user
     const jwt = authHeader.replace('Bearer ', '')
-    const { data: { user: authUser }, error: userError } = await supabase.auth.getUser(jwt)
+    const { data: { user }, error: userError } = await supabase.auth.getUser(jwt)
     
-    if (userError || !authUser) {
+    if (userError || !user) {
       console.error('Auth error:', userError)
-      
-      // Record authentication failure
-      await supabase.rpc('record_validation_attempt', {
-        p_ip_address: clientIP,
-        p_user_id: null,
-        p_qr_code: 'auth_failed',
-        p_is_successful: false,
-        p_user_agent: req.headers.get('user-agent') || null
-      }).catch(console.error)
-
       return new Response(
         JSON.stringify({ 
           success: false,
@@ -150,27 +58,20 @@ serve(async (req) => {
       )
     }
 
-    user = authUser
-    userId = user.id
-
     // Parse request body
     const { qr_code, user_agent, location_data }: ScanRequest = await req.json()
 
     if (!qr_code) {
-      // Record invalid request
-      await supabase.rpc('record_validation_attempt', {
-        p_ip_address: clientIP,
-        p_user_id: userId,
-        p_qr_code: 'missing',
-        p_is_successful: false,
-        p_user_agent: req.headers.get('user-agent') || null
-      }).catch(console.error)
-
       return new Response(
         JSON.stringify({ error: 'QR code required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
+
+    // Get client IP
+    const clientIP = req.headers.get('x-forwarded-for') || 
+                    req.headers.get('x-real-ip') || 
+                    'unknown'
 
     // Find the QR code and check if it's valid
     const { data: qrData, error: qrError } = await supabase
@@ -234,7 +135,7 @@ serve(async (req) => {
         .insert({
           auth_user_id: user.id,
           auth_phone: authPhone,
-          phone_number: authPhone,
+          phone: authPhone,
           nickname: nickname,
           email: user.email
         })
@@ -250,36 +151,6 @@ serve(async (req) => {
       }
 
       personId = newPerson.id
-    }
-
-    // Record validation attempt for security tracking
-    await supabase.rpc('record_validation_attempt', {
-      p_ip_address: clientIP,
-      p_user_id: userId,
-      p_qr_code: qr_code,
-      p_is_successful: isValid,
-      p_user_agent: user_agent || req.headers.get('user-agent') || null
-    }).catch(console.error)
-
-    // Check for suspicious activity: Multiple rapid failed attempts
-    if (!isValid) {
-      const { data: recentFailedAttempts } = await supabase
-        .rpc('check_rate_limit', { 
-          p_ip_address: clientIP,
-          p_window_minutes: 2, // 2 minute window
-          p_max_attempts: 5    // 5 failed attempts
-        })
-
-      if (recentFailedAttempts) {
-        // Block IP for suspicious activity (multiple rapid failures)
-        await supabase.rpc('block_ip_address', {
-          p_ip_address: clientIP,
-          p_duration_minutes: 30,
-          p_reason: 'suspicious_activity'
-        }).catch(console.error)
-        
-        console.warn(`IP ${clientIP} blocked for suspicious activity: multiple rapid QR validation failures`)
-      }
     }
 
     // Record the scan attempt (always record, regardless of validity)
@@ -355,9 +226,10 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: false,
-        error: 'Unable to validate QR code',
-        message: 'There was an issue processing your QR scan. Please try again or contact event staff.',
-        is_valid: false
+        error: 'QR Validation Error',
+        message: `ERROR: ${error.message || error}`,
+        is_valid: false,
+        error_details: error.code || error.name || 'Unknown'
       }),
       { 
         status: 500, 

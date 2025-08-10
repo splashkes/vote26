@@ -199,7 +199,7 @@ serve(async (req) => {
       mode: 'payment',
       success_url: success_url || `https://artb.art/payment/{CHECKOUT_SESSION_ID}`,
       cancel_url: cancel_url || `https://artb.art/event/${event.id}?payment=cancelled`,
-      customer_email: person.email,
+      customer_email: person.email || undefined, // Don't pass null to Stripe
       metadata: {
         art_id: artwork.id,
         person_id: person.id,
@@ -233,8 +233,8 @@ serve(async (req) => {
           stripe_session_url: session.url,
           art_code: artwork.art_code,
           artist_name: artwork.artist_profiles?.name,
-          buyer_name: `${person.first_name} ${person.last_name}`,
-          buyer_email: person.email,
+          buyer_name: [person.first_name, person.last_name].filter(Boolean).join(' ') || person.nickname || 'Art Buyer',
+          buyer_email: person.email || null,
           buyer_phone: person.phone,
         },
       })

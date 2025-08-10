@@ -155,11 +155,15 @@ Environment:
 - LOG_FILE: $LOG_FILE
 
 COMPONENTS TO BACKUP:
-- Database tables and data
+- Database tables and data (703,000+ rows)
 - Edge functions (Supabase functions)  
-- Database migrations
-- Application configurations
-- Backup and cleanup scripts
+- Database migrations and app migrations
+- RLS policies and database triggers
+- External service documentation
+- Infrastructure configurations
+- Environment variable documentation
+- Recovery procedures and instructions
+- Application configurations and scripts
 EOF
 }
 
@@ -391,6 +395,306 @@ verify_edge_functions() {
     log_success "Edge functions verification completed"
 }
 
+# Export Supabase project settings
+export_supabase_settings() {
+    log_info "Exporting Supabase project settings..."
+    
+    mkdir -p "$BACKUP_DIR/supabase-settings"
+    
+    # Export project configuration
+    if command -v supabase &> /dev/null; then
+        # Get project info
+        supabase projects list --output json > "$BACKUP_DIR/supabase-settings/projects.json" 2>/dev/null || log_warn "Could not export projects list"
+        
+        # Get project settings
+        supabase project api-keys --project-ref xsqdkubgyqwpyvfltnrf --output json > "$BACKUP_DIR/supabase-settings/api-keys.json" 2>/dev/null || log_warn "Could not export API keys info"
+        
+        log_info "  ✓ Project configuration exported"
+    else
+        log_warn "Supabase CLI not available, skipping project settings export"
+    fi
+    
+    # Export database schema with RLS policies
+    log_info "Exporting RLS policies and triggers..."
+    PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -d "$DB_NAME" -U "$DB_USER" -c "
+    SELECT 
+        schemaname,
+        tablename,
+        policyname,
+        permissive,
+        roles,
+        cmd,
+        qual,
+        with_check
+    FROM pg_policies
+    WHERE schemaname = 'public'
+    ORDER BY tablename, policyname;
+    " > "$BACKUP_DIR/supabase-settings/rls_policies.txt"
+    
+    # Export triggers
+    PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -d "$DB_NAME" -U "$DB_USER" -c "
+    SELECT 
+        trigger_name,
+        event_manipulation,
+        event_object_table,
+        action_statement
+    FROM information_schema.triggers
+    WHERE trigger_schema = 'public'
+    ORDER BY event_object_table, trigger_name;
+    " > "$BACKUP_DIR/supabase-settings/triggers.txt"
+    
+    log_success "Supabase settings export completed"
+}
+
+# Document required environment variables and external services
+document_external_dependencies() {
+    log_info "Documenting external dependencies..."
+    
+    mkdir -p "$BACKUP_DIR/recovery-info"
+    
+    # Create environment variables documentation
+    cat > "$BACKUP_DIR/recovery-info/REQUIRED_ENVIRONMENT_VARIABLES.md" << 'EOF'
+# Required Environment Variables for Recovery
+
+⚠️ **CRITICAL**: These environment variables must be set in Supabase for the application to function.
+
+## Database & Core
+- `SUPABASE_URL` - Supabase project URL
+- `SUPABASE_SERVICE_ROLE_KEY` - Service role key for database access
+
+## SMS/Twilio Integration
+- `TWILIO_ACCOUNT_SID` - Twilio account identifier
+- `TWILIO_AUTH_TOKEN` - Twilio authentication token
+- `TWILIO_FROM_NUMBER` - Phone number for sending SMS
+
+## Stripe Payment Processing
+- `stripe_canada_secret_key` - Stripe secret key for Canadian account
+- `stripe_intl_secret_key` - Stripe secret key for international account
+- `stripe_webhook_secret_canada` - Webhook secret for Canadian Stripe account
+- `stripe_webhook_secret_intl` - Webhook secret for international Stripe account
+
+## Slack Integration
+- `SLACK_BOT_TOKEN` - Slack bot OAuth token for notifications
+
+## Recovery Instructions
+1. Set these in Supabase Dashboard → Project Settings → API → Environment variables
+2. Deploy edge functions after setting environment variables
+3. Test each service integration before going live
+
+## Where to Find These Values
+- Supabase: Dashboard → Project Settings → API
+- Twilio: Console → Account Info
+- Stripe: Dashboard → Developers → API keys
+- Slack: App → OAuth & Permissions → Bot User OAuth Token
+EOF
+
+    # Create external services documentation
+    cat > "$BACKUP_DIR/recovery-info/EXTERNAL_SERVICES.md" << 'EOF'
+# External Service Configurations
+
+## Twilio (SMS Service)
+- **Account**: Art Battle Twilio account
+- **Phone Numbers**: Check console for assigned numbers
+- **Messaging Service**: Configured for international SMS
+- **Webhooks**: Set to Supabase edge function endpoints
+
+## Stripe (Payment Processing)
+- **Canada Account**: For Canadian events (CAD currency)
+- **International Account**: For USD/international events  
+- **Webhooks**: 
+  - Canada: `https://domain/stripe/webhook` → stripe-webhook-handler
+  - International: Similar setup
+- **Products**: Event-specific artwork products
+
+## Slack Integration
+- **Workspace**: Art Battle Slack workspace
+- **Bot Name**: Art Battle Vote Bot
+- **Channels**: Event-specific channels for notifications
+- **Permissions**: Send messages, read channel info
+
+## DigitalOcean Spaces (CDN)
+- **Bucket**: `artb`
+- **Region**: `tor1` (Toronto)
+- **Endpoints**: 
+  - Vote app: `https://artb.tor1.cdn.digitaloceanspaces.com/vote26/`
+  - API: `https://artb.tor1.digitaloceanspaces.com/`
+- **CORS**: Configured for artb.art domain
+
+## Cloudflare (Image Delivery)
+- **Domain**: `imagedelivery.net`
+- **Account**: Art Battle Cloudflare account
+- **Image variants**: thumbnail, compressed, public sizes
+EOF
+
+    # Create DNS/domain documentation  
+    cat > "$BACKUP_DIR/recovery-info/DNS_DOMAIN_CONFIG.md" << 'EOF'
+# DNS and Domain Configuration
+
+## Primary Domain: artb.art
+- **Registrar**: [Document current registrar]
+- **DNS Provider**: [Document DNS provider]
+
+## Critical DNS Records
+```
+# A/AAAA Records
+artb.art → [IP address]
+www.artb.art → [IP address or CNAME]
+
+# CNAME Records  
+cdn.artb.art → artb.tor1.cdn.digitaloceanspaces.com
+
+# Subdomains
+vote.artb.art → [Main app]
+api.artb.art → [API endpoint]
+```
+
+## CDN Configuration
+- **Main CDN**: DigitalOcean Spaces
+- **Image CDN**: Cloudflare Image Delivery
+- **Cache Settings**: [Document cache rules]
+- **SSL**: [Document certificate setup]
+
+## Application Routes
+- `artb.art/` → Event list (main app)
+- `artb.art/e/{event_id}/` → Event details  
+- `artb.art/e/{event_id}/auction` → Auction view
+- `artb.art/payment/{session_id}` → Payment receipt
+- `artb.art/vote26/` → CDN asset path
+
+## Recovery Steps
+1. Point DNS to new infrastructure
+2. Configure CDN with same paths
+3. Update CORS settings for new domains  
+4. Test all routes and redirects
+EOF
+
+    # Create infrastructure documentation
+    cat > "$BACKUP_DIR/recovery-info/INFRASTRUCTURE_CONFIG.md" << 'EOF'
+# Infrastructure Configuration
+
+## Supabase Project
+- **Project ID**: xsqdkubgyqwpyvfltnrf
+- **Region**: [Document region]
+- **Plan**: [Document current plan]
+- **Database**: PostgreSQL
+- **Auth**: Phone-based OTP authentication
+
+## Database Settings
+- **Connection pooling**: Enabled
+- **Row Level Security**: Enabled on all tables
+- **Realtime**: Enabled for critical tables (art, bids, votes)
+- **API rate limiting**: [Document current limits]
+
+## Edge Functions
+- **Runtime**: Deno
+- **Deployed functions**: 9 functions (see backup)
+- **Triggers**: Database triggers for notifications
+- **Cron jobs**: Vote weight calculations
+
+## Deployment Pipeline
+1. **Build**: Vite builds React app
+2. **Upload**: Assets to DigitalOcean Spaces
+3. **Cache**: CDN cache invalidation
+4. **Functions**: Deploy via Supabase CLI
+
+## Monitoring & Logging
+- **Database logs**: Supabase dashboard
+- **Application logs**: Browser console + edge function logs
+- **Error tracking**: [Document if any service used]
+- **Uptime monitoring**: [Document if configured]
+
+## Backup Strategy
+- **Database**: Daily automated backups (this script)
+- **Code**: Git repository backups
+- **Assets**: CDN has redundancy
+- **Secrets**: Manual documentation (secure location)
+EOF
+
+    # Document current deployment state
+    cat > "$BACKUP_DIR/recovery-info/CURRENT_DEPLOYMENT_STATE.txt" << EOF
+# Current Deployment State
+Generated: $(date)
+
+## Git Information
+Current branch: $(git branch --show-current 2>/dev/null || echo "unknown")
+Last commit: $(git log -1 --oneline 2>/dev/null || echo "unknown")
+Repository: $(git remote get-url origin 2>/dev/null || echo "unknown")
+
+## Build Information  
+Node version: $(node --version 2>/dev/null || echo "not available")
+npm version: $(npm --version 2>/dev/null || echo "not available")
+
+## Database Connection
+Host: $DB_HOST
+Port: $DB_PORT
+Database: $DB_NAME
+User: $DB_USER
+
+## Backup Details
+Created: $(date)
+Backup size: $(du -sh "$BACKUP_DIR" 2>/dev/null | cut -f1 || echo "calculating...")
+Tables backed up: $(find "$BACKUP_DIR/data" -name "*.csv" | wc -l)
+Functions backed up: $(find "$BACKUP_DIR/config/supabase/functions" -name "index.ts" | wc -l)
+
+## Recovery Priority
+1. Restore database and functions (critical - app won't work)
+2. Configure environment variables (critical - services won't work)  
+3. Set up DNS and CDN (critical - users can't access)
+4. Configure external services (important - features won't work)
+5. Test all functionality (essential - before going live)
+EOF
+
+    local doc_count=$(find "$BACKUP_DIR/recovery-info" -name "*.md" -o -name "*.txt" | wc -l)
+    log_info "  ✓ Created $doc_count recovery documentation files"
+    
+    log_success "External dependencies documentation completed"
+}
+
+# Export nginx and web server configurations
+export_infrastructure_config() {
+    log_info "Exporting infrastructure configuration..."
+    
+    mkdir -p "$BACKUP_DIR/infrastructure"
+    
+    # Copy nginx configurations
+    if [ -f "$PROJECT_DIR/nginx-stripe-webhook-proxy.conf" ]; then
+        cp "$PROJECT_DIR/nginx-stripe-webhook-proxy.conf" "$BACKUP_DIR/infrastructure/"
+        log_info "  ✓ Nginx configuration backed up"
+    fi
+    
+    # Copy any docker or deployment configurations
+    find "$PROJECT_DIR" -name "Dockerfile" -o -name "docker-compose.*" -o -name "*.yml" -o -name "*.yaml" | head -5 | while read -r config_file; do
+        if [ -f "$config_file" ]; then
+            cp "$config_file" "$BACKUP_DIR/infrastructure/$(basename "$config_file")"
+            log_info "  ✓ $(basename "$config_file") backed up"
+        fi
+    done
+    
+    # Export current system information
+    cat > "$BACKUP_DIR/infrastructure/system_info.txt" << EOF
+# System Information at Backup Time
+Generated: $(date)
+
+## Operating System
+$(uname -a)
+
+## Available Services
+PostgreSQL client: $(which psql 2>/dev/null || echo "not found")
+Node.js: $(node --version 2>/dev/null || echo "not found") 
+npm: $(npm --version 2>/dev/null || echo "not found")
+Supabase CLI: $(supabase --version 2>/dev/null || echo "not found")
+
+## Network Configuration
+Hostname: $(hostname)
+$(ip route show default | head -1)
+
+## Disk Usage
+$(df -h | grep -E "(/$|/root)")
+EOF
+    
+    log_success "Infrastructure configuration export completed"
+}
+
 # Compress backup
 compress_backup() {
     log_info "Compressing backup..."
@@ -512,6 +816,15 @@ main() {
     
     # Verify edge functions were backed up properly
     verify_edge_functions
+    
+    # Export Supabase project settings and RLS policies
+    export_supabase_settings
+    
+    # Document external dependencies and recovery information
+    document_external_dependencies
+    
+    # Export infrastructure configurations
+    export_infrastructure_config
     
     # Compress backup
     compress_backup
