@@ -22,6 +22,8 @@ import SampleWorksUpload from './SampleWorksUpload';
 const ProfileEditor = () => {
   const { user, person, loading } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [profiles, setProfiles] = useState([]);
+  const [selectedProfile, setSelectedProfile] = useState(null);
   const [profile, setProfile] = useState({
     name: '',
     bio: '',
@@ -39,6 +41,7 @@ const ProfileEditor = () => {
   const [saveMessage, setSaveMessage] = useState('');
   const [error, setError] = useState('');
   const [artistProfileId, setArtistProfileId] = useState(null);
+  const [isCreatingNew, setIsCreatingNew] = useState(false);
   const isEditingRef = useRef(false);
 
   // E.164 phone number formatting and parsing
@@ -99,55 +102,101 @@ const ProfileEditor = () => {
 
   useEffect(() => {
     if (!loading && user && person) {
-      fetchProfile();
+      fetchProfiles();
     } else if (!loading && !user) {
       setProfileLoading(false);
     }
   }, [user, person, loading]);
 
-  const fetchProfile = async () => {
+  const fetchProfiles = async () => {
     if (isEditingRef.current) {
       return;
     }
 
     try {
-      const { data, error } = await supabase
+      const { data: profilesData, error: profilesError } = await supabase
         .from('artist_profiles')
         .select('*')
         .eq('person_id', person.id)
-        .single();
+        .order('created_at', { ascending: true });
 
-      if (error && error.code !== 'PGRST116') {
-        throw error;
+      if (profilesError) {
+        throw profilesError;
       }
 
-      if (data) {
-        setArtistProfileId(data.id);
-        setProfile({
-          name: data.name || '',
-          bio: data.bio || '',
-          website: data.website || '',
-          instagram: data.instagram || '',
-          facebook: data.facebook || '',
-          twitter: data.twitter || '',
-          city: data.city || data.city_text || '',
-          country: data.country || '',
-          email: data.email || '',
-          phone: parseAndFormatPhone(data.phone || user.phone || ''),
-        });
+      if (profilesData && profilesData.length > 0) {
+        setProfiles(profilesData);
+        // Auto-select first profile if none selected
+        const currentProfile = selectedProfile || profilesData[0];
+        setSelectedProfile(currentProfile);
+        loadProfileData(currentProfile);
       } else {
-        setProfile(prev => ({
-          ...prev,
-          phone: parseAndFormatPhone(user.phone || ''),
-          email: user.email || '',
+        setProfiles([]);
+        setSelectedProfile(null);
+        // Set up for new profile creation
+        setIsCreatingNew(true);
+        setProfile({
           name: person.name || '',
-        }));
+          bio: '',
+          website: '',
+          instagram: '',
+          facebook: '',
+          twitter: '',
+          city: '',
+          country: '',
+          email: user.email || '',
+          phone: parseAndFormatPhone(user.phone || ''),
+        });
       }
     } catch (err) {
-      setError('Failed to load profile: ' + err.message);
+      setError('Failed to load profiles: ' + err.message);
     } finally {
       setProfileLoading(false);
     }
+  };
+
+  const loadProfileData = (profileData) => {
+    setArtistProfileId(profileData.id);
+    setIsCreatingNew(false);
+    setProfile({
+      name: profileData.name || '',
+      bio: profileData.bio || '',
+      website: profileData.website || '',
+      instagram: profileData.instagram || '',
+      facebook: profileData.facebook || '',
+      twitter: profileData.twitter || '',
+      city: profileData.city || profileData.city_text || '',
+      country: profileData.country || '',
+      email: profileData.email || '',
+      phone: parseAndFormatPhone(profileData.phone || user.phone || ''),
+    });
+  };
+
+  const handleProfileSelect = (profileData) => {
+    setSelectedProfile(profileData);
+    loadProfileData(profileData);
+    setSaveMessage('');
+    setError('');
+  };
+
+  const handleCreateNew = () => {
+    setSelectedProfile(null);
+    setArtistProfileId(null);
+    setIsCreatingNew(true);
+    setProfile({
+      name: '',
+      bio: '',
+      website: '',
+      instagram: '',
+      facebook: '',
+      twitter: '',
+      city: '',
+      country: '',
+      email: user.email || '',
+      phone: parseAndFormatPhone(user.phone || ''),
+    });
+    setSaveMessage('');
+    setError('');
   };
 
   const handleSave = async () => {
@@ -232,8 +281,15 @@ const ProfileEditor = () => {
 
       if (error) throw error;
 
-      if (data && !artistProfileId) {
-        setArtistProfileId(data.id);
+      if (data) {
+        if (!artistProfileId) {
+          setArtistProfileId(data.id);
+          setSelectedProfile(data);
+          setIsCreatingNew(false);
+        }
+        
+        // Refresh the profiles list to show updated data
+        await fetchProfiles();
       }
 
       setSaveMessage('Profile saved successfully!');
@@ -297,11 +353,14 @@ const ProfileEditor = () => {
 
   return (
     <Flex direction="column" gap="6">
-      <Flex direction="column" gap="2">
-        <Heading size="6">Artist Profile</Heading>
+      <Flex direction="column" gap="4">
+        <Heading size="6">
+          Artist Profile
+        </Heading>
         <Text size="3" color="gray">
           Create and manage your professional artist profile
         </Text>
+
       </Flex>
 
       {error && (
@@ -473,7 +532,7 @@ const ProfileEditor = () => {
           disabled={saving}
           loading={saving}
         >
-          {saving ? 'Saving...' : 'Save Profile'}
+          {saving ? 'Saving...' : (isCreatingNew ? 'Create Profile' : 'Update Profile')}
         </Button>
       </Flex>
     </Flex>

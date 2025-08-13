@@ -172,8 +172,8 @@ serve(async (req) => {
           is_valid: true
         }
       } else {
-        // Record the new scan
-        const { error: insertError } = await supabase
+        // Record the new scan in people_qr_scans
+        const { data: qrScanData, error: insertError } = await supabase
           .from('people_qr_scans')
           .insert({
             person_id: personId,
@@ -185,6 +185,8 @@ serve(async (req) => {
             location_data: location_data,
             is_valid: isValid
           })
+          .select('id')
+          .single()
 
         if (insertError) {
           console.error('Error recording scan:', insertError)
@@ -192,6 +194,43 @@ serve(async (req) => {
             JSON.stringify({ error: 'Failed to record scan' }),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           )
+        }
+
+        // If this was a valid scan, also record it as an event registration
+        if (isValid && qrScanData) {
+          // Check if person already has a registration for this event (from any source)
+          const { data: existingRegistration } = await supabase
+            .from('event_registrations')
+            .select('id')
+            .eq('person_id', personId)
+            .eq('event_id', eventId)
+            .single()
+
+          if (!existingRegistration) {
+            // Create new event registration
+            const { error: registrationError } = await supabase
+              .from('event_registrations')
+              .insert({
+                event_id: eventId,
+                person_id: personId,
+                registration_type: 'qr_scan',
+                registration_source: 'qr_system',
+                registered_at: new Date().toISOString(),
+                qr_code: qr_code,
+                qr_scan_id: qrScanData.id,
+                metadata: {
+                  ip_address: clientIP,
+                  user_agent: user_agent,
+                  location_data: location_data
+                }
+              })
+
+            if (registrationError) {
+              console.error('Error recording event registration:', registrationError)
+              // Don't fail the entire request - the QR scan was recorded successfully
+              // But log this for monitoring
+            }
+          }
         }
       }
     }

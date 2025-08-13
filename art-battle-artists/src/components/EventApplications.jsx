@@ -54,21 +54,28 @@ const EventApplications = () => {
 
   const fetchArtistProfile = async () => {
     try {
-      const { data, error } = await supabase
-        .from('artist_profiles')
-        .select('id')
-        .eq('person_id', person.id)
-        .single();
+      // Use the new primary profile system
+      const { data: primaryCheck, error: primaryError } = await supabase
+        .rpc('has_primary_profile', { target_person_id: person.id });
 
-      if (error && error.code !== 'PGRST116') {
-        throw error;
+      if (primaryError) {
+        throw primaryError;
       }
 
-      if (data) {
-        setArtistProfileId(data.id);
-      } else {
-        setError('Please complete your artist profile first before applying to events.');
+      if (!primaryCheck || primaryCheck.length === 0) {
+        setError('No primary profile found. Please set up your profile first.');
+        setLoading(false);
+        return;
       }
+
+      const result = primaryCheck[0];
+      if (!result.has_primary || !result.profile_id) {
+        setError('No primary profile found. Please set up your profile first.');
+        setLoading(false);
+        return;
+      }
+
+      setArtistProfileId(result.profile_id);
     } catch (err) {
       setError('Failed to load artist profile: ' + err.message);
     }

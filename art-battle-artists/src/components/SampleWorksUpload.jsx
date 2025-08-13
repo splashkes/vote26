@@ -22,7 +22,6 @@ import {
 } from '@radix-ui/react-icons';
 import { supabase } from '../lib/supabase';
 import { getCloudflareConfig } from '../lib/cloudflare';
-import { getArtworkImageUrls } from '../lib/imageHelpers';
 
 const MAX_SAMPLE_WORKS = 10;
 
@@ -52,14 +51,9 @@ const SampleWorksUpload = ({ artistProfileId, onWorksChange }) => {
 
   const loadSampleWorks = async () => {
     try {
+      // Use the unified function to get all sample works (modern + legacy)
       const { data, error } = await supabase
-        .from('artist_sample_works')
-        .select(`
-          *,
-          media_file:media_files(*)
-        `)
-        .eq('artist_profile_id', artistProfileId)
-        .order('display_order', { ascending: true });
+        .rpc('get_unified_sample_works', { profile_id: artistProfileId });
 
       if (error) throw error;
       setSampleWorks(data || []);
@@ -277,13 +271,12 @@ const SampleWorksUpload = ({ artistProfileId, onWorksChange }) => {
         {sampleWorks.length > 0 && (
           <Grid columns="3" gap="3" style={{ marginTop: '1rem' }}>
             {sampleWorks.map((work) => {
-              const imageUrls = getArtworkImageUrls(null, work.media_file);
               return (
-                <Box key={work.id} style={{ position: 'relative' }}>
+                <Box key={work.id || work.sample_work_id} style={{ position: 'relative' }}>
                   <Card size="1">
                     <Box style={{ position: 'relative', aspectRatio: '1', overflow: 'hidden', borderRadius: '8px' }}>
                       <img
-                        src={imageUrls.compressed || imageUrls.original}
+                        src={work.image_url}
                         alt="Sample work"
                         style={{
                           width: '100%',
@@ -300,7 +293,7 @@ const SampleWorksUpload = ({ artistProfileId, onWorksChange }) => {
                           top: '4px',
                           right: '4px'
                         }}
-                        onClick={() => handleRemoveWork(work.id)}
+                        onClick={() => handleRemoveWork(work.id || work.sample_work_id)}
                       >
                         <Cross2Icon width="12" height="12" />
                       </IconButton>

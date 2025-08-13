@@ -88,6 +88,12 @@ const EventDetails = () => {
   };
   const [activeTab, setActiveTab] = useState(getInitialTab());
   const countdownInterval = useRef(null);
+  
+  // Connection management state
+  const [connectionState, setConnectionState] = useState('disconnected'); // 'connecting', 'connected', 'disconnected', 'reconnecting'
+  const [reconnectAttempts, setReconnectAttempts] = useState(0);
+  const [subscriptionRefs, setSubscriptionRefs] = useState(new Map()); // Track active subscriptions
+  const reconnectTimeoutRef = useRef(null);
 
   useEffect(() => {
     fetchEventDetails();
@@ -135,6 +141,96 @@ const EventDetails = () => {
 
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, [activeTab]);
+
+  // Connection management functions
+  const cleanupSubscriptions = () => {
+    console.log('Cleaning up all subscriptions...');
+    subscriptionRefs.forEach((subscription, key) => {
+      if (subscription && typeof subscription.unsubscribe === 'function') {
+        subscription.unsubscribe();
+      }
+    });
+    setSubscriptionRefs(new Map());
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+    }
+  };
+
+  const getReconnectDelay = (attempts) => {
+    // Exponential backoff: 1s, 2s, 4s, 8s, 16s, max 60s
+    return Math.min(1000 * Math.pow(2, attempts), 60000);
+  };
+
+  const createManagedSubscription = (channelName, subscriptionConfig) => {
+    const existingSubscription = subscriptionRefs.get(channelName);
+    if (existingSubscription) {
+      console.log(`Subscription ${channelName} already exists, skipping`);
+      return existingSubscription;
+    }
+
+    console.log(`Creating subscription: ${channelName}`);
+    setConnectionState('connecting');
+    
+    const subscription = supabase.channel(channelName);
+    
+    // Add the postgres_changes listener
+    subscription.on('postgres_changes', subscriptionConfig, subscriptionConfig.callback);
+    
+    // Handle connection events
+    subscription.on('system', {}, (payload) => {
+      console.log(`Subscription ${channelName} status:`, payload.status);
+      if (payload.status === 'SUBSCRIBED') {
+        setConnectionState('connected');
+        setReconnectAttempts(0);
+      } else if (payload.status === 'CLOSED') {
+        setConnectionState('disconnected');
+        // Auto-reconnect with exponential backoff
+        handleReconnect(channelName, subscriptionConfig);
+      }
+    });
+
+    const subscribedChannel = subscription.subscribe();
+    
+    // Store reference
+    setSubscriptionRefs(prev => new Map(prev).set(channelName, subscribedChannel));
+    
+    return subscribedChannel;
+  };
+
+  const handleReconnect = (channelName, subscriptionConfig) => {
+    if (reconnectAttempts >= 5) {
+      console.log(`Max reconnection attempts reached for ${channelName}`);
+      setConnectionState('disconnected');
+      return;
+    }
+
+    setConnectionState('reconnecting');
+    const delay = getReconnectDelay(reconnectAttempts);
+    
+    console.log(`Reconnecting ${channelName} in ${delay}ms (attempt ${reconnectAttempts + 1})`);
+    
+    reconnectTimeoutRef.current = setTimeout(() => {
+      setReconnectAttempts(prev => prev + 1);
+      createManagedSubscription(channelName, subscriptionConfig);
+    }, delay);
+  };
+
+  // Handle page visibility changes to pause/resume connections
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        console.log('Page hidden - pausing real-time connections');
+        // Don't cleanup, just note the state change
+      } else {
+        console.log('Page visible - resuming real-time connections');
+        // Reset reconnect attempts when page becomes visible again
+        setReconnectAttempts(0);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
 
   // Set up realtime subscriptions for public views
   useEffect(() => {
@@ -227,24 +323,36 @@ const EventDetails = () => {
         .subscribe();
     }
 
-    // Subscribe to round_contestants for artist updates
-    const roundContestantsSubscription = supabase
-      .channel(`round-contestants-${eventId}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'round_contestants'
-      }, (payload) => {
-        console.log('Round contestants update:', payload);
-        // Use background refresh to avoid loading screen
+    // Subscribe to round_contestants - real-time for admins, polling for regular users
+    let roundContestantsSubscription = null;
+    let roundContestantsInterval = null;
+    
+    if (isAdmin) {
+      // Admin users get real-time updates
+      roundContestantsSubscription = supabase
+        .channel(`round-contestants-${eventId}`)
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'round_contestants'
+        }, (payload) => {
+          console.log('Round contestants update:', payload);
+          // Use background refresh to avoid loading screen
+          refreshEventDataSilently();
+          // Flash the info tab if visible
+          setTimeout(() => {
+            const element = document.querySelector('[data-tab="info"]');
+            if (element) applyFlashClass(element, 'realtime-flash-subtle');
+          }, 0);
+        })
+        .subscribe();
+    } else {
+      // Regular users get polling every 5 minutes
+      roundContestantsInterval = setInterval(() => {
+        console.log('Round contestants polling update (5min interval)');
         refreshEventDataSilently();
-        // Flash the info tab if visible
-        setTimeout(() => {
-          const element = document.querySelector('[data-tab="info"]');
-          if (element) applyFlashClass(element, 'realtime-flash-subtle');
-        }, 0);
-      })
-      .subscribe();
+      }, 5 * 60 * 1000); // 5 minutes
+    }
 
     // Subscribe to art_media for image updates
     const artMediaSubscription = supabase
@@ -282,6 +390,11 @@ const EventDetails = () => {
       .subscribe();
 
     return () => {
+      // Clean up all subscriptions and intervals
+      cleanupSubscriptions();
+      if (roundContestantsInterval) clearInterval(roundContestantsInterval);
+      
+      // Legacy cleanup for any remaining direct subscriptions
       if (artSubscription) artSubscription.unsubscribe();
       if (bidsSubscription) bidsSubscription.unsubscribe();
       if (votesSubscription) votesSubscription.unsubscribe();

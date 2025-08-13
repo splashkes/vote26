@@ -1,0 +1,2 @@
+- call ALL ADMIN only FUNCTIONS with admin- at the start
+- when ready just deploy, build is at the top of deploy

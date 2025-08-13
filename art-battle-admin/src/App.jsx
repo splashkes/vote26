@@ -7,6 +7,12 @@ import LoginPage from './components/LoginPage';
 import EventDashboard from './components/EventDashboard';
 import EventDetail from './components/EventDetail';
 import ArtistManagement from './components/ArtistManagement';
+import HealthMonitor from './components/HealthMonitor';
+import LiveMonitor from './components/LiveMonitor';
+import ArtworkManagement from './components/ArtworkManagement';
+import AllArtists from './components/AllArtists';
+import PeopleManagement from './components/PeopleManagement';
+import HealthRecommendations from './components/HealthRecommendations';
 import './App.css';
 
 function App() {
@@ -29,6 +35,12 @@ function App() {
                 <Route path="events" element={<EventDashboard />} />
                 <Route path="events/:eventId" element={<EventDetail />} />
                 <Route path="events/:eventId/artists" element={<ArtistManagement />} />
+                <Route path="events/:eventId/art" element={<ArtworkManagement />} />
+                <Route path="events/:eventId/health" element={<HealthMonitor />} />
+                <Route path="events/:eventId/live" element={<LiveMonitor />} />
+                <Route path="artists" element={<AllArtists />} />
+                <Route path="people" element={<PeopleManagement />} />
+                <Route path="health" element={<HealthRecommendations />} />
                 <Route path="*" element={<Navigate to="/events" replace />} />
               </Route>
             </Routes>

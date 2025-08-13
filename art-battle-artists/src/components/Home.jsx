@@ -21,13 +21,17 @@ import {
 } from '@radix-ui/react-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { getArtworkImageUrls } from '../lib/imageHelpers';
 import AuthModal from './AuthModal';
 
-const Home = ({ onNavigateToTab }) => {
+
+const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
   const { user, person, loading: authLoading } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [profile, setProfile] = useState(null);
+  const [profiles, setProfiles] = useState([]);
+  const [selectedProfile, setSelectedProfile] = useState(null);
+  const [candidateProfiles, setCandidateProfiles] = useState([]);
+  const [showProfilePicker, setShowProfilePicker] = useState(false);
+  const [showCreateNewProfile, setShowCreateNewProfile] = useState(false);
   const [sampleWorks, setSampleWorks] = useState([]);
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -42,70 +46,351 @@ const Home = ({ onNavigateToTab }) => {
     }
   }, [user, person, authLoading]);
 
+  // Notify parent when profile picker state changes
+  useEffect(() => {
+    if (onProfilePickerChange) {
+      onProfilePickerChange(showProfilePicker);
+    }
+  }, [showProfilePicker, onProfilePickerChange]);
+
   const loadData = async () => {
     console.log('Home: Starting loadData, person:', person);
     try {
-      // Load artist profile
-      const { data: profileData, error: profileError } = await supabase
-        .from('artist_profiles')
-        .select('*')
-        .eq('person_id', person.id)
-        .single();
 
-      console.log('Home: Profile query result:', { profileData, profileError });
+      // Step 1: Check if user has set a primary profile using the new system
+      console.log('Home: Checking for primary profile with person.id:', person.id);
+      const { data: primaryCheck, error: primaryError } = await supabase
+        .rpc('has_primary_profile', { target_person_id: person.id });
 
-      if (profileError && profileError.code !== 'PGRST116') {
-        throw profileError;
+      console.log('Home: Primary profile check result:', { primaryCheck, primaryError });
+
+      if (!primaryError && primaryCheck && primaryCheck.length > 0) {
+        const result = primaryCheck[0];
+        if (result.has_primary && result.profile_id) {
+          // Found primary profile, load it
+          const { data: primaryProfile, error: profileError } = await supabase
+            .from('artist_profiles')
+            .select('*')
+            .eq('id', result.profile_id)
+            .single();
+
+          if (!profileError && primaryProfile) {
+            console.log('Home: Found primary profile, loading dashboard for:', primaryProfile.name);
+            setProfiles([primaryProfile]);
+            setSelectedProfile(primaryProfile);
+            setCandidateProfiles([]); // Clear any candidate profiles
+            setShowProfilePicker(false); // Ensure picker is hidden
+            await loadProfileData(primaryProfile);
+            return;
+          }
+        }
       }
 
-      if (profileData) {
-        setProfile(profileData);
-
-        // Load sample works
-        const { data: worksData, error: worksError } = await supabase
-          .from('artist_sample_works')
-          .select(`
-            *,
-            media_file:media_files(*)
-          `)
-          .eq('artist_profile_id', profileData.id)
-          .order('display_order', { ascending: true })
-          .limit(6);
-
-        console.log('Home: Sample works query result:', { worksData, worksError });
-        if (worksError) throw worksError;
-        setSampleWorks(worksData || []);
-
-        // Load applications with event details
-        const { data: appsData, error: appsError } = await supabase
-          .from('artist_applications')
-          .select(`
-            *,
-            event:events(
-              id,
-              name,
-              event_start_datetime,
-              venue,
-              city:cities(name)
-            )
-          `)
-          .eq('artist_profile_id', profileData.id)
-          .order('applied_at', { ascending: false })
-          .limit(5);
-
-        console.log('Home: Applications query result:', { appsData, appsError });
-        if (appsError) throw appsError;
-        setApplications(appsData || []);
-      } else {
-        console.log('Home: No profile data found');
-        setProfile(null);
-      }
+      // Step 2: No primary profile set, run profile lookup to show picker
+      console.log('Home: No primary profile found, running profile lookup...');
+      await handleProfileLookup();
     } catch (err) {
       console.error('Home: Error in loadData:', err);
       setError('Failed to load data: ' + err.message);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleProfileLookup = async () => {
+    try {
+      let userPhone = user.phone;
+      if (!userPhone) {
+        setError('Phone number not available for profile lookup');
+        return;
+      }
+
+      // Normalize phone number format for lookup
+      if (userPhone && !userPhone.startsWith('+')) {
+        if (userPhone.startsWith('1') && userPhone.length === 11) {
+          userPhone = `+${userPhone}`;
+        } else if (userPhone.length === 10) {
+          userPhone = `+1${userPhone}`;
+        } else {
+          userPhone = `+1${userPhone}`;
+        }
+      }
+
+      console.log('Home: Running profile lookup for phone:', userPhone);
+
+      // Use the new simplified profile lookup
+      const { data: candidateProfiles, error: lookupError } = await supabase
+        .rpc('lookup_profiles_by_contact', { 
+          target_phone: userPhone,
+          target_email: user.email || null
+        });
+
+      console.log('Home: Profile lookup result:', { candidateProfiles, lookupError });
+
+      if (lookupError) {
+        console.error('Profile lookup failed:', lookupError);
+        setError(`Failed to lookup profiles: ${lookupError.message || lookupError}`);
+        setProfiles([]);
+        setSelectedProfile(null);
+        return;
+      }
+
+      if (candidateProfiles && candidateProfiles.length > 0) {
+        // Load sample works for each profile
+        const detailedCandidates = await Promise.all(
+          candidateProfiles.map(async (candidate) => {
+            // Get sample works using unified function
+            const { data: sampleWorks } = await supabase
+              .rpc('get_unified_sample_works', { profile_id: candidate.id });
+            
+            console.log('Sample works for', candidate.name, ':', sampleWorks);
+            if (sampleWorks && sampleWorks.length > 0) {
+              sampleWorks.forEach((work, idx) => {
+                console.log(`  Work ${idx}:`, {
+                  id: work.id,
+                  title: work.title,
+                  image_url: work.image_url,
+                  source_type: work.source_type,
+                  original_url: work.original_url
+                });
+              });
+            }
+
+            // Get artwork count from art table
+            const { count: artworkCount } = await supabase
+              .from('art')
+              .select('*', { count: 'exact', head: true })
+              .eq('artist_id', candidate.id);
+
+            return {
+              ...candidate,
+              sampleWorks: sampleWorks || [],
+              artworkCount: artworkCount || 0,
+            };
+          })
+        );
+
+        console.log('Home: Found candidate profiles with details:', detailedCandidates);
+        
+        // Debug: log profile candidates
+        detailedCandidates.forEach((candidate, index) => {
+          console.log(`Candidate ${index + 1}:`, {
+            name: candidate.name,
+            email: candidate.email,
+            phone: candidate.phone,
+            match_type: candidate.match_type,
+            bio: candidate.bio,
+            city: candidate.city,
+            instagram: candidate.instagram,
+            sampleWorksCount: candidate.sampleWorks?.length || 0,
+            artworkCount: candidate.artworkCount || 0
+          });
+        });
+
+        // Auto-selection logic
+        let autoSelectedProfile = null;
+        
+        // Rule 1: If only one profile, auto-select it
+        if (detailedCandidates.length === 1) {
+          autoSelectedProfile = detailedCandidates[0];
+          console.log('Home: Auto-selecting single profile:', autoSelectedProfile.name);
+        }
+        // Rule 2: If only one profile has paintings, auto-select it
+        else {
+          const profilesWithPaintings = detailedCandidates.filter(p => (p.artworkCount || 0) > 0);
+          if (profilesWithPaintings.length === 1) {
+            autoSelectedProfile = profilesWithPaintings[0];
+            console.log('Home: Auto-selecting profile with paintings:', autoSelectedProfile.name, `(${autoSelectedProfile.artworkCount} paintings)`);
+          }
+        }
+
+        if (autoSelectedProfile) {
+          // Auto-select the profile and set it as primary
+          await handleProfileSelect(autoSelectedProfile);
+          return; // Skip showing the picker
+        }
+
+        // Show picker if no auto-selection
+        setCandidateProfiles(detailedCandidates);
+        setShowProfilePicker(true);
+        setProfiles([]);
+        setSelectedProfile(null);
+      } else {
+        // No candidates found, show option to create new profile
+        console.log('Home: No candidate profiles found for phone:', userPhone);
+        setProfiles([]);
+        setSelectedProfile(null);
+        setCandidateProfiles([]);
+        setShowProfilePicker(true); // Show picker with create new option
+        setShowCreateNewProfile(true); // Flag to show create new profile option
+      }
+    } catch (err) {
+      console.error('Home: Error in multi-profile lookup:', err);
+      setError('Failed to lookup potential profiles: ' + err.message);
+    }
+  };
+
+  const loadProfileData = async (profile) => {
+    if (!profile) return;
+    
+    try {
+      // Load sample works using unified function (combines modern + legacy)
+      const { data: worksData, error: worksError } = await supabase
+        .rpc('get_unified_sample_works', { profile_id: profile.id });
+
+      console.log('Home: Sample works query result:', { 
+        worksData, 
+        worksError, 
+        worksCount: worksData?.length || 0,
+        profile_id: profile.id 
+      });
+      if (worksError) throw worksError;
+      setSampleWorks(worksData || []);
+      console.log('Home: Set sample works state:', { 
+        worksCount: (worksData || []).length,
+        firstWork: worksData?.[0] ? {
+          id: worksData[0].id,
+          title: worksData[0].title,
+          media_file: worksData[0].media_file ? {
+            original_url: worksData[0].media_file.original_url,
+            compressed_url: worksData[0].media_file.compressed_url,
+            cloudflare_id: worksData[0].media_file.cloudflare_id
+          } : null
+        } : null
+      });
+
+      // Load applications for selected profile
+      const { data: appsData, error: appsError } = await supabase
+        .from('artist_applications')
+        .select(`
+          *,
+          event:events(
+            id,
+            name,
+            event_start_datetime,
+            venue,
+            city:cities(name)
+          )
+        `)
+        .eq('artist_profile_id', profile.id)
+        .order('applied_at', { ascending: false })
+        .limit(5);
+
+      console.log('Home: Applications query result:', { appsData, appsError });
+      if (appsError) throw appsError;
+      setApplications(appsData || []);
+    } catch (err) {
+      console.error('Home: Error in loadProfileData:', err);
+      setError('Failed to load profile data: ' + err.message);
+    }
+  };
+
+  const handleCandidateSelect = async (candidate) => {
+    console.log('Home: Selected candidate profile:', candidate);
+    
+    try {
+      // Use edge function to set this profile as primary (bypasses RLS)
+      const { data: result, error: setPrimaryError } = await supabase.functions
+        .invoke('set-primary-profile', {
+          body: { 
+            profile_id: candidate.id, 
+            target_person_id: person.id 
+          }
+        });
+
+      console.log('Home: Set profile as primary result:', { result, setPrimaryError });
+
+      if (setPrimaryError || !result?.success) {
+        throw new Error(result?.message || setPrimaryError?.message || 'Failed to set profile as primary');
+      }
+
+      // Load the updated profile
+      const { data: updatedProfile, error: profileError } = await supabase
+        .from('artist_profiles')
+        .select('*')
+        .eq('id', candidate.id)
+        .single();
+
+      if (profileError) {
+        throw new Error(`Failed to load updated profile: ${profileError.message}`);
+      }
+
+      console.log('Home: Profile set as primary successfully:', updatedProfile.name);
+      
+      // Reload data to properly check for primary profile and hide picker
+      await loadData();
+      
+    } catch (err) {
+      console.error('Home: Error handling candidate selection:', err);
+      setError('Failed to process profile selection: ' + err.message);
+    }
+  };
+
+  const handleSkipProfileSelection = () => {
+    console.log('Home: User skipped profile selection');
+    setShowProfilePicker(false);
+    setCandidateProfiles([]);
+    setShowCreateNewProfile(false);
+    setProfiles([]);
+    setSelectedProfile(null);
+  };
+
+  const handleCreateNewProfile = async () => {
+    console.log('Home: Creating new profile for user');
+    
+    try {
+      // Use edge function to create a new profile (bypasses RLS)
+      const userPhone = user.phone;
+      const { data: result, error: createError } = await supabase.functions
+        .invoke('create-new-profile', {
+          body: { 
+            profileData: {
+              name: user.name || user.email || 'Artist Profile',
+              email: user.email,
+              phone: userPhone
+            },
+            target_person_id: person.id
+          }
+        });
+
+      console.log('Home: Create new profile result:', { result, createError });
+
+      if (createError || !result?.success) {
+        throw new Error(result?.message || createError?.message || 'Failed to create new profile');
+      }
+
+      const newProfile = result.profile;
+
+      console.log('Home: New profile created successfully:', newProfile.name);
+      setProfiles([newProfile]);
+      setSelectedProfile(newProfile);
+      setCandidateProfiles([]);
+      setShowProfilePicker(false);
+      setShowCreateNewProfile(false);
+      
+      // Notify parent that profile picker is hidden
+      onProfilePickerChange(false);
+      
+      // Navigate to profile edit tab when creating new profile (use setTimeout to ensure state updates)
+      console.log('Home: Navigating to profile edit tab after creating new profile');
+      setTimeout(() => {
+        console.log('Home: Executing delayed navigation to profile tab');
+        onNavigateToTab('profile');
+      }, 300);
+      
+      await loadProfileData(newProfile);
+      
+    } catch (err) {
+      console.error('Home: Error creating new profile:', err);
+      setError('Failed to create new profile: ' + err.message);
+    }
+  };
+
+  const handleProfileSelect = async (profile) => {
+    setSelectedProfile(profile);
+    setLoading(true);
+    await loadProfileData(profile);
+    setLoading(false);
   };
 
   const formatDate = (dateString) => {
@@ -163,10 +448,13 @@ const Home = ({ onNavigateToTab }) => {
     }
   };
 
+
   if (authLoading || loading) {
     return (
       <Box>
         <Heading size="6" mb="4">Home</Heading>
+        
+
         <Flex direction="column" gap="4">
           {[1, 2, 3].map((i) => (
             <Card key={i} size="3">
@@ -201,7 +489,231 @@ const Home = ({ onNavigateToTab }) => {
     );
   }
 
-  if (!profile) {
+  // Show profile picker if we found candidate profiles or need to create new profile
+  if (showProfilePicker && (candidateProfiles.length > 0 || showCreateNewProfile)) {
+    return (
+      <Flex direction="column" gap="6">
+
+        <Flex direction="column" gap="2">
+          <Heading size="6">Select Your Artist Profile</Heading>
+          <Text size="3" color="gray">
+            We found <Text weight="bold" style={{ display: 'inline' }}>{candidateProfiles.length} potential profile{candidateProfiles.length > 1 ? 's' : ''}</Text> associated with your phone number. 
+            Please select the one you want to use, or skip below to create a new profile. You can edit your profile after selection.
+          </Text>
+        </Flex>
+
+        {error && (
+          <Callout.Root color="red">
+            <Callout.Icon>
+              <InfoCircledIcon />
+            </Callout.Icon>
+            <Callout.Text>{error}</Callout.Text>
+          </Callout.Root>
+        )}
+
+        <Grid columns="1" gap="4">
+          {candidateProfiles.map((candidate, index) => {
+            const works = candidate.sampleWorks || [];
+            
+            return (
+              <Card key={index} size="3">
+                <Flex direction="column" gap="4" p="4">
+                  {/* Header with name and select button */}
+                  <Flex justify="between" align="start">
+                    <Flex align="center" gap="2">
+                      <Text size="5" weight="bold" style={{ color: 'var(--crimson-11)' }}>
+                        {candidate.name || 'Unnamed Profile'}
+                      </Text>
+                      {/* Phone match badge removed - cache refresh fix */}
+                      {(candidate.artworkCount || 0) > 0 && (
+                        <Badge color="green" variant="soft" size="1">
+                          {candidate.artworkCount} paintings
+                        </Badge>
+                      )}
+                    </Flex>
+                    
+                    <Button size="2" variant="solid" color="crimson" onClick={() => handleCandidateSelect(candidate)}>
+                      Use This Profile
+                    </Button>
+                  </Flex>
+
+                  {/* Profile details in a grid layout */}
+                  <Grid columns={{ initial: '1', md: '2' }} gap="4">
+                    {/* Left column - Profile info */}
+                    <Flex direction="column" gap="3">
+                      {/* Contact info */}
+                      <Flex direction="column" gap="2">
+                        {candidate.email && (
+                          <Flex align="center" gap="2">
+                            <Text size="2" color="gray">📧</Text>
+                            <Text size="3">{candidate.email}</Text>
+                          </Flex>
+                        )}
+                        
+                        {candidate.phone && (
+                          <Flex align="center" gap="2">
+                            <Text size="2" color="gray">📱</Text>
+                            <Text size="3">{candidate.phone}</Text>
+                          </Flex>
+                        )}
+                        
+                        {candidate.city && (
+                          <Flex align="center" gap="2">
+                            <Text size="2" color="gray">📍</Text>
+                            <Text size="3">{candidate.city}</Text>
+                          </Flex>
+                        )}
+                      </Flex>
+
+                      {/* Bio */}
+                      {candidate.bio && (
+                        <Flex direction="column" gap="1">
+                          <Text size="2" color="gray" weight="medium">Bio</Text>
+                          <Text size="2" style={{ 
+                            lineHeight: '1.4', 
+                            wordWrap: 'break-word',
+                            whiteSpace: 'normal',
+                            maxWidth: '100%'
+                          }}>
+                            {candidate.bio.length > 500 ? `${candidate.bio.substring(0, 500)}...` : candidate.bio}
+                          </Text>
+                        </Flex>
+                      )}
+
+                      {/* Social links */}
+                      <Flex direction="column" gap="1">
+                        {candidate.instagram && (
+                          <Flex align="center" gap="2">
+                            <Text size="2" color="gray">📷</Text>
+                            <Text size="2">{candidate.instagram}</Text>
+                          </Flex>
+                        )}
+                        {candidate.website && (
+                          <Flex align="center" gap="2">
+                            <Text size="2" color="gray">🌐</Text>
+                            <Text size="2">{candidate.website}</Text>
+                          </Flex>
+                        )}
+                      </Flex>
+                    </Flex>
+
+                    {/* Right column - Sample works */}
+                    {works.length > 0 && (
+                      <Box>
+                        <Text size="2" weight="medium" color="gray" mb="3" display="block">
+                          Sample Works ({works.length})
+                        </Text>
+                        <Grid columns="3" gap="2">
+                          {/* Existing sample works from profiles */}
+                          {works.slice(0, 6).map((work, workIdx) => {
+                            
+                            return (
+                              <Box 
+                                key={work.id || workIdx} 
+                                style={{ 
+                                  position: 'relative', 
+                                  aspectRatio: '1',
+                                  overflow: 'hidden',
+                                  borderRadius: '6px',
+                                  border: '2px solid var(--gray-6)',
+                                  transition: 'all 0.2s ease'
+                                }}
+                                className="sample-work-thumb"
+                              >
+                                {work.image_url ? (
+                                  <img
+                                    src={work.image_url}
+                                    alt={work.title || "Sample work"}
+                                    style={{
+                                      width: '100%',
+                                      height: '100%',
+                                      objectFit: 'cover',
+                                      transition: 'transform 0.2s ease'
+                                    }}
+                                    onError={(e) => {
+                                      e.target.style.display = 'none';
+                                      e.target.nextSibling.style.display = 'flex';
+                                    }}
+                                  />
+                                ) : null}
+                                
+                                {/* Fallback for missing images */}
+                                <Flex
+                                  align="center"
+                                  justify="center"
+                                  style={{
+                                    width: '100%',
+                                    height: '100%',
+                                    backgroundColor: 'var(--gray-3)',
+                                    color: 'var(--gray-9)',
+                                    display: work.image_url ? 'none' : 'flex'
+                                  }}
+                                >
+                                  <Text size="1">🎨</Text>
+                                </Flex>
+
+                                {/* Title overlay */}
+                                {work.title && (
+                                  <Box
+                                    style={{
+                                      position: 'absolute',
+                                      bottom: '0',
+                                      left: '0',
+                                      right: '0',
+                                      background: 'linear-gradient(transparent, rgba(0,0,0,0.7))',
+                                      color: 'white',
+                                      padding: '8px 4px 4px',
+                                      fontSize: '10px',
+                                      fontWeight: '500',
+                                      opacity: '0',
+                                      transition: 'opacity 0.2s ease'
+                                    }}
+                                    className="work-title-overlay"
+                                  >
+                                    {work.title}
+                                  </Box>
+                                )}
+                              </Box>
+                            );
+                          })}
+                        </Grid>
+                        {works.length > 6 && (
+                          <Text size="1" color="gray" mt="2" display="block" align="center">
+                            +{works.length - 6} more works
+                          </Text>
+                        )}
+                      </Box>
+                    )}
+                  </Grid>
+                </Flex>
+              </Card>
+            );
+          })}
+        </Grid>
+
+        
+        {/* Show create new profile option when no profiles found */}
+        {showCreateNewProfile && candidateProfiles.length === 0 && (
+          <Card size="3">
+            <Flex direction="column" gap="4" p="4">
+              <Flex direction="column" gap="2" align="center">
+                <Text size="5" weight="bold">No Existing Profiles Found</Text>
+                <Text size="3" color="gray" align="center">
+                  We couldn't find any artist profiles associated with your contact information.
+                  Would you like to create a new profile?
+                </Text>
+              </Flex>
+              <Button size="4" variant="solid" color="crimson" onClick={handleCreateNewProfile}>
+                Create New Artist Profile
+              </Button>
+            </Flex>
+          </Card>
+        )}
+      </Flex>
+    );
+  }
+
+  if (profiles.length === 0) {
     return (
       <Flex direction="column" gap="4">
         <Heading size="6">Welcome!</Heading>
@@ -224,11 +736,18 @@ const Home = ({ onNavigateToTab }) => {
 
   return (
     <Flex direction="column" gap="6">
-      <Flex direction="column" gap="2">
-        <Heading size="6">Welcome back, {profile.name || 'Artist'}!</Heading>
-        <Text size="3" color="gray">
-          Your artist dashboard overview
-        </Text>
+
+      <Flex direction="column" gap="4">
+
+        {/* Welcome Header */}
+        <Flex direction="column" gap="2">
+          <Heading size="6">
+            Welcome back, {selectedProfile?.name || 'Artist'}!
+          </Heading>
+          <Text size="3" color="gray">
+            Your artist dashboard overview
+          </Text>
+        </Flex>
       </Flex>
 
       {error && (
@@ -322,30 +841,30 @@ const Home = ({ onNavigateToTab }) => {
               <Flex direction="column" gap="3">
                 <Flex direction="column" gap="2">
                   <Text size="5" weight="bold" style={{ color: 'var(--crimson-11)' }}>
-                    {profile.name}
+                    {selectedProfile?.name}
                   </Text>
                   
                   <Flex direction="column" gap="1">
-                    {profile.city && profile.country && (
+                    {selectedProfile?.city && selectedProfile?.country && (
                       <Flex align="center" gap="2">
                         <Text size="2" color="gray">📍</Text>
-                        <Text size="3" weight="medium">{profile.city}, {profile.country}</Text>
+                        <Text size="3" weight="medium">{selectedProfile.city}, {selectedProfile.country}</Text>
                       </Flex>
                     )}
-                    {(profile.website || profile.instagram || profile.facebook) && (
+                    {(selectedProfile?.website || selectedProfile?.instagram || selectedProfile?.facebook) && (
                       <Flex align="center" gap="2">
                         <Text size="2" color="gray">🌐</Text>
                         <Text size="3">
-                          {profile.website && 'Website'}
-                          {profile.instagram && (profile.website ? ' • Instagram' : 'Instagram')}
-                          {profile.facebook && ((profile.website || profile.instagram) ? ' • Facebook' : 'Facebook')}
+                          {selectedProfile.website && 'Website'}
+                          {selectedProfile.instagram && (selectedProfile.website ? ' • Instagram' : 'Instagram')}
+                          {selectedProfile.facebook && ((selectedProfile.website || selectedProfile.instagram) ? ' • Facebook' : 'Facebook')}
                         </Text>
                       </Flex>
                     )}
                   </Flex>
                 </Flex>
 
-                {profile.bio && (
+                {selectedProfile?.bio && (
                   <Box>
                     <Text size="2" weight="medium" color="gray" mb="1" display="block">About</Text>
                     <Text size="3" style={{ 
@@ -355,7 +874,7 @@ const Home = ({ onNavigateToTab }) => {
                       overflow: 'hidden',
                       lineHeight: '1.4'
                     }}>
-                      {profile.bio}
+                      {selectedProfile.bio}
                     </Text>
                   </Box>
                 )}
@@ -367,8 +886,13 @@ const Home = ({ onNavigateToTab }) => {
                 <Box>
                   <Text size="2" weight="medium" color="gray" mb="3" display="block">Sample Works</Text>
                   <Grid columns="3" gap="2">
-                    {sampleWorks.slice(0, 9).map((work) => {
-                      const imageUrls = getArtworkImageUrls(null, work.media_file);
+                    {sampleWorks.slice(0, 9).map((work, index) => {
+                      console.log(`Home: Dashboard image ${index}:`, {
+                        work_id: work.id,
+                        work_title: work.title,
+                        source_type: work.source_type,
+                        image_url: work.image_url
+                      });
                       return (
                         <Box 
                           key={work.id} 
@@ -383,7 +907,7 @@ const Home = ({ onNavigateToTab }) => {
                           className="sample-work-thumb"
                         >
                           <img
-                            src={imageUrls.compressed || imageUrls.original}
+                            src={work.image_url}
                             alt={work.title || "Sample work"}
                             style={{
                               width: '100%',
@@ -398,6 +922,13 @@ const Home = ({ onNavigateToTab }) => {
                             onMouseLeave={(e) => {
                               e.target.style.transform = 'scale(1)';
                               e.target.parentElement.style.borderColor = 'var(--gray-6)';
+                            }}
+                            onError={(e) => {
+                              console.error('Home: Dashboard image failed to load:', {
+                                src: e.target.src,
+                                work_id: work.id,
+                                media_file: work.media_file
+                              });
                             }}
                           />
                           {work.title && (

@@ -173,7 +173,9 @@ const QRAdminPanel = ({ eventId }) => {
               
               <Box p="3" style={{ background: 'var(--gray-2)', borderRadius: '6px', fontFamily: 'monospace' }}>
                 <Code size="2">
-                  https://artb.art/qr/{qrSecret.secret_token}
+                  <a href={`https://artb.art/qr/${qrSecret.secret_token}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--blue-11)', textDecoration: 'none' }}>
+                    https://artb.art/qr/{qrSecret.secret_token}
+                  </a>
                 </Code>
               </Box>
               
@@ -188,7 +190,7 @@ const QRAdminPanel = ({ eventId }) => {
                   {copied ? 'Copied!' : 'Copy URL'}
                 </Button>
                 
-                <Button 
+                {/* <Button 
                   size="2" 
                   variant="outline" 
                   color="orange"
@@ -197,7 +199,7 @@ const QRAdminPanel = ({ eventId }) => {
                 >
                   {generating ? <Spinner size="1" /> : <ReloadIcon />}
                   {generating ? 'Generating...' : 'Generate New'}
-                </Button>
+                </Button> */}
               </Flex>
 
               <Callout.Root size="1" mt="3">

@@ -155,10 +155,13 @@ Environment:
 - LOG_FILE: $LOG_FILE
 
 COMPONENTS TO BACKUP:
-- Database tables and data (703,000+ rows)
+- Database tables and data (770,000+ rows)
 - Edge functions (Supabase functions)  
 - Database migrations and app migrations
 - RLS policies and database triggers
+- TOML configuration files (config.toml, wrangler.toml)
+- Package.json files from all sub-projects
+- Build configurations (vite, eslint, etc.)
 - External service documentation
 - Infrastructure configurations
 - Environment variable documentation
@@ -316,10 +319,51 @@ backup_config() {
         log_info "  └── App migrations: $app_migration_count files"
     fi
     
+    # Backup TOML configuration files
+    if [ -f "$PROJECT_DIR/config.toml" ]; then
+        cp "$PROJECT_DIR/config.toml" "$BACKUP_DIR/config/" 2>/dev/null && log_info "  ✓ config.toml backed up"
+    fi
+    
+    if [ -f "$PROJECT_DIR/cloudflare-worker/wrangler.toml" ]; then
+        cp "$PROJECT_DIR/cloudflare-worker/wrangler.toml" "$BACKUP_DIR/config/" 2>/dev/null && log_info "  ✓ wrangler.toml backed up"
+    fi
+    
+    # Backup package.json files from all sub-projects
+    mkdir -p "$BACKUP_DIR/config/package-configs"
+    find "$PROJECT_DIR" -maxdepth 2 -name "package.json" -not -path "*/node_modules/*" | while read -r package_file; do
+        if [ -f "$package_file" ]; then
+            local project_name=$(basename "$(dirname "$package_file")")
+            cp "$package_file" "$BACKUP_DIR/config/package-configs/${project_name}-package.json" 2>/dev/null
+        fi
+    done
+    local package_count=$(find "$BACKUP_DIR/config/package-configs" -name "*-package.json" | wc -l)
+    if [ "$package_count" -gt 0 ]; then
+        log_info "  ✓ $package_count package.json files backed up"
+    fi
+    
     # Backup environment files (without sensitive data)
     if [ -f "$PROJECT_DIR/.env.example" ]; then
         cp "$PROJECT_DIR/.env.example" "$BACKUP_DIR/config/" 2>/dev/null || log_warn "Could not copy .env.example"
     fi
+    
+    # Backup other important config files
+    local config_files=(
+        "vite.config.js"
+        "eslint.config.js" 
+        "tailwind.config.js"
+        "tsconfig.json"
+        "supabase.json"
+    )
+    
+    for config in "${config_files[@]}"; do
+        find "$PROJECT_DIR" -maxdepth 2 -name "$config" -not -path "*/node_modules/*" | while read -r config_file; do
+            if [ -f "$config_file" ]; then
+                local project_dir=$(basename "$(dirname "$config_file")")
+                local dest_name="${project_dir}-${config}"
+                cp "$config_file" "$BACKUP_DIR/config/${dest_name}" 2>/dev/null && log_info "  ✓ $dest_name backed up"
+            fi
+        done
+    done
     
     # Backup scripts
     if [ -d "$PROJECT_DIR/scripts" ]; then

@@ -49,7 +49,13 @@ print_status "Checking required tools..."
 check_command "s3cmd"
 check_command "npm"
 
-# Build the app
+# Clean and build the app  
+print_status "Cleaning previous build artifacts..."
+if [ -d "dist" ]; then
+    rm -rf dist
+    print_success "Previous dist directory cleaned"
+fi
+
 print_status "Building the application for production..."
 if npm run build; then
     print_success "Build completed successfully"
@@ -64,9 +70,32 @@ if [ ! -d "dist" ]; then
     exit 1
 fi
 
-# Count files to be deployed
+# Validate and count files to be deployed
+print_status "Validating build artifacts..."
+
+# Check for essential files
+if [ ! -f "dist/index.html" ]; then
+    print_error "index.html not found in dist. Build may be incomplete."
+    exit 1
+fi
+
+if [ ! -d "dist/assets" ]; then
+    print_error "assets directory not found in dist. Build may be incomplete."
+    exit 1
+fi
+
+# Check for unexpected files that could indicate contamination
+UNEXPECTED_FILES=$(find dist -type f -not -name "*.html" -not -name "*.js" -not -name "*.css" -not -name "*.map" -not -name "*.ico" -not -name "*.png" -not -name "*.jpg" -not -name "*.jpeg" -not -name "*.svg" -not -name "*.gif" -not -name "*.woff*" -not -name "*.ttf" -not -name "*.eot" -not -name "*.json" | head -5)
+
+if [ ! -z "$UNEXPECTED_FILES" ]; then
+    print_warning "Found unexpected files in dist directory:"
+    echo "$UNEXPECTED_FILES"
+    print_warning "This could indicate contamination. Proceeding with caution..."
+fi
+
 FILE_COUNT=$(find dist -type f | wc -l)
 print_status "Found $FILE_COUNT files to deploy"
+print_success "Build artifacts validated"
 
 # Generate cache-busting version using git commit hash
 GIT_HASH=$(git rev-parse --short HEAD 2>/dev/null || date +%s)
@@ -116,22 +145,35 @@ else
     exit 1
 fi
 
-# Upload other assets (images, fonts, etc.)
-print_status "Uploading other assets..."
-if s3cmd sync dist/ s3://$CDN_BUCKET/$CDN_PATH/ \
-    --acl-public \
-    --exclude="index.html" \
-    --exclude="assets/*.js" \
-    --exclude="assets/*.css" \
-    --exclude="*.map" \
-    --add-header="Cache-Control:public, max-age=3600" \
-    --add-header="Access-Control-Allow-Origin:https://artb.art" \
-    --add-header="Access-Control-Allow-Methods:GET, HEAD" \
-    --add-header="Access-Control-Allow-Headers:*"; then
-    print_success "Other assets uploaded successfully"
-else
-    print_warning "No other assets found or upload failed"
+# Upload only specific static assets (NO directory sync to prevent contamination)
+print_status "Uploading additional static assets..."
+
+# Check for favicon and other root-level assets ONLY
+if [ -f "dist/vite.svg" ]; then
+    s3cmd put dist/vite.svg s3://$CDN_BUCKET/$CDN_PATH/vite.svg \
+        --acl-public \
+        --add-header="Cache-Control:public, max-age=3600" \
+        --add-header="Access-Control-Allow-Origin:https://artb.art"
+    print_success "vite.svg uploaded"
 fi
+
+if [ -f "dist/favicon.ico" ]; then
+    s3cmd put dist/favicon.ico s3://$CDN_BUCKET/$CDN_PATH/favicon.ico \
+        --acl-public \
+        --add-header="Cache-Control:public, max-age=3600" \
+        --add-header="Access-Control-Allow-Origin:https://artb.art"
+    print_success "favicon.ico uploaded"
+fi
+
+# List what we actually have in dist for transparency
+print_status "Build contents for verification:"
+ls -la dist/
+if [ -d "dist/assets" ]; then
+    echo "Assets directory contents:"
+    ls -la dist/assets/ | head -10
+fi
+
+print_success "Static assets deployment completed safely"
 
 # Verify deployment
 print_status "Verifying deployment..."

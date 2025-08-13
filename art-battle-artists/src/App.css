@@ -119,14 +119,24 @@ button:active,
   transition: transform 0.1s ease;
 }
 
-/* Prevent text selection on UI elements */
+/* Prevent text selection on interactive UI elements only */
 button,
-.rt-Card,
 .rt-Badge {
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
+}
+
+/* Explicitly allow text selection on cards and content */
+.rt-Card,
+.rt-Text,
+p,
+span {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
 }
 
 /* Loading skeleton animation */
