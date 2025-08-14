@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
   Heading,
@@ -55,6 +55,7 @@ import PersonTile from './PersonTile';
 
 const EventDetail = () => {
   const { eventId } = useParams();
+  const navigate = useNavigate();
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -94,6 +95,14 @@ const EventDetail = () => {
   const [sampleWorksLoading, setSampleWorksLoading] = useState(false);
   const [imageModalOpen, setImageModalOpen] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
+  
+  // Bio editing states for artist modal
+  const [editingBio, setEditingBio] = useState(false);
+  const [bioText, setBioText] = useState('');
+  const [bioSaving, setBioSaving] = useState(false);
+  const [showInvitationForm, setShowInvitationForm] = useState(false);
+  const [invitationMessage, setInvitationMessage] = useState('');
+  const [sendingInvitation, setSendingInvitation] = useState(false);
 
   useEffect(() => {
     if (eventId) {
@@ -111,8 +120,7 @@ const EventDetail = () => {
         .from('events')
         .select(`
           *,
-          cities(id, name, country_id),
-          countries(id, name, code),
+          cities(id, name, country_id, countries(id, name, code)),
           event_admins(id, admin_level, phone),
           rounds(
             id,
@@ -484,6 +492,64 @@ const EventDetail = () => {
     setImageModalOpen(true);
   };
 
+  const saveBio = async () => {
+    if (!selectedArtist?.artist_profiles?.id) {
+      console.error('No artist profile ID available for bio save');
+      return;
+    }
+
+    setBioSaving(true);
+    try {
+      const { error } = await supabase
+        .from('artist_profiles')
+        .update({ abhq_bio: bioText })
+        .eq('id', selectedArtist.artist_profiles.id);
+
+      if (error) throw error;
+
+      // Update the selected artist in state
+      setSelectedArtist(prev => ({
+        ...prev,
+        artist_profiles: {
+          ...prev.artist_profiles,
+          abhq_bio: bioText
+        }
+      }));
+
+      // Update the artist in all relevant lists
+      const updateArtistInList = (list, setList) => {
+        setList(prev => prev.map(artist => 
+          artist.artist_number === selectedArtist.artist_number 
+            ? {
+                ...artist,
+                artist_profiles: {
+                  ...artist.artist_profiles,
+                  abhq_bio: bioText
+                }
+              }
+            : artist
+        ));
+      };
+
+      updateArtistInList(artistApplications, setArtistApplications);
+      updateArtistInList(artistInvites, setArtistInvites);
+      updateArtistInList(artistConfirmations, setArtistConfirmations);
+
+      setEditingBio(false);
+      console.log('Bio saved successfully');
+    } catch (error) {
+      console.error('Error saving bio:', error);
+      alert('Error saving bio. Please try again.');
+    } finally {
+      setBioSaving(false);
+    }
+  };
+
+  const cancelBioEdit = () => {
+    setBioText(selectedArtist?.artist_profiles?.abhq_bio || '');
+    setEditingBio(false);
+  };
+
   const fetchSampleWorks = async (artistNumber) => {
     if (!artistNumber) return;
     
@@ -526,6 +592,11 @@ const EventDetail = () => {
     setArtistModalType(type);
     setArtistModalOpen(true);
     setSampleWorks([]); // Clear previous sample works
+    
+    // Initialize bio editing state
+    setBioText(artist.artist_profiles?.abhq_bio || '');
+    setEditingBio(false);
+    setBioSaving(false);
     
     // Fetch sample works using artist number
     const artistNumber = artist?.artist_number;
@@ -718,6 +789,81 @@ const EventDetail = () => {
   const showAdminMessage = (type, text) => {
     setAdminMessage({ type, text });
     setTimeout(() => setAdminMessage(null), 4000);
+  };
+
+  const handleSendInvitation = () => {
+    setShowInvitationForm(true);
+    setInvitationMessage(`Hi! We would love to invite you to participate in ${event?.name || 'our upcoming Art Battle event'}. 
+
+Please let us know if you're interested in joining us for this exciting event. We think you'd be a great addition to our lineup of talented artists!
+
+Looking forward to hearing from you.
+
+Best regards,
+The Art Battle Team`);
+  };
+
+  const sendInvitation = async () => {
+    if (!selectedArtist || !invitationMessage.trim()) {
+      showAdminMessage('error', 'Please provide a message for the invitation');
+      return;
+    }
+
+    try {
+      setSendingInvitation(true);
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        showAdminMessage('error', 'Not authenticated');
+        return;
+      }
+
+      const response = await supabase.functions.invoke('admin-send-invitation', {
+        body: {
+          artist_number: selectedArtist.artist_number,
+          event_eid: event?.eid,
+          message_from_producer: invitationMessage,
+          artist_profile_id: selectedArtist.artist_profile_id
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
+
+      if (response.error) {
+        console.error('Invitation error:', response.error);
+        showAdminMessage('error', `Failed to send invitation: ${response.error.message}`);
+        return;
+      }
+
+      if (response.data?.error) {
+        console.error('Function returned error:', response.data.error);
+        showAdminMessage('error', response.data.error);
+        return;
+      }
+
+      showAdminMessage('success', response.data?.message || 'Invitation sent successfully!');
+      
+      // Reset form and close modal after short delay
+      setTimeout(() => {
+        setShowInvitationForm(false);
+        setInvitationMessage('');
+        setArtistModalOpen(false);
+        // Refresh artist data to show new invitation
+        fetchArtistData();
+      }, 2000);
+
+    } catch (error) {
+      console.error('Error sending invitation:', error);
+      showAdminMessage('error', 'Failed to send invitation. Please try again.');
+    } finally {
+      setSendingInvitation(false);
+    }
+  };
+
+  const cancelInvitation = () => {
+    setShowInvitationForm(false);
+    setInvitationMessage('');
   };
 
   const fetchEventAdmins = async () => {
@@ -951,7 +1097,7 @@ const EventDetail = () => {
               />
             </Text>
           </Box>
-          <Button>
+          <Button onClick={() => navigate(`/events/create?edit=${eventId}`)}>
             Edit Event
           </Button>
         </Flex>
@@ -969,9 +1115,6 @@ const EventDetail = () => {
                 </Text>
                 <Text size="2">
                   <strong>Venue:</strong> <DebugField value={event.venue} fieldName="event.venue" />
-                </Text>
-                <Text size="2">
-                  <strong>Current Round:</strong> <DebugField value={event.current_round} fieldName="event.current_round" />
                 </Text>
                 <Text size="2">
                   <strong>Enabled:</strong> {event.enabled ? 'Yes' : 'No'}
@@ -1027,8 +1170,8 @@ const EventDetail = () => {
                 <Text size="2">
                   <strong>Country:</strong>{' '}
                   <DebugField 
-                    value={event.countries?.name} 
-                    fieldName="countries.name" 
+                    value={event.cities?.countries?.name} 
+                    fieldName="cities.countries.name" 
                   />
                 </Text>
               </Flex>
@@ -1053,8 +1196,6 @@ const EventDetail = () => {
               <Tabs.Trigger value="admins" onClick={fetchEventAdmins}>
                 Admins ({eventAdmins.length})
               </Tabs.Trigger>
-              <Tabs.Trigger value="settings">Settings</Tabs.Trigger>
-              <Tabs.Trigger value="debug">Debug</Tabs.Trigger>
             </Tabs.List>
 
             <Box p="3">
@@ -1689,29 +1830,6 @@ const EventDetail = () => {
                 )}
               </Tabs.Content>
 
-              <Tabs.Content value="settings">
-                <Text size="3" weight="medium" mb="3" style={{ display: 'block' }}>
-                  Event Settings
-                </Text>
-                <Flex direction="column" gap="3">
-                  <Text size="2">
-                    <strong>Show in App:</strong> {event.show_in_app ? 'Yes' : 'No'}
-                  </Text>
-                  <Text size="2">
-                    <strong>Enable Auction:</strong> {event.enable_auction ? 'Yes' : 'No'}
-                  </Text>
-                  <Text size="2">
-                    <strong>Vote by Link:</strong> {event.vote_by_link ? 'Yes' : 'No'}
-                  </Text>
-                  <Text size="2">
-                    <strong>Email Registration:</strong> {event.email_registration ? 'Yes' : 'No'}
-                  </Text>
-                </Flex>
-              </Tabs.Content>
-
-              <Tabs.Content value="debug">
-                <DebugObjectViewer obj={event} label="Full Event Object" />
-              </Tabs.Content>
             </Box>
           </Tabs.Root>
         </Card>
@@ -2257,7 +2375,14 @@ const EventDetail = () => {
       </Dialog.Root>
 
       {/* Artist Workflow Modal */}
-      <Dialog.Root open={artistModalOpen} onOpenChange={setArtistModalOpen}>
+      <Dialog.Root open={artistModalOpen} onOpenChange={(open) => {
+        setArtistModalOpen(open);
+        if (!open) {
+          // Reset invitation form state when modal closes
+          setShowInvitationForm(false);
+          setInvitationMessage('');
+        }
+      }}>
         <Dialog.Content style={{ maxWidth: 800, maxHeight: '90vh' }}>
           <Dialog.Title>
             <Flex align="center" gap="3">
@@ -2419,8 +2544,72 @@ const EventDetail = () => {
                   </Box>
                 </Card>
 
+                {/* Invitation Form */}
+                {showInvitationForm && selectedArtist && (
+                  <Card>
+                    <Box p="4">
+                      <Heading size="4" mb="3">
+                        <Flex align="center" gap="2">
+                          <PaperPlaneIcon />
+                          Send Invitation to {selectedArtist?.artist_profiles?.name || selectedArtist?.artist_number}
+                        </Flex>
+                      </Heading>
+                      
+                      <Flex direction="column" gap="4">
+                        <Box>
+                          <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>
+                            Personal Message from Producer:
+                          </Text>
+                          <TextArea
+                            placeholder="Write a personal invitation message..."
+                            value={invitationMessage}
+                            onChange={(e) => setInvitationMessage(e.target.value)}
+                            rows={8}
+                            style={{ minHeight: '200px' }}
+                          />
+                          <Text size="1" color="gray" mt="1" style={{ display: 'block' }}>
+                            This message will be sent to the artist along with the invitation to participate in {event?.name}.
+                          </Text>
+                        </Box>
+
+                        <Separator />
+
+                        <Flex gap="3">
+                          <Button 
+                            size="3" 
+                            style={{ flex: 1 }}
+                            onClick={sendInvitation}
+                            disabled={sendingInvitation || !invitationMessage.trim()}
+                          >
+                            {sendingInvitation ? (
+                              <>
+                                <Spinner size="1" />
+                                Sending...
+                              </>
+                            ) : (
+                              <>
+                                <PaperPlaneIcon />
+                                Send Invitation
+                              </>
+                            )}
+                          </Button>
+                          <Button 
+                            size="3" 
+                            variant="outline" 
+                            color="gray"
+                            onClick={cancelInvitation}
+                            disabled={sendingInvitation}
+                          >
+                            Cancel
+                          </Button>
+                        </Flex>
+                      </Flex>
+                    </Box>
+                  </Card>
+                )}
+
                 {/* Application-specific content */}
-                {artistModalType === 'application' && selectedArtist && (
+                {artistModalType === 'application' && selectedArtist && !showInvitationForm && (
                   <Card>
                     <Box p="4">
                       <Heading size="4" mb="3">Application Details</Heading>
@@ -2444,7 +2633,11 @@ const EventDetail = () => {
                         <Separator />
                         
                         <Flex gap="3">
-                          <Button size="3" style={{ flex: 1 }}>
+                          <Button 
+                            size="3" 
+                            style={{ flex: 1 }}
+                            onClick={handleSendInvitation}
+                          >
                             Send Invitation
                           </Button>
                           <Button size="3" variant="outline" color="red">
@@ -2555,6 +2748,70 @@ const EventDetail = () => {
                             <strong>Promo Image:</strong> ✅ Submitted
                           </Text>
                         )}
+
+                        {/* ABHQ Bio Section */}
+                        <Box mt="3">
+                          <Flex justify="between" align="center" mb="2">
+                            <Text size="2" weight="medium">
+                              <strong>ABHQ Bio:</strong>
+                            </Text>
+                            {!editingBio && (
+                              <Button 
+                                size="1" 
+                                variant="soft"
+                                onClick={() => setEditingBio(true)}
+                              >
+                                Edit
+                              </Button>
+                            )}
+                          </Flex>
+                          
+                          {editingBio ? (
+                            <Box>
+                              <TextArea
+                                value={bioText}
+                                onChange={(e) => setBioText(e.target.value)}
+                                placeholder="Enter ABHQ bio..."
+                                rows={6}
+                                style={{ width: '100%', marginBottom: '8px' }}
+                              />
+                              <Flex gap="2">
+                                <Button 
+                                  size="1" 
+                                  onClick={saveBio}
+                                  loading={bioSaving}
+                                  disabled={bioSaving}
+                                >
+                                  Save
+                                </Button>
+                                <Button 
+                                  size="1" 
+                                  variant="soft" 
+                                  onClick={cancelBioEdit}
+                                  disabled={bioSaving}
+                                >
+                                  Cancel
+                                </Button>
+                              </Flex>
+                            </Box>
+                          ) : (
+                            <>
+                              {selectedArtist?.artist_profiles?.abhq_bio ? (
+                                <Box p="3" style={{ backgroundColor: 'var(--green-2)', borderRadius: '6px' }}>
+                                  <Text size="2" style={{ lineHeight: '1.5', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                                    {selectedArtist.artist_profiles.abhq_bio}
+                                  </Text>
+                                </Box>
+                              ) : (
+                                <Box p="3" style={{ backgroundColor: 'var(--red-2)', borderRadius: '6px' }}>
+                                  <Text size="2" color="red">
+                                    No ABHQ bio available
+                                  </Text>
+                                </Box>
+                              )}
+                            </>
+                          )}
+                        </Box>
                         
                         <Separator />
                         

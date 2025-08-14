@@ -18,28 +18,30 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    const { person_id, form_17_entry_id } = await req.json()
-
-    if (!person_id || !form_17_entry_id) {
-      throw new Error('Missing required parameters: person_id and form_17_entry_id')
+    // Get auth token and verify user
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      throw new Error('No authorization header')
     }
 
-    // Get Form 17 data from artist_profile_aliases
-    const { data: aliasData, error: aliasError } = await supabase
-      .from('artist_profile_aliases')
-      .select('form_17_metadata')
-      .eq('form_17_entry_id', form_17_entry_id)
-      .single()
-
-    if (aliasError || !aliasData) {
-      throw new Error(`Failed to find Form 17 data: ${aliasError?.message}`)
+    const token = authHeader.replace('Bearer ', '')
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+    
+    if (authError || !user) {
+      throw new Error('Unauthorized')
     }
 
-    const form17Data = aliasData.form_17_metadata?.extracted_data || {}
-    const form17Fields = aliasData.form_17_metadata?.form_17_fields || {}
+    const { person_id, name, email, bio, city, website, instagram, facebook } = await req.json()
 
-    // Generate custom artist ID
-    const firstName = form17Data.first_name || form17Fields['1'] || 'Artist'
+    if (!person_id || !name) {
+      throw new Error('Missing required parameters: person_id and name')
+    }
+
+    // Get phone from authenticated user
+    const userPhone = user.phone
+
+    // Generate custom artist ID using provided name
+    const firstName = name.split(' ')[0] || 'Artist'
     const { data: customIdResult, error: idError } = await supabase
       .rpc('generate_artist_id', { first_name: firstName })
 
@@ -49,176 +51,55 @@ serve(async (req) => {
 
     const customId = customIdResult
 
+    // Format phone number with + prefix if provided and doesn't already have it
+    let formattedPhone = null
+    if (userPhone && userPhone.trim()) {
+      formattedPhone = userPhone.trim().startsWith('+') ? userPhone.trim() : `+${userPhone.trim()}`
+    }
+
     // Prepare profile data
     const profileData = {
       mongo_id: customId, // Use our custom ID in mongo_id field
       person_id: person_id,
       primary_for: person_id,
-      form_17_entry_id: form_17_entry_id,
-      name: form17Fields['1'] || firstName,
-      email: form17Fields['14'],
-      phone: form17Fields['3'],
-      bio: form17Fields['5'],
-      city: form17Fields['93.3'],
-      website: form17Fields['4'] || '',
-      instagram: form17Fields['16'],
-      facebook: form17Fields['17'],
-      aliases: [form_17_entry_id.toString()], // Track Form 17 ID as alias
+      name: name,
+      email: email || null,
+      phone: formattedPhone,
+      bio: bio || null,
+      city: city || null,
+      website: website || null,
+      instagram: instagram || null,
+      facebook: facebook || null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }
 
-    // First check if a profile for this Form 17 entry already exists
-    const { data: existingProfile, error: checkError } = await supabase
+    // Clear primary_for from any other profiles for this person
+    await supabase
       .from('artist_profiles')
-      .select('*')
-      .eq('form_17_entry_id', form_17_entry_id)
+      .update({ primary_for: null })
+      .eq('primary_for', person_id)
+
+    // Create new profile
+    console.log(`Creating new profile for ${name} (person ${person_id})`)
+    
+    const { data: newProfile, error: createError } = await supabase
+      .from('artist_profiles')
+      .insert(profileData)
+      .select()
       .single()
 
-    let finalProfile;
-
-    if (existingProfile && !checkError) {
-      // Profile already exists, clear other primaries and set this one
-      console.log(`Profile already exists for Form 17 entry ${form_17_entry_id}, updating primary_for`)
-      
-      // First clear primary_for from any other profiles for this person
-      await supabase
-        .from('artist_profiles')
-        .update({ primary_for: null })
-        .eq('primary_for', person_id)
-
-      // Then set this profile as the new primary
-      const { data: updatedProfile, error: updateError } = await supabase
-        .from('artist_profiles')
-        .update({ 
-          primary_for: person_id,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', existingProfile.id)
-        .select()
-        .single()
-
-      if (updateError) {
-        throw new Error(`Failed to update existing profile: ${updateError.message}`)
-      }
-
-      finalProfile = updatedProfile
-      
-      // Check if this profile already has sample works, if so, skip creating new ones
-      const { data: existingSampleWorks, error: sampleWorksError } = await supabase
-        .from('artist_sample_works')
-        .select('id')
-        .eq('artist_profile_id', finalProfile.id)
-        .limit(1)
-      
-      if (existingSampleWorks && existingSampleWorks.length > 0) {
-        console.log(`Profile already has sample works, skipping Form 17 sample work creation`)
-        return new Response(
-          JSON.stringify({ 
-            success: true, 
-            profile: finalProfile,
-            sample_works_created: 0,
-            existing_sample_works: true,
-            custom_id: finalProfile.mongo_id || customId
-          }),
-          { 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 200 
-          }
-        )
-      }
-    } else {
-      // Create new profile, first clear any existing primaries
-      console.log(`Creating new profile for Form 17 entry ${form_17_entry_id}`)
-      
-      // Clear primary_for from any other profiles for this person
-      await supabase
-        .from('artist_profiles')
-        .update({ primary_for: null })
-        .eq('primary_for', person_id)
-
-      const { data: newProfile, error: createError } = await supabase
-        .from('artist_profiles')
-        .insert(profileData)
-        .select()
-        .single()
-
-      if (createError) {
-        throw new Error(`Failed to create profile: ${createError.message}`)
-      }
-
-      finalProfile = newProfile
+    if (createError) {
+      throw new Error(`Failed to create profile: ${createError.message}`)
     }
 
-    // Process sample works from Form 17 fields (28, 29, 30)
-    const sampleWorkUrls = [
-      form17Fields['28'],
-      form17Fields['29'], 
-      form17Fields['30']
-    ].filter(url => url && url.trim())
-     .map(url => url.split('|:||:||:|')[0]) // Clean URLs
-     .map(url => url.replace(/^https?:\/\/artbattle\.ca\//, 'https://artbattle.com/')) // Fix domain
-
-    // Create sample works records
-    const sampleWorksPromises = sampleWorkUrls.map(async (imageUrl, index) => {
-      // Create media_files entry with URL in the expected field for image helpers
-      const { data: mediaFile, error: mediaError } = await supabase
-        .from('media_files')
-        .insert({
-          file_name: `form17_sample_${index + 1}.jpg`,
-          file_path: imageUrl, // Keep for reference
-          original_url: imageUrl, // Store in field expected by getArtworkImageUrls()
-          compressed_url: imageUrl, // Use same URL for all variants for external images
-          thumbnail_url: imageUrl, // Use same URL for thumbnail
-          file_type: 'image/jpeg',
-          file_size: null,
-          upload_date: new Date().toISOString(),
-          metadata: {
-            source: 'form_17',
-            form_17_field: `field_${28 + index}`
-          }
-        })
-        .select()
-        .single()
-
-      if (mediaError) {
-        console.error(`Failed to create media file for ${imageUrl}:`, mediaError)
-        return null
-      }
-
-      // Create artist_sample_works entry
-      const { data: sampleWork, error: workError } = await supabase
-        .from('artist_sample_works')
-        .insert({
-          artist_profile_id: finalProfile.id,
-          media_file_id: mediaFile.id,
-          title: `Form 17 Sample Work ${index + 1}`,
-          description: `Sample work from original Form 17 submission`,
-          display_order: index,
-          created_at: new Date().toISOString()
-        })
-        .select()
-        .single()
-
-      if (workError) {
-        console.error(`Failed to create sample work for ${imageUrl}:`, workError)
-        return null
-      }
-
-      return sampleWork
-    })
-
-    const sampleWorks = await Promise.all(sampleWorksPromises)
-    const successfulWorks = sampleWorks.filter(work => work !== null)
-
-    console.log(`Created profile ${customId} with ${successfulWorks.length} sample works`)
+    console.log(`Created profile ${customId} for ${name}`)
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        profile: finalProfile,
-        sample_works_created: successfulWorks.length,
-        custom_id: finalProfile.mongo_id || customId
+        profile: newProfile,
+        custom_id: customId
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

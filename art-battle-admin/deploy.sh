@@ -106,7 +106,6 @@ done
 s3cmd sync \
     --acl-public \
     --add-header="Cache-Control:no-cache, must-revalidate" \
-    --delete-removed \
     --exclude="*.css" \
     --exclude="*.js" \
     --guess-mime-type \

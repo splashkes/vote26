@@ -24,12 +24,18 @@ const EventDashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [events, setEvents] = useState([]);
+  const [eventGroups, setEventGroups] = useState({
+    upcoming30: [],
+    past30: [],
+    future: [],
+    past30to120: []
+  });
+  const [healthScores, setHealthScores] = useState(new Map());
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTags, setActiveTags] = useState(new Set());
   const [error, setError] = useState(null);
-  const [displayedEvents, setDisplayedEvents] = useState(20); // For infinite scroll
-  const [hasMore, setHasMore] = useState(true);
+  const [loadingHealth, setLoadingHealth] = useState(false);
 
   useEffect(() => {
     fetchEvents();
@@ -52,10 +58,8 @@ const EventDashboard = () => {
           event_end_datetime,
           enabled,
           show_in_app,
-          current_round,
           timezone_icann,
-          cities(name, country_id),
-          countries(name, code)
+          cities(name, country_id, countries(name, code))
         `)
         .order('event_start_datetime', { ascending: false });
 
@@ -70,11 +74,93 @@ const EventDashboard = () => {
       console.log('EventDashboard: Fetched', data?.length, 'events from database');
       debugObject(data?.[0], 'Sample Event Data');
       setEvents(data || []);
+
+      // Group events by time periods
+      groupEventsByTime(data || []);
     } catch (err) {
       console.error('Error in fetchEvents:', err);
       setError('Failed to load events');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const groupEventsByTime = (allEvents) => {
+    const now = new Date();
+    const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const oneHundredTwentyDaysAgo = new Date(now.getTime() - 120 * 24 * 60 * 60 * 1000);
+
+    const groups = {
+      upcoming30: [],
+      past30: [],
+      future: [],
+      past30to120: []
+    };
+
+    allEvents.forEach(event => {
+      const eventDate = new Date(event.event_start_datetime);
+      
+      if (eventDate >= now && eventDate <= thirtyDaysFromNow) {
+        // Upcoming events in next 30 days
+        groups.upcoming30.push(event);
+      } else if (eventDate >= thirtyDaysAgo && eventDate < now) {
+        // Events in last 30 days
+        groups.past30.push(event);
+      } else if (eventDate > thirtyDaysFromNow) {
+        // Future events beyond 30 days
+        groups.future.push(event);
+      } else if (eventDate >= oneHundredTwentyDaysAgo && eventDate < thirtyDaysAgo) {
+        // Past events from -30 to -120 days
+        groups.past30to120.push(event);
+      }
+    });
+
+    // Sort each group appropriately
+    groups.upcoming30.sort((a, b) => new Date(a.event_start_datetime) - new Date(b.event_start_datetime)); // Oldest first
+    groups.past30.sort((a, b) => new Date(b.event_start_datetime) - new Date(a.event_start_datetime)); // Newest first
+    groups.future.sort((a, b) => new Date(a.event_start_datetime) - new Date(b.event_start_datetime)); // Oldest first
+    groups.past30to120.sort((a, b) => new Date(b.event_start_datetime) - new Date(a.event_start_datetime)); // Newest first
+
+    setEventGroups(groups);
+
+    // Load health scores for upcoming events
+    loadHealthScores(groups.upcoming30);
+  };
+
+  const loadHealthScores = async (upcomingEvents) => {
+    if (upcomingEvents.length === 0) return;
+    
+    setLoadingHealth(true);
+    const scores = new Map();
+    
+    try {
+      // Load health scores in parallel for all upcoming events
+      const healthPromises = upcomingEvents.map(async (event) => {
+        try {
+          const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/health-report-public/${event.eid}?format=json`);
+          if (response.ok) {
+            const healthData = await response.json();
+            return { eid: event.eid, score: healthData.health_score };
+          }
+        } catch (error) {
+          console.warn(`Failed to load health score for ${event.eid}:`, error);
+        }
+        return { eid: event.eid, score: null };
+      });
+
+      const results = await Promise.all(healthPromises);
+      results.forEach(({ eid, score }) => {
+        if (score !== null) {
+          scores.set(eid, score);
+        }
+      });
+
+      setHealthScores(scores);
+    } catch (error) {
+      console.error('Error loading health scores:', error);
+    } finally {
+      setLoadingHealth(false);
     }
   };
 
@@ -116,7 +202,7 @@ const EventDashboard = () => {
         const eid = (item.eid || '').toLowerCase();
         const venue = (item.venue || '').toLowerCase();
         const cityName = (item.cities?.name || '').toLowerCase();
-        const countryName = (item.countries?.name || '').toLowerCase();
+        const countryName = (item.cities?.countries?.name || '').toLowerCase();
         
         // Exact matches get highest score
         if (name.includes(searchLower)) score += 100;
@@ -235,7 +321,7 @@ const EventDashboard = () => {
               Manage and monitor Art Battle events
             </Text>
           </Box>
-          <Button>
+          <Button onClick={() => navigate('/events/create')}>
             Create Event
           </Button>
         </Flex>
@@ -390,13 +476,6 @@ const EventDashboard = () => {
                         </Text>
                       </Flex>
 
-                      <Text size="2" color="gray">
-                        Round: <DebugField 
-                          value={event.current_round} 
-                          fieldName="event.current_round"
-                          fallback="0"
-                        />
-                      </Text>
                     </Flex>
 
                     {/* Location */}
@@ -406,11 +485,11 @@ const EventDashboard = () => {
                         fieldName="cities.name"
                         fallback="Unknown city"
                       />
-                      {event.countries?.name && (
+                      {event.cities?.countries?.name && (
                         <>
                           , <DebugField 
-                            value={event.countries.name} 
-                            fieldName="countries.name"
+                            value={event.cities.countries.name} 
+                            fieldName="cities.countries.name"
                           />
                         </>
                       )}

@@ -27,12 +27,28 @@ html, body {
   /* Prevent horizontal scroll */
   body {
     overflow-x: hidden;
+    padding: 0;
+    margin: 0;
   }
   
   /* Ensure full width on mobile */
   .rt-Container {
     width: 100% !important;
     max-width: 100% !important;
+    padding: 0.75rem !important;
+    margin: 0 !important;
+  }
+  
+  /* Fix header on mobile */
+  .rt-Container > div:first-child {
+    margin-bottom: 1rem !important;
+  }
+  
+  /* Better responsive flex headers */
+  .rt-Flex[data-mobile-header] {
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
   }
   
   /* Optimize touch targets */
@@ -44,6 +60,13 @@ html, body {
   /* Improve readability */
   .rt-Text {
     line-height: 1.5;
+  }
+  
+  /* Ensure heading doesn't overflow */
+  .rt-Heading {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 

@@ -245,9 +245,9 @@ const InternationalPhoneInput = forwardRef(({
         }
         
         // Strategy 3: Use our ref if available
-        if (!inputElement && intlInputRef.current) {
+        if (!inputElement && inputRef.current) {
           try {
-            const inputFromRef = intlInputRef.current.querySelector?.('input[type="tel"]');
+            const inputFromRef = inputRef.current.querySelector?.('input[type="tel"]');
             if (inputFromRef) {
               inputElement = inputFromRef;
             }
@@ -274,7 +274,7 @@ const InternationalPhoneInput = forwardRef(({
   return (
     <Flex direction="column" gap="2">
       {/* Simple Country + Phone Input */}
-      <Flex gap="2" align="center">
+      <Flex gap="2" align="center" className="phone-input-container">
         <Select.Root 
           value={selectedCountry} 
           onValueChange={(newCountry) => {
@@ -317,6 +317,8 @@ const InternationalPhoneInput = forwardRef(({
           autoComplete={autoComplete}
           style={{ flex: 1 }}
           size="3"
+          type="tel"
+          inputMode="numeric"
           {...props}
         />
       </Flex>

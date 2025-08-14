@@ -375,6 +375,7 @@ const AdminPanel = ({
         .select(`
           id,
           artist_id,
+          artist_number,
           artist_profiles!inner (
             id,
             name,
@@ -408,6 +409,7 @@ const AdminPanel = ({
       // Transform event artists data
       const allEventArtists = eventArtistsData.map(ea => ({
         ...ea.artist_profiles,
+        artist_number: ea.artist_number,
         isAssigned: artistAssignmentMap.has(ea.artist_id)
       }));
 
@@ -438,9 +440,10 @@ const AdminPanel = ({
       // Server-side search with OR conditions for name, city, instagram, and entry_id (if numeric)
       const { data, error } = await supabase
         .from('artist_profiles')
-        .select('id, name, city_text, instagram, entry_id')
+        .select('id, name, city_text, instagram, entry_id, person_id')
         .not('name', 'is', null)
         .or(orConditions)
+        .order('person_id', { nullsLast: true })
         .order('name')
         .limit(20); // Limit results to 20 for performance
 
@@ -458,12 +461,24 @@ const AdminPanel = ({
 
   const addArtistToEvent = async (artistId) => {
     try {
+      // First get the artist's entry_id to use as artist_number
+      const { data: artistData, error: fetchError } = await supabase
+        .from('artist_profiles')
+        .select('entry_id')
+        .eq('id', artistId)
+        .single();
+
+      if (fetchError) {
+        throw fetchError;
+      }
+
       // Add artist to event_artists table instead of round_contestants
       const { error } = await supabase
         .from('event_artists')
         .insert({
           event_id: eventId,
           artist_id: artistId,
+          artist_number: artistData.entry_id?.toString(),
           status: 'confirmed'
         });
 
@@ -948,7 +963,7 @@ const AdminPanel = ({
                         <Text size="2" weight="medium">{artist.name}</Text>
                         <Flex gap="2" align="center">
                           <Text size="1" color="gray">{artist.city_text}</Text>
-                          <Text size="1" color="gray">• ID: {artist.entry_id || 'N/A'}</Text>
+                          <Text size="1" color="gray">• ID: {artist.artist_number || 'N/A'}</Text>
                         </Flex>
                       </Box>
                       <Flex align="center" gap="2">
@@ -1044,7 +1059,10 @@ const AdminPanel = ({
                           border: '1px solid var(--gray-4)'
                         }}>
                           <Box>
-                            <Text size="2" weight="medium">{artist.name}</Text>
+                            <Text size="2" weight="medium">
+                              {artist.name}
+                              {artist.person_id && <Text size="1" color="green" weight="medium" style={{marginLeft: '6px'}}>(LATEST)</Text>}
+                            </Text>
                             <Flex gap="2" align="center">
                               <Text size="1" color="gray">{artist.city_text}</Text>
                               {artist.entry_id && <Text size="1" color="gray">• ID: {artist.entry_id}</Text>}

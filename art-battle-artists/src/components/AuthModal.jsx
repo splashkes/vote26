@@ -12,13 +12,16 @@ import {
 import { InfoCircledIcon } from '@radix-ui/react-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import InternationalPhoneInput from './InternationalPhoneInput';
 
 const AuthModal = ({ open, onOpenChange, redirectTo = null }) => {
   const [phone, setPhone] = useState('');
+  const [rawPhone, setRawPhone] = useState(''); // Store E.164 formatted phone
   const [otp, setOtp] = useState('');
   const [step, setStep] = useState('phone'); // 'phone' or 'otp'
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [phoneValid, setPhoneValid] = useState(false);
   
   const phoneInputRef = useRef(null);
   const otpInputRef = useRef(null);
@@ -29,13 +32,41 @@ const AuthModal = ({ open, onOpenChange, redirectTo = null }) => {
   // Auto-focus inputs when step changes
   useEffect(() => {
     if (open) {
-      setTimeout(() => {
-        if (step === 'phone' && phoneInputRef.current) {
-          phoneInputRef.current.focus();
-        } else if (step === 'otp' && otpInputRef.current) {
-          otpInputRef.current.focus();
+      const focusActiveInput = () => {
+        try {
+          if (step === 'phone') {
+            // Multiple strategies to find and focus the phone input
+            let inputElement = null;
+            
+            // Strategy 1: Use container class
+            const phoneContainer = document.querySelector('.phone-input-container');
+            if (phoneContainer) {
+              inputElement = phoneContainer.querySelector('input[type="tel"]');
+            }
+            
+            // Strategy 2: Find all tel inputs and use the last one
+            if (!inputElement) {
+              const telInputs = document.querySelectorAll('input[type="tel"]');
+              if (telInputs.length > 0) {
+                inputElement = telInputs[telInputs.length - 1];
+              }
+            }
+            
+            if (inputElement && inputElement.focus) {
+              inputElement.focus();
+            }
+          } else if (step === 'otp' && otpInputRef.current) {
+            otpInputRef.current.focus();
+          }
+        } catch (error) {
+          console.log('Focus error (non-critical):', error);
         }
-      }, 100);
+      };
+      
+      // Try multiple times with different delays to handle async rendering
+      setTimeout(focusActiveInput, 100);
+      setTimeout(focusActiveInput, 300);
+      setTimeout(focusActiveInput, 500);
     }
   }, [open, step]);
 
@@ -44,11 +75,14 @@ const AuthModal = ({ open, onOpenChange, redirectTo = null }) => {
     setError('');
     
     try {
-      // Convert to E.164 format
-      const cleaned = phone.replace(/\D/g, '');
-      const e164Phone = cleaned.startsWith('1') ? `+${cleaned}` : `+1${cleaned}`;
+      // Use the E.164 formatted phone number from the international input
+      const phoneToUse = rawPhone || phone;
       
-      const { error } = await signInWithOtp(e164Phone);
+      if (!phoneToUse.startsWith('+')) {
+        throw new Error('Please select a country and enter a valid phone number');
+      }
+      
+      const { error } = await signInWithOtp(phoneToUse);
       if (error) throw error;
       
       setStep('otp');
@@ -64,18 +98,23 @@ const AuthModal = ({ open, onOpenChange, redirectTo = null }) => {
     setError('');
     
     try {
-      // Convert to E.164 format (same as sendOtp)
-      const cleaned = phone.replace(/\D/g, '');
-      const e164Phone = cleaned.startsWith('1') ? `+${cleaned}` : `+1${cleaned}`;
+      // Use the same E.164 phone format as sendOtp
+      const phoneToUse = rawPhone || phone;
       
-      const { error } = await verifyOtp(e164Phone, otp);
+      if (!phoneToUse.startsWith('+')) {
+        throw new Error('Phone number format error');
+      }
+      
+      const { error } = await verifyOtp(phoneToUse, otp);
       if (error) throw error;
       
       // Success - close modal
       onOpenChange(false);
       setPhone('');
+      setRawPhone('');
       setOtp('');
       setStep('phone');
+      setPhoneValid(false);
       
       // Redirect to intended URL if provided
       if (redirectTo) {
@@ -88,19 +127,28 @@ const AuthModal = ({ open, onOpenChange, redirectTo = null }) => {
     }
   };
 
-  const formatPhoneNumber = (value) => {
-    // Remove all non-digits
-    const cleaned = value.replace(/\D/g, '');
+  // Handle phone input changes from international phone component
+  const handlePhoneChange = (data) => {
+    console.log('📞 AuthModal: Phone change data received:', {
+      inputValue: data.inputValue,
+      phone: data.phone,
+      nationalFormat: data.nationalFormat,
+      e164Format: data.e164Format,
+      isValid: data.isValid,
+      validationResult: data.validationResult
+    });
+    console.log('📞 AuthModal: Current phoneValid state:', phoneValid);
     
-    // Format as needed (e.g., US format)
-    if (cleaned.length <= 3) return cleaned;
-    if (cleaned.length <= 6) return `${cleaned.slice(0, 3)}-${cleaned.slice(3)}`;
-    return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}-${cleaned.slice(6, 10)}`;
-  };
-
-  const handlePhoneChange = (e) => {
-    const formatted = formatPhoneNumber(e.target.value);
-    setPhone(formatted);
+    // Use formatted national version for display (like "(416) 302-5959")
+    setPhone(data.nationalFormat || data.inputValue || data.phone || ''); // Formatted display value
+    setRawPhone(data.e164Format || data.phone || ''); // E.164 for backend (+14163025959)
+    const newValid = data.isValid || false;
+    setPhoneValid(newValid);
+    
+    console.log('📞 AuthModal: Setting phoneValid to:', newValid);
+    console.log('📞 AuthModal: Display phone:', data.nationalFormat);
+    console.log('📞 AuthModal: Backend phone:', data.e164Format);
+    console.log('📞 AuthModal: Button should be enabled:', !loading && newValid);
   };
 
   return (
@@ -112,7 +160,7 @@ const AuthModal = ({ open, onOpenChange, redirectTo = null }) => {
         }}
       >
         <Dialog.Title>
-          <Heading size="6">Sign in to vote</Heading>
+          <Heading size="6">Sign in to Artist Portal</Heading>
         </Dialog.Title>
         
         <Dialog.Description size="2" mb="4">
@@ -135,38 +183,23 @@ const AuthModal = ({ open, onOpenChange, redirectTo = null }) => {
           {step === 'phone' ? (
             <>
               <Box>
-                <Text size="2" weight="medium" mb="1">
+                <Text size="2" weight="medium" mb="2">
                   Phone Number
                 </Text>
-                <Flex gap="2">
-                  <TextField.Root
-                    size="3"
-                    style={{ width: '80px' }}
-                    value="+1"
-                    disabled
-                  />
-                  <TextField.Root
-                    ref={phoneInputRef}
-                    size="3"
-                    placeholder="416-302-5959"
-                    value={phone}
-                    onChange={handlePhoneChange}
-                    onKeyPress={(e) => e.key === 'Enter' && handleSendOtp()}
-                    style={{ flex: 1 }}
-                    type="tel"
-                    inputMode="numeric"
-                    autoComplete="tel"
-                  />
-                </Flex>
-                <Text size="1" color="gray" mt="1">
-                  Enter your phone number without country code
-                </Text>
+                <InternationalPhoneInput
+                  ref={phoneInputRef}
+                  value={phone}
+                  onChange={handlePhoneChange}
+                  onKeyPress={(e) => e.key === 'Enter' && phoneValid && handleSendOtp()}
+                  placeholder="Enter your phone number"
+                  autoComplete="tel"
+                />
               </Box>
               
               <Button 
                 size="3" 
                 onClick={handleSendOtp}
-                disabled={loading || phone.replace(/\D/g, '').length < 10}
+                disabled={loading || !phoneValid}
                 loading={loading}
               >
                 Send Verification Code
@@ -191,7 +224,7 @@ const AuthModal = ({ open, onOpenChange, redirectTo = null }) => {
                   style={{ maxWidth: '150px', margin: '0 auto' }}
                 />
                 <Text size="1" color="gray" mt="1" style={{ display: 'block' }}>
-                  Code sent to {phone}
+                  Code sent to {rawPhone || phone}
                 </Text>
               </Box>
               
@@ -212,6 +245,9 @@ const AuthModal = ({ open, onOpenChange, redirectTo = null }) => {
                     setStep('phone');
                     setOtp('');
                     setError('');
+                    setPhone('');
+                    setRawPhone('');
+                    setPhoneValid(false);
                   }}
                   disabled={loading}
                 >

@@ -291,7 +291,7 @@ backup_config() {
         # Verify edge functions were backed up
         if [ -d "$BACKUP_DIR/config/supabase/functions" ]; then
             local function_count=$(find "$BACKUP_DIR/config/supabase/functions" -name "index.ts" | wc -l)
-            log_info "  └── Edge functions backed up: $function_count functions"
+            log_info "  └── Local edge functions backed up: $function_count functions"
             
             # List all backed up functions
             find "$BACKUP_DIR/config/supabase/functions" -maxdepth 1 -type d -not -name "functions" | while read -r func_dir; do
@@ -301,8 +301,32 @@ backup_config() {
                 fi
             done
         else
-            log_warn "Edge functions directory not found in backup"
+            log_warn "Local edge functions directory not found in backup"
         fi
+    fi
+    
+    # Download all deployed functions (including those not in local filesystem)
+    log_info "Downloading deployed edge functions..."
+    local deployed_functions_dir="$BACKUP_DIR/deployed-functions"
+    
+    # Source the download function script
+    source "$SCRIPT_DIR/download-deployed-functions.sh"
+    
+    # Download all deployed functions
+    if download_all_functions "$deployed_functions_dir"; then
+        local deployed_count=$(find "$deployed_functions_dir" -maxdepth 1 -type d | wc -l)
+        deployed_count=$((deployed_count - 1)) # Subtract the parent directory
+        log_info "  └── Deployed functions downloaded: $deployed_count functions"
+        
+        # List downloaded deployed functions
+        find "$deployed_functions_dir" -maxdepth 1 -type d -not -name "deployed-functions" | while read -r func_dir; do
+            if [ -f "$func_dir/metadata.json" ]; then
+                local func_name=$(basename "$func_dir")
+                log_info "      ✓ $func_name (deployed)"
+            fi
+        done
+    else
+        log_warn "Failed to download deployed functions - backup will continue with local functions only"
     fi
     
     # Backup migrations
@@ -391,11 +415,27 @@ verify_edge_functions() {
     
     local main_functions_dir="$BACKUP_DIR/config/supabase/functions"
     local vote_functions_dir="$BACKUP_DIR/config/art-battle-vote-functions"
+    local deployed_functions_dir="$BACKUP_DIR/deployed-functions"
     
+    local local_found=0
+    local deployed_found=0
+    
+    # Check local functions
     if [ -d "$main_functions_dir" ]; then
-        log_success "✓ Main Supabase functions directory backed up"
+        log_success "✓ Local Supabase functions directory backed up"
+        local_found=$(find "$main_functions_dir" -name "index.ts" | wc -l)
+        log_info "  └── Local functions: $local_found"
+    else
+        log_warn "Local edge functions directory not found in backup"
+    fi
+    
+    # Check deployed functions
+    if [ -d "$deployed_functions_dir" ]; then
+        log_success "✓ Deployed functions directory backed up"
+        deployed_found=$(find "$deployed_functions_dir" -name "metadata.json" | wc -l)
+        log_info "  └── Deployed functions: $deployed_found"
         
-        # Check for critical edge functions
+        # Check for critical deployed functions
         local critical_functions=(
             "stripe-create-checkout"
             "stripe-payment-status" 
@@ -404,39 +444,59 @@ verify_edge_functions() {
             "generate-qr-code"
             "validate-qr-scan"
             "slack-webhook"
+            "meta-ads-report"
+            "rfm-scoring"
+            "eventbrite-data"
+            "health-report-public"
         )
         
-        local found_functions=0
+        local found_critical=0
         for func in "${critical_functions[@]}"; do
-            if [ -f "$main_functions_dir/$func/index.ts" ]; then
-                log_info "  ✓ $func - OK"
-                ((found_functions++))
+            if [ -f "$deployed_functions_dir/$func/metadata.json" ]; then
+                log_info "  ✓ $func - OK (deployed)"
+                ((found_critical++))
+            elif [ -f "$main_functions_dir/$func/index.ts" ]; then
+                log_info "  ✓ $func - OK (local)"
+                ((found_critical++))
             else
                 log_warn "  ✗ $func - MISSING"
             fi
         done
         
-        log_info "Edge functions verification: $found_functions/${#critical_functions[@]} critical functions found"
-        
-        # Update backup info with edge functions details
-        echo "" >> "$BACKUP_DIR/backup_info.txt"
-        echo "EDGE FUNCTIONS BACKUP:" >> "$BACKUP_DIR/backup_info.txt"
-        echo "Critical functions found: $found_functions/${#critical_functions[@]}" >> "$BACKUP_DIR/backup_info.txt"
-        
-        # List all functions in backup
-        echo "All functions backed up:" >> "$BACKUP_DIR/backup_info.txt"
-        find "$main_functions_dir" -maxdepth 1 -type d -not -name "functions" | while read -r func_dir; do
-            if [ -f "$func_dir/index.ts" ]; then
-                echo "- $(basename "$func_dir")" >> "$BACKUP_DIR/backup_info.txt"
-            fi
-        done
-        
+        log_info "Critical functions verification: $found_critical/${#critical_functions[@]} critical functions found"
     else
-        log_error "Edge functions directory not found in backup!"
-        return 1
+        log_warn "Deployed functions directory not found in backup"
     fi
     
-    log_success "Edge functions verification completed"
+    # Update backup info with edge functions details
+    echo "" >> "$BACKUP_DIR/backup_info.txt"
+    echo "EDGE FUNCTIONS BACKUP:" >> "$BACKUP_DIR/backup_info.txt"
+    echo "Local functions: $local_found" >> "$BACKUP_DIR/backup_info.txt"
+    echo "Deployed functions: $deployed_found" >> "$BACKUP_DIR/backup_info.txt"
+    echo "Total functions backed up: $((local_found + deployed_found))" >> "$BACKUP_DIR/backup_info.txt"
+    
+    # List all functions in backup
+    echo "" >> "$BACKUP_DIR/backup_info.txt"
+    echo "Local functions backed up:" >> "$BACKUP_DIR/backup_info.txt"
+    if [ -d "$main_functions_dir" ]; then
+        find "$main_functions_dir" -maxdepth 1 -type d -not -name "functions" | while read -r func_dir; do
+            if [ -f "$func_dir/index.ts" ]; then
+                echo "- $(basename "$func_dir") (local)" >> "$BACKUP_DIR/backup_info.txt"
+            fi
+        done
+    fi
+    
+    echo "" >> "$BACKUP_DIR/backup_info.txt"
+    echo "Deployed functions backed up:" >> "$BACKUP_DIR/backup_info.txt"
+    if [ -d "$deployed_functions_dir" ]; then
+        find "$deployed_functions_dir" -maxdepth 1 -type d -not -name "deployed-functions" | while read -r func_dir; do
+            if [ -f "$func_dir/metadata.json" ]; then
+                echo "- $(basename "$func_dir") (deployed)" >> "$BACKUP_DIR/backup_info.txt"
+            fi
+        done
+    fi
+    
+    log_success "Edge functions verification completed - Total: $((local_found + deployed_found)) functions"
 }
 
 # Export Supabase project settings

@@ -40,7 +40,7 @@ serve(async (req) => {
     // Get the most recent analysis data from event_analysis_history
     const { data: analysisData } = await supabaseClient
       .from('event_analysis_history')
-      .select('venue_capacity, configured_tickets, capacity, current_metrics, analysis_date')
+      .select('venue_capacity, configured_tickets, current_metrics, predictions, curve_analysis, analysis_date, days_until_event')
       .eq('eid', eventEid)
       .order('analysis_date', { ascending: false })
       .limit(1)
@@ -49,7 +49,7 @@ serve(async (req) => {
     // Get detailed cached event data
     const { data: cachedData } = await supabaseClient
       .from('cached_event_data')
-      .select('venue_capacity, ticket_capacity, current_sales, ticket_classes, last_updated')
+      .select('venue_capacity, ticket_capacity, current_sales, ticket_classes, sales_data, last_updated')
       .eq('eid', eventEid)
       .single()
 
@@ -60,40 +60,48 @@ serve(async (req) => {
       average_price: 0,
       total_capacity: 0,
       venue_capacity: 0,
-      data_source: 'no_data'
+      data_source: 'TICKET DATA MISSING'
     }
 
-    if (cachedData) {
-      // Use cached_event_data for current sales
-      const ticketClasses = cachedData.ticket_classes || []
-      let totalRevenue = 0
-      let totalSold = 0
-      
-      if (Array.isArray(ticketClasses)) {
-        ticketClasses.forEach(tc => {
-          totalSold += tc.quantitySold || 0
-          totalRevenue += tc.grossSales || 0
-        })
-      }
-
-      ticketData = {
-        tickets_sold: cachedData.current_sales || totalSold,
-        revenue: totalRevenue,
-        average_price: totalSold > 0 ? totalRevenue / totalSold : 0,
-        total_capacity: cachedData.ticket_capacity || 0,
-        venue_capacity: cachedData.venue_capacity || 0,
-        data_source: `cached_event_data (updated: ${cachedData.last_updated})`
-      }
-    } else if (analysisData && analysisData.current_metrics) {
-      // Use event_analysis_history current_metrics
+    // Priority 1: Use event_analysis_history (most comprehensive)
+    if (analysisData && analysisData.current_metrics) {
       const metrics = analysisData.current_metrics
       ticketData = {
         tickets_sold: metrics.ticketsSold || 0,
         revenue: metrics.revenue || 0,
         average_price: metrics.ticketsSold > 0 ? (metrics.revenue || 0) / metrics.ticketsSold : 0,
-        total_capacity: analysisData.capacity || analysisData.configured_tickets || 0,
+        total_capacity: analysisData.configured_tickets || 0,
         venue_capacity: analysisData.venue_capacity || 0,
-        data_source: `event_analysis_history (analyzed: ${analysisData.analysis_date})`
+        data_source: `Event Analysis System (${new Date(analysisData.analysis_date).toLocaleDateString()})`
+      }
+    }
+    // Priority 2: Use cached_event_data if analysis unavailable  
+    else if (cachedData && (cachedData.current_sales || cachedData.ticket_classes)) {
+      let totalRevenue = 0
+      let totalSold = 0
+      
+      // Extract from current_sales object if available
+      if (cachedData.current_sales && typeof cachedData.current_sales === 'object') {
+        totalSold = cachedData.current_sales.tickets || 0
+        totalRevenue = cachedData.current_sales.revenue || 0
+      }
+      // Extract revenue from ticket classes if available
+      else if (Array.isArray(cachedData.ticket_classes)) {
+        cachedData.ticket_classes.forEach(tc => {
+          const sold = tc.quantitySold || 0
+          const price = parseFloat(tc.price) || 0
+          totalSold += sold
+          totalRevenue += price * sold
+        })
+      }
+
+      ticketData = {
+        tickets_sold: totalSold,
+        revenue: totalRevenue,
+        average_price: totalSold > 0 ? totalRevenue / totalSold : 0,
+        total_capacity: cachedData.ticket_capacity || 0,
+        venue_capacity: cachedData.venue_capacity || 0,
+        data_source: `Eventbrite Cache (${new Date(cachedData.last_updated).toLocaleDateString()})`
       }
     }
 
@@ -109,53 +117,80 @@ serve(async (req) => {
       if (city) cityName = city.name
     }
 
-    // Get artist booking data
+    // Get artist booking data using event_eid
+    const { data: artistApplications } = await supabaseClient
+      .from('artist_applications')
+      .select('id, application_status, artist_number')
+      .eq('event_eid', eventEid)
+
     const { data: artistInvitations } = await supabaseClient
       .from('artist_invitations')
-      .select('id, status')
-      .eq('event_id', event.id)
+      .select('id, status, artist_number')
+      .eq('event_eid', eventEid)
 
     const { data: artistConfirmations } = await supabaseClient
       .from('artist_confirmations')
-      .select('id, status')
-      .eq('event_id', event.id)
-
-    const { data: eventArtists } = await supabaseClient
-      .from('event_artists')
-      .select('id, status')
-      .eq('event_id', event.id)
+      .select('id, artist_number')
+      .eq('event_eid', eventEid)
 
     // Calculate artist stats
+    const applicationsCount = artistApplications?.length || 0
     const invitedCount = artistInvitations?.length || 0
-    const confirmedCount = artistConfirmations?.filter(a => a.status === 'confirmed').length || 0
-    const readyCount = eventArtists?.filter(a => a.status === 'ready' || a.status === 'confirmed').length || 0
+    const confirmedCount = artistConfirmations?.length || 0
 
-    // Get email marketing data
+    // Get email marketing data using correct column name
     const { data: emailCampaigns } = await supabaseClient
       .from('assigned_email_campaigns')
       .select('*')
-      .eq('event_id', event.id)
+      .eq('assigned_event_abid', eventEid)
 
     // Calculate email stats
     const emailCampaignCount = emailCampaigns?.length || 0
-    const totalEmailRecipients = emailCampaigns?.reduce((sum, campaign) => sum + (campaign.recipients_count || 0), 0) || 0
+    const totalEmailRecipients = emailCampaigns?.reduce((sum, campaign) => sum + (campaign.total_recipients || 0), 0) || 0
     const avgOpenRate = emailCampaigns?.length > 0 ? 
       emailCampaigns.reduce((sum, campaign) => sum + (campaign.open_rate || 0), 0) / emailCampaigns.length : 0
 
-    // Get SMS data (basic stats from sms_config or message_queue)
-    const { data: smsStats } = await supabaseClient
-      .from('message_queue')
-      .select('id, message_type, status')
-      .eq('event_id', event.id)
-      .eq('message_type', 'sms')
+    // Get SMS promotion data using correct column name
+    const { data: smsPromotions } = await supabaseClient
+      .from('assigned_promotions')
+      .select('*')
+      .eq('assigned_event_abid', eventEid)
 
-    const smsCampaignCount = smsStats?.length || 0
-    const smsRecipients = smsStats?.length || 0 // Each message = one recipient
+    const smsCampaignCount = smsPromotions?.length || 0
+    const smsRecipients = smsPromotions?.reduce((sum, promo) => sum + (promo.total_recipients || 0), 0) || 0
 
-    // Calculate days until event
+    // Get Meta Ads data from meta-ads-report function using service role
+    let metaAdsData = null
+    try {
+      const metaResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/meta-ads-report/${eventEid}`, {
+        headers: {
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+          'apikey': Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+        }
+      })
+      
+      if (metaResponse.ok) {
+        metaAdsData = await metaResponse.json()
+      } else {
+        console.log('Meta ads response not OK:', metaResponse.status)
+      }
+    } catch (error) {
+      console.log('Meta ads data not available:', error.message)
+    }
+
+    // Calculate days until event (use analysis data if available for accuracy)
     const eventDate = new Date(event.event_start_datetime)
     const today = new Date()
-    const daysUntil = Math.ceil((eventDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+    let daysUntil = Math.ceil((eventDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+    
+    // Use analysis data if available (more reliable)
+    if (analysisData && typeof analysisData.days_until_event === 'number') {
+      daysUntil = analysisData.days_until_event
+    }
+    
+    // Handle past events
+    const isPastEvent = daysUntil < 0
+    const daysDisplay = isPastEvent ? `${Math.abs(daysUntil)} days ago` : `${daysUntil} days`
 
     // Calculate health score
     let healthScore = 0
@@ -165,13 +200,22 @@ serve(async (req) => {
     const ticketPercentage = ticketData.total_capacity > 0 ? (ticketData.tickets_sold / ticketData.total_capacity) : 0
     healthScore += Math.min(40, ticketPercentage * 40)
 
-    // Artist booking component (30 points max)
-    const artistProgress = invitedCount > 0 ? ((confirmedCount + readyCount) / Math.max(invitedCount, 12)) : 0
+    // Artist booking component (30 points max) - need minimum 12 artists typically
+    const targetArtists = 12
+    const artistProgress = confirmedCount / targetArtists
     healthScore += Math.min(30, artistProgress * 30)
 
     // Marketing activity component (30 points max)
-    const marketingScore = Math.min(30, (emailCampaignCount * 5) + (smsCampaignCount * 3) + (avgOpenRate * 100 * 0.2))
-    healthScore += marketingScore
+    let marketingScore = (emailCampaignCount * 5) + (smsCampaignCount * 3) + (avgOpenRate * 100 * 0.2)
+    
+    // Add Facebook ads score if available
+    if (metaAdsData) {
+      const adSpendScore = Math.min(10, (metaAdsData.total_spend / 100) * 10) // 10 points for $100+ spend
+      const reachScore = Math.min(5, (metaAdsData.total_reach / 1000) * 5) // 5 points for 1000+ reach
+      marketingScore += adSpendScore + reachScore
+    }
+    
+    healthScore += Math.min(30, marketingScore)
 
     healthScore = Math.round(healthScore)
 
@@ -188,7 +232,7 @@ serve(async (req) => {
 **Health Score:** ${healthScore}/100 (${healthStatus})
 **Venue:** ${event.venue || 'TBD'}
 **City:** ${cityName}
-**Days until event:** ${daysUntil}
+**Days until event:** ${daysDisplay}
 
 ### Tickets
 **Tickets Sold:** ${ticketData.tickets_sold}/${ticketData.total_capacity} (${Math.round(ticketPercentage * 100)}%)
@@ -196,9 +240,9 @@ serve(async (req) => {
 **Average Price:** $${ticketData.average_price.toFixed(2)}
 
 ### Artists
+**Applications:** ${applicationsCount}
 **Invited:** ${invitedCount}
 **Confirmed:** ${confirmedCount}
-**Ready:** ${readyCount}
 
 *Report generated: ${new Date().toISOString()}*`
 
@@ -224,7 +268,7 @@ serve(async (req) => {
       month: 'long', 
       day: 'numeric' 
     })}
-**Days until event:** ${daysUntil}
+**Days until event:** ${daysDisplay}
 
 ## Marketing Performance Highlights
 
@@ -238,13 +282,15 @@ serve(async (req) => {
 - **Total Recipients:** ${smsRecipients.toLocaleString()}
 
 ### Facebook Ads
-*Facebook Ads integration in progress - data not yet available*
-- Total Budget: TBD
-- Spent: TBD  
-- Reach: TBD
-- Click-through Rate: TBD
-- Conversions: TBD
-- ROAS: TBD
+${metaAdsData ? 
+  `- **Total Budget**: $${metaAdsData.total_budget?.toFixed(2) || '0.00'} ${metaAdsData.currency || 'USD'}
+- **Spent**: $${metaAdsData.total_spend?.toFixed(2) || '0.00'} ${metaAdsData.currency || 'USD'}
+- **Reach**: ${metaAdsData.total_reach?.toLocaleString() || '0'} people
+- **Clicks**: ${metaAdsData.total_clicks?.toLocaleString() || '0'}
+- **Click-through Rate**: ${metaAdsData.total_reach > 0 ? ((metaAdsData.total_clicks / metaAdsData.total_reach) * 100).toFixed(2) : '0.00'}%
+- **Conversions**: ${metaAdsData.conversions || 0}
+- **ROAS**: ${metaAdsData.total_spend > 0 ? (metaAdsData.conversion_value / metaAdsData.total_spend).toFixed(2) : '0.00'}x` :
+  '**FACEBOOK ADS DATA MISSING** - Integration not available for this event'}
 
 ## Tickets
 ### Ticket Sales Overview
@@ -256,15 +302,20 @@ serve(async (req) => {
 
 ### Sales Curve Analysis
 **Historical ${cityName} Sales Pattern**
-*Data analysis in progress* - Limited historical data available
+${analysisData?.curve_analysis?.characteristics || 'SALES CURVE DATA MISSING'}
 
-**Days Until Event**: ${daysUntil}
+**Analysis Type**: ${analysisData?.curve_analysis?.type || 'DATA MISSING'}
+**Prediction Methodology**: ${analysisData?.predictions?.methodology || 'DATA MISSING'}
+**Confidence Level**: ${analysisData?.predictions?.confidence ? Math.round(analysisData.predictions.confidence * 100) + '%' : 'DATA MISSING'}
+
+**Days Until Event**: ${daysDisplay}
 **Current Sales**: ${ticketData.tickets_sold} tickets
+**Projected Final Sales**: ${analysisData?.predictions?.finalTickets || 'PREDICTION DATA MISSING'} tickets
 
 ## Artist Booking Status
+**Applications**: ${applicationsCount} artists
 **Invited**: ${invitedCount} artists
-**Confirmed**: ${confirmedCount} artists  
-**Ready**: ${readyCount} artists
+**Confirmed**: ${confirmedCount} artists
 
 *Note: This report shows actual ticket data. For events with Eventbrite integration, cached data from Eventbrite API is displayed. For events without Eventbrite, internal registration counts are shown. Facebook Ads integration is in development.*
 

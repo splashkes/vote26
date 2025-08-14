@@ -22,6 +22,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import AuthModal from './AuthModal';
+import InvitationAcceptanceModal from './InvitationAcceptanceModal';
 
 
 const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
@@ -34,9 +35,13 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
   const [showCreateNewProfile, setShowCreateNewProfile] = useState(false);
   const [sampleWorks, setSampleWorks] = useState([]);
   const [applications, setApplications] = useState([]);
+  const [invitations, setInvitations] = useState([]);
+  const [confirmations, setConfirmations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [accepting, setAccepting] = useState({});
+  const [showInvitationModal, setShowInvitationModal] = useState(false);
+  const [selectedInvitation, setSelectedInvitation] = useState(null);
 
   useEffect(() => {
     if (!authLoading && user && person) {
@@ -279,6 +284,89 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
       console.log('Home: Applications query result:', { appsData, appsError });
       if (appsError) throw appsError;
       setApplications(appsData || []);
+
+      // Load invitations for selected profile
+      // Since there's no direct foreign key between artist_invitations.event_eid and events.eid,
+      // we need to fetch invitations first, then get event details separately
+      const { data: invitationsRaw, error: invitationsError } = await supabase
+        .from('artist_invitations')
+        .select('*')
+        .eq('artist_profile_id', profile.id)
+        .eq('status', 'pending')
+        .is('accepted_at', null)
+        .order('created_at', { ascending: false });
+
+      if (invitationsError) throw invitationsError;
+
+      // Get event details for each invitation
+      const invitationsData = [];
+      if (invitationsRaw && invitationsRaw.length > 0) {
+        for (const invitation of invitationsRaw) {
+          if (invitation.event_eid) {
+            const { data: eventData } = await supabase
+              .from('events')
+              .select(`
+                id,
+                eid,
+                name,
+                event_start_datetime,
+                venue,
+                city:cities(name)
+              `)
+              .eq('eid', invitation.event_eid)
+              .single();
+
+            invitationsData.push({
+              ...invitation,
+              event: eventData
+            });
+          }
+        }
+      }
+
+      console.log('Home: Invitations query result:', { invitationsData, invitationsError });
+      if (invitationsError) throw invitationsError;
+      setInvitations(invitationsData || []);
+
+      // Load confirmations for selected profile
+      const { data: confirmationsRaw, error: confirmationsError } = await supabase
+        .from('artist_confirmations')
+        .select('*')
+        .eq('artist_profile_id', profile.id)
+        .eq('confirmation_status', 'confirmed')
+        .order('created_at', { ascending: false });
+
+      if (confirmationsError) throw confirmationsError;
+
+      // Get event details for each confirmation
+      const confirmationsData = [];
+      if (confirmationsRaw && confirmationsRaw.length > 0) {
+        for (const confirmation of confirmationsRaw) {
+          if (confirmation.event_eid) {
+            const { data: eventData } = await supabase
+              .from('events')
+              .select(`
+                id,
+                eid,
+                name,
+                event_start_datetime,
+                event_end_datetime,
+                venue,
+                city:cities(name)
+              `)
+              .eq('eid', confirmation.event_eid)
+              .single();
+
+            confirmationsData.push({
+              ...confirmation,
+              event: eventData
+            });
+          }
+        }
+      }
+
+      console.log('Home: Confirmations query result:', { confirmationsData, confirmationsError });
+      setConfirmations(confirmationsData || []);
     } catch (err) {
       console.error('Home: Error in loadProfileData:', err);
       setError('Failed to load profile data: ' + err.message);
@@ -402,6 +490,21 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
     });
   };
 
+  const formatDateTime = (dateString) => {
+    const date = new Date(dateString);
+    const dateStr = date.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    });
+    const timeStr = date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+    return `${dateStr} at ${timeStr}`;
+  };
+
   const getStatusBadge = (status) => {
     const statusConfig = {
       invited: { color: 'crimson', text: 'INVITED' },
@@ -419,32 +522,109 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
     );
   };
 
-  const handleAcceptInvitation = async (eventId) => {
-    setAccepting(prev => ({ ...prev, [eventId]: true }));
+  const handleAcceptInvitation = (invitationId) => {
+    // Check if already confirmed for this event
+    const invitation = invitations.find(inv => inv.id === invitationId);
+    if (!invitation) {
+      setError('Invitation not found');
+      return;
+    }
+
+    // Check if already confirmed for this event
+    const alreadyConfirmed = confirmations.find(conf => conf.event_eid === invitation.event_eid);
+    if (alreadyConfirmed) {
+      setError('You have already accepted an invitation for this event!');
+      return;
+    }
+
+    // Show the comprehensive invitation acceptance modal
+    setSelectedInvitation(invitation);
+    setShowInvitationModal(true);
+  };
+
+  const processInvitationAcceptance = async (submissionData) => {
+    if (!submissionData || !selectedInvitation) return;
+
+    setAccepting(prev => ({ ...prev, [selectedInvitation.id]: true }));
     setError('');
 
     try {
-      const application = applications.find(app => app.event_id === eventId);
-      
-      const { error } = await supabase
-        .from('artist_applications')
-        .update({
-          application_status: 'accepted',
-          metadata: {
-            ...application?.metadata,
-            accepted_invitation_at: new Date().toISOString()
-          }
-        })
-        .eq('id', application.id);
+      // Double-check if already confirmed (in case of race condition)
+      const alreadyConfirmed = confirmations.find(conf => conf.event_eid === selectedInvitation.event_eid);
+      if (alreadyConfirmed) {
+        throw new Error('You have already accepted an invitation for this event!');
+      }
 
-      if (error) throw error;
+      // Update artist profile with pronouns if provided
+      if (submissionData.profileUpdates) {
+        const { error: profileUpdateError } = await supabase
+          .from('artist_profiles')
+          .update(submissionData.profileUpdates)
+          .eq('id', submissionData.artistProfileId);
+
+        if (profileUpdateError) throw profileUpdateError;
+      }
+
+      // Create comprehensive confirmation entry
+      const { error: confirmError } = await supabase
+        .from('artist_confirmations')
+        .insert({
+          artist_profile_id: submissionData.artistProfileId,
+          event_eid: submissionData.eventEid,
+          artist_number: submissionData.artistNumber,
+          confirmation_status: 'confirmed',
+          entry_date: new Date().toISOString(),
+          form_19_entry_id: null, // Explicitly set to null since this should not be used
+          
+          // Enhanced confirmation data
+          legal_name: submissionData.confirmationData.legalName,
+          social_promotion_consent: submissionData.confirmationData.socialPromotionConsent,
+          social_usernames: submissionData.confirmationData.socialUsernames,
+          message_to_organizers: submissionData.confirmationData.messageToOrganizers,
+          public_message: submissionData.confirmationData.publicMessage,
+          payment_method: submissionData.confirmationData.paymentMethod,
+          payment_details: submissionData.confirmationData.paymentDetails,
+          legal_agreements: submissionData.confirmationData.legalAgreements,
+          promotion_artwork_url: submissionData.confirmationData.promotionArtworkUrl,
+          
+          metadata: {
+            accepted_invitation_at: new Date().toISOString(),
+            original_invitation_id: selectedInvitation.id,
+            accepted_via: 'artist_portal_enhanced_home'
+          }
+        });
+
+      if (confirmError) throw confirmError;
+
+      // Update the invitation with accepted_at timestamp to hide it from UI
+      try {
+        const { error: invitationUpdateError } = await supabase
+          .from('artist_invitations')
+          .update({
+            accepted_at: new Date().toISOString()
+          })
+          .eq('id', selectedInvitation.id);
+
+        if (invitationUpdateError) {
+          console.warn('Failed to update invitation accepted_at:', invitationUpdateError.message);
+          // Continue anyway - the confirmation is created, which is the important part
+        }
+      } catch (invitationError) {
+        console.warn('Error updating invitation:', invitationError.message);
+      }
 
       // Reload data to show updated status
-      await loadData();
+      if (selectedProfile) {
+        await loadProfileData(selectedProfile);
+      }
+
+      // Close the modal
+      setShowInvitationModal(false);
+      setSelectedInvitation(null);
     } catch (err) {
       setError('Failed to accept invitation: ' + err.message);
     } finally {
-      setAccepting(prev => ({ ...prev, [eventId]: false }));
+      setAccepting(prev => ({ ...prev, [selectedInvitation.id]: false }));
     }
   };
 
@@ -760,6 +940,131 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
       )}
 
       <Grid columns="1" gap="6">
+        {/* Confirmed Events */}
+        {confirmations.length > 0 && (
+          <Card size="3" style={{ border: '2px solid var(--green-9)' }}>
+            <Flex direction="column" gap="4">
+              <Flex justify="between" align="center">
+                <Heading size="5" style={{ color: 'var(--green-11)' }}>
+                  ✅ My Confirmed Events
+                </Heading>
+                <Badge color="green" variant="solid">
+                  {confirmations.length} confirmed
+                </Badge>
+              </Flex>
+              
+              <Flex direction="column" gap="3">
+                {confirmations.map((confirmation) => (
+                  <Card key={confirmation.id} size="2" style={{ backgroundColor: 'var(--green-2)', border: '1px solid var(--green-6)' }}>
+                    <Flex direction="column" gap="3">
+                      <Flex justify="between" align="start">
+                        <Flex direction="column" gap="1">
+                          <Text size="4" weight="bold">
+                            {confirmation.event?.name}
+                          </Text>
+                          <Text size="2" color="gray">
+                            📅 {confirmation.event?.event_start_datetime && 
+                              formatDateTime(confirmation.event.event_start_datetime)}
+                            {confirmation.event?.venue && ` • 📍 ${confirmation.event.venue}`}
+                            {confirmation.event?.city?.name && `, ${confirmation.event.city.name}`}
+                          </Text>
+                          <Text size="2" color="gray">
+                            Artist #{confirmation.artist_number}
+                          </Text>
+                        </Flex>
+                        
+                        <Badge color="green" variant="solid">
+                          CONFIRMED
+                        </Badge>
+                      </Flex>
+
+                      <Callout.Root color="green" size="1">
+                        <Callout.Icon>
+                          <CheckCircledIcon />
+                        </Callout.Icon>
+                        <Callout.Text>
+                          🎉 You are confirmed to participate in this event! Get ready to paint!
+                        </Callout.Text>
+                      </Callout.Root>
+                    </Flex>
+                  </Card>
+                ))}
+              </Flex>
+            </Flex>
+          </Card>
+        )}
+
+        {/* Pending Invitations */}
+        {invitations.length > 0 && (
+          <Card size="3" style={{ border: '2px solid var(--crimson-9)' }}>
+            <Flex direction="column" gap="4">
+              <Flex justify="between" align="center">
+                <Heading size="5" style={{ color: 'var(--crimson-11)' }}>
+                  🎉 Event Invitations
+                </Heading>
+                <Badge color="crimson" variant="solid">
+                  {invitations.length} pending
+                </Badge>
+              </Flex>
+              
+              <Flex direction="column" gap="3">
+                {invitations.map((invitation) => (
+                  <Card key={invitation.id} size="2" style={{ backgroundColor: 'var(--crimson-2)', border: '1px solid var(--crimson-6)' }}>
+                    <Flex direction="column" gap="3">
+                      <Flex justify="between" align="start">
+                        <Flex direction="column" gap="1">
+                          <Text size="4" weight="bold">
+                            {invitation.event?.name}
+                          </Text>
+                          <Text size="2" color="gray">
+                            📅 {invitation.event?.event_start_datetime && 
+                              formatDateTime(invitation.event.event_start_datetime)}
+                            {invitation.event?.venue && ` • 📍 ${invitation.event.venue}`}
+                            {invitation.event?.city?.name && `, ${invitation.event.city.name}`}
+                          </Text>
+                          <Text size="2" color="gray">
+                            Artist #{invitation.artist_number}
+                          </Text>
+                        </Flex>
+                        
+                        <Badge color="crimson" variant="solid">
+                          INVITED
+                        </Badge>
+                      </Flex>
+                      
+                      {invitation.message_from_producer && (
+                        <Box p="3" style={{ backgroundColor: 'var(--blue-2)', borderRadius: '6px', borderLeft: '3px solid var(--blue-9)' }}>
+                          <Text size="2" weight="medium" mb="1" style={{ display: 'block' }}>
+                            Message from Producer:
+                          </Text>
+                          <Text size="2" style={{ fontStyle: 'italic', whiteSpace: 'pre-wrap' }}>
+                            "{invitation.message_from_producer}"
+                          </Text>
+                        </Box>
+                      )}
+                      
+                      <Button
+                        size="3"
+                        variant="solid"
+                        color="crimson"
+                        onClick={() => handleAcceptInvitation(invitation.id)}
+                        style={{ 
+                          fontSize: '14px',
+                          fontWeight: 'bold',
+                          textTransform: 'uppercase'
+                        }}
+                      >
+                        <CheckCircledIcon width="16" height="16" />
+                        Accept Invitation & Confirm Attendance
+                      </Button>
+                    </Flex>
+                  </Card>
+                ))}
+              </Flex>
+            </Flex>
+          </Card>
+        )}
+
         {/* Recent Applications */}
         <Card size="3">
           <Flex direction="column" gap="4">
@@ -790,7 +1095,7 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
                         </Text>
                         <Text size="2" color="gray">
                           {application.event?.event_start_datetime && 
-                            formatDate(application.event.event_start_datetime)}
+                            formatDateTime(application.event.event_start_datetime)}
                           {application.event?.venue && ` • ${application.event.venue}`}
                           {application.event?.city?.name && ` • ${application.event.city.name}`}
                         </Text>
@@ -997,6 +1302,19 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
           </Flex>
         </Card>
       </Grid>
+
+      {/* Comprehensive Invitation Acceptance Modal */}
+      {selectedInvitation && (
+        <InvitationAcceptanceModal
+          open={showInvitationModal}
+          onOpenChange={setShowInvitationModal}
+          event={selectedInvitation.event}
+          invitation={selectedInvitation}
+          artistProfile={selectedProfile}
+          onAccept={processInvitationAcceptance}
+          loading={accepting[selectedInvitation.id]}
+        />
+      )}
     </Flex>
   );
 };

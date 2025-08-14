@@ -11,6 +11,9 @@ import {
   Callout,
   IconButton,
   Grid,
+  Dialog,
+  TextArea,
+  Separator,
 } from '@radix-ui/themes';
 import { 
   CalendarIcon, 
@@ -24,16 +27,27 @@ import {
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import AuthModal from './AuthModal';
+import InvitationAcceptanceModal from './InvitationAcceptanceModal';
 
 const EventApplications = () => {
   const [events, setEvents] = useState([]);
   const [applications, setApplications] = useState([]);
+  const [invitations, setInvitations] = useState([]);
+  const [confirmations, setConfirmations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState({});
   const [removing, setRemoving] = useState({});
   const [error, setError] = useState('');
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [artistProfileId, setArtistProfileId] = useState(null);
+  const [artistProfile, setArtistProfile] = useState(null);
+  
+  // Modal states
+  const [showApplicationModal, setShowApplicationModal] = useState(false);
+  const [showInvitationModal, setShowInvitationModal] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState(null);
+  const [selectedInvitation, setSelectedInvitation] = useState(null);
+  const [applicationMessage, setApplicationMessage] = useState('');
   
   const { user, person, loading: authLoading } = useAuth();
 
@@ -49,6 +63,8 @@ const EventApplications = () => {
     if (artistProfileId) {
       fetchEvents();
       fetchApplications();
+      fetchInvitations();
+      fetchConfirmations();
     }
   }, [artistProfileId]);
 
@@ -76,6 +92,19 @@ const EventApplications = () => {
       }
 
       setArtistProfileId(result.profile_id);
+      
+      // Also fetch the full artist profile data
+      const { data: profileData, error: profileError } = await supabase
+        .from('artist_profiles')
+        .select('*')
+        .eq('id', result.profile_id)
+        .single();
+
+      if (profileError) {
+        throw profileError;
+      }
+
+      setArtistProfile(profileData);
     } catch (err) {
       setError('Failed to load artist profile: ' + err.message);
     }
@@ -130,22 +159,86 @@ const EventApplications = () => {
     }
   };
 
-  const handleApply = async (eventId) => {
+  const fetchInvitations = async () => {
+    if (!artistProfileId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('artist_invitations')
+        .select('*')
+        .eq('artist_profile_id', artistProfileId)
+        .is('accepted_at', null);
+
+      if (error) throw error;
+      
+      setInvitations(data || []);
+    } catch (err) {
+      console.error('Failed to load invitations:', err.message);
+    }
+  };
+
+  const fetchConfirmations = async () => {
+    if (!artistProfileId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('artist_confirmations')
+        .select('*')
+        .eq('artist_profile_id', artistProfileId);
+
+      if (error) throw error;
+      
+      setConfirmations(data || []);
+    } catch (err) {
+      console.error('Failed to load confirmations:', err.message);
+    }
+  };
+
+  const handleApply = (eventId) => {
     if (!artistProfileId) {
       setError('Please complete your artist profile first.');
       return;
     }
 
-    setApplying(prev => ({ ...prev, [eventId]: true }));
+    const event = events.find(e => e.id === eventId);
+    setSelectedEvent(event);
+    setApplicationMessage('');
+    setShowApplicationModal(true);
+  };
+
+  const submitApplication = async () => {
+    if (!selectedEvent || !artistProfileId) return;
+
+    setApplying(prev => ({ ...prev, [selectedEvent.id]: true }));
     setError('');
 
     try {
+      // Get artist profile entry_id and event eid
+      const { data: profileData, error: profileError } = await supabase
+        .from('artist_profiles')
+        .select('entry_id')
+        .eq('id', artistProfileId)
+        .single();
+
+      if (profileError) throw new Error('Failed to get artist profile: ' + profileError.message);
+
+      const { data: eventData, error: eventError } = await supabase
+        .from('events')
+        .select('eid')
+        .eq('id', selectedEvent.id)
+        .single();
+
+      if (eventError) throw new Error('Failed to get event: ' + eventError.message);
+
       const { error } = await supabase
         .from('artist_applications')
         .insert({
           artist_profile_id: artistProfileId,
-          event_id: eventId,
+          event_id: selectedEvent.id,
           application_status: 'pending',
+          artist_number: profileData.entry_id?.toString(),
+          event_eid: eventData.eid,
+          message_to_producer: applicationMessage || null,
           metadata: {
             applied_via: 'artist_portal',
             applied_at: new Date().toISOString()
@@ -155,6 +248,9 @@ const EventApplications = () => {
       if (error) throw error;
 
       await fetchApplications();
+      setShowApplicationModal(false);
+      setSelectedEvent(null);
+      setApplicationMessage('');
     } catch (err) {
       if (err.code === '23505') {
         setError('You have already applied to this event.');
@@ -162,7 +258,7 @@ const EventApplications = () => {
         setError('Failed to apply: ' + err.message);
       }
     } finally {
-      setApplying(prev => ({ ...prev, [eventId]: false }));
+      setApplying(prev => ({ ...prev, [selectedEvent.id]: false }));
     }
   };
 
@@ -189,32 +285,110 @@ const EventApplications = () => {
     }
   };
 
-  const handleAcceptInvitation = async (eventId) => {
-    if (!artistProfileId) return;
+  const handleAcceptInvitation = (eventId) => {
+    const event = events.find(e => e.id === eventId);
+    const invitation = invitations.find(inv => inv.event_eid === event?.eid);
+    
+    if (!invitation) {
+      setError('Invitation not found for this event');
+      return;
+    }
 
-    setApplying(prev => ({ ...prev, [eventId]: true }));
+    // Check if already confirmed for this event
+    const alreadyConfirmed = confirmations.find(conf => conf.event_eid === event?.eid);
+    if (alreadyConfirmed) {
+      setError('You have already accepted an invitation for this event!');
+      return;
+    }
+    
+    setSelectedEvent(event);
+    setSelectedInvitation(invitation);
+    setShowInvitationModal(true);
+  };
+
+  const acceptInvitation = async (submissionData) => {
+    if (!submissionData) return;
+
+    setApplying(prev => ({ ...prev, [selectedEvent.id]: true }));
     setError('');
 
     try {
-      const { error } = await supabase
-        .from('artist_applications')
-        .update({
-          application_status: 'accepted',
+      // Double-check if already confirmed (in case of race condition)
+      const alreadyConfirmed = confirmations.find(conf => conf.event_eid === selectedEvent?.eid);
+      if (alreadyConfirmed) {
+        throw new Error('You have already accepted an invitation for this event!');
+      }
+      // Update artist profile with pronouns
+      if (submissionData.profileUpdates) {
+        const { error: profileUpdateError } = await supabase
+          .from('artist_profiles')
+          .update(submissionData.profileUpdates)
+          .eq('id', submissionData.artistProfileId);
+
+        if (profileUpdateError) throw profileUpdateError;
+      }
+
+      // Create comprehensive confirmation entry
+      const { error: confirmError } = await supabase
+        .from('artist_confirmations')
+        .insert({
+          artist_profile_id: submissionData.artistProfileId,
+          event_eid: submissionData.eventEid,
+          artist_number: submissionData.artistNumber,
+          confirmation_status: 'confirmed',
+          entry_date: new Date().toISOString(),
+          form_19_entry_id: null, // Explicitly set to null since this should not be used
+          
+          // Enhanced confirmation data
+          legal_name: submissionData.confirmationData.legalName,
+          social_promotion_consent: submissionData.confirmationData.socialPromotionConsent,
+          social_usernames: submissionData.confirmationData.socialUsernames,
+          message_to_organizers: submissionData.confirmationData.messageToOrganizers,
+          public_message: submissionData.confirmationData.publicMessage,
+          payment_method: submissionData.confirmationData.paymentMethod,
+          payment_details: submissionData.confirmationData.paymentDetails,
+          legal_agreements: submissionData.confirmationData.legalAgreements,
+          promotion_artwork_url: submissionData.confirmationData.promotionArtworkUrl,
+          
           metadata: {
-            ...applications.find(app => app.event_id === eventId)?.metadata,
-            accepted_invitation_at: new Date().toISOString()
+            accepted_invitation_at: new Date().toISOString(),
+            original_invitation_id: selectedInvitation?.id,
+            accepted_via: 'artist_portal_enhanced'
           }
-        })
-        .eq('artist_profile_id', artistProfileId)
-        .eq('event_id', eventId);
+        });
 
-      if (error) throw error;
+      if (confirmError) throw confirmError;
 
-      await fetchApplications();
+      // Update the invitation with accepted_at timestamp to hide it from UI
+      try {
+        const { error: invitationUpdateError } = await supabase
+          .from('artist_invitations')
+          .update({
+            accepted_at: new Date().toISOString()
+          })
+          .eq('id', selectedInvitation.id);
+
+        if (invitationUpdateError) {
+          console.warn('Failed to update invitation accepted_at:', invitationUpdateError.message);
+          // Continue anyway - the confirmation is created, which is the important part
+        }
+      } catch (invitationError) {
+        console.warn('Error updating invitation:', invitationError.message);
+      }
+      
+      await Promise.all([
+        fetchInvitations(),
+        fetchConfirmations(),
+        fetchApplications()
+      ]);
+
+      setShowInvitationModal(false);
+      setSelectedEvent(null);
+      setSelectedInvitation(null);
     } catch (err) {
       setError('Failed to accept invitation: ' + err.message);
     } finally {
-      setApplying(prev => ({ ...prev, [eventId]: false }));
+      setApplying(prev => ({ ...prev, [selectedEvent.id]: false }));
     }
   };
 
@@ -227,8 +401,48 @@ const EventApplications = () => {
     });
   };
 
+  const formatDateTime = (dateString) => {
+    const date = new Date(dateString);
+    const dateStr = date.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    });
+    const timeStr = date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+    return `${dateStr} at ${timeStr}`;
+  };
+
   const getApplicationForEvent = (eventId) => {
     return applications.find(app => app.event_id === eventId);
+  };
+
+  const getInvitationForEvent = (eventId, eventEid) => {
+    return invitations.find(inv => inv.event_eid === eventEid);
+  };
+
+  const getConfirmationForEvent = (eventId, eventEid) => {
+    return confirmations.find(conf => conf.event_eid === eventEid);
+  };
+
+  const getEventStatus = (event) => {
+    const application = getApplicationForEvent(event.id);
+    const invitation = getInvitationForEvent(event.id, event.eid);
+    const confirmation = getConfirmationForEvent(event.id, event.eid);
+
+    if (confirmation) {
+      return { type: 'confirmed', data: confirmation };
+    }
+    if (invitation && invitation.status === 'pending') {
+      return { type: 'invited', data: invitation };
+    }
+    if (application) {
+      return { type: 'applied', data: application };
+    }
+    return { type: 'none', data: null };
   };
 
   const getStatusBadge = (status) => {
@@ -237,7 +451,8 @@ const EventApplications = () => {
       pending: { color: 'yellow', text: 'Pending' },
       accepted: { color: 'green', text: 'Accepted' },
       rejected: { color: 'red', text: 'Rejected' },
-      withdrawn: { color: 'gray', text: 'Withdrawn' }
+      withdrawn: { color: 'gray', text: 'Withdrawn' },
+      confirmed: { color: 'green', text: 'CONFIRMED' }
     };
 
     const config = statusConfig[status] || statusConfig.pending;
@@ -304,20 +519,101 @@ const EventApplications = () => {
         </Callout.Root>
       )}
 
-      <Flex direction="column" gap="4">
-        {events.length === 0 ? (
-          <Card size="3">
-            <Flex direction="column" align="center" gap="3" py="6">
-              <CalendarIcon width="48" height="48" />
-              <Text size="3" color="gray">
-                No upcoming events available
-              </Text>
-            </Flex>
-          </Card>
+      {/* Confirmed Events Section */}
+      {confirmations.length > 0 && (
+        <Box mb="6">
+          <Flex direction="column" gap="2" mb="4">
+            <Heading size="5">My Confirmed Events</Heading>
+            <Text size="3" color="gray">
+              Events you are confirmed to participate in
+            </Text>
+          </Flex>
+          
+          <Flex direction="column" gap="4">
+            {confirmations.map((confirmation) => {
+              const event = events.find(e => e.eid === confirmation.event_eid);
+              
+              if (!event) return null;
+              
+              return (
+                <Card key={confirmation.id} size="3" style={{ border: '2px solid var(--green-9)' }}>
+                  <Flex direction="column" gap="3">
+                    <Flex justify="between" align="start">
+                      <Box style={{ flex: 1 }}>
+                        <Flex align="center" gap="2" mb="2">
+                          <Text size="5" weight="bold">
+                            {event.name}
+                          </Text>
+                          <Badge color="green" variant="solid">
+                            CONFIRMED
+                          </Badge>
+                        </Flex>
+                        
+                        <Flex direction="column" gap="1" mb="3">
+                          <Text size="3" color="gray">
+                            📅 {formatDateTime(event.event_start_datetime)}
+                          </Text>
+                          {event.venue && (
+                            <Text size="3" color="gray">
+                              📍 {event.venue}
+                              {event.city?.name && ` • ${event.city.name}`}
+                            </Text>
+                          )}
+                        </Flex>
+
+                        {event.description && (
+                          <Text size="2" color="gray" style={{ 
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden'
+                          }}>
+                            {event.description}
+                          </Text>
+                        )}
+                      </Box>
+                    </Flex>
+
+                    <Callout.Root color="green" size="1">
+                      <Callout.Icon>
+                        <CheckCircledIcon />
+                      </Callout.Icon>
+                      <Callout.Text>
+                        ✅ You are confirmed for this event! Artist #{confirmation.artist_number}
+                      </Callout.Text>
+                    </Callout.Root>
+                  </Flex>
+                </Card>
+              );
+            })}
+          </Flex>
+        </Box>
+      )}
+
+      <Box>
+        <Flex direction="column" gap="2" mb="4">
+          <Heading size="5">Available Events</Heading>
+          <Text size="3" color="gray">
+            Browse and apply to upcoming events
+          </Text>
+        </Flex>
+        
+        <Flex direction="column" gap="4">
+          {events.length === 0 ? (
+            <Card size="3">
+              <Flex direction="column" align="center" gap="3" py="6">
+                <CalendarIcon width="48" height="48" />
+                <Text size="3" color="gray">
+                  No upcoming events available
+                </Text>
+              </Flex>
+            </Card>
         ) : (
           events.map((event) => {
-            const application = getApplicationForEvent(event.id);
-            const hasApplied = !!application;
+            const eventStatus = getEventStatus(event);
+            const hasApplied = eventStatus.type === 'applied';
+            const hasInvitation = eventStatus.type === 'invited';
+            const hasConfirmation = eventStatus.type === 'confirmed';
             const isApplying = applying[event.id];
             const isRemoving = removing[event.id];
 
@@ -330,12 +626,14 @@ const EventApplications = () => {
                         <Text size="5" weight="bold">
                           {event.name}
                         </Text>
-                        {hasApplied && getStatusBadge(application.application_status)}
+                        {hasApplied && getStatusBadge(eventStatus.data.application_status)}
+                        {hasInvitation && getStatusBadge('invited')}
+                        {hasConfirmation && getStatusBadge('confirmed')}
                       </Flex>
                       
                       <Flex direction="column" gap="1" mb="3">
                         <Text size="3" color="gray">
-                          📅 {formatDate(event.event_start_datetime)}
+                          📅 {formatDateTime(event.event_start_datetime)}
                         </Text>
                         {event.venue && (
                           <Text size="3" color="gray">
@@ -358,7 +656,7 @@ const EventApplications = () => {
                     </Box>
 
                     <Flex gap="2" align="center">
-                      {!hasApplied && (
+                      {eventStatus.type === 'none' && (
                         <Button
                           size="2"
                           variant="solid"
@@ -374,14 +672,14 @@ const EventApplications = () => {
                     </Flex>
                   </Flex>
 
-                  {hasApplied && application.application_status === 'pending' && (
+                  {hasApplied && eventStatus.data.application_status === 'pending' && (
                     <Flex align="center" gap="2">
                       <Callout.Root color="blue" size="1">
                         <Callout.Icon>
                           <InfoCircledIcon />
                         </Callout.Icon>
                         <Callout.Text>
-                          Application Submitted {application.applied_at && `• ${new Date(application.applied_at).toLocaleDateString()}`}
+                          Application Submitted {eventStatus.data.applied_at && `• ${new Date(eventStatus.data.applied_at).toLocaleDateString()}`}
                         </Callout.Text>
                       </Callout.Root>
                       <IconButton
@@ -396,7 +694,7 @@ const EventApplications = () => {
                     </Flex>
                   )}
 
-                  {hasApplied && application.application_status === 'accepted' && (
+                  {hasApplied && eventStatus.data.application_status === 'accepted' && (
                     <Callout.Root color="green" size="1">
                       <Callout.Icon>
                         <CheckCircledIcon />
@@ -407,7 +705,7 @@ const EventApplications = () => {
                     </Callout.Root>
                   )}
 
-                  {hasApplied && application.application_status === 'invited' && (
+                  {hasInvitation && (
                     <Flex direction="column" gap="3">
                       <Callout.Root color="crimson" size="1">
                         <Callout.Icon>
@@ -421,8 +719,6 @@ const EventApplications = () => {
                         size="3"
                         variant="solid"
                         color="crimson"
-                        disabled={isApplying}
-                        loading={isApplying}
                         onClick={() => handleAcceptInvitation(event.id)}
                         style={{ 
                           fontSize: '14px',
@@ -436,7 +732,7 @@ const EventApplications = () => {
                     </Flex>
                   )}
 
-                  {hasApplied && application.application_status === 'rejected' && (
+                  {hasApplied && eventStatus.data.application_status === 'rejected' && (
                     <Callout.Root color="red" size="1">
                       <Callout.Icon>
                         <CrossCircledIcon />
@@ -446,12 +742,95 @@ const EventApplications = () => {
                       </Callout.Text>
                     </Callout.Root>
                   )}
+
+                  {hasConfirmation && (
+                    <Callout.Root color="green" size="1">
+                      <Callout.Icon>
+                        <CheckCircledIcon />
+                      </Callout.Icon>
+                      <Callout.Text>
+                        ✅ CONFIRMED! You are registered to participate in this event.
+                      </Callout.Text>
+                    </Callout.Root>
+                  )}
                 </Flex>
               </Card>
             );
           })
-        )}
-      </Flex>
+          )}
+        </Flex>
+      </Box>
+
+      {/* Application Modal */}
+      <Dialog.Root open={showApplicationModal} onOpenChange={setShowApplicationModal}>
+        <Dialog.Content style={{ maxWidth: 500 }}>
+          <Dialog.Title>Apply to {selectedEvent?.name}</Dialog.Title>
+          <Dialog.Description size="2" mb="4">
+            Submit your application with an optional message to the event producer.
+          </Dialog.Description>
+
+          {selectedEvent && (
+            <Box mb="4">
+              <Card size="2" style={{ backgroundColor: 'var(--gray-2)' }}>
+                <Flex direction="column" gap="2">
+                  <Text size="3" weight="bold">{selectedEvent.name}</Text>
+                  <Text size="2" color="gray">
+                    📅 {formatDateTime(selectedEvent.event_start_datetime)}
+                  </Text>
+                  {selectedEvent.venue && (
+                    <Text size="2" color="gray">
+                      📍 {selectedEvent.venue}
+                      {selectedEvent.city?.name && ` • ${selectedEvent.city.name}`}
+                    </Text>
+                  )}
+                </Flex>
+              </Card>
+            </Box>
+          )}
+
+          <Flex direction="column" gap="3">
+            <Text size="2" weight="medium">
+              Message to Producer (Optional)
+            </Text>
+            <TextArea
+              placeholder="Tell the producer why you'd like to participate in this event, your experience, or any other relevant information..."
+              value={applicationMessage}
+              onChange={(e) => setApplicationMessage(e.target.value)}
+              rows={4}
+              style={{ resize: 'vertical', minHeight: '100px' }}
+            />
+            <Text size="1" color="gray">
+              This message will be sent to the event producer along with your application.
+            </Text>
+          </Flex>
+
+          <Flex gap="3" mt="4" justify="end">
+            <Dialog.Close>
+              <Button variant="soft" color="gray">
+                Cancel
+              </Button>
+            </Dialog.Close>
+            <Button
+              onClick={submitApplication}
+              disabled={applying[selectedEvent?.id]}
+              loading={applying[selectedEvent?.id]}
+            >
+              Submit Application
+            </Button>
+          </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
+
+      {/* Comprehensive Invitation Acceptance Modal */}
+      <InvitationAcceptanceModal
+        open={showInvitationModal}
+        onOpenChange={setShowInvitationModal}
+        event={selectedEvent}
+        invitation={selectedInvitation}
+        artistProfile={artistProfile}
+        onAccept={acceptInvitation}
+        loading={applying[selectedEvent?.id]}
+      />
     </Box>
   );
 };

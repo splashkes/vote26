@@ -12,6 +12,7 @@ import {
   Box,
   Callout,
   Grid,
+  Select,
 } from '@radix-ui/themes';
 import { PersonIcon, InfoCircledIcon, CheckIcon } from '@radix-ui/react-icons';
 import { useAuth } from '../contexts/AuthContext';
@@ -38,6 +39,7 @@ const ProfileEditor = () => {
   });
   const [profileLoading, setProfileLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [countries, setCountries] = useState([]);
   const [saveMessage, setSaveMessage] = useState('');
   const [error, setError] = useState('');
   const [artistProfileId, setArtistProfileId] = useState(null);
@@ -107,6 +109,30 @@ const ProfileEditor = () => {
       setProfileLoading(false);
     }
   }, [user, person, loading]);
+
+  useEffect(() => {
+    fetchCountries();
+  }, []);
+
+  const fetchCountries = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('countries')
+        .select('name, code')
+        .order('name');
+
+      if (error) throw error;
+      setCountries(data || []);
+    } catch (error) {
+      console.error('Error fetching countries:', error);
+      // Fallback to a basic list if database fetch fails
+      setCountries([
+        { name: 'Canada', code: 'CA' },
+        { name: 'United States', code: 'US' },
+        { name: 'United Kingdom', code: 'GB' },
+      ]);
+    }
+  };
 
   const fetchProfiles = async () => {
     if (isEditingRef.current) {
@@ -424,11 +450,19 @@ const ProfileEditor = () => {
               </Flex>
               <Flex direction="column" gap="2" style={{ flex: 1 }}>
                 <Text size="2" weight="medium">Country</Text>
-                <TextField.Root
-                  placeholder="Your country"
+                <Select.Root
                   value={profile.country}
-                  onChange={(e) => handleInputChange('country', e.target.value)}
-                />
+                  onValueChange={(value) => handleInputChange('country', value)}
+                >
+                  <Select.Trigger placeholder="Select your country" />
+                  <Select.Content>
+                    {countries.map((country) => (
+                      <Select.Item key={country.code} value={country.code}>
+                        {country.name}
+                      </Select.Item>
+                    ))}
+                  </Select.Content>
+                </Select.Root>
               </Flex>
             </Flex>
           </Flex>

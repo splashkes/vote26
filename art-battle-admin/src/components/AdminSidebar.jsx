@@ -50,7 +50,7 @@ const AdminSidebar = () => {
       to: '/artists',
       icon: PersonIcon,
       label: 'Artists',
-      description: 'All artists across the system'
+      description: 'Manage profiles, applications, invitations'
     },
     {
       to: '/people',

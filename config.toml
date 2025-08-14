@@ -1,2 +1,5 @@
 [functions.health-report-public]
 verify_jwt = false
+
+[functions.meta-ads-report]
+verify_jwt = false
