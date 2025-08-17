@@ -38,7 +38,16 @@ const UpgradeHandler = () => {
       setError(null);
       setResult(null);
 
-      const { data, error } = await supabase.functions.invoke('validate-qr-scan', {
+      console.log('Starting QR validation for code:', qrCode);
+      console.log('User authenticated:', !!user);
+
+      // Create a timeout promise
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Request timed out after 15 seconds')), 15000);
+      });
+
+      // Make the function call with timeout
+      const functionPromise = supabase.functions.invoke('validate-qr-scan', {
         body: {
           qr_code: qrCode,
           user_agent: navigator.userAgent,
@@ -49,7 +58,12 @@ const UpgradeHandler = () => {
         }
       });
 
+      const { data, error } = await Promise.race([functionPromise, timeoutPromise]);
+
+      console.log('Function response:', { data, error });
+
       if (error) {
+        console.error('Supabase function error:', error);
         throw error;
       }
 
@@ -58,7 +72,35 @@ const UpgradeHandler = () => {
 
     } catch (err) {
       console.error('Error validating QR scan:', err);
-      setError('Failed to validate QR code: ' + err.message);
+      
+      // Handle specific error cases and provide fallback navigation
+      let errorMessage = 'Failed to validate QR code';
+      let showFallbackNavigation = false;
+      
+      if (err.message.includes('timeout')) {
+        errorMessage = 'Request timed out - please check your internet connection and try again';
+        showFallbackNavigation = true;
+      } else if (err.message.includes('fetch')) {
+        errorMessage = 'Network error - please check your internet connection';
+        showFallbackNavigation = true;
+      } else if (err.message.includes('AUTH')) {
+        errorMessage = 'Authentication error - please sign out and sign back in';
+      } else if (err.message.includes('500') || err.message.includes('Internal Server Error')) {
+        errorMessage = 'Server error while validating QR code. You can still proceed to the events.';
+        showFallbackNavigation = true;
+      } else if (err.message) {
+        errorMessage = `Error: ${err.message}`;
+        showFallbackNavigation = true;
+      }
+      
+      setError(errorMessage);
+      
+      // For certain errors, still allow navigation to events list
+      if (showFallbackNavigation) {
+        setTimeout(() => {
+          navigate('/');
+        }, 3000);
+      }
     } finally {
       setLoading(false);
     }

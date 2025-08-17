@@ -13,20 +13,45 @@ export const AuthProvider = ({ children }) => {
   const [metadataSyncAttempts, setMetadataSyncAttempts] = useState({});
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        await extractPersonFromMetadata(session.user);
+    console.log('AuthContext: Initializing...');
+    
+    // Get initial session with timeout and error handling
+    const initializeAuth = async () => {
+      try {
+        console.log('AuthContext: Getting initial session...');
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('AuthContext: Error getting session:', error);
+          throw error;
+        }
+        
+        console.log('AuthContext: Session retrieved:', !!session);
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          await extractPersonFromMetadata(session.user);
+        }
+      } catch (error) {
+        console.error('AuthContext: Failed to initialize:', error);
+        // Set to null state instead of staying in loading
+        setSession(null);
+        setUser(null);
+        setPerson(null);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
-    });
+    };
+
+    initializeAuth();
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('AuthContext: Auth state changed:', event, !!session);
       setSession(session);
       setUser(session?.user ?? null);
+      
       if (session?.user) {
         await extractPersonFromMetadata(session.user);
       } else {

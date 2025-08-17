@@ -1,5 +1,5 @@
 // Generate QR Code Edge Function
-// Creates new QR codes with 10-minute expiration and cleans up old codes
+// Creates new QR codes with 60-minute expiration and cleans up old codes
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
@@ -140,7 +140,7 @@ serve(async (req) => {
     // Generate new QR code
     const qrCode = generateRandomCode()
     const now = new Date()
-    const expiresAt = new Date(now.getTime() + 10 * 60 * 1000) // 10 minutes from now
+    const expiresAt = new Date(now.getTime() + 60 * 60 * 1000) // 60 minutes from now
 
     // Insert new QR code
     const { data: qrData, error: insertError } = await supabase

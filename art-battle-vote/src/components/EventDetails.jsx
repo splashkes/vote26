@@ -318,7 +318,7 @@ const EventDetails = () => {
         }, (payload) => {
           console.log('Vote realtime update:', payload);
           // Update vote weights
-          fetchVoteWeights();
+          // fetchVoteWeights(); // TODO: Implement this function
         })
         .subscribe();
     }
@@ -487,8 +487,14 @@ const EventDetails = () => {
 
   const fetchEventDetails = async () => {
     try {
+      console.log('EventDetails: Starting fetchEventDetails for eventId:', eventId);
       setLoading(true);
       setError(null);
+      
+      // Add timeout protection
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Event loading timed out after 30 seconds')), 30000);
+      });
 
       // Fetch event details
       const { data: eventData, error: eventError } = await supabase

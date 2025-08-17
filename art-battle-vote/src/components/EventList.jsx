@@ -25,6 +25,10 @@ import { getImageUrl } from '../lib/imageHelpers';
 const EventList = () => {
   const [events, setEvents] = useState({ active: [], recent: [], future: [] });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const [retryCountdown, setRetryCountdown] = useState(0);
+  const [isRetrying, setIsRetrying] = useState(false);
   const [expandedEvent, setExpandedEvent] = useState(null);
   const [topArtworks, setTopArtworks] = useState({});
   const [loadingArtworks, setLoadingArtworks] = useState({});
@@ -40,10 +44,25 @@ const EventList = () => {
 
   useEffect(() => {
     fetchEvents();
-  }, []);
+    
+    // Add a safety timeout to prevent infinite loading
+    const loadingTimeout = setTimeout(() => {
+      if (loading) {
+        console.error('Loading timeout reached - forcing loading to false');
+        setLoading(false);
+        setEvents({ active: [], recent: [], future: [] });
+      }
+    }, 15000); // 15 second timeout
+    
+    return () => clearTimeout(loadingTimeout);
+  }, []); // Remove loading dependency to prevent infinite loop
 
   const fetchEvents = async () => {
     try {
+      console.log('Starting to fetch events...');
+      console.log('Network status:', navigator.onLine ? 'online' : 'offline');
+      console.log('User agent:', navigator.userAgent);
+      
       const now = new Date();
       // Event categorization by date
       const eighteenHoursAgo = new Date(now.getTime() - 18 * 60 * 60 * 1000);
@@ -54,7 +73,12 @@ const EventList = () => {
       const twoMonthsAgo = new Date();
       twoMonthsAgo.setDate(twoMonthsAgo.getDate() - 60);
       
-      const { data, error } = await supabase
+      // Add timeout to the request
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Request timed out after 10 seconds')), 10000);
+      });
+
+      const queryPromise = supabase
         .from('events')
         .select(`
           id,
@@ -70,6 +94,9 @@ const EventList = () => {
         .eq('show_in_app', true)
         .gte('event_start_datetime', twoMonthsAgo.toISOString())
         .order('event_start_datetime', { ascending: true });
+
+      const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
+      console.log('Events fetch completed:', { dataLength: data?.length, error });
 
       if (error) throw error;
       
@@ -123,11 +150,59 @@ const EventList = () => {
       // Event categorization complete
 
       setEvents(categorized);
+      setError(null); // Clear any previous errors
     } catch (error) {
       console.error('Error fetching events:', error);
+      
+      setError(error.message);
+      
+      // Show user-friendly error message
+      if (error.message.includes('timeout')) {
+        console.error('Request timed out - network may be slow');
+      } else if (error.message.includes('fetch')) {
+        console.error('Network error occurred');
+      } else {
+        console.error('Unexpected error:', error.message);
+      }
+      
+      // Auto-retry up to 3 times with geometric progression: 4s, 8s, 16s
+      if (retryCount < 3) {
+        const delay = Math.pow(2, retryCount + 2) * 1000; // 4s, 8s, 16s
+        console.log(`Retrying in ${delay}ms (attempt ${retryCount + 1}/3)...`);
+        
+        setIsRetrying(true);
+        setRetryCountdown(Math.floor(delay / 1000));
+        
+        // Start countdown
+        const countdownInterval = setInterval(() => {
+          setRetryCountdown(prev => {
+            if (prev <= 1) {
+              clearInterval(countdownInterval);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+        
+        setTimeout(() => {
+          setIsRetrying(false);
+          setRetryCount(prev => prev + 1);
+          fetchEvents();
+        }, delay);
+      } else {
+        // Set empty state after all retries failed
+        setEvents({ active: [], recent: [], future: [] });
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const retryFetch = () => {
+    setRetryCount(0);
+    setError(null);
+    setLoading(true);
+    fetchEvents();
   };
 
   const toggleEventExpanded = async (eventId) => {
@@ -460,6 +535,32 @@ const EventList = () => {
         <Box p="4">
           {loading ? (
             <LoadingScreen message="Loading events..." />
+          ) : error ? (
+            <Flex direction="column" align="center" gap="4" style={{ minHeight: '50vh', justifyContent: 'center' }}>
+              <Text size="4" color="red" weight="bold" style={{ textAlign: 'center' }}>
+                Failed to load events
+              </Text>
+              <Text size="2" color="gray" style={{ textAlign: 'center' }}>
+                {error.includes('timeout') ? 'Network connection is slow or unavailable' : 
+                 error.includes('fetch') ? 'Unable to connect to server' : 
+                 'An unexpected error occurred'}
+              </Text>
+              {isRetrying ? (
+                <Button disabled size="3" variant="soft">
+                  <Spinner loading size="1" />
+                  Retrying in {retryCountdown}s...
+                </Button>
+              ) : (
+                <Button onClick={retryFetch} size="3">
+                  Try Again
+                </Button>
+              )}
+              {retryCount > 0 && !isRetrying && (
+                <Text size="1" color="gray">
+                  Attempted {retryCount} time{retryCount !== 1 ? 's' : ''}
+                </Text>
+              )}
+            </Flex>
           ) : (
             <>
               {/* Active Events */}

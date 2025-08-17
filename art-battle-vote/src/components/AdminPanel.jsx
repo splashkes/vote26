@@ -117,8 +117,8 @@ const AdminPanel = ({
       window.refreshVoteWeights = async () => {
         // Trigger parent component to refresh vote weights
         // This will be called by realtime subscription
-        const { fetchVoteWeights } = await import('../components/EventDetails');
-        if (fetchVoteWeights) fetchVoteWeights();
+        // const { fetchVoteWeights } = await import('../components/EventDetails');
+        // if (fetchVoteWeights) fetchVoteWeights(); // TODO: Implement this function
       };
     }
     return () => {
@@ -1225,14 +1225,22 @@ const AdminPanel = ({
             
             {/* Add Round Button */}
             <Button size="2" variant="soft" onClick={() => {
-              // Add round in frontend state only
-              const maxRoundNumber = rounds.length > 0 
-                ? Math.max(...rounds.map(r => r.roundNumber)) 
-                : 0;
+              // Add round in frontend state only - find first missing round number
+              const existingRoundNumbers = rounds.map(r => r.roundNumber).sort((a, b) => a - b);
+              let nextRoundNumber = 1;
+              
+              // Find the first gap in round numbers
+              for (let i = 0; i < existingRoundNumbers.length; i++) {
+                if (existingRoundNumbers[i] === nextRoundNumber) {
+                  nextRoundNumber++;
+                } else {
+                  break; // Found a gap
+                }
+              }
               
               const newRound = {
-                id: `temp-round-${maxRoundNumber + 1}`,
-                roundNumber: maxRoundNumber + 1,
+                id: `temp-round-${nextRoundNumber}`,
+                roundNumber: nextRoundNumber,
                 easels: []
               };
               

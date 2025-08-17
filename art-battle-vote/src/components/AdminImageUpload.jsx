@@ -125,6 +125,12 @@ const AdminImageUpload = ({
       return;
     }
 
+    // Check for HEIC files specifically
+    if (file.type === 'image/heic' || file.type === 'image/heif' || file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif')) {
+      setErrorMessage('HEIC files are not supported. Please convert to JPEG or PNG, or retake the photo in a different format. iOS users: go to Settings → Camera → Formats → "Most Compatible"');
+      return;
+    }
+
     setSelectedFile(file);
     setErrorMessage('');
     setUploadStatus(null);
@@ -263,13 +269,16 @@ const AdminImageUpload = ({
                   <Text size="2" color="gray">
                     Images will be resized to {maxWidth}x{maxHeight}
                   </Text>
+                  <Text size="2" color="blue" style={{ textAlign: 'center', maxWidth: '300px' }}>
+                    📱 iOS users: To avoid HEIC files, go to Settings → Camera → Formats → "Most Compatible"
+                  </Text>
                 </Flex>
               </Card>
             </label>
             <input
               id="image-upload"
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/gif,image/webp"
               onChange={handleFileSelect}
               style={{ display: 'none' }}
             />
