@@ -423,55 +423,21 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
     setSelectedProfile(null);
   };
 
-  const handleCreateNewProfile = async () => {
-    console.log('Home: Creating new profile for user');
+  const handleCreateNewProfile = () => {
+    console.log('Home: Navigating to profile creation form');
     
-    try {
-      // Use edge function to create a new profile (bypasses RLS)
-      const userPhone = user.phone;
-      const { data: result, error: createError } = await supabase.functions
-        .invoke('create-new-profile', {
-          body: { 
-            profileData: {
-              name: user.name || user.email || 'Artist Profile',
-              email: user.email,
-              phone: userPhone
-            },
-            target_person_id: person.id
-          }
-        });
-
-      console.log('Home: Create new profile result:', { result, createError });
-
-      if (createError || !result?.success) {
-        throw new Error(result?.message || createError?.message || 'Failed to create new profile');
-      }
-
-      const newProfile = result.profile;
-
-      console.log('Home: New profile created successfully:', newProfile.name);
-      setProfiles([newProfile]);
-      setSelectedProfile(newProfile);
-      setCandidateProfiles([]);
-      setShowProfilePicker(false);
-      setShowCreateNewProfile(false);
-      
-      // Notify parent that profile picker is hidden
-      onProfilePickerChange(false);
-      
-      // Navigate to profile edit tab when creating new profile (use setTimeout to ensure state updates)
-      console.log('Home: Navigating to profile edit tab after creating new profile');
-      setTimeout(() => {
-        console.log('Home: Executing delayed navigation to profile tab');
-        onNavigateToTab('profile');
-      }, 300);
-      
-      await loadProfileData(newProfile);
-      
-    } catch (err) {
-      console.error('Home: Error creating new profile:', err);
-      setError('Failed to create new profile: ' + err.message);
-    }
+    // Clear any existing profile state
+    setProfiles([]);
+    setSelectedProfile(null);
+    setCandidateProfiles([]);
+    setShowProfilePicker(false);
+    setShowCreateNewProfile(false);
+    
+    // Notify parent that profile picker is hidden
+    onProfilePickerChange(false);
+    
+    // Navigate directly to profile tab where ProfileForm will handle creation
+    onNavigateToTab('profile');
   };
 
   const handleProfileSelect = async (profile) => {

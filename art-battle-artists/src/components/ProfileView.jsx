@@ -157,7 +157,7 @@ const ProfileView = () => {
         {/* Header */}
         <Flex justify="between" align="start">
           <Flex direction="column" gap="1">
-            <Heading size="7">{profile.name || 'Artist Profile'}</Heading>
+            <Heading size="7">{profile.name}</Heading>
             {profile.city && profile.country && (
               <Flex align="center" gap="1">
                 <HomeIcon width="14" height="14" color="gray" />

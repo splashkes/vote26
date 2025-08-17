@@ -21,6 +21,7 @@ interface EventRequest {
   show_in_app?: boolean
   current_round?: number
   capacity?: number
+  eventbrite_id?: string
 }
 
 Deno.serve(async (req) => {
@@ -212,6 +213,7 @@ Deno.serve(async (req) => {
       show_in_app: eventData.show_in_app ?? false,
       current_round: eventData.current_round ?? 0,
       capacity: eventData.capacity || 200,
+      eventbrite_id: eventData.eventbrite_id || null,
       updated_at: new Date().toISOString()
     }
 

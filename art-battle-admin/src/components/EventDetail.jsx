@@ -52,6 +52,7 @@ import {
 } from '@radix-ui/react-icons';
 import { getRFMScore, getBatchRFMScores, getSegmentColor, getSegmentTier } from '../lib/rfmScoring';
 import PersonTile from './PersonTile';
+import { parsePhoneNumber, isValidPhoneNumber } from 'libphonenumber-js';
 
 const EventDetail = () => {
   const { eventId } = useParams();
@@ -83,6 +84,8 @@ const EventDetail = () => {
   const [selectedAdminLevel, setSelectedAdminLevel] = useState('voting');
   const [adminMessage, setAdminMessage] = useState(null);
   const [adminsLoading, setAdminsLoading] = useState(false);
+  const [phoneValidationError, setPhoneValidationError] = useState(null);
+  const [validatedPhone, setValidatedPhone] = useState(null);
   const [artistApplications, setArtistApplications] = useState([]);
   const [artistInvites, setArtistInvites] = useState([]);
   const [artistConfirmations, setArtistConfirmations] = useState([]);
@@ -258,24 +261,30 @@ const EventDetail = () => {
       
       console.log('Looking for health data for event EID:', eventData.eid);
       
-      // Fetch health scores and marketing recommendations using EID as event_id
+      // Calculate 50 hours ago timestamp
+      const now = new Date();
+      const fiftyHoursAgo = new Date(now.getTime() - 50 * 60 * 60 * 1000);
+
+      // Fetch health scores and marketing recommendations using EID as event_id (only if less than 50 hours old)
       const [healthResponse, marketingResponse] = await Promise.all([
         supabase
           .from('ai_analysis_cache')
           .select('*')
           .eq('event_id', eventData.eid)
           .eq('analysis_type', 'health_scores')
+          .gte('created_at', fiftyHoursAgo.toISOString())
           .order('created_at', { ascending: false })
           .limit(1)
-          .single(),
+          .maybeSingle(),
         supabase
           .from('ai_analysis_cache')
           .select('*')
           .eq('event_id', eventData.eid)
           .eq('analysis_type', 'marketing')
+          .gte('created_at', fiftyHoursAgo.toISOString())
           .order('created_at', { ascending: false })
           .limit(1)
-          .single()
+          .maybeSingle()
       ]);
       
       console.log('Health response:', healthResponse);
@@ -445,10 +454,14 @@ const EventDetail = () => {
     const diffMs = now - new Date(date);
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+    const diffSeconds = Math.floor(diffMs / 1000);
     
     if (diffDays > 0) return `${diffDays}d ago`;
     if (diffHours > 0) return `${diffHours}h ago`;
-    return 'Recently';
+    if (diffMinutes > 0) return `${diffMinutes}m ago`;
+    if (diffSeconds > 0) return `${diffSeconds}s ago`;
+    return 'Just now';
   };
 
   const getInvitationStatus = (invite) => {
@@ -907,24 +920,68 @@ The Art Battle Team`);
     }
   };
 
+  // Real-time phone validation as user types
+  const validatePhoneInput = (phoneInput) => {
+    if (!phoneInput.trim()) {
+      setPhoneValidationError(null);
+      setValidatedPhone(null);
+      return;
+    }
+
+    try {
+      if (isValidPhoneNumber(phoneInput)) {
+        const phoneNumber = parsePhoneNumber(phoneInput);
+        const normalized = phoneNumber.format('E.164');
+        setValidatedPhone(normalized);
+        setPhoneValidationError(null);
+      } else {
+        setPhoneValidationError('Invalid phone number format');
+        setValidatedPhone(null);
+      }
+    } catch (error) {
+      setPhoneValidationError('Please include country code (e.g., +1, +7, +44)');
+      setValidatedPhone(null);
+    }
+  };
+
   const addEventAdmin = async () => {
     if (!adminPhoneSearch) {
       showAdminMessage('error', 'Please enter a phone number');
       return;
     }
     
-    // Just use the phone number as entered - minimal formatting
-    let phone = adminPhoneSearch.trim();
-    
-    // If no validation issues, use as-is (people can figure it out like login)
+    // Validate and normalize phone number to E.164 format
+    const inputPhone = adminPhoneSearch.trim();
+    let normalizedPhone;
     
     try {
-      // Check if admin already exists
+      // Try to parse the phone number
+      if (!isValidPhoneNumber(inputPhone)) {
+        setPhoneValidationError('Please enter a valid phone number');
+        showAdminMessage('error', 'Please enter a valid phone number');
+        return;
+      }
+      
+      // Parse and format to E.164
+      const phoneNumber = parsePhoneNumber(inputPhone);
+      normalizedPhone = phoneNumber.format('E.164');
+      setValidatedPhone(normalizedPhone);
+      setPhoneValidationError(null);
+      
+    } catch (parseError) {
+      console.error('Phone parsing error:', parseError);
+      setPhoneValidationError('Please enter a valid phone number with country code');
+      showAdminMessage('error', 'Please enter a valid phone number with country code (e.g., +1234567890)');
+      return;
+    }
+    
+    try {
+      // Check if admin already exists (check both formats for safety)
       const { data: existing } = await supabase
         .from('event_admins')
         .select('id')
         .eq('event_id', eventId)
-        .eq('phone', phone)
+        .or(`phone.eq.${normalizedPhone},phone.eq.${inputPhone}`)
         .single();
       
       if (existing) {
@@ -932,20 +989,22 @@ The Art Battle Team`);
         return;
       }
       
-      // Add new admin
+      // Add new admin with normalized E.164 format
       const { error } = await supabase
         .from('event_admins')
         .insert({
           event_id: eventId,
-          phone: phone,
+          phone: normalizedPhone,
           admin_level: selectedAdminLevel
         });
       
       if (error) throw error;
       
-      showAdminMessage('success', `Successfully added ${phone} as ${selectedAdminLevel} admin`);
+      showAdminMessage('success', `Successfully added ${normalizedPhone} as ${selectedAdminLevel} admin`);
       setAdminPhoneSearch('');
       setPeopleSearchResults([]);
+      setPhoneValidationError(null);
+      setValidatedPhone(null);
       await fetchEventAdmins();
       
     } catch (error) {
@@ -1112,6 +1171,9 @@ The Art Battle Team`);
               <Flex direction="column" gap="2">
                 <Text size="2">
                   <strong>EID:</strong> <DebugField value={event.eid} fieldName="event.eid" />
+                </Text>
+                <Text size="2">
+                  <strong>Eventbrite ID:</strong> <DebugField value={event.eventbrite_id} fieldName="event.eventbrite_id" fallback="Not set" />
                 </Text>
                 <Text size="2">
                   <strong>Venue:</strong> <DebugField value={event.venue} fieldName="event.venue" />
@@ -1744,6 +1806,9 @@ The Art Battle Team`);
                                   const value = e.target.value;
                                   setAdminPhoneSearch(value);
                                   
+                                  // Validate phone number in real-time
+                                  validatePhoneInput(value);
+                                  
                                   // Search for people with this phone
                                   if (value.length >= 10) {
                                     searchPeopleByPhone(value);
@@ -1755,7 +1820,7 @@ The Art Battle Team`);
                                   flex: 1,
                                   padding: '8px',
                                   borderRadius: '4px',
-                                  border: '1px solid var(--gray-6)',
+                                  border: `1px solid ${phoneValidationError ? 'var(--red-9)' : validatedPhone ? 'var(--green-9)' : 'var(--gray-6)'}`,
                                   background: 'var(--color-background)',
                                   color: 'var(--color-text)'
                                 }}
@@ -1771,10 +1836,29 @@ The Art Battle Team`);
                                   <Select.Item value="super">Super</Select.Item>
                                 </Select.Content>
                               </Select.Root>
-                              <Button size="2" onClick={addEventAdmin}>
+                              <Button size="2" onClick={addEventAdmin} disabled={!!phoneValidationError || !validatedPhone}>
                                 Add Admin
                               </Button>
                             </Flex>
+                            
+                            {/* Phone Validation Feedback */}
+                            {phoneValidationError && (
+                              <Callout.Root color="red" size="1" mt="2">
+                                <Callout.Icon>
+                                  <ExclamationTriangleIcon />
+                                </Callout.Icon>
+                                <Callout.Text>{phoneValidationError}</Callout.Text>
+                              </Callout.Root>
+                            )}
+                            
+                            {validatedPhone && !phoneValidationError && (
+                              <Callout.Root color="green" size="1" mt="2">
+                                <Callout.Icon>
+                                  <CheckCircledIcon />
+                                </Callout.Icon>
+                                <Callout.Text>Will be stored as: {validatedPhone}</Callout.Text>
+                              </Callout.Root>
+                            )}
                             
                             {/* Search Results */}
                             {peopleSearchResults.length > 0 && (

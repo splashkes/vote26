@@ -52,6 +52,10 @@ const ArtistsManagement = () => {
   const [imageModalOpen, setImageModalOpen] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
   
+  // Artist event history data
+  const [artistEventHistory, setArtistEventHistory] = useState([]);
+  const [eventHistoryLoading, setEventHistoryLoading] = useState(false);
+  
   // Bio editing states
   const [editingBio, setEditingBio] = useState(false);
   const [bioText, setBioText] = useState('');
@@ -249,6 +253,7 @@ const ArtistsManagement = () => {
     // Load sample works if available
     if (artist.artist_number) {
       loadSampleWorks(artist.artist_number);
+      loadArtistEventHistory(artist.artist_number);
     }
   };
 
@@ -283,6 +288,93 @@ const ArtistsManagement = () => {
       setSampleWorks([]);
     } finally {
       setSampleWorksLoading(false);
+    }
+  };
+
+  const loadArtistEventHistory = async (artistNumber) => {
+    setEventHistoryLoading(true);
+    try {
+      // Load all data for this artist
+      const [applicationsData, confirmationsData, invitationsData] = await Promise.all([
+        supabase.from('artist_applications').select('*').eq('artist_number', artistNumber),
+        supabase.from('artist_confirmations').select('*').eq('artist_number', artistNumber),
+        supabase.from('artist_invitations').select('*').eq('artist_number', artistNumber)
+      ]);
+
+      if (applicationsData.error) console.error('Error fetching applications:', applicationsData.error);
+      if (confirmationsData.error) console.error('Error fetching confirmations:', confirmationsData.error);
+      if (invitationsData.error) console.error('Error fetching invitations:', invitationsData.error);
+
+      // Group all data by event_eid
+      const eventMap = new Map();
+
+      // Process applications
+      (applicationsData.data || []).forEach(app => {
+        if (app.event_eid) {
+          if (!eventMap.has(app.event_eid)) {
+            eventMap.set(app.event_eid, { event_eid: app.event_eid });
+          }
+          const event = eventMap.get(app.event_eid);
+          event.application = app;
+          event.applied_date = app.applied_at || app.entry_date;
+        }
+      });
+
+      // Process invitations
+      (invitationsData.data || []).forEach(inv => {
+        if (inv.event_eid) {
+          if (!eventMap.has(inv.event_eid)) {
+            eventMap.set(inv.event_eid, { event_eid: inv.event_eid });
+          }
+          const event = eventMap.get(inv.event_eid);
+          event.invitation = inv;
+          event.invited_date = inv.entry_date || inv.created_at;
+        }
+      });
+
+      // Process confirmations
+      (confirmationsData.data || []).forEach(conf => {
+        if (conf.event_eid) {
+          if (!eventMap.has(conf.event_eid)) {
+            eventMap.set(conf.event_eid, { event_eid: conf.event_eid });
+          }
+          const event = eventMap.get(conf.event_eid);
+          event.confirmation = conf;
+          event.confirmed_date = conf.created_at || conf.entry_date;
+        }
+      });
+
+      // Get event details for each event
+      const eventsWithDetails = await Promise.all(
+        Array.from(eventMap.values()).map(async (eventHistory) => {
+          const { data: eventData } = await supabase
+            .from('events')
+            .select('id, eid, name, event_start_datetime, venue, cities(name, countries(name))')
+            .eq('eid', eventHistory.event_eid)
+            .single();
+          
+          return {
+            ...eventHistory,
+            event_details: eventData,
+            // Sort by most recent activity
+            last_activity: Math.max(
+              new Date(eventHistory.applied_date || 0).getTime(),
+              new Date(eventHistory.invited_date || 0).getTime(),
+              new Date(eventHistory.confirmed_date || 0).getTime()
+            )
+          };
+        })
+      );
+
+      // Sort by most recent activity
+      eventsWithDetails.sort((a, b) => b.last_activity - a.last_activity);
+      
+      setArtistEventHistory(eventsWithDetails);
+    } catch (error) {
+      console.error('Error loading artist event history:', error);
+      setArtistEventHistory([]);
+    } finally {
+      setEventHistoryLoading(false);
     }
   };
 
@@ -356,10 +448,14 @@ const ArtistsManagement = () => {
     const diffMs = now - new Date(date);
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+    const diffSeconds = Math.floor(diffMs / 1000);
     
     if (diffDays > 0) return `${diffDays}d ago`;
     if (diffHours > 0) return `${diffHours}h ago`;
-    return 'Recently';
+    if (diffMinutes > 0) return `${diffMinutes}m ago`;
+    if (diffSeconds > 0) return `${diffSeconds}s ago`;
+    return 'Just now';
   };
 
   const toggleStatusFilter = (status) => {
@@ -701,9 +797,12 @@ const ArtistsManagement = () => {
                   
                   {/* Artist Details */}
                   <Flex direction="column" gap="1">
-                    {(artist.artist_profiles?.city_text || artist.artist_profiles?.city) && (
+                    {(artist.artist_profiles?.city_text || artist.artist_profiles?.city || artist.artist_profiles?.country) && (
                       <Text size="1" color="gray">
-                        📍 {artist.artist_profiles.city_text || artist.artist_profiles.city}
+                        📍 {[
+                          artist.artist_profiles?.city_text || artist.artist_profiles?.city,
+                          artist.artist_profiles?.country
+                        ].filter(Boolean).join(', ')}
                       </Text>
                     )}
                   </Flex>
@@ -908,6 +1007,117 @@ const ArtistsManagement = () => {
                         </>
                       )}
                     </Box>
+                  </Box>
+                </Card>
+
+                {/* Event History */}
+                <Card>
+                  <Box p="4">
+                    <Heading size="4" mb="3">Event History</Heading>
+                    {eventHistoryLoading ? (
+                      <Box style={{ textAlign: 'center', padding: '2rem' }}>
+                        <Spinner size="2" />
+                        <Text size="2" color="gray" style={{ display: 'block', marginTop: '1rem' }}>
+                          Loading event history...
+                        </Text>
+                      </Box>
+                    ) : artistEventHistory.length > 0 ? (
+                      <Flex direction="column" gap="3">
+                        {artistEventHistory.map((eventHistory) => (
+                          <Card key={eventHistory.event_eid} style={{ backgroundColor: 'var(--gray-2)' }}>
+                            <Box p="3">
+                              {/* Event Header */}
+                              <Flex justify="between" align="start" mb="3">
+                                <Flex direction="column">
+                                  <Text size="3" weight="bold">
+                                    {eventHistory.event_details?.name || eventHistory.event_eid}
+                                  </Text>
+                                  <Text size="2" color="gray">
+                                    {eventHistory.event_eid} • {eventHistory.event_details?.cities?.name && eventHistory.event_details.cities.countries?.name ? 
+                                      `${eventHistory.event_details.cities.name}, ${eventHistory.event_details.cities.countries.name}` : 
+                                      eventHistory.event_details?.venue || 'Location TBD'
+                                    }
+                                  </Text>
+                                  {eventHistory.event_details?.event_start_datetime && (
+                                    <Text size="2" color="gray">
+                                      Event Date: {new Date(eventHistory.event_details.event_start_datetime).toLocaleDateString()}
+                                    </Text>
+                                  )}
+                                </Flex>
+                              </Flex>
+                              
+                              {/* Timeline */}
+                              <Flex direction="column" gap="2">
+                                {eventHistory.applied_date && (
+                                  <Flex align="center" gap="3">
+                                    <Badge color="blue" size="1">Applied</Badge>
+                                    <Text size="2">
+                                      {new Date(eventHistory.applied_date).toLocaleDateString()}
+                                    </Text>
+                                  </Flex>
+                                )}
+                                
+                                {eventHistory.invited_date && (
+                                  <Flex align="center" gap="3">
+                                    <Badge color="orange" size="1">Invited</Badge>
+                                    <Text size="2">
+                                      {new Date(eventHistory.invited_date).toLocaleDateString()}
+                                    </Text>
+                                  </Flex>
+                                )}
+                                
+                                {eventHistory.confirmed_date && (
+                                  <Flex align="center" gap="3">
+                                    <Badge color="green" size="1">Confirmed</Badge>
+                                    <Text size="2">
+                                      {new Date(eventHistory.confirmed_date).toLocaleDateString()}
+                                    </Text>
+                                  </Flex>
+                                )}
+                              </Flex>
+
+                              {/* Additional Details */}
+                              {(eventHistory.application?.message_to_producer || eventHistory.invitation?.message_from_producer || eventHistory.confirmation?.message_to_organizers) && (
+                                <Box mt="3">
+                                  {eventHistory.application?.message_to_producer && (
+                                    <Box mb="2">
+                                      <Text size="2" weight="medium">Application Message:</Text>
+                                      <Box p="2" style={{ backgroundColor: 'var(--blue-3)', borderRadius: '4px', marginTop: '4px' }}>
+                                        <Text size="2" style={{ whiteSpace: 'pre-wrap' }}>
+                                          {eventHistory.application.message_to_producer}
+                                        </Text>
+                                      </Box>
+                                    </Box>
+                                  )}
+                                  {eventHistory.invitation?.message_from_producer && (
+                                    <Box mb="2">
+                                      <Text size="2" weight="medium">Invitation Message:</Text>
+                                      <Box p="2" style={{ backgroundColor: 'var(--orange-3)', borderRadius: '4px', marginTop: '4px' }}>
+                                        <Text size="2" style={{ whiteSpace: 'pre-wrap' }}>
+                                          {eventHistory.invitation.message_from_producer}
+                                        </Text>
+                                      </Box>
+                                    </Box>
+                                  )}
+                                  {eventHistory.confirmation?.message_to_organizers && (
+                                    <Box>
+                                      <Text size="2" weight="medium">Confirmation Message:</Text>
+                                      <Box p="2" style={{ backgroundColor: 'var(--green-3)', borderRadius: '4px', marginTop: '4px' }}>
+                                        <Text size="2" style={{ whiteSpace: 'pre-wrap' }}>
+                                          {eventHistory.confirmation.message_to_organizers}
+                                        </Text>
+                                      </Box>
+                                    </Box>
+                                  )}
+                                </Box>
+                              )}
+                            </Box>
+                          </Card>
+                        ))}
+                      </Flex>
+                    ) : (
+                      <Text size="2" color="gray">No event history found</Text>
+                    )}
                   </Box>
                 </Card>
 

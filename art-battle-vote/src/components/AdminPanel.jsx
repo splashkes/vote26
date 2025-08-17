@@ -1622,7 +1622,8 @@ const AdminPanel = ({
                           <Flex gap="2" align="center">
                             <Badge size="2" color={
                               admin.admin_level === 'super' ? 'red' : 
-                              admin.admin_level === 'auction' ? 'blue' : 
+                              admin.admin_level === 'producer' ? 'blue' : 
+                              admin.admin_level === 'photo' ? 'purple' : 
                               'green'
                             }>
                               {admin.admin_level.toUpperCase()}
@@ -1704,7 +1705,8 @@ const AdminPanel = ({
                           <Select.Trigger />
                           <Select.Content>
                             <Select.Item value="voting">Voting</Select.Item>
-                            <Select.Item value="auction">Auction</Select.Item>
+                            <Select.Item value="photo">Photo</Select.Item>
+                            <Select.Item value="producer">Producer</Select.Item>
                             <Select.Item value="super">Super</Select.Item>
                           </Select.Content>
                         </Select.Root>

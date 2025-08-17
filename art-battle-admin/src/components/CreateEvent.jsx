@@ -46,7 +46,8 @@ const CreateEvent = () => {
     show_in_app: false,
     current_round: 0,
     capacity: 200,
-    eid: ''
+    eid: '',
+    eventbrite_id: ''
   });
 
   useEffect(() => {
@@ -175,7 +176,8 @@ const CreateEvent = () => {
           show_in_app: eventData.show_in_app || false,
           current_round: eventData.current_round || 0,
           capacity: eventData.capacity || 200,
-          eid: eventData.eid || ''
+          eid: eventData.eid || '',
+          eventbrite_id: eventData.eventbrite_id || ''
         });
       }
     } catch (err) {
@@ -431,6 +433,20 @@ const CreateEvent = () => {
                         value={formData.venue}
                         onChange={(e) => handleInputChange('venue', e.target.value)}
                       />
+                    </Box>
+
+                    <Box>
+                      <Text as="label" size="2" weight="medium" mb="1" style={{ display: 'block' }}>
+                        Eventbrite Event ID
+                      </Text>
+                      <TextField.Root
+                        placeholder="e.g., 123456789012"
+                        value={formData.eventbrite_id}
+                        onChange={(e) => handleInputChange('eventbrite_id', e.target.value)}
+                      />
+                      <Text size="2" color="gray" mt="1" style={{ display: 'block' }}>
+                        Optional. Enter the numeric ID from your Eventbrite event URL.
+                      </Text>
                     </Box>
                   </Flex>
                 </Box>

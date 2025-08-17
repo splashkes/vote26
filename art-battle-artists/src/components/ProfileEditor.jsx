@@ -19,6 +19,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import AuthModal from './AuthModal';
 import SampleWorksUpload from './SampleWorksUpload';
+import ProfileForm from './ProfileForm';
 
 const ProfileEditor = () => {
   const { user, person, loading } = useAuth();
@@ -407,168 +408,29 @@ const ProfileEditor = () => {
         </Callout.Root>
       )}
 
-      <Grid columns="1" gap="6">
-        <Card size="3">
-          <Flex direction="column" gap="4">
-            <Heading size="5">Basic Information</Heading>
-            
-            <Flex direction="column" gap="2">
-              <Text size="2" weight="medium">Name *</Text>
-              <TextField.Root
-                placeholder="Your full name"
-                value={profile.name}
-                onChange={(e) => handleInputChange('name', e.target.value)}
-              />
-            </Flex>
-
-            <Flex direction="column" gap="2">
-              <Text size="2" weight="medium">Bio</Text>
-              <TextArea
-                placeholder="Tell us about yourself, your artistic journey, and what inspires you..."
-                value={profile.bio}
-                onChange={(e) => handleInputChange('bio', e.target.value)}
-                onBlur={handleInputBlur}
-                rows={4}
-              />
-            </Flex>
-
-          </Flex>
-        </Card>
-
-        <Card size="3">
-          <Flex direction="column" gap="4">
-            <Heading size="5">Location</Heading>
-            
-            <Flex gap="3">
-              <Flex direction="column" gap="2" style={{ flex: 1 }}>
-                <Text size="2" weight="medium">City</Text>
-                <TextField.Root
-                  placeholder="Your city"
-                  value={profile.city}
-                  onChange={(e) => handleInputChange('city', e.target.value)}
-                />
-              </Flex>
-              <Flex direction="column" gap="2" style={{ flex: 1 }}>
-                <Text size="2" weight="medium">Country</Text>
-                <Select.Root
-                  value={profile.country}
-                  onValueChange={(value) => handleInputChange('country', value)}
-                >
-                  <Select.Trigger placeholder="Select your country" />
-                  <Select.Content>
-                    {countries.map((country) => (
-                      <Select.Item key={country.code} value={country.code}>
-                        {country.name}
-                      </Select.Item>
-                    ))}
-                  </Select.Content>
-                </Select.Root>
-              </Flex>
-            </Flex>
-          </Flex>
-        </Card>
-
-        <Card size="3">
-          <Flex direction="column" gap="4">
-            <Heading size="5">Contact Information</Heading>
-            
-            <Flex gap="3">
-              <Flex direction="column" gap="2" style={{ flex: 1 }}>
-                <Text size="2" weight="medium">Email</Text>
-                <TextField.Root
-                  type="email"
-                  placeholder="your@email.com"
-                  value={profile.email}
-                  onChange={(e) => handleInputChange('email', e.target.value)}
-                />
-              </Flex>
-              <Flex direction="column" gap="2" style={{ flex: 1 }}>
-                <Text size="2" weight="medium">Phone</Text>
-                <TextField.Root
-                  type="tel"
-                  placeholder="+1 234 567 8900"
-                  value={profile.phone}
-                  onChange={(e) => handleInputChange('phone', e.target.value)}
-                  style={{
-                    borderColor: profile.phone && !validatePhoneE164(profile.phone) ? 'var(--red-8)' : undefined
-                  }}
-                />
-                {profile.phone && !validatePhoneE164(profile.phone) && (
-                  <Text size="1" color="red">
-                    Please enter a valid phone number (e.g., +1 234 567 8900)
-                  </Text>
-                )}
-              </Flex>
-            </Flex>
-          </Flex>
-        </Card>
-
-        <Card size="3">
-          <Flex direction="column" gap="4">
-            <Heading size="5">Online Presence</Heading>
-            
-            <Flex direction="column" gap="2">
-              <Text size="2" weight="medium">Website</Text>
-              <TextField.Root
-                placeholder="https://yourwebsite.com"
-                value={profile.website}
-                onChange={(e) => handleInputChange('website', e.target.value)}
-              />
-            </Flex>
-
-            <Flex gap="3">
-              <Flex direction="column" gap="2" style={{ flex: 1 }}>
-                <Text size="2" weight="medium">Instagram</Text>
-                <TextField.Root
-                  placeholder="@yourusername"
-                  value={profile.instagram}
-                  onChange={(e) => handleInputChange('instagram', e.target.value)}
-                />
-              </Flex>
-              <Flex direction="column" gap="2" style={{ flex: 1 }}>
-                <Text size="2" weight="medium">Facebook</Text>
-                <TextField.Root
-                  placeholder="facebook.com/yourpage"
-                  value={profile.facebook}
-                  onChange={(e) => handleInputChange('facebook', e.target.value)}
-                />
-              </Flex>
-            </Flex>
-
-            <Flex direction="column" gap="2">
-              <Text size="2" weight="medium">Twitter/X</Text>
-              <TextField.Root
-                placeholder="@yourusername"
-                value={profile.twitter}
-                onChange={(e) => handleInputChange('twitter', e.target.value)}
-              />
-            </Flex>
-          </Flex>
-        </Card>
-
-
-        {artistProfileId && (
-          <SampleWorksUpload 
-            artistProfileId={artistProfileId}
-            onWorksChange={(works) => {
-              console.log('Sample works updated:', works.length);
-            }}
-          />
-        )}
-      </Grid>
-
-      <Separator size="4" />
-
-      <Flex justify="end" gap="3">
-        <Button 
-          size="3" 
-          onClick={handleSave} 
-          disabled={saving}
-          loading={saving}
-        >
-          {saving ? 'Saving...' : (isCreatingNew ? 'Create Profile' : 'Update Profile')}
-        </Button>
-      </Flex>
+      {/* ===== NEW CLEAN PROFILE FORM ===== */}
+      <ProfileForm 
+        existingProfile={selectedProfile}
+        onSuccess={(profile) => {
+          setSelectedProfile(profile);
+          setArtistProfileId(profile.id);
+          setIsCreatingNew(false);
+          setSaveMessage('');
+          setError('');
+          // Refresh profiles list
+          fetchProfiles();
+        }}
+      />
+      
+      {/* ===== SAMPLE WORKS UPLOAD (KEEP THIS - WORKS WELL) ===== */}
+      {artistProfileId && (
+        <SampleWorksUpload 
+          artistProfileId={artistProfileId}
+          onWorksChange={(works) => {
+            console.log('Sample works updated:', works.length);
+          }}
+        />
+      )}
     </Flex>
   );
 };
