@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -16,17 +16,41 @@ import {
   GearIcon, 
   ExitIcon,
   HeartFilledIcon,
-  BarChartIcon
+  BarChartIcon,
+  LockClosedIcon
 } from '@radix-ui/react-icons';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 import { DebugField } from './DebugComponents';
 import EventSearch from './EventSearch';
 
 const AdminSidebar = () => {
   const { user, adminEvents, signOut } = useAuth();
   const [selectedEventId, setSelectedEventId] = useState('');
+  const [userLevel, setUserLevel] = useState(null);
   const location = useLocation();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const checkUserLevel = async () => {
+      if (!user?.email) return;
+      
+      try {
+        const { data: adminUser } = await supabase
+          .from('abhq_admin_users')
+          .select('level')
+          .eq('email', user.email)
+          .eq('active', true)
+          .single();
+          
+        setUserLevel(adminUser?.level);
+      } catch (err) {
+        console.error('Error checking user level:', err);
+      }
+    };
+
+    checkUserLevel();
+  }, [user]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -39,7 +63,7 @@ const AdminSidebar = () => {
     navigate(`/events/${eventId}`);
   };
 
-  const navItems = [
+  const baseNavItems = [
     {
       to: '/events',
       icon: DashboardIcon,
@@ -72,6 +96,21 @@ const AdminSidebar = () => {
       description: 'System configuration'
     }
   ];
+
+  // Add Admin Users for super admins only
+  const navItems = userLevel === 'super' 
+    ? [
+        ...baseNavItems.slice(0, -1), // All items except Settings
+        {
+          to: '/admin-users',
+          icon: LockClosedIcon,
+          label: 'Admin Users',
+          description: 'Manage administrator accounts',
+          color: 'orange'
+        },
+        baseNavItems[baseNavItems.length - 1] // Settings at the end
+      ]
+    : baseNavItems;
 
   return (
     <ScrollArea style={{ height: '100%' }}>

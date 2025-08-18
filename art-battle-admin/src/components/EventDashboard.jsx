@@ -54,10 +54,26 @@ const EventDashboard = () => {
 
       setIsSearching(true);
       try {
+        // Check admin user's city access restrictions for search
+        let cityFilter = null;
+        if (user?.email) {
+          const { data: adminUser } = await supabase
+            .from('abhq_admin_users')
+            .select('cities_access')
+            .eq('email', user.email)
+            .eq('active', true)
+            .single();
+          
+          // If admin has specific cities_access (not empty array), apply filter
+          if (adminUser?.cities_access && adminUser.cities_access.length > 0) {
+            cityFilter = adminUser.cities_access;
+          }
+        }
+        
         // Search ALL events in database, not just the ones we've loaded
         const searchTermLower = searchTerm.toLowerCase().trim();
         
-        const { data, error } = await supabase
+        let query = supabase
           .from('events')
           .select(`
             id,
@@ -71,10 +87,18 @@ const EventDashboard = () => {
             show_in_app,
             timezone_icann,
             eventbrite_id,
+            city_id,
             cities(name, country_id, countries(name, code))
           `)
           .or(`name.ilike.%${searchTerm}%,eid.ilike.%${searchTerm}%,venue.ilike.%${searchTerm}%`)
           .order('event_start_datetime', { ascending: false });
+
+        // Apply city filter if admin has restricted access
+        if (cityFilter) {
+          query = query.in('city_id', cityFilter);
+        }
+
+        const { data, error } = await query;
 
         if (error) {
           console.error('Search error:', error);
@@ -98,6 +122,22 @@ const EventDashboard = () => {
       setLoading(true);
       setError(null);
       
+      // Check admin user's city access restrictions
+      let cityFilter = null;
+      if (user?.email) {
+        const { data: adminUser } = await supabase
+          .from('abhq_admin_users')
+          .select('cities_access')
+          .eq('email', user.email)
+          .eq('active', true)
+          .single();
+        
+        // If admin has specific cities_access (not empty array), apply filter
+        if (adminUser?.cities_access && adminUser.cities_access.length > 0) {
+          cityFilter = adminUser.cities_access;
+        }
+      }
+      
       let query = supabase
         .from('events')
         .select(`
@@ -112,9 +152,15 @@ const EventDashboard = () => {
           show_in_app,
           timezone_icann,
           eventbrite_id,
+          city_id,
           cities(name, country_id, countries(name, code))
         `)
         .order('event_start_datetime', { ascending: false });
+
+      // Apply city filter if admin has restricted access
+      if (cityFilter) {
+        query = query.in('city_id', cityFilter);
+      }
 
       const { data, error: fetchError } = await query;
 

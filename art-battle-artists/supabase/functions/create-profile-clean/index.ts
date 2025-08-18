@@ -61,6 +61,7 @@ serve(async (req) => {
       facebook: facebook?.trim() || null,
       twitter: twitter?.trim() || null,
       phone: user.phone || null,
+      set_primary_profile_at: new Date().toISOString(),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }

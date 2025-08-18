@@ -40,7 +40,7 @@ const EventList = () => {
     future: 5
   });
   const navigate = useNavigate();
-  const { user, person, signOut, loading: authLoading } = useAuth();
+  const { user, person, signOut, loading: authLoading, isRefreshing, sessionWarning, refreshSessionIfNeeded } = useAuth();
 
   useEffect(() => {
     fetchEvents();
@@ -62,6 +62,12 @@ const EventList = () => {
       console.log('Starting to fetch events...');
       console.log('Network status:', navigator.onLine ? 'online' : 'offline');
       console.log('User agent:', navigator.userAgent);
+      
+      // Check and refresh session if needed before making API calls
+      if (user && refreshSessionIfNeeded) {
+        console.log('Checking session before API call...');
+        await refreshSessionIfNeeded();
+      }
       
       const now = new Date();
       // Event categorization by date
@@ -95,10 +101,27 @@ const EventList = () => {
         .gte('event_start_datetime', twoMonthsAgo.toISOString())
         .order('event_start_datetime', { ascending: true });
 
-      const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
+      let { data, error } = await Promise.race([queryPromise, timeoutPromise]);
       console.log('Events fetch completed:', { dataLength: data?.length, error });
 
-      if (error) throw error;
+      if (error) {
+        // Handle auth errors specially
+        if (error.message?.includes('JWT') || error.message?.includes('token') || error.message?.includes('401') || error.message?.includes('403')) {
+          console.log('Auth error detected, attempting session refresh...');
+          if (refreshSessionIfNeeded) {
+            await refreshSessionIfNeeded();
+            // Retry once after refresh
+            const retryResult = await supabase.from('events').select(`
+              id, eid, name, event_start_datetime, event_end_datetime, venue, enable_auction, vote_by_link
+            `).eq('enabled', true).eq('show_in_app', true).gte('event_start_datetime', twoMonthsAgo.toISOString()).order('event_start_datetime', { ascending: true });
+            
+            if (retryResult.error) throw retryResult.error;
+            data = retryResult.data; // Use retry result
+            error = null; // Clear error since retry succeeded
+          }
+        }
+        if (error) throw error;
+      }
       
       // Processing event list data
 
@@ -511,20 +534,27 @@ const EventList = () => {
             
             {/* User Info */}
             {user && (
-              <Flex align="center" justify="center" gap="2">
-                <PersonIcon />
-                <Text size="2" color="gray">
-                  {person?.name || person?.first_name || person?.nickname || 
-                   (user.phone ? `User ${user.phone.slice(-4)}` : 'Logged in')}
-                </Text>
-                <Button 
-                  size="1" 
-                  variant="ghost" 
-                  onClick={() => signOut()}
-                  style={{ padding: '2px 8px' }}
-                >
-                  <ExitIcon />
-                </Button>
+              <Flex direction="column" align="center" gap="1">
+                <Flex align="center" justify="center" gap="2">
+                  <PersonIcon />
+                  <Text size="2" color="gray">
+                    {person?.name || person?.first_name || person?.nickname || 
+                     (user.phone ? `User ${user.phone.slice(-4)}` : 'Logged in')}
+                  </Text>
+                  <Button 
+                    size="1" 
+                    variant="ghost" 
+                    onClick={() => signOut()}
+                    style={{ padding: '2px 8px' }}
+                  >
+                    <ExitIcon />
+                  </Button>
+                </Flex>
+                {sessionWarning && (
+                  <Text size="1" color="orange" style={{ textAlign: 'center' }}>
+                    ⚠️ {sessionWarning}
+                  </Text>
+                )}
               </Flex>
             )}
           </Flex>
@@ -533,8 +563,8 @@ const EventList = () => {
 
       <Container size="2" style={{ maxWidth: '600px', paddingTop: user ? '120px' : '100px' }}>
         <Box p="4">
-          {loading ? (
-            <LoadingScreen message="Loading events..." />
+          {loading || isRefreshing ? (
+            <LoadingScreen message={isRefreshing ? "Refreshing session..." : "Loading events..."} />
           ) : error ? (
             <Flex direction="column" align="center" gap="4" style={{ minHeight: '50vh', justifyContent: 'center' }}>
               <Text size="4" color="red" weight="bold" style={{ textAlign: 'center' }}>
