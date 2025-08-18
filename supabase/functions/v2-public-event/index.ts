@@ -13,7 +13,36 @@ serve(async (req) => {
   }
 
   const url = new URL(req.url)
-  const eventId = url.pathname.split('/').pop()
+  const pathParts = url.pathname.split('/').filter(p => p)
+  
+  // Handle different endpoint patterns:
+  // /live/event/AB3028 -> event data
+  // /live/event/AB3028/media -> media data  
+  // /live/event/AB3028-round-easel/bids -> specific artwork bids
+  const lastPart = pathParts[pathParts.length - 1]
+  const secondLastPart = pathParts[pathParts.length - 2]
+  
+  const isMediaRequest = lastPart === 'media'
+  const isBidsRequest = lastPart === 'bids'
+  
+  let eventId, round, easel
+  
+  if (isMediaRequest) {
+    eventId = secondLastPart
+  } else if (isBidsRequest) {
+    // Parse AB3028-round-easel format
+    const compound = secondLastPart
+    const parts = compound.split('-')
+    if (parts.length >= 3) {
+      eventId = parts[0]
+      round = parts[1] 
+      easel = parts[2]
+    } else {
+      throw new Error(`Invalid compound ID format: ${compound}`)
+    }
+  } else {
+    eventId = lastPart
+  }
   
   console.log(`[v2-public-event] Starting request for eventId: ${eventId}`)
 
@@ -26,16 +55,41 @@ serve(async (req) => {
       })
     }
 
-    console.log(`[v2-public-event] Calling generatePublicEventData for: ${eventId}`)
-    const eventData = await generatePublicEventData(eventId)
+    if (isMediaRequest) {
+      console.log(`[v2-public-event] Calling generateEventMediaData for: ${eventId}`)
+      const mediaData = await generateEventMediaData(eventId)
+      
+      console.log(`[v2-public-event] SUCCESS: Generated media data for ${eventId}`)
+      return new Response(JSON.stringify(mediaData), {
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        }
+      })
+    } else if (isBidsRequest) {
+      console.log(`[v2-public-event] Calling generateArtworkBidsData for: ${eventId}-${round}-${easel}`)
+      const bidsData = await generateArtworkBidsData(eventId, round, easel)
+      
+      console.log(`[v2-public-event] SUCCESS: Generated artwork bids data for ${eventId}-${round}-${easel}`)
+      return new Response(JSON.stringify(bidsData), {
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        }
+      })
+    } else {
+      console.log(`[v2-public-event] Calling generatePublicEventData for: ${eventId}`)
+      const eventData = await generatePublicEventData(eventId)
+      
+      console.log(`[v2-public-event] SUCCESS: Generated data for ${eventId}`)
+      return new Response(JSON.stringify(eventData), {
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        }
+      })
+    }
     
-    console.log(`[v2-public-event] SUCCESS: Generated data for ${eventId}`)
-    return new Response(JSON.stringify(eventData), {
-      headers: { 
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
-      }
-    })
   } catch (error) {
     console.error('[v2-public-event] CRITICAL ERROR:', {
       message: error.message,
@@ -108,6 +162,7 @@ const generatePublicEventData = async (eventId: string) => {
       description,
       status,
       easel,
+      round,
       created_at,
       artist_profiles (
         id,
@@ -200,4 +255,221 @@ const processBidsForPublic = (bids: any[]) => {
   }
   
   return Array.from(bidMap.values())
+}
+
+const generateEventMediaData = async (eventId: string) => {
+  console.log(`[generateEventMediaData] Starting for eventId: ${eventId}`)
+  
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  )
+  
+  console.log(`[generateEventMediaData] Getting event UUID for: ${eventId}`)
+  
+  // First get the event to get its UUID
+  const { data: eventInfo, error: eventError } = await supabase
+    .from('events')
+    .select('id')
+    .eq('eid', eventId)
+    .single()
+  
+  if (eventError || !eventInfo) {
+    console.error(`[generateEventMediaData] Event not found: ${eventId}`)
+    throw new Error(`Event ${eventId} not found`)
+  }
+  
+  console.log(`[generateEventMediaData] Querying media files for event UUID: ${eventInfo.id}`)
+  
+  // Get artworks with their media files via art_media junction table
+  const { data: artworks, error: artworksError } = await supabase
+    .from('art')
+    .select(`
+      id,
+      art_code,
+      easel,
+      round,
+      art_media (
+        is_primary,
+        display_order,
+        media_files (
+          id,
+          file_type,
+          file_size,
+          cloudflare_id,
+          thumbnail_url,
+          compressed_url,
+          original_url,
+          created_at
+        )
+      )
+    `)
+    .eq('event_id', eventInfo.id)
+    .order('easel')
+  
+  console.log(`[generateEventMediaData] Artworks query result:`, {
+    count: artworks?.length || 0,
+    error: artworksError
+  })
+  
+  if (artworksError) {
+    console.error(`[generateEventMediaData] Artworks query error:`, artworksError)
+    throw new Error(`Artworks query failed: ${artworksError.message}`)
+  }
+  
+  // Process media data
+  const mediaMap = new Map()
+  
+  artworks?.forEach(artwork => {
+    if (artwork.art_media && artwork.art_media.length > 0) {
+      // Get all valid media files and sort by creation date (most recent first)
+      const validMedia = artwork.art_media.filter(am => am.media_files)
+      
+      if (validMedia.length > 0) {
+        // Sort all media by creation date (most recent first)
+        const sortedMedia = validMedia.sort((a, b) => {
+          const aDate = new Date(a.media_files?.created_at || 0)
+          const bDate = new Date(b.media_files?.created_at || 0)
+          return bDate.getTime() - aDate.getTime() // Descending order (newest first)
+        })
+        
+        // Return all media files for this artwork, maintaining expected structure
+        // Frontend expects array of objects with media_files property, sorted newest first
+        const allMedia = sortedMedia.map(am => ({
+          media_files: am.media_files,
+          is_primary: am.is_primary,
+          display_order: am.display_order
+        }))
+        
+        mediaMap.set(artwork.id, {
+          artwork_id: artwork.id,
+          art_code: artwork.art_code,
+          easel: artwork.easel,
+          round: artwork.round,
+          media: allMedia // Array of media objects with media_files property, newest first
+        })
+      }
+    }
+  })
+  
+  return {
+    event_id: eventId,
+    media: Array.from(mediaMap.values()),
+    generated_at: new Date().toISOString()
+  }
+}
+
+const generateArtworkBidsData = async (eventId: string, round: string, easel: string) => {
+  console.log(`[generateArtworkBidsData] Starting for eventId: ${eventId}, round: ${round}, easel: ${easel}`)
+  
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  )
+  
+  console.log(`[generateArtworkBidsData] Getting event UUID for: ${eventId}`)
+  
+  // First get the event to get its UUID
+  const { data: eventInfo, error: eventError } = await supabase
+    .from('events')
+    .select('id')
+    .eq('eid', eventId)
+    .single()
+  
+  if (eventError || !eventInfo) {
+    console.error(`[generateArtworkBidsData] Event not found: ${eventId}`)
+    throw new Error(`Event ${eventId} not found`)
+  }
+  
+  console.log(`[generateArtworkBidsData] Finding artwork for round: ${round}, easel: ${easel}`)
+  
+  // Find the specific artwork by round and easel
+  const { data: artwork, error: artworkError } = await supabase
+    .from('art')
+    .select('id, art_code')
+    .eq('event_id', eventInfo.id)
+    .eq('round', round)
+    .eq('easel', easel)
+    .single()
+  
+  if (artworkError || !artwork) {
+    console.error(`[generateArtworkBidsData] Artwork not found for round: ${round}, easel: ${easel}`)
+    throw new Error(`Artwork not found for ${eventId} round ${round} easel ${easel}`)
+  }
+  
+  console.log(`[generateArtworkBidsData] Querying bids for artwork: ${artwork.id}`)
+  
+  // Get bids for this specific artwork with bidder names from people table
+  const { data: bids, error: bidsError } = await supabase
+    .from('bids')
+    .select(`
+      id,
+      amount,
+      created_at,
+      people (
+        name,
+        email,
+        phone
+      )
+    `)
+    .eq('art_id', artwork.id)
+    .order('created_at', { ascending: false })
+  
+  console.log(`[generateArtworkBidsData] Bids query result:`, {
+    count: bids?.length || 0,
+    error: bidsError
+  })
+  
+  if (bidsError) {
+    console.error(`[generateArtworkBidsData] Bids query error:`, bidsError)
+    throw new Error(`Bids query failed: ${bidsError.message}`)
+  }
+  
+  // Helper function to format bidder display name
+  const formatBidderDisplayName = (person: any) => {
+    if (!person) return 'Anonymous'
+    
+    // Try name first (format: "First L.") - but ignore placeholder names like "User"
+    if (person.name && person.name.trim().toLowerCase() !== 'user') {
+      const nameParts = person.name.trim().split(/\s+/)
+      if (nameParts.length >= 2) {
+        const firstName = nameParts[0]
+        const lastInitial = nameParts[nameParts.length - 1].charAt(0).toUpperCase()
+        return `${firstName} ${lastInitial}.`
+      } else if (nameParts.length === 1) {
+        return nameParts[0]
+      }
+    }
+    
+    // Fallback to last 4 digits of phone if available
+    if (person.phone) {
+      const digits = person.phone.replace(/\D/g, '')
+      if (digits.length >= 4) {
+        return `***-${digits.slice(-4)}`
+      }
+    }
+    
+    return 'Anonymous'
+  }
+  
+  // Process bids data for public display (format names for privacy)
+  const processedBids = (bids || []).map(bid => ({
+    id: bid.id,
+    amount: bid.amount,
+    created_at: bid.created_at,
+    display_name: formatBidderDisplayName(bid.people),
+    bidder_name: formatBidderDisplayName(bid.people) // Legacy field name
+  }))
+  
+  return {
+    event_id: eventId,
+    artwork_id: artwork.id,
+    art_code: artwork.art_code,
+    round: round,
+    easel: easel,
+    bids: processedBids,
+    highest_bid: processedBids.length > 0 ? Math.max(...processedBids.map(b => b.amount)) : 0,
+    bid_count: processedBids.length,
+    generated_at: new Date().toISOString()
+  }
 }

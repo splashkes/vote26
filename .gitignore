@@ -46,3 +46,6 @@ wrangler.toml.backup
 # Deployment logs
 deploy.log
 deployment-report.txt
+
+# Backups
+backups/

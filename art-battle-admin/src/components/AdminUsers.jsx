@@ -23,7 +23,8 @@ import {
   EnvelopeClosedIcon, 
   ExclamationTriangleIcon,
   CheckIcon,
-  Cross2Icon 
+  Cross2Icon,
+  ReloadIcon
 } from '@radix-ui/react-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -83,11 +84,12 @@ const AdminUsers = () => {
     }
   };
 
-  const fetchAdminUsers = async () => {
+  const fetchAdminUsers = async (forceRefresh = false) => {
     try {
       setLoading(true);
       
-      const { data, error } = await supabase
+      // Add a timestamp to force refresh and bypass any caching
+      const query = supabase
         .from('abhq_admin_users')
         .select(`
           id,
@@ -101,6 +103,13 @@ const AdminUsers = () => {
           notes
         `)
         .order('created_at', { ascending: false });
+      
+      // Force refresh by adding a timestamp parameter when needed
+      if (forceRefresh) {
+        query.limit(1000); // Add a different parameter to force cache refresh
+      }
+      
+      const { data, error } = await query;
 
       if (error) throw error;
       
@@ -125,10 +134,11 @@ const AdminUsers = () => {
         })
       );
       
+      console.log('Fetched admin users:', usersWithCities.length, 'users');
       setAdminUsers(usersWithCities);
     } catch (err) {
       console.error('Error fetching admin users:', err);
-      setError('Failed to load admin users');
+      setError(`Failed to load admin users: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -177,15 +187,22 @@ const AdminUsers = () => {
       if (inviteError) throw inviteError;
       if (!data.success) throw new Error(data.error || 'Failed to send invite');
 
+      console.log('Invite successful, refreshing user list...');
       setSuccess(`Invite sent successfully to ${inviteForm.email}`);
       setInviteForm({ email: '', level: 'producer', cities_access: [], notes: '' });
       
-      // Refresh the users list
+      // Small delay to ensure database transaction completes
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Refresh the users list with force refresh
+      await fetchAdminUsers(true);
+      console.log('User list refreshed after invite');
+      setInviteModalOpen(false);
+      
+      // Clear success message after a delay
       setTimeout(() => {
-        fetchAdminUsers();
-        setInviteModalOpen(false);
         setSuccess('');
-      }, 2000);
+      }, 3000);
 
     } catch (err) {
       console.error('Error sending invite:', err);
@@ -220,13 +237,15 @@ const AdminUsers = () => {
 
       setSuccess('User updated successfully');
       
-      // Refresh the users list
+      // Refresh the users list immediately with force refresh
+      await fetchAdminUsers(true);
+      setEditModalOpen(false);
+      setSelectedUser(null);
+      
+      // Clear success message after a delay
       setTimeout(() => {
-        fetchAdminUsers();
-        setEditModalOpen(false);
-        setSelectedUser(null);
         setSuccess('');
-      }, 1500);
+      }, 3000);
 
     } catch (err) {
       console.error('Error updating user:', err);
@@ -297,14 +316,24 @@ const AdminUsers = () => {
               Manage administrator access and permissions
             </Text>
           </Box>
-          <Button onClick={() => {
-            setInviteModalOpen(true);
-            setError('');
-            setSuccess('');
-          }}>
-            <PlusIcon />
-            Invite Admin User
-          </Button>
+          <Flex gap="2">
+            <Button 
+              variant="soft" 
+              onClick={() => fetchAdminUsers(true)}
+              disabled={loading}
+            >
+              <ReloadIcon />
+              Refresh
+            </Button>
+            <Button onClick={() => {
+              setInviteModalOpen(true);
+              setError('');
+              setSuccess('');
+            }}>
+              <PlusIcon />
+              Invite Admin User
+            </Button>
+          </Flex>
         </Flex>
 
         {/* Success/Error Messages */}

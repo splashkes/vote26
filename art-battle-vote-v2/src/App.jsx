@@ -4,7 +4,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider } from './contexts/AuthContext'
 import EventListV2 from './components/EventListV2'
 import EventDetailsV2 from './components/EventDetailsV2'
-import AuthModal from './components/shared/AuthModal'
+import AuthModal from './components/AuthModal'
 import './App.css'
 
 function App() {

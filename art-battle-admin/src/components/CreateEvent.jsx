@@ -109,11 +109,11 @@ const CreateEvent = () => {
         return;
       }
 
-      let nextEidNumber = 3000; // Minimum starting number
+      let nextEidNumber = 2900; // Minimum starting number (changed to 2900)
       if (latestEvent && latestEvent[0]?.eid) {
         const match = latestEvent[0].eid.match(/AB(\d+)/);
         if (match) {
-          nextEidNumber = Math.max(parseInt(match[1]) + 1, 3000); // Ensure minimum of 3000
+          nextEidNumber = Math.max(parseInt(match[1]) + 1, 2900); // Ensure minimum of 2900
         }
       }
 
@@ -123,7 +123,7 @@ const CreateEvent = () => {
       setFormData(prev => ({ ...prev, eid }));
     } catch (err) {
       console.error('Error fetching next EID:', err);
-      const fallbackEid = 'AB3000'; // Default fallback with minimum 3000
+      const fallbackEid = 'AB2900'; // Default fallback with minimum 2900
       setNextEid(fallbackEid);
       setFormData(prev => ({ ...prev, eid: fallbackEid }));
     } finally {
@@ -217,14 +217,14 @@ const CreateEvent = () => {
 
       // Validate EID format
       if (!formData.eid.match(/^AB\d{4,}$/)) {
-        setError('Event Number (EID) must be in format AB#### with minimum AB3000');
+        setError('Event Number (EID) must be in format AB#### with minimum AB2900');
         return;
       }
 
       // Validate minimum EID number
       const eidNumber = parseInt(formData.eid.slice(2));
-      if (eidNumber < 3000) {
-        setError('Event Number (EID) must be AB3000 or higher');
+      if (eidNumber < 2900) {
+        setError('Event Number (EID) must be AB2900 or higher');
         return;
       }
 
@@ -361,7 +361,7 @@ const CreateEvent = () => {
               ) : (
                 <Box>
                   <TextField.Root
-                    placeholder="AB3000"
+                    placeholder="AB2900"
                     value={formData.eid}
                     onChange={(e) => {
                       const value = e.target.value.toUpperCase();
@@ -382,7 +382,7 @@ const CreateEvent = () => {
                     required
                   />
                   <Text size="2" color="gray" mt="1" style={{ display: 'block' }}>
-                    Format: AB#### (minimum AB3000). You can edit this if needed.
+                    Format: AB#### (minimum AB2900). You can edit this if needed.
                   </Text>
                 </Box>
               )}

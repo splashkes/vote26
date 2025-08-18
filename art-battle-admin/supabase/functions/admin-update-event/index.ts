@@ -130,7 +130,7 @@ Deno.serve(async (req) => {
     // Validate EID format
     if (!eventData.eid.match(/^AB\d{4,}$/)) {
       return new Response(
-        JSON.stringify({ error: 'EID must be in format AB#### (e.g., AB3000)' }),
+        JSON.stringify({ error: 'EID must be in format AB#### (e.g., AB2900)' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       )
     }
