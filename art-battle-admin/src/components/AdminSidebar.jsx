@@ -17,14 +17,16 @@ import {
   ExitIcon,
   HeartFilledIcon,
   BarChartIcon,
-  LockClosedIcon
+  LockClosedIcon,
+  HamburgerMenuIcon,
+  ChevronRightIcon
 } from '@radix-ui/react-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { DebugField } from './DebugComponents';
 import EventSearch from './EventSearch';
 
-const AdminSidebar = () => {
+const AdminSidebar = ({ collapsed = false, onToggleCollapse }) => {
   const { user, adminEvents, signOut } = useAuth();
   const [selectedEventId, setSelectedEventId] = useState('');
   const [userLevel, setUserLevel] = useState(null);
@@ -115,58 +117,77 @@ const AdminSidebar = () => {
   return (
     <ScrollArea style={{ height: '100%' }}>
       <Box>
-        {/* User Info */}
-        <div className="nav-section">
-          <Flex direction="column" gap="2">
-            <Text size="2" weight="medium">
-              <DebugField 
-                value={user?.email} 
-                fieldName="user.email" 
-                fallback="Unknown user" 
-              />
-            </Text>
-            <Badge color="green" size="1">
+        {/* Collapse Toggle */}
+        <div className="nav-section" style={{ padding: collapsed ? '0.5rem' : '1rem' }}>
+          <Flex justify={collapsed ? 'center' : 'between'} align="center">
+            {!collapsed && (
+              <Text size="2" weight="medium">
+                <DebugField 
+                  value={user?.email} 
+                  fieldName="user.email" 
+                  fallback="Unknown user" 
+                />
+              </Text>
+            )}
+            <Button
+              variant="ghost"
+              size="1"
+              onClick={onToggleCollapse}
+              style={{ minHeight: '24px', minWidth: '24px', padding: '2px' }}
+            >
+              {collapsed ? <ChevronRightIcon /> : <HamburgerMenuIcon />}
+            </Button>
+          </Flex>
+          {!collapsed && (
+            <Badge color="green" size="1" style={{ marginTop: '0.5rem' }}>
               {adminEvents.length} event{adminEvents.length !== 1 ? 's' : ''}
             </Badge>
-          </Flex>
+          )}
         </div>
 
         <Separator />
 
         {/* Navigation */}
-        <div className="nav-section">
-          <Text size="2" weight="medium" mb="3" style={{ display: 'block' }}>
-            Navigation
-          </Text>
+        <div className="nav-section" style={{ padding: collapsed ? '0.5rem' : '1rem' }}>
+          {!collapsed && (
+            <Text size="2" weight="medium" mb="3" style={{ display: 'block' }}>
+              Navigation
+            </Text>
+          )}
           <Flex direction="column" gap="1">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = location.pathname.startsWith(item.to) && item.to !== '/events' || location.pathname === item.to;
-              const isDisabled = false; // No more event-dependent disabled states
+              const isDisabled = false;
 
               return (
                 <Link
                   key={item.to}
                   to={item.to}
-                  className={`nav-item ${isActive ? 'active' : ''} ${isDisabled ? 'disabled' : ''}`}
+                  className={`nav-item ${isActive ? 'active' : ''} ${isDisabled ? 'disabled' : ''} ${collapsed ? 'collapsed' : ''}`}
                   style={{
                     pointerEvents: isDisabled ? 'none' : 'auto',
-                    opacity: isDisabled ? 0.5 : 1
+                    opacity: isDisabled ? 0.5 : 1,
+                    justifyContent: collapsed ? 'center' : 'flex-start',
+                    padding: collapsed ? '0.5rem' : '0.5rem 0.75rem'
                   }}
+                  title={collapsed ? `${item.label} - ${item.description}` : ''}
                 >
-                  <Flex align="center" gap="2">
+                  <Flex align="center" gap={collapsed ? "0" : "2"} justify={collapsed ? 'center' : 'flex-start'}>
                     <Icon 
                       size={16} 
                       color={item.color && !isDisabled ? `var(--${item.color}-9)` : undefined}
                     />
-                    <Box>
-                      <Text size="2" weight="medium" style={{ display: 'block' }}>
-                        {item.label}
-                      </Text>
-                      <Text size="1" color="gray">
-                        {item.description}
-                      </Text>
-                    </Box>
+                    {!collapsed && (
+                      <Box>
+                        <Text size="2" weight="medium" style={{ display: 'block' }}>
+                          {item.label}
+                        </Text>
+                        <Text size="1" color="gray">
+                          {item.description}
+                        </Text>
+                      </Box>
+                    )}
                   </Flex>
                 </Link>
               );
@@ -177,14 +198,25 @@ const AdminSidebar = () => {
         <Separator />
 
         {/* Admin Actions */}
-        <div className="nav-section">
-          <Text size="2" weight="medium" mb="3" style={{ display: 'block' }}>
-            Admin
-          </Text>
+        <div className="nav-section" style={{ padding: collapsed ? '0.5rem' : '1rem' }}>
+          {!collapsed && (
+            <Text size="2" weight="medium" mb="3" style={{ display: 'block' }}>
+              Admin
+            </Text>
+          )}
           <Flex direction="column" gap="2">
-            <Button variant="ghost" size="2" onClick={handleSignOut}>
+            <Button 
+              variant="ghost" 
+              size="2" 
+              onClick={handleSignOut}
+              style={{ 
+                justifyContent: collapsed ? 'center' : 'flex-start',
+                padding: collapsed ? '0.5rem' : undefined
+              }}
+              title={collapsed ? 'Sign Out' : ''}
+            >
               <ExitIcon />
-              Sign Out
+              {!collapsed && 'Sign Out'}
             </Button>
           </Flex>
         </div>

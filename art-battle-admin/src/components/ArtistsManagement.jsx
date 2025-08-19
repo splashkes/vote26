@@ -65,11 +65,32 @@ const ArtistsManagement = () => {
   const [profilesLoading, setProfilesLoading] = useState(false);
   const [profilesLoadingProgress, setProfilesLoadingProgress] = useState({ loaded: 0, total: 0 });
 
+  // Invite artist to event states
+  const [inviteModalOpen, setInviteModalOpen] = useState(false);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [selectedEventForInvite, setSelectedEventForInvite] = useState('');
+  const [inviteMessage, setInviteMessage] = useState('');
+  const [events, setEvents] = useState([]);
+
   useEffect(() => {
     fetchAllArtistsData();
+    fetchEvents();
   }, []);
 
-  const fetchAllArtistsData = async () => {
+  // Search function with debouncing
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (searchTerm.trim()) {
+        fetchAllArtistsData(searchTerm, 500); // Search with term, limit results
+      } else {
+        fetchAllArtistsData('', 1000); // No search term, get more results
+      }
+    }, 300); // Debounce for 300ms
+
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm]);
+
+  const fetchAllArtistsData = async (searchQuery = '', searchLimit = 1000) => {
     try {
       setLoading(true);
       
@@ -79,7 +100,7 @@ const ArtistsManagement = () => {
         throw new Error('Not authenticated');
       }
 
-      // Fetch all artist workflow data
+      // Fetch artist data with search parameters
       const response = await fetch(`https://xsqdkubgyqwpyvfltnrf.supabase.co/functions/v1/admin-artists-search`, {
         method: 'POST',
         headers: {
@@ -87,7 +108,10 @@ const ArtistsManagement = () => {
           'Content-Type': 'application/json',
           'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcWRrdWJneXF3cHl2Zmx0bnJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM0MjE2OTYsImV4cCI6MjA2ODk5NzY5Nn0.hY8v8IDZQTcdAFa_OvQNFd1CyvabGcOZZMn_J6c4c2U'
         },
-        body: JSON.stringify({})
+        body: JSON.stringify({
+          searchTerm: searchQuery,
+          limit: searchLimit
+        })
       });
 
       if (!response.ok) {
@@ -562,21 +586,8 @@ const ArtistsManagement = () => {
       return true;
     });
 
-    // Apply search filter
-    if (searchTerm) {
-      allArtists = allArtists.filter(artist => {
-        const searchLower = searchTerm.toLowerCase();
-        const profile = artist.artist_profiles || {};
-        
-        return (
-          profile.name?.toLowerCase().includes(searchLower) ||
-          profile.email?.toLowerCase().includes(searchLower) ||
-          profile.phone?.includes(searchTerm) ||
-          profile.entry_id?.toLowerCase().includes(searchLower) ||
-          artist.artist_number?.toString().includes(searchTerm)
-        );
-      });
-    }
+    // Search is now handled server-side via the admin-artists-search function
+    // No client-side filtering needed for search terms
 
     // Sort by last activity (most recent first)
     return allArtists.sort((a, b) => new Date(b.last_activity) - new Date(a.last_activity));
@@ -832,35 +843,37 @@ const ArtistsManagement = () => {
       <Dialog.Root open={artistModalOpen} onOpenChange={setArtistModalOpen}>
         <Dialog.Content style={{ maxWidth: 800, maxHeight: '90vh' }}>
           <Dialog.Title>
-            <Flex align="center" gap="3">
-              <PersonIcon size={24} />
-              <Box>
-                <Text size="5" weight="bold">
-                  {selectedArtist?.artist_profiles?.name || 'Unknown Artist'}
-                </Text>
-                <Flex align="center" gap="2" mt="1">
-                  <Text size="2" color="gray">
-                    {artistModalType.charAt(0).toUpperCase() + artistModalType.slice(1)} Details
+            <Flex align="center" justify="between">
+              <Flex align="center" gap="3">
+                <PersonIcon size={24} />
+                <Box>
+                  <Text size="5" weight="bold">
+                    {selectedArtist?.artist_profiles?.name || 'Unknown Artist'}
                   </Text>
-                  {getAliasBadgeText(selectedArtist?.artist_profiles) && (
-                    <Badge color="purple" size="2">
-                      {getAliasBadgeText(selectedArtist.artist_profiles)}
-                    </Badge>
-                  )}
-                  {selectedArtist?.artist_profiles?.experience_level && (
-                    <Badge 
-                      color={
-                        selectedArtist.artist_profiles.experience_level === 'beginner' ? 'green' :
-                        selectedArtist.artist_profiles.experience_level === 'intermediate' ? 'orange' :
-                        'red'
-                      }
-                      size="2"
-                    >
-                      {selectedArtist.artist_profiles.experience_level}
-                    </Badge>
-                  )}
-                </Flex>
-              </Box>
+                  <Flex align="center" gap="2" mt="1">
+                    <Text size="2" color="gray">
+                      {artistModalType.charAt(0).toUpperCase() + artistModalType.slice(1)} Details
+                    </Text>
+                    {getAliasBadgeText(selectedArtist?.artist_profiles) && (
+                      <Badge color="purple" size="2">
+                        {getAliasBadgeText(selectedArtist.artist_profiles)}
+                      </Badge>
+                    )}
+                    {selectedArtist?.artist_profiles?.experience_level && (
+                      <Badge 
+                        color={
+                          selectedArtist.artist_profiles.experience_level === 'beginner' ? 'green' :
+                          selectedArtist.artist_profiles.experience_level === 'intermediate' ? 'orange' :
+                          'red'
+                        }
+                        size="2"
+                      >
+                        {selectedArtist.artist_profiles.experience_level}
+                      </Badge>
+                    )}
+                  </Flex>
+                </Box>
+              </Flex>
               <Dialog.Close>
                 <Button variant="ghost" size="1">
                   <Cross2Icon />

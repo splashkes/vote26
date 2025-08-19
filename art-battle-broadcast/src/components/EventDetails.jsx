@@ -33,9 +33,10 @@ import {
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import publicDataManager from '../lib/PublicDataManager';
+import { useBroadcastCache } from '../hooks/useBroadcastCache';
 import LoadingScreen from './LoadingScreen';
 import { getImageUrl, getArtworkImageUrls } from '../lib/imageHelpers';
-import { injectFlashStyles, applyFlashClass } from '../utils/realtimeFlash';
+// V2 BROADCAST: Perfect cache invalidation system
 
 // Import AdminPanel directly for now
 import AdminPanel from './AdminPanel';
@@ -54,6 +55,7 @@ const EventDetails = () => {
   
   const { user, person } = useAuth();
   const [event, setEvent] = useState(null);
+  const [eventEid, setEventEid] = useState(null); // EID for broadcast subscription
   const [artworks, setArtworks] = useState([]);
   const [selectedArt, setSelectedArt] = useState(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
@@ -84,6 +86,152 @@ const EventDetails = () => {
   const [paymentModalChecked, setPaymentModalChecked] = useState(false); // Prevent duplicate modals
   const [voteSummary, setVoteSummary] = useState([]); // V2 BROADCAST: Vote summary from cached data
   const [bidRanges, setBidRanges] = useState({}); // V2 BROADCAST: Bid ranges from cached data
+  
+  // V2 BROADCAST: Perfect cache invalidation system
+  const { clearEventCache } = useBroadcastCache(
+    eventEid, // Use EID for broadcast subscription, not UUID
+    async (notificationData) => {
+      console.log(`🔄 [V2-BROADCAST] Refreshing data after cache invalidation:`, notificationData);
+      
+      // Use surgical updates instead of full fetchEventDetails() to avoid constant reloading
+      console.log(`🔄 [V2-BROADCAST] Processing surgical updates for invalidated endpoints`);
+      
+      try {
+        // Only re-fetch specific endpoints that were invalidated with coordinated cache-busting
+        if (notificationData.endpoints && notificationData.endpoints.length > 0) {
+          const cacheVersion = notificationData.cache_version || Date.now();
+          
+          for (const endpoint of notificationData.endpoints) {
+            console.log(`🎯 [V2-BROADCAST] Re-fetching invalidated endpoint: ${endpoint}`);
+            
+            try {
+              // Use coordinated cache-busting from broadcast payload for ALL endpoints
+              const fullUrl = `https://artb.art${endpoint}?v=${cacheVersion}`;
+              console.log(`🔄 [V2-BROADCAST] Cache-busting with version: ${cacheVersion}`);
+              const response = await fetch(fullUrl);
+              
+              if (response.ok) {
+                const data = await response.json();
+                
+                // Handle different endpoint types
+                if (endpoint.includes('/bids')) {
+                  // Handle bid endpoint updates
+                  const match = endpoint.match(/\/live\/event\/[^-]+-(\d+)-(\d+)\/bids/);
+                  if (match && artworks.length > 0) {
+                    const round = parseInt(match[1]);
+                    const easel = parseInt(match[2]);
+                    const targetArtwork = artworks.find(art => art.round === round && art.easel === easel);
+                    
+                    if (targetArtwork) {
+                      const topBid = data.bids[0]?.amount || 0;
+                      console.log(`✅ [V2-BROADCAST] Updating bid history for artwork ${targetArtwork.id} - ${data.bids.length} bids, top: $${topBid}`);
+                      setBidHistory(prev => ({
+                        ...prev,
+                        [targetArtwork.id]: data.bids
+                      }));
+                      
+                      // Also update currentBids to reflect new highest bid
+                      setCurrentBids(prev => ({
+                        ...prev,
+                        [targetArtwork.id]: topBid
+                      }));
+                    }
+                  }
+                } else if (endpoint.includes('/media')) {
+                  // Handle media endpoint updates
+                  console.log(`✅ [V2-BROADCAST] Refreshing media data for event ${eventEid}`);
+                  
+                  // Update media data specifically when media endpoint is invalidated
+                  if (data && data.media && Array.isArray(data.media)) {
+                    console.log(`🔍 [DEBUG] Media data received:`, data.media.length, 'artworks');
+                    
+                    // Process media data by artwork (same logic as in fetchEventDetails)
+                    const mediaByArt = {};
+                    data.media.forEach((item, index) => {
+                      const artId = item.artwork_id;
+                      console.log(`🔍 [DEBUG] Processing artwork ${index + 1}:`, artId, `Media count: ${item.media?.length || 0}`);
+                      
+                      if (item.media && Array.isArray(item.media)) {
+                        // Convert media format to match initial load format
+                        mediaByArt[artId] = item.media.map(mediaItem => ({
+                          ...mediaItem,
+                          media_files: mediaItem.media_files
+                        }));
+                        console.log(`🔍 [DEBUG] Added media for ${artId}:`, mediaByArt[artId].length, 'items');
+                      }
+                    });
+                    
+                    console.log(`✅ [V2-BROADCAST] Updated media for ${Object.keys(mediaByArt).length} artworks`);
+                    console.log(`🔍 [DEBUG] Media by art keys:`, Object.keys(mediaByArt));
+                    
+                    // Update artworks with new media data
+                    setArtworks(prevArtworks => {
+                      const updated = prevArtworks.map(artwork => ({
+                        ...artwork,
+                        media: mediaByArt[artwork.id] || artwork.media || []
+                      }));
+                      console.log(`🔍 [DEBUG] setArtworks called with ${updated.length} artworks`);
+                      
+                      // CRITICAL: Also update selectedArt if it's currently open
+                      if (selectedArt && mediaByArt[selectedArt.id]) {
+                        const updatedSelectedArt = {
+                          ...selectedArt,
+                          media: mediaByArt[selectedArt.id]
+                        };
+                        console.log(`🔍 [DEBUG] Updated selectedArt with ${updatedSelectedArt.media.length} media items`);
+                        setSelectedArt(updatedSelectedArt);
+                      }
+                      
+                      // CRITICAL: Also update artworksByRound for main grid display
+                      const regrouped = updated.reduce((acc, artwork) => {
+                        const round = artwork.round || 1;
+                        if (!acc[round]) {
+                          acc[round] = [];
+                        }
+                        acc[round].push(artwork);
+                        return acc;
+                      }, {});
+                      console.log(`🔍 [DEBUG] Updated artworksByRound with ${Object.keys(regrouped).length} rounds`);
+                      setArtworksByRound(regrouped);
+                      
+                      return updated;
+                    });
+                  } else {
+                    console.log(`⚠️ [DEBUG] No media data in response:`, data);
+                  }
+                } else if (endpoint.match(/\/live\/event\/[^\/]+$/)) {
+                  // Handle main event endpoint updates (votes, artwork changes)
+                  console.log(`✅ [V2-BROADCAST] Updating main event data from broadcast`);
+                  
+                  // Update main event data surgically instead of full reload
+                  if (data && data.event) {
+                    setEvent(data.event);
+                    console.log(`✅ [V2-BROADCAST] Updated event data surgically`);
+                  }
+                  if (data && data.artworks) {
+                    setArtworks(data.artworks);
+                    console.log(`✅ [V2-BROADCAST] Updated ${data.artworks.length} artworks surgically`);
+                  }
+                }
+              } else {
+                console.warn(`⚠️ [V2-BROADCAST] Failed to fetch ${fullUrl}: ${response.status}`);
+              }
+            } catch (error) {
+              console.error(`❌ [V2-BROADCAST] Error fetching ${endpoint}:`, error);
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`❌ [V2-BROADCAST] Failed to refresh data:`, error);
+      }
+    },
+    {
+      autoRefresh: true,
+      refreshDelay: 2000, // 2 second delay to batch multiple notifications
+      debugMode: true // Enable debug logging to troubleshoot media broadcasts
+    }
+  );
+  
   // Initialize activeTab from hash or tab parameter
   const getInitialTab = () => {
     const hash = window.location.hash.replace('#', '');
@@ -92,15 +240,9 @@ const EventDetails = () => {
   const [activeTab, setActiveTab] = useState(getInitialTab());
   const countdownInterval = useRef(null);
   
-  // Connection management state
-  const [connectionState, setConnectionState] = useState('disconnected'); // 'connecting', 'connected', 'disconnected', 'reconnecting'
-  const [reconnectAttempts, setReconnectAttempts] = useState(0);
-  const [subscriptionRefs, setSubscriptionRefs] = useState(new Map()); // Track active subscriptions
-  const reconnectTimeoutRef = useRef(null);
 
   useEffect(() => {
     fetchEventDetails();
-    injectFlashStyles(); // Inject flash animation styles
   }, [eventId]);
 
   // Handle tab parameter from URL hash and authentication check
@@ -145,266 +287,9 @@ const EventDetails = () => {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, [activeTab]);
 
-  // Connection management functions
-  const cleanupSubscriptions = () => {
-    console.log('Cleaning up all subscriptions...');
-    subscriptionRefs.forEach((subscription, key) => {
-      if (subscription && typeof subscription.unsubscribe === 'function') {
-        subscription.unsubscribe();
-      }
-    });
-    setSubscriptionRefs(new Map());
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-    }
-  };
+  // V2 BROADCAST: No subscription management needed - data loads on demand
 
-  const getReconnectDelay = (attempts) => {
-    // Exponential backoff: 1s, 2s, 4s, 8s, 16s, max 60s
-    return Math.min(1000 * Math.pow(2, attempts), 60000);
-  };
-
-  const createManagedSubscription = (channelName, subscriptionConfig) => {
-    const existingSubscription = subscriptionRefs.get(channelName);
-    if (existingSubscription) {
-      console.log(`Subscription ${channelName} already exists, skipping`);
-      return existingSubscription;
-    }
-
-    console.log(`Creating subscription: ${channelName}`);
-    setConnectionState('connecting');
-    
-    const subscription = supabase.channel(channelName);
-    
-    // Add the postgres_changes listener
-    subscription.on('postgres_changes', subscriptionConfig, subscriptionConfig.callback);
-    
-    // Handle connection events
-    subscription.on('system', {}, (payload) => {
-      console.log(`Subscription ${channelName} status:`, payload.status);
-      if (payload.status === 'SUBSCRIBED') {
-        setConnectionState('connected');
-        setReconnectAttempts(0);
-      } else if (payload.status === 'CLOSED') {
-        setConnectionState('disconnected');
-        // Auto-reconnect with exponential backoff
-        handleReconnect(channelName, subscriptionConfig);
-      }
-    });
-
-    const subscribedChannel = subscription.subscribe();
-    
-    // Store reference
-    setSubscriptionRefs(prev => new Map(prev).set(channelName, subscribedChannel));
-    
-    return subscribedChannel;
-  };
-
-  const handleReconnect = (channelName, subscriptionConfig) => {
-    if (reconnectAttempts >= 5) {
-      console.log(`Max reconnection attempts reached for ${channelName}`);
-      setConnectionState('disconnected');
-      return;
-    }
-
-    setConnectionState('reconnecting');
-    const delay = getReconnectDelay(reconnectAttempts);
-    
-    console.log(`Reconnecting ${channelName} in ${delay}ms (attempt ${reconnectAttempts + 1})`);
-    
-    reconnectTimeoutRef.current = setTimeout(() => {
-      setReconnectAttempts(prev => prev + 1);
-      createManagedSubscription(channelName, subscriptionConfig);
-    }, delay);
-  };
-
-  // Handle page visibility changes to pause/resume connections
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        console.log('Page hidden - pausing real-time connections');
-        // Don't cleanup, just note the state change
-      } else {
-        console.log('Page visible - resuming real-time connections');
-        // Reset reconnect attempts when page becomes visible again
-        setReconnectAttempts(0);
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, []);
-
-  // Set up realtime subscriptions for public views
-  useEffect(() => {
-    if (!eventId) return;
-
-    // Subscribe to art table for winner status, auction status changes
-    const artSubscription = supabase
-      .channel(`art-${eventId}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'art',
-        filter: `event_id=eq.${eventId}`
-      }, (payload) => {
-        console.log('Art realtime update:', payload);
-        
-        if (payload.eventType === 'UPDATE') {
-          setArtworks(prev => prev.map(art => {
-            if (art.id === payload.new.id) {
-              // Flash the updated artwork
-              setTimeout(() => {
-                const element = document.querySelector(`[data-art-id="${art.id}"]`);
-                if (element) applyFlashClass(element);
-              }, 0);
-              return { ...art, ...payload.new };
-            }
-            return art;
-          }));
-          
-          // Update round winners if winner status changed
-          if (payload.new.is_winner !== payload.old?.is_winner) {
-            fetchRoundWinners();
-          }
-        }
-      })
-      .subscribe();
-
-    // Subscribe to bids table for live bid updates
-    const bidsSubscription = supabase
-      .channel(`bids-${eventId}`)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'bids'
-      }, async (payload) => {
-        console.log('Bid realtime update:', payload);
-        
-        // Update current bids for the artwork
-        const artId = payload.new.art_id;
-        setCurrentBids(prev => {
-          const newBids = { ...prev, [artId]: payload.new.amount };
-          // Flash the bid display
-          setTimeout(() => {
-            const element = document.querySelector(`[data-bid-art="${artId}"]`);
-            if (element) applyFlashClass(element);
-          }, 0);
-          return newBids;
-        });
-        
-        // Reset bid input to new minimum bid when someone else bids
-        setBidAmounts(prev => {
-          const updated = { ...prev };
-          // Don't reset if this bid is from the current user
-          if (payload.new.person_id !== person?.id) {
-            delete updated[artId]; // This will make getMinimumBid() recalculate
-          }
-          return updated;
-        });
-        
-        // Update bid history
-        fetchBidHistory([artId]);
-      })
-      .subscribe();
-
-    // Subscribe to votes table for admin panel (only if admin)
-    let votesSubscription = null;
-    if (isAdmin) {
-      votesSubscription = supabase
-        .channel(`votes-${eventId}`)
-        .on('postgres_changes', {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'votes',
-          filter: `event_id=eq.${eventId}`
-        }, (payload) => {
-          console.log('Vote realtime update:', payload);
-          // Update vote weights
-          // fetchVoteWeights(); // TODO: Implement this function
-        })
-        .subscribe();
-    }
-
-    // Subscribe to round_contestants - real-time for admins, polling for regular users
-    let roundContestantsSubscription = null;
-    let roundContestantsInterval = null;
-    
-    if (isAdmin) {
-      // Admin users get real-time updates
-      roundContestantsSubscription = supabase
-        .channel(`round-contestants-${eventId}`)
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'round_contestants'
-        }, (payload) => {
-          console.log('Round contestants update:', payload);
-          // Use background refresh to avoid loading screen
-          refreshEventDataSilently();
-          // Flash the info tab if visible
-          setTimeout(() => {
-            const element = document.querySelector('[data-tab="info"]');
-            if (element) applyFlashClass(element, 'realtime-flash-subtle');
-          }, 0);
-        })
-        .subscribe();
-    } else {
-      // Regular users get polling every 5 minutes
-      roundContestantsInterval = setInterval(() => {
-        console.log('Round contestants polling update (5min interval)');
-        refreshEventDataSilently();
-      }, 5 * 60 * 1000); // 5 minutes
-    }
-
-    // Subscribe to art_media for image updates
-    const artMediaSubscription = supabase
-      .channel(`art-media-${eventId}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'art_media'
-      }, async (payload) => {
-        console.log('Art media update:', payload);
-        // Refresh the specific artwork's images
-        if (payload.new?.art_id) {
-          const artId = payload.new.art_id;
-          const { data: mediaData } = await supabase
-            .from('art_media')
-            .select('*')
-            .eq('art_id', artId)
-            .order('created_at', { ascending: false });
-          
-          if (mediaData) {
-            setArtworks(prev => prev.map(art => {
-              if (art.id === artId) {
-                // Flash the artwork image
-                setTimeout(() => {
-                  const element = document.querySelector(`[data-art-image="${artId}"]`);
-                  if (element) applyFlashClass(element);
-                }, 0);
-                return { ...art, art_media: mediaData };
-              }
-              return art;
-            }));
-          }
-        }
-      })
-      .subscribe();
-
-    return () => {
-      // Clean up all subscriptions and intervals
-      cleanupSubscriptions();
-      if (roundContestantsInterval) clearInterval(roundContestantsInterval);
-      
-      // Legacy cleanup for any remaining direct subscriptions
-      if (artSubscription) artSubscription.unsubscribe();
-      if (bidsSubscription) bidsSubscription.unsubscribe();
-      if (votesSubscription) votesSubscription.unsubscribe();
-      if (roundContestantsSubscription) roundContestantsSubscription.unsubscribe();
-      if (artMediaSubscription) artMediaSubscription.unsubscribe();
-    };
-  }, [eventId, isAdmin]);
+  // V2 BROADCAST: Data loads on demand via cached endpoints - no subscriptions needed
 
   useEffect(() => {
     // Check admin permissions from database
@@ -493,40 +378,41 @@ const EventDetails = () => {
       console.log('EventDetails: Starting fetchEventDetails for eventId:', eventId);
       setLoading(true);
       setError(null);
-      
-      // Add timeout protection
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Event loading timed out after 30 seconds')), 30000);
-      });
 
-      // Fetch event details
-      const { data: eventData, error: eventError } = await supabase
-        .from('events')
-        .select('*')
-        .eq('id', eventId)
-        .single();
-
-      if (eventError) throw eventError;
-      setEvent(eventData);
-
-      // V2 BROADCAST VERSION: Try cached endpoints first
+      // V2 BROADCAST VERSION: Get ALL data from cached endpoints (no direct Supabase queries)
       try {
-        console.log('🚀 [V2-BROADCAST] EventDetails: Attempting to load from cached endpoints');
-        console.log('🔍 [V2-BROADCAST] EventDetails: Looking for EID:', eventData.eid);
-        const cachedData = await publicDataManager.getEvent(eventData.eid);
-        console.log('📊 [V2-BROADCAST] EventDetails: Cached data received:', cachedData ? 'YES' : 'NO');
-        console.log('📊 [V2-BROADCAST] EventDetails: Artworks count:', cachedData?.artworks?.length || 0);
+        console.log('🌐 [V2-BROADCAST] Fetching event data from cached endpoint');
+        
+        // First try to determine EID from eventId parameter
+        let eid = eventId;
+        
+        // If eventId looks like a UUID, we need to find the EID
+        if (eventId.length === 36 && eventId.includes('-')) {
+          console.log('🔍 [V2-BROADCAST] EventId appears to be UUID, need to resolve EID...');
+          // For now, we'll need to get this from the events list or make this work differently
+          // But let's try the cached endpoint directly with the UUID
+          eid = eventId; // Keep as is for now, the endpoint should handle UUID->EID mapping
+        } else {
+          console.log('🌐 [V2-BROADCAST] EventId appears to be EID:', eid);
+        }
+        
+        const cachedData = await publicDataManager.getEventWithVersions(eid);
+        console.log('🌐 [V2-BROADCAST] Versioned event data received:', cachedData ? 'SUCCESS' : 'FAILED');
+        console.log('🌐 [V2-BROADCAST] Artworks in cache:', cachedData?.artworks?.length || 0);
+
+        if (cachedData?.event) {
+          // Set event data from cached endpoint
+          setEvent(cachedData.event);
+          setEventEid(cachedData.event.eid); // Store EID for broadcast subscription
+          console.log('🌐 [V2-BROADCAST] Event EID from cache:', cachedData.event.eid);
+        }
         
         if (cachedData?.artworks && cachedData.artworks.length > 0) {
           console.log('✅ [V2-BROADCAST] EventDetails: Loading artwork data from cached endpoints');
           
-          // Get media data from cached endpoint (non-blocking)
-          let mediaData = null;
-          try {
-            mediaData = await publicDataManager.getEventMedia(eventData.eid);
-          } catch (mediaError) {
-            console.warn('⚠️ [V2-BROADCAST] Media endpoint failed, continuing without images:', mediaError);
-          }
+          // Media data is now included in the versioned response
+          console.log('🌐 [V2-BROADCAST] Processing media data from versioned response');
+          const mediaData = cachedData.media;
           
           // Process media data by artwork
           const mediaByArt = {};
@@ -586,6 +472,10 @@ const EventDetails = () => {
         }
       } catch (cachedError) {
         console.error('❌ [V2-BROADCAST] CRITICAL: Cached endpoints failed:', cachedError);
+        // Check if it's a 429 rate limit error and provide friendly message
+        if (cachedError.message && cachedError.message.includes('429')) {
+          throw new Error('Oops! Too much refreshing. Please try again in a few minutes.');
+        }
         throw new Error('API endpoints unavailable. This is a broadcast-only version that requires cached endpoints.');
       }
 
@@ -1083,10 +973,10 @@ const EventDetails = () => {
           continue;
         }
         
-        console.log(`🌐 [V2-BROADCAST] Loading bid history for artwork ${artwork.round}-${artwork.easel}`);
+        console.log(`🌐 [V2-BROADCAST] Loading versioned bid history for artwork ${artwork.round}-${artwork.easel}`);
         
         try {
-          const bidData = await publicDataManager.getArtworkBids(event.eid, artwork.round, artwork.easel);
+          const bidData = await publicDataManager.getArtworkBidsWithVersions(event.eid, artwork.round, artwork.easel, cachedData.cacheVersions || new Map());
           
           if (bidData && bidData.bids) {
             historyByArt[artId] = bidData.bids;
@@ -1210,7 +1100,7 @@ const EventDetails = () => {
       // Add 2 second delay to simulate server processing
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Use the secure RPC function with eid, round, easel
+      // Back to simplified function to test basic INSERT
       const { data, error } = await supabase
         .rpc('cast_vote_secure', {
           p_eid: event.eid,
@@ -1218,12 +1108,20 @@ const EventDetails = () => {
           p_easel: confirmVote.easel
         });
 
+      console.log('Vote function call params:', { p_art_id: confirmVote.id });
+      console.log('Artwork ID:', confirmVote.id, 'EID:', event.eid, 'Round:', confirmVote.round, 'Easel:', confirmVote.easel);
+      console.log('Vote function response:', { data, error });
+      console.log('Vote function data details:', JSON.stringify(data, null, 2));
+      console.log('Vote function error details:', JSON.stringify(error, null, 2));
+      
       if (error) {
-        console.error('Vote error:', error);
+        console.error('Vote RPC error:', error);
         throw error;
       }
       
       if (!data || !data.success) {
+        console.error('Vote function returned error:', data);
+        console.error('Error details:', data?.error, 'Detail:', data?.detail);
         setVoteError(data?.error || 'Failed to register vote');
       } else {
         // Vote successful - log weight info
@@ -1612,7 +1510,7 @@ const EventDetails = () => {
     
     // V2 BROADCAST VERSION: Load bid history on demand when artwork is clicked
     if (artwork && !bidHistory[artwork.id] && event?.eid) {
-      console.log(`🌐 [V2-BROADCAST] Loading bid history for artwork ${artwork.round}-${artwork.easel}`);
+      console.log(`🌐 [V2-BROADCAST] Loading bid history on-demand for artwork ${artwork.round}-${artwork.easel}`);
       try {
         const bidData = await publicDataManager.getArtworkBids(event.eid, artwork.round, artwork.easel);
         
@@ -2594,7 +2492,9 @@ const EventDetails = () => {
                     {bidHistory[selectedArt.id] && bidHistory[selectedArt.id].length > 0 && (
                       <Box mt="4">
                         <Separator size="4" mb="3" />
-                        <Heading size="3" mb="3">Bid History</Heading>
+                        <Heading size="3" mb="3">
+                          Bid History ({bidHistory[selectedArt.id].length} bids)
+                        </Heading>
                         <Flex direction="column" gap="2">
                           {bidHistory[selectedArt.id].map((bid, index) => (
                             <Flex key={index} justify="between" align="center">

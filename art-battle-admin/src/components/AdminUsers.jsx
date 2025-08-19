@@ -28,6 +28,7 @@ import {
 } from '@radix-ui/react-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 
 const AdminUsers = () => {
   const { user } = useAuth();
@@ -88,30 +89,22 @@ const AdminUsers = () => {
     try {
       setLoading(true);
       
-      // Add a timestamp to force refresh and bypass any caching
-      const query = supabase
-        .from('abhq_admin_users')
-        .select(`
-          id,
-          user_id,
-          email,
-          level,
-          cities_access,
-          active,
-          created_at,
-          created_by,
-          notes
-        `)
-        .order('created_at', { ascending: false });
-      
-      // Force refresh by adding a timestamp parameter when needed
-      if (forceRefresh) {
-        query.limit(1000); // Add a different parameter to force cache refresh
+      // Use the admin function to fetch users (bypasses RLS)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Not authenticated');
       }
-      
-      const { data, error } = await query;
+
+      const { data: response, error } = await supabase.functions.invoke('admin-get-users', {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
 
       if (error) throw error;
+      if (!response.success) throw new Error(response.error || 'Failed to fetch admin users');
+
+      const data = response.users;
       
       // Get city names for each user
       const usersWithCities = await Promise.all(
@@ -175,17 +168,71 @@ const AdminUsers = () => {
     setSuccess('');
     
     try {
-      const { data, error: inviteError } = await supabase.functions.invoke('admin-invite-user', {
-        body: {
+      // Make a direct fetch request to get raw error details
+      const session = await supabase.auth.getSession();
+      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/admin-invite-user`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.data.session?.access_token}`,
+          'Content-Type': 'application/json',
+          'apikey': supabase.supabaseKey
+        },
+        body: JSON.stringify({
           email: inviteForm.email.trim(),
           level: inviteForm.level,
           cities_access: inviteForm.cities_access,
           notes: inviteForm.notes.trim()
-        }
+        })
       });
 
-      if (inviteError) throw inviteError;
-      if (!data.success) throw new Error(data.error || 'Failed to send invite');
+      console.log('Response status:', response.status);
+      console.log('Response headers:', [...response.headers.entries()]);
+      
+      const responseText = await response.text();
+      console.log('Raw response text:', responseText);
+      
+      let data;
+      try {
+        data = JSON.parse(responseText);
+        console.log('Parsed response data:', data);
+      } catch (parseErr) {
+        console.error('Failed to parse response as JSON:', parseErr);
+        throw new Error(`HTTP ${response.status}: ${responseText}`);
+      }
+
+      if (!response.ok) {
+        console.error('DETAILED ERROR FROM FUNCTION:', data);
+        throw new Error(data.error || `HTTP ${response.status}: ${responseText}`);
+      }
+
+      // Simulate the original Supabase response format
+      const inviteError = null;
+
+      if (inviteError) {
+        console.error('Invite error details:', inviteError);
+        
+        // Check if this is a FunctionsHttpError and extract detailed response
+        if (inviteError instanceof FunctionsHttpError) {
+          try {
+            const errorDetails = await inviteError.context.json();
+            console.error('DETAILED ERROR RESPONSE:', errorDetails);
+            console.error('Error message:', errorDetails.message);
+            console.error('Error code:', errorDetails.code);
+            console.error('Error hint:', errorDetails.hint);
+            console.error('Insert data:', errorDetails.insertData);
+          } catch (parseError) {
+            console.error('Failed to parse error details:', parseError);
+            console.error('Raw error context:', inviteError.context);
+          }
+        }
+        
+        console.error('Full error object:', JSON.stringify(inviteError, null, 2));
+        throw inviteError;
+      }
+      if (!data.success) {
+        console.error('Response data error:', data);
+        throw new Error(data.error || 'Failed to send invite');
+      }
 
       console.log('Invite successful, refreshing user list...');
       setSuccess(`Invite sent successfully to ${inviteForm.email}`);
@@ -205,7 +252,29 @@ const AdminUsers = () => {
       }, 3000);
 
     } catch (err) {
-      console.error('Error sending invite:', err);
+      console.error('=== INVITE ERROR ANALYSIS ===');
+      console.error('Error type:', err.constructor.name);
+      console.error('Error message:', err.message);
+      console.error('Error instanceof FunctionsHttpError:', err instanceof FunctionsHttpError);
+      console.error('Full error object:', err);
+      
+      // Try to extract detailed error response
+      if (err instanceof FunctionsHttpError && err.context) {
+        try {
+          const rawResponse = await err.context.text();
+          console.error('Raw response text:', rawResponse);
+          try {
+            const parsedError = JSON.parse(rawResponse);
+            console.error('PARSED ERROR DETAILS:', parsedError);
+          } catch (parseErr) {
+            console.error('Could not parse as JSON:', parseErr);
+          }
+        } catch (contextErr) {
+          console.error('Could not read context:', contextErr);
+        }
+      }
+      
+      console.error('=== END ERROR ANALYSIS ===');
       setError(err.message || 'Failed to send invite');
     } finally {
       setInviteLoading(false);

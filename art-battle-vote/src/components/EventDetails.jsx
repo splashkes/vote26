@@ -1118,7 +1118,7 @@ const EventDetails = () => {
       // Add 2 second delay to simulate server processing
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Use the secure RPC function with eid, round, easel
+      // Use the secure RPC function with EID/round/easel
       const { data, error } = await supabase
         .rpc('cast_vote_secure', {
           p_eid: event.eid,
@@ -1126,12 +1126,15 @@ const EventDetails = () => {
           p_easel: confirmVote.easel
         });
 
+      console.log('Vote function response:', { data, error });
+      
       if (error) {
-        console.error('Vote error:', error);
+        console.error('Vote RPC error:', error);
         throw error;
       }
       
       if (!data || !data.success) {
+        console.error('Vote function returned error:', data);
         setVoteError(data?.error || 'Failed to register vote');
       } else {
         // Vote successful - log weight info

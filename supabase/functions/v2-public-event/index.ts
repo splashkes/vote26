@@ -127,12 +127,27 @@ const generatePublicEventData = async (eventId: string) => {
   
   console.log(`[generatePublicEventData] Supabase client created, querying events table`)
   
-  // First get the event to get its UUID
-  const { data: eventInfo, error: eventError } = await supabase
-    .from('events')
-    .select('id, eid, name, description, event_start_datetime, venue')
-    .eq('eid', eventId)
-    .single()
+  // Handle both UUID and EID inputs
+  let eventQuery;
+  if (eventId.length === 36 && eventId.includes('-')) {
+    // Input looks like a UUID
+    console.log(`[generatePublicEventData] Querying by UUID: ${eventId}`)
+    eventQuery = supabase
+      .from('events')
+      .select('id, eid, name, description, event_start_datetime, venue')
+      .eq('id', eventId)
+      .single()
+  } else {
+    // Input looks like an EID
+    console.log(`[generatePublicEventData] Querying by EID: ${eventId}`)
+    eventQuery = supabase
+      .from('events')
+      .select('id, eid, name, description, event_start_datetime, venue')
+      .eq('eid', eventId)
+      .single()
+  }
+  
+  const { data: eventInfo, error: eventError } = await eventQuery
   
   console.log(`[generatePublicEventData] Event query result:`, {
     eventInfo: eventInfo,
@@ -153,7 +168,7 @@ const generatePublicEventData = async (eventId: string) => {
   
   console.log(`[generatePublicEventData] Querying artworks for event UUID: ${eventInfo.id}`)
   
-  // Get artworks with artist profiles using correct join
+  // Get artworks with artist profiles - ONLY include artworks that have an artist assigned
   const { data: artworks, error: artworksError } = await supabase
     .from('art')
     .select(`
@@ -164,7 +179,7 @@ const generatePublicEventData = async (eventId: string) => {
       easel,
       round,
       created_at,
-      artist_profiles (
+      artist_profiles!inner (
         id,
         name,
         bio,
@@ -173,6 +188,7 @@ const generatePublicEventData = async (eventId: string) => {
       )
     `)
     .eq('event_id', eventInfo.id)
+    .not('artist_id', 'is', null)
     .order('easel')
   
   console.log(`[generatePublicEventData] Artworks query result:`, {
@@ -265,14 +281,29 @@ const generateEventMediaData = async (eventId: string) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   )
   
-  console.log(`[generateEventMediaData] Getting event UUID for: ${eventId}`)
+  console.log(`[generateEventMediaData] Getting event info for: ${eventId}`)
   
-  // First get the event to get its UUID
-  const { data: eventInfo, error: eventError } = await supabase
-    .from('events')
-    .select('id')
-    .eq('eid', eventId)
-    .single()
+  // Handle both UUID and EID inputs for media endpoint
+  let eventQuery;
+  if (eventId.length === 36 && eventId.includes('-')) {
+    // Input looks like a UUID
+    console.log(`[generateEventMediaData] Querying by UUID: ${eventId}`)
+    eventQuery = supabase
+      .from('events')
+      .select('id, eid')
+      .eq('id', eventId)
+      .single()
+  } else {
+    // Input looks like an EID
+    console.log(`[generateEventMediaData] Querying by EID: ${eventId}`)
+    eventQuery = supabase
+      .from('events')
+      .select('id, eid')
+      .eq('eid', eventId)
+      .single()
+  }
+  
+  const { data: eventInfo, error: eventError } = await eventQuery
   
   if (eventError || !eventInfo) {
     console.error(`[generateEventMediaData] Event not found: ${eventId}`)
@@ -281,7 +312,7 @@ const generateEventMediaData = async (eventId: string) => {
   
   console.log(`[generateEventMediaData] Querying media files for event UUID: ${eventInfo.id}`)
   
-  // Get artworks with their media files via art_media junction table
+  // Get artworks with their media files - ONLY include artworks that have an artist assigned
   const { data: artworks, error: artworksError } = await supabase
     .from('art')
     .select(`
@@ -305,6 +336,7 @@ const generateEventMediaData = async (eventId: string) => {
       )
     `)
     .eq('event_id', eventInfo.id)
+    .not('artist_id', 'is', null)
     .order('easel')
   
   console.log(`[generateEventMediaData] Artworks query result:`, {
@@ -367,14 +399,29 @@ const generateArtworkBidsData = async (eventId: string, round: string, easel: st
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   )
   
-  console.log(`[generateArtworkBidsData] Getting event UUID for: ${eventId}`)
+  console.log(`[generateArtworkBidsData] Getting event info for: ${eventId}`)
   
-  // First get the event to get its UUID
-  const { data: eventInfo, error: eventError } = await supabase
-    .from('events')
-    .select('id')
-    .eq('eid', eventId)
-    .single()
+  // Handle both UUID and EID inputs for bid endpoint
+  let eventQuery;
+  if (eventId.length === 36 && eventId.includes('-')) {
+    // Input looks like a UUID
+    console.log(`[generateArtworkBidsData] Querying by UUID: ${eventId}`)
+    eventQuery = supabase
+      .from('events')
+      .select('id, eid')
+      .eq('id', eventId)
+      .single()
+  } else {
+    // Input looks like an EID
+    console.log(`[generateArtworkBidsData] Querying by EID: ${eventId}`)
+    eventQuery = supabase
+      .from('events')
+      .select('id, eid')
+      .eq('eid', eventId)
+      .single()
+  }
+  
+  const { data: eventInfo, error: eventError } = await eventQuery
   
   if (eventError || !eventInfo) {
     console.error(`[generateArtworkBidsData] Event not found: ${eventId}`)

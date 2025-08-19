@@ -21,13 +21,14 @@ import {
   HeartFilledIcon,
   CheckCircledIcon,
   CrossCircledIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  Cross2Icon
 } from '@radix-ui/react-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { DebugField } from './DebugComponents';
 
-const EventContextPanel = ({ selectedEventId }) => {
+const EventContextPanel = ({ selectedEventId, onClose }) => {
   const { user, hasEventAccess } = useAuth();
   const [eventDetails, setEventDetails] = useState(null);
   const [eventStats, setEventStats] = useState(null);
@@ -264,6 +265,24 @@ const EventContextPanel = ({ selectedEventId }) => {
   return (
     <ScrollArea style={{ height: '100%' }}>
       <Box p="4">
+        {/* Close Button */}
+        {onClose && (
+          <Flex justify="end" mb="2">
+            <Button
+              variant="ghost"
+              size="1"
+              onClick={onClose}
+              style={{ 
+                minHeight: '24px', 
+                minWidth: '24px',
+                padding: '0',
+                color: 'var(--gray-11)'
+              }}
+            >
+              <Cross2Icon width="16" height="16" />
+            </Button>
+          </Flex>
+        )}
         <Flex direction="column" gap="4">
           {/* Event Header */}
           <Box>

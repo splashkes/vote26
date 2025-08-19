@@ -24,49 +24,83 @@ serve(async (req) => {
       throw new Error('Authorization header required')
     }
 
-    // Get all artist profiles as the base dataset
-    const { data: profilesData, error: profilesError } = await supabase
-      .from('artist_profiles')
-      .select('*')
-      .order('created_at', { ascending: false })
+    // Get search parameters from request body
+    const { searchTerm, limit = 100 } = await req.json().catch(() => ({}))
+
+    let profilesQuery = supabase.from('artist_profiles').select('*')
+
+    // Apply search filters if search term is provided
+    if (searchTerm && searchTerm.trim()) {
+      const term = searchTerm.trim()
+      // Search by name, email, phone, or entry_id
+      profilesQuery = profilesQuery.or(`name.ilike.%${term}%,email.ilike.%${term}%,phone.ilike.%${term}%,entry_id.eq.${parseInt(term) || 0}`)
+    }
+
+    // Apply limit and order
+    profilesQuery = profilesQuery.order('created_at', { ascending: false }).limit(limit)
+
+    const { data: profilesData, error: profilesError } = await profilesQuery
 
     if (profilesError) {
       console.error('Error fetching artist profiles:', profilesError)
       throw new Error('Failed to fetch artist profiles')
     }
 
-    // Get all workflow data in parallel
+    // Get artist numbers from found profiles
+    const foundArtistNumbers = profilesData?.map(p => p.entry_id).filter(Boolean) || []
+    
+    // If we have a search term, also search workflow data by artist number
+    let additionalArtistNumbers: number[] = []
+    if (searchTerm && searchTerm.trim() && !isNaN(parseInt(searchTerm))) {
+      additionalArtistNumbers = [parseInt(searchTerm)]
+    }
+    
+    const allArtistNumbers = [...new Set([...foundArtistNumbers, ...additionalArtistNumbers])]
+    
+    // Get workflow data for the found artist numbers (plus any direct artist number searches)
     const [applicationsResult, invitationsResult, confirmationsResult] = await Promise.all([
-      supabase
-        .from('artist_applications')
-        .select(`
-          id,
-          artist_profile_id,
-          event_eid,
-          artist_number,
-          entry_date,
-          application_status,
-          applied_at
-        `)
-        .order('applied_at', { ascending: false }),
+      allArtistNumbers.length > 0 
+        ? supabase
+            .from('artist_applications')
+            .select(`
+              id,
+              artist_profile_id,
+              event_eid,
+              artist_number,
+              entry_date,
+              application_status,
+              applied_at
+            `)
+            .in('artist_number', allArtistNumbers)
+            .order('applied_at', { ascending: false })
+            .limit(limit)
+        : Promise.resolve({ data: [], error: null }),
       
-      supabase
-        .from('artist_invitations')
-        .select(`
-          id,
-          artist_profile_id,
-          event_eid,
-          artist_number,
-          entry_date,
-          status,
-          created_at
-        `)
-        .order('created_at', { ascending: false }),
+      allArtistNumbers.length > 0 
+        ? supabase
+            .from('artist_invitations')
+            .select(`
+              id,
+              artist_profile_id,
+              event_eid,
+              artist_number,
+              entry_date,
+              status,
+              created_at
+            `)
+            .in('artist_number', allArtistNumbers)
+            .order('created_at', { ascending: false })
+            .limit(limit)
+        : Promise.resolve({ data: [], error: null }),
       
-      supabase
-        .from('artist_confirmations')
-        .select('*')
-        .order('created_at', { ascending: false })
+      allArtistNumbers.length > 0 
+        ? supabase
+            .from('artist_confirmations')
+            .select('*')
+            .in('artist_number', allArtistNumbers)
+            .order('created_at', { ascending: false })
+            .limit(limit)
+        : Promise.resolve({ data: [], error: null })
     ])
 
     if (applicationsResult.error) {

@@ -44,9 +44,15 @@ serve(async (req) => {
       twitter
     } = await req.json()
 
-    // Validate required fields
-    if (!profile_id || !person_id || !name || !name.trim()) {
-      throw new Error('profile_id, person_id and name are required')
+    // Validate required fields with detailed error messages
+    if (!profile_id) {
+      throw new Error('profile_id is required but was missing or null')
+    }
+    if (!person_id) {
+      throw new Error('person_id is required but was missing or null')
+    }
+    if (!name || !name.trim()) {
+      throw new Error('name is required but was missing, null, or empty')
     }
 
     // Verify ownership - user must own this profile

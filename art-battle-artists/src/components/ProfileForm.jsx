@@ -156,6 +156,16 @@ const ProfileForm = ({ existingProfile = null, onSuccess }) => {
 
     try {
       const functionName = isEditing ? 'update-profile-clean' : 'create-profile-clean';
+      
+      // Validation for editing mode
+      if (isEditing && !existingProfile?.id) {
+        throw new Error('Cannot update profile: profile ID is missing. Please refresh and try again.');
+      }
+      
+      if (!person?.id) {
+        throw new Error('Cannot save profile: user authentication is missing. Please sign in again.');
+      }
+      
       const payload = isEditing 
         ? {
             profile_id: existingProfile.id,
