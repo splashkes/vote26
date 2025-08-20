@@ -82,6 +82,7 @@ serve(async (req) => {
         console.log('Payment status:', session.payment_status)
         console.log('Session status:', session.status)
         console.log('Amount total:', session.amount_total)
+        console.log('Presentment details:', session.presentment_details)
         
         // If payment is completed, mark as completed immediately
         if (session.payment_status === 'paid' && session.status === 'complete') {
@@ -101,6 +102,34 @@ serve(async (req) => {
           }
 
           console.log('Payment completed successfully:', result)
+          
+          // Update metadata with presentment details if Adaptive Pricing was used
+          if (session.presentment_details) {
+            const { error: metadataError } = await supabase
+              .from('payment_processing')
+              .update({
+                metadata: {
+                  webhook_event: 'checkout.session.completed',
+                  webhook_received_at: new Date().toISOString(),
+                  stripe_account_region: stripeAccountRegion,
+                  payment_status: session.payment_status,
+                  session_status: session.status,
+                  presentment_amount: session.presentment_details.presentment_amount,
+                  presentment_currency: session.presentment_details.presentment_currency,
+                  adaptive_pricing_used: true,
+                },
+              })
+              .eq('stripe_checkout_session_id', session.id)
+            
+            if (metadataError) {
+              console.error('Error updating presentment metadata:', metadataError)
+            } else {
+              console.log('Updated payment with presentment details:', {
+                presentment_amount: session.presentment_details.presentment_amount,
+                presentment_currency: session.presentment_details.presentment_currency
+              })
+            }
+          }
         } else {
           // Fallback: just update to processing if not fully paid yet
           console.log('Payment not yet complete, updating to processing status')
@@ -117,6 +146,9 @@ serve(async (req) => {
                 stripe_account_region: stripeAccountRegion,
                 payment_status: session.payment_status,
                 session_status: session.status,
+                presentment_amount: session.presentment_details?.presentment_amount,
+                presentment_currency: session.presentment_details?.presentment_currency,
+                adaptive_pricing_used: !!session.presentment_details,
               },
             })
             .eq('stripe_checkout_session_id', session.id)

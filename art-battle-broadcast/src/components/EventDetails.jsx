@@ -1,4 +1,9 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { 
+  getCurrencyFromEvent, 
+  formatCurrencyFromEvent, 
+  formatMinimumBidText 
+} from '../utils/currency';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Container,
@@ -134,7 +139,11 @@ const EventDetails = () => {
                       // Also update currentBids to reflect new highest bid
                       setCurrentBids(prev => ({
                         ...prev,
-                        [targetArtwork.id]: topBid
+                        [targetArtwork.id]: {
+                          amount: topBid,
+                          count: data.bids.length,
+                          time: data.bids[0]?.created_at
+                        }
                       }));
                     }
                   }
@@ -195,7 +204,7 @@ const EventDetails = () => {
                     console.log(`⚠️ [DEBUG] No media data in response:`, data);
                   }
                 } else if (endpoint.match(/\/live\/event\/[^\/]+$/)) {
-                  // Handle main event endpoint updates (votes, artwork changes)
+                  // Handle main event endpoint updates (votes, artwork changes, artist assignments)
                   console.log(`✅ [V2-BROADCAST] Updating main event data from broadcast`);
                   
                   // Update main event data surgically instead of full reload
@@ -204,8 +213,43 @@ const EventDetails = () => {
                     console.log(`✅ [V2-BROADCAST] Updated event data surgically`);
                   }
                   if (data && data.artworks) {
-                    setArtworks(data.artworks);
-                    console.log(`✅ [V2-BROADCAST] Updated ${data.artworks.length} artworks surgically`);
+                    // CRITICAL: Preserve existing media data when updating artworks
+                    setArtworks(prevArtworks => {
+                      const updatedArtworks = data.artworks.map(newArtwork => {
+                        // Find existing artwork to preserve its media data
+                        const existingArtwork = prevArtworks.find(prev => prev.id === newArtwork.id);
+                        return {
+                          ...newArtwork,
+                          // Preserve existing media data if it exists, otherwise use empty array
+                          media: existingArtwork?.media || []
+                        };
+                      });
+                      
+                      console.log(`🔄 [V2-BROADCAST] About to regroup ${updatedArtworks.length} artworks by rounds (preserving media)...`);
+                      
+                      // CRITICAL: Also update artworksByRound when artworks change (for artist assignments)
+                      try {
+                        const regrouped = updatedArtworks.reduce((acc, artwork) => {
+                          const round = artwork.round || 1;
+                          if (!acc[round]) {
+                            acc[round] = [];
+                          }
+                          acc[round].push(artwork);
+                          return acc;
+                        }, {});
+                        
+                        console.log(`🔄 [V2-BROADCAST] Regrouping complete, setting artworksByRound...`);
+                        setArtworksByRound(regrouped);
+                        
+                        console.log(`✅ [V2-BROADCAST] Updated ${updatedArtworks.length} artworks and regrouped by rounds surgically (media preserved):`, Object.keys(regrouped).map(r => `Round ${r}: ${regrouped[r].length} artworks`));
+                      } catch (error) {
+                        console.error(`❌ [V2-BROADCAST] Error during regrouping:`, error);
+                      }
+                      
+                      return updatedArtworks;
+                    });
+                  } else {
+                    console.warn(`⚠️ [V2-BROADCAST] No artworks data in response or data is null:`, data);
                   }
                 }
               } else {
@@ -582,9 +626,13 @@ const EventDetails = () => {
       const historyByArt = {};
       if (bidsData) {
         bidsData.forEach(bid => {
-          // Track highest bid
-          if (!bidsByArt[bid.art_id] || bid.amount > bidsByArt[bid.art_id]) {
-            bidsByArt[bid.art_id] = bid.amount;
+          // Track highest bid with new format
+          if (!bidsByArt[bid.art_id] || bid.amount > bidsByArt[bid.art_id].amount) {
+            bidsByArt[bid.art_id] = {
+              amount: bid.amount,
+              count: bidsData.filter(b => b.art_id === bid.art_id).length,
+              time: bid.created_at
+            };
           }
           // Track bid history
           if (!historyByArt[bid.art_id]) {
@@ -817,8 +865,12 @@ const EventDetails = () => {
       const historyByArt = {};
       if (bidsData) {
         bidsData.forEach(bid => {
-          if (!bidsByArt[bid.art_id] || bid.amount > bidsByArt[bid.art_id]) {
-            bidsByArt[bid.art_id] = bid.amount;
+          if (!bidsByArt[bid.art_id] || bid.amount > bidsByArt[bid.art_id].amount) {
+            bidsByArt[bid.art_id] = {
+              amount: bid.amount,
+              count: bidsData.filter(b => b.art_id === bid.art_id).length,
+              time: bid.created_at
+            };
           }
           if (!historyByArt[bid.art_id]) {
             historyByArt[bid.art_id] = [];
@@ -1187,6 +1239,14 @@ const EventDetails = () => {
     return Math.ceil(increment / 5) * 5;
   };
 
+  // Helper function to get round title
+  const getRoundTitle = (round, artworksInRound) => {
+    if (artworksInRound.length === 1) {
+      return 'Featured Artist';
+    }
+    return `Round ${round}`;
+  };
+
   const getBiddingStatus = (artwork) => {
     if (!artwork) return null;
 
@@ -1467,16 +1527,24 @@ const EventDetails = () => {
         throw new Error(data?.error || 'Failed to place bid');
       }
 
-      // Update current bids with the actual amount from the response
+      // Update current bids with the new format including currency info
       setCurrentBids(prev => ({
         ...prev,
-        [confirmBid.artId]: data.amount || confirmBid.amount
+        [confirmBid.artId]: {
+          amount: data.amount || confirmBid.amount,
+          count: (prev[confirmBid.artId]?.count || 0) + 1,
+          time: new Date().toISOString()
+        }
       }));
 
-      // Clear bid amount
+      // Update bid amount to new minimum bid
+      const newCurrentBid = data.amount || confirmBid.amount;
+      const newIncrement = calculateBidIncrement(newCurrentBid);
+      const newMinimumBid = newCurrentBid + newIncrement;
+      
       setBidAmounts(prev => ({
         ...prev,
-        [confirmBid.artId]: ''
+        [confirmBid.artId]: newMinimumBid
       }));
 
       // Update the artwork's closing time if it was extended
@@ -1513,6 +1581,25 @@ const EventDetails = () => {
     setVoteError('');
     setBidError('');
     setBidSuccess(false);
+    
+    // Initialize bid amount to minimum bid if not already set
+    if (artwork && !bidAmounts[artwork.id]) {
+      const currentBid = currentBids[artwork.id]?.amount || 0;
+      const startingBid = event?.auction_start_bid || 0;
+      
+      let minimumBid;
+      if (currentBid === 0) {
+        minimumBid = startingBid;
+      } else {
+        const increment = calculateBidIncrement(currentBid);
+        minimumBid = currentBid + increment;
+      }
+      
+      setBidAmounts(prev => ({
+        ...prev,
+        [artwork.id]: minimumBid
+      }));
+    }
     
     // V2 BROADCAST VERSION: Load bid history on demand when artwork is clicked
     if (artwork && !bidHistory[artwork.id] && event?.eid) {
@@ -1793,7 +1880,7 @@ const EventDetails = () => {
             
             <Card mt="4">
               <Heading size="4" mb="2">Artists</Heading>
-              <ArtistsList eventId={eventId} />
+              <ArtistsList eventId={eventId} eventEid={eventEid} />
             </Card>
           </Tabs.Content>
 
@@ -1801,7 +1888,7 @@ const EventDetails = () => {
             {/* Artworks grouped by round */}
             {Object.keys(artworksByRound).sort((a, b) => a - b).map(round => (
         <Box key={round} mb="6">
-          <Heading size="5" mb="4">Round {round}</Heading>
+          <Heading size="5" mb="4">{getRoundTitle(round, artworksByRound[round])}</Heading>
           <Grid columns={{ initial: '2', sm: '3', md: '4' }} gap="4">
               {artworksByRound[round].map(artwork => {
                 // Get primary or latest media (newest first)
@@ -1909,7 +1996,7 @@ const EventDetails = () => {
                               artwork.status === 'cancelled' ? 'gray' : 
                               'yellow'
                             } weight="medium">
-                              ${Math.round(currentBids[artwork.id]?.amount || 0)}
+                              {formatCurrencyFromEvent(currentBids[artwork.id]?.amount || 0, event, 'display')}
                             </Text>
                             <Text size="1" color="gray">
                               {' • '}
@@ -2118,7 +2205,7 @@ const EventDetails = () => {
                                 
                                 <Box style={{ textAlign: 'right' }} data-bid-art={artwork.id}>
                                   <Text size="4" weight="bold" style={{ display: 'block' }}>
-                                    ${Math.round(currentBid)}
+                                    {formatCurrencyFromEvent(currentBid, event, 'display')}
                                   </Text>
                                   <Text size="1" color="gray">
                                     {bidCount} bid{bidCount !== 1 ? 's' : ''}
@@ -2179,7 +2266,7 @@ const EventDetails = () => {
                                   </Flex>
                                   <Flex justify="between">
                                     <Text size="2" weight="medium">Final Bid:</Text>
-                                    <Text size="2" weight="bold">${Math.round(currentBid)}</Text>
+                                    <Text size="2" weight="bold">{formatCurrencyFromEvent(currentBid, event, 'display')}</Text>
                                   </Flex>
                                   <Flex justify="between">
                                     <Text size="2" weight="medium">Buyer:</Text>
@@ -2223,6 +2310,7 @@ const EventDetails = () => {
                 artworks={artworks}
                 currentTime={currentTime}
                 user={user}
+                onDataChange={clearEventCache}
               />
             )}
             {!isAdmin && (
@@ -2553,7 +2641,7 @@ const EventDetails = () => {
                         
                         <Box style={{ minWidth: '120px', textAlign: 'center' }}>
                           <Text size="6" weight="bold">
-                            ${bidAmounts[selectedArt.id] || getMinimumBid(selectedArt.id)}
+                            {formatCurrencyFromEvent(bidAmounts[selectedArt.id] || getMinimumBid(selectedArt.id), event, 'display')}
                           </Text>
                         </Box>
                         
@@ -2568,7 +2656,12 @@ const EventDetails = () => {
                       </Flex>
                       
                       <Text size="1" color="gray" style={{ display: 'block', marginTop: '0.5rem', textAlign: 'center' }}>
-                        Next minimum bid: ${getMinimumBid(selectedArt.id)}
+                        {(() => {
+                          const currentBid = currentBids[selectedArt.id]?.amount || 0;
+                          const minimumBid = getMinimumBid(selectedArt.id);
+                          const currency = getCurrencyFromEvent(event);
+                          return formatMinimumBidText(currentBid, minimumBid, currency.code, currency.symbol);
+                        })()}
                       </Text>
                     </Box>
                     
@@ -2586,7 +2679,7 @@ const EventDetails = () => {
                       ) : !user ? (
                         'Sign in to bid'
                       ) : (
-                        'Place Bid'
+                        formatCurrencyFromEvent(bidAmounts[selectedArt.id] || getMinimumBid(selectedArt.id), event, 'button')
                       )}
                     </Button>
                     </>
@@ -2725,7 +2818,7 @@ const EventDetails = () => {
           <AlertDialog.Description size="2">
             <Flex direction="column" gap="2">
               <Text>
-                You are about to place a bid of <strong>${confirmBid?.amount?.toFixed(2)}</strong> for:
+                You are about to place a bid of <strong>{formatCurrencyFromEvent(confirmBid?.amount || 0, event, 'confirmation')}</strong> for:
               </Text>
               <Box style={{ 
                 background: 'var(--gray-3)', 

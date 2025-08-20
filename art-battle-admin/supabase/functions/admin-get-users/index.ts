@@ -79,9 +79,10 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Fetch all admin users using service role (bypasses RLS)
-    console.log('Fetching all admin users...')
+    // Fetch all admin users with login info using service role (bypasses RLS)
+    console.log('Fetching all admin users with login data...')
     
+    // First get admin users, then fetch auth data separately since we can't directly join across schemas
     const { data: adminUsers, error: fetchError } = await supabase
       .from('abhq_admin_users')
       .select(`
@@ -93,7 +94,10 @@ Deno.serve(async (req) => {
         active,
         created_at,
         created_by,
-        notes
+        notes,
+        invitation_sent_at,
+        invitation_expires_at,
+        invitation_accepted_at
       `)
       .order('created_at', { ascending: false })
 
@@ -107,11 +111,42 @@ Deno.serve(async (req) => {
 
     console.log('Fetched admin users:', adminUsers?.length || 0, 'users')
 
+    // Enrich with auth.users login data
+    const enrichedUsers = await Promise.all(
+      (adminUsers || []).map(async (adminUser) => {
+        if (!adminUser.user_id) {
+          return { ...adminUser, last_sign_in_at: null, email_confirmed_at: null }
+        }
+
+        try {
+          // Use admin.getUserById to get auth data
+          const { data: authUser, error: authError } = await supabase.auth.admin.getUserById(adminUser.user_id)
+          
+          if (authError || !authUser.user) {
+            console.log(`No auth data for user ${adminUser.email}:`, authError?.message)
+            return { ...adminUser, last_sign_in_at: null, email_confirmed_at: null }
+          }
+
+          return {
+            ...adminUser,
+            last_sign_in_at: authUser.user.last_sign_in_at,
+            email_confirmed_at: authUser.user.email_confirmed_at,
+            confirmed_at: authUser.user.confirmed_at
+          }
+        } catch (err) {
+          console.error(`Error fetching auth data for ${adminUser.email}:`, err)
+          return { ...adminUser, last_sign_in_at: null, email_confirmed_at: null }
+        }
+      })
+    )
+
+    console.log('Enriched users with login data')
+
     return new Response(
       JSON.stringify({ 
         success: true, 
-        users: adminUsers || [],
-        count: adminUsers?.length || 0
+        users: enrichedUsers,
+        count: enrichedUsers?.length || 0
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )

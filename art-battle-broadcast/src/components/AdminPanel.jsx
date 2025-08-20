@@ -32,7 +32,8 @@ const AdminPanel = ({
   setRoundWinners = () => {}, 
   artworks = [],
   currentTime = Date.now(),
-  user = null
+  user = null,
+  onDataChange = () => {}
 }) => {
   const [auctionEndTime, setAuctionEndTime] = useState(null);
   const [auctionWarningActive, setAuctionWarningActive] = useState(false);
@@ -492,8 +493,9 @@ const AdminPanel = ({
         return;
       }
 
-      // Refresh data
+      // Refresh data and trigger broadcast cache refresh
       fetchEventData();
+      onDataChange();
       setSearchQuery('');
       setSearchResults([]);
       setShowCreateArtist(false);
@@ -1900,6 +1902,7 @@ const AdminPanel = ({
                       
                       // Refresh data in background
                       fetchEventData();
+                      onDataChange();
                     } catch (error) {
                       console.error('Error setting winner:', error);
                       alert(`Failed to set winner: ${error.message}`);
@@ -2075,6 +2078,7 @@ const AdminPanel = ({
                     try {
                       console.log('Starting fetchEventData...');
                       await fetchEventData();
+                      onDataChange();
                       console.log('fetchEventData completed successfully');
                     } catch (refreshError) {
                       console.error('CRITICAL: fetchEventData failed:', refreshError);
@@ -2273,6 +2277,7 @@ const AdminPanel = ({
                     }
                     console.log('Successfully removed from event_artists');
                     fetchEventData();
+                    onDataChange();
                   } else if (deleteConfirm?.type === 'easel') {
                     console.log('Removing entire easel:', deleteConfirm);
                     
@@ -2323,6 +2328,7 @@ const AdminPanel = ({
                     console.log('Successfully removed easel from round_contestants');
                     console.log('Calling fetchEventData to refresh rounds...');
                     await fetchEventData();
+                    onDataChange();
                     console.log('fetchEventData completed after easel removal');
                   } else if (deleteConfirm?.type === 'artist') {
                     // First, check if art record exists for this round/easel
@@ -2409,6 +2415,7 @@ const AdminPanel = ({
                     setClearOptions({ clearImages: false, clearVotes: false, clearBids: false });
                     
                     fetchEventData();
+                    onDataChange();
                   }
                   setDeleteConfirm(null);
                   setSelectedEasel(null);
@@ -2462,34 +2469,8 @@ const AdminPanel = ({
                 type="tel"
                 value={newArtist.phone}
                 onChange={(e) => {
-                  // Format phone number as user types
-                  let value = e.target.value.replace(/\D/g, '');
-                  if (value.length > 0 && !value.startsWith('1')) {
-                    value = '1' + value;
-                  }
-                  // Limit to 11 digits (1 + 10 digit phone)
-                  value = value.slice(0, 11);
-                  
-                  // Format for display
-                  let formatted = value;
-                  if (value.length > 1) {
-                    formatted = '+' + value;
-                    if (value.length > 1) {
-                      formatted = `+${value.slice(0, 1)} `;
-                      if (value.length > 4) {
-                        formatted += `(${value.slice(1, 4)}) `;
-                        if (value.length > 7) {
-                          formatted += `${value.slice(4, 7)}-${value.slice(7)}`;
-                        } else {
-                          formatted += value.slice(4);
-                        }
-                      } else {
-                        formatted += value.slice(1);
-                      }
-                    }
-                  }
-                  
-                  setNewArtist(prev => ({ ...prev, phone: formatted }));
+                  // Simple international phone input - accept any format
+                  setNewArtist(prev => ({ ...prev, phone: e.target.value }));
                 }}
                 placeholder="+1 (555) 123-4567"
                 style={{
@@ -2502,7 +2483,7 @@ const AdminPanel = ({
                 }}
               />
               <Text size="1" color="gray" mt="1">
-                Must be a valid North American phone number
+                International phone number with country code
               </Text>
             </Box>
             
@@ -2582,29 +2563,20 @@ const AdminPanel = ({
                   }
                   
                   // Extract clean phone number (digits only)
-                  const phoneDigits = newArtist.phone.replace(/\D/g, '');
-                  if (phoneDigits.length !== 11 || !phoneDigits.startsWith('1')) {
-                    alert('Please enter a valid North American phone number');
-                    return;
-                  }
-                  
-                  // Create artist profile
-                  const { data: artist, error } = await supabase
-                    .from('artist_profiles')
-                    .insert({
-                      name: newArtist.name.trim(),
-                      phone: '+' + phoneDigits,
-                      email: newArtist.email.trim() || null,
-                      city_text: newArtist.city_text.trim() || null,
-                      instagram: newArtist.instagram.trim() || null
-                    })
-                    .select()
-                    .single();
+                  // Create artist profile using admin function
+                  const { data: artistId, error } = await supabase
+                    .rpc('admin_insert_artist_profile_temp', {
+                      p_name: newArtist.name.trim(),
+                      p_phone: newArtist.phone.trim(),
+                      p_email: newArtist.email.trim() || null,
+                      p_city: newArtist.city_text.trim() || null,
+                      p_instagram: newArtist.instagram.trim() || null
+                    });
                   
                   if (error) throw error;
                   
                   // Add to event immediately
-                  await addArtistToEvent(artist.id);
+                  await addArtistToEvent(artistId);
                   
                   // Reset form
                   setNewArtist({ name: '', phone: '', email: '', city_text: '', instagram: '' });
@@ -2621,7 +2593,7 @@ const AdminPanel = ({
                   alert('Failed to create artist. They may already exist.');
                 }
               }}
-              disabled={!newArtist.name.trim() || newArtist.phone.replace(/\D/g, '').length !== 11}
+              disabled={!newArtist.name.trim() || !newArtist.phone.trim()}
             >
               Create Artist
             </Button>

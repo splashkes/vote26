@@ -15,6 +15,7 @@ import ArtistsManagement from './components/ArtistsManagement';
 import PeopleManagement from './components/PeopleManagement';
 import HealthRecommendations from './components/HealthRecommendations';
 import AdminUsers from './components/AdminUsers';
+import InvitationManagement from './components/InvitationManagement';
 import Welcome from './components/Welcome';
 import './App.css';
 
@@ -47,6 +48,7 @@ function App() {
                 <Route path="people" element={<PeopleManagement />} />
                 <Route path="health" element={<HealthRecommendations />} />
                 <Route path="admin-users" element={<AdminUsers />} />
+                <Route path="invitations" element={<InvitationManagement />} />
                 <Route path="*" element={<Navigate to="/events" replace />} />
               </Route>
             </Routes>

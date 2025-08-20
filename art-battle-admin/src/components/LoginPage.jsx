@@ -8,10 +8,12 @@ import {
   Button,
   Callout,
   Heading,
-  Box
+  Box,
+  Dialog
 } from '@radix-ui/themes';
-import { ExclamationTriangleIcon } from '@radix-ui/react-icons';
+import { ExclamationTriangleIcon, CheckIcon } from '@radix-ui/react-icons';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 
 const LoginPage = () => {
   const { user, loading, signInWithEmail } = useAuth();
@@ -19,9 +21,20 @@ const LoginPage = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Password reset state
+  const [resetModalOpen, setResetModalOpen] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetError, setResetError] = useState('');
+  const [resetSuccess, setResetSuccess] = useState('');
+  const [passwordResetRequested, setPasswordResetRequested] = useState(false);
 
-  // Redirect if already logged in
+  // Redirect if already logged in, but pass password reset flag
   if (!loading && user) {
+    if (passwordResetRequested) {
+      return <Navigate to="/welcome?force_password_change=true" replace />;
+    }
     return <Navigate to="/events" replace />;
   }
 
@@ -41,6 +54,71 @@ const LoginPage = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handlePasswordReset = async (e) => {
+    e.preventDefault();
+    
+    if (!resetEmail.trim()) {
+      setResetError('Email address is required');
+      return;
+    }
+    
+    setResetLoading(true);
+    setResetError('');
+    setResetSuccess('');
+    
+    try {
+      // First, try to sign in the user to see if they can already log in
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email: resetEmail.trim(),
+        password: 'temp-password-that-will-fail'
+      });
+      
+      // If we get here without error, or with a specific "wrong password" error,
+      // it means the user exists and can potentially log in
+      
+      // Instead of sending reset email, let's flag that they want to reset
+      // and try to let them log in normally first
+      setPasswordResetRequested(true);
+      setResetModalOpen(false);
+      setEmail(resetEmail.trim());
+      setResetSuccess('Please try logging in with your current password first. If successful, you\'ll be prompted to set a new password.');
+      
+    } catch (err) {
+      // If the above fails, fall back to sending reset email
+      try {
+        const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+          resetEmail.trim(),
+          {
+            redirectTo: 'https://artb.art/admin/welcome?force_password_change=true'
+          }
+        );
+        
+        if (resetError) {
+          setResetError(resetError.message || 'Failed to send password reset email');
+        } else {
+          setResetSuccess('Password reset email sent! Please check your inbox and follow the instructions.');
+          setTimeout(() => {
+            setResetModalOpen(false);
+            setResetEmail('');
+            setResetSuccess('');
+          }, 3000);
+        }
+      } catch (resetErr) {
+        console.error('Password reset error:', resetErr);
+        setResetError('An unexpected error occurred. Please try again.');
+      }
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  const openResetModal = () => {
+    setResetModalOpen(true);
+    setResetEmail(email); // Pre-fill with current email if available
+    setResetError('');
+    setResetSuccess('');
   };
 
   if (loading) {
@@ -102,11 +180,74 @@ const LoginPage = () => {
             </Flex>
           </form>
 
-          <Text size="1" color="gray" style={{ textAlign: 'center', marginTop: '1rem' }}>
-            Admin access only. Contact support if you need access.
-          </Text>
+          <Flex direction="column" align="center" gap="2" style={{ marginTop: '1rem' }}>
+            <Button 
+              variant="ghost" 
+              size="1" 
+              onClick={openResetModal}
+              disabled={isLoading}
+            >
+              Forgot your password?
+            </Button>
+            
+            <Text size="1" color="gray" style={{ textAlign: 'center' }}>
+              Admin access only. Contact support if you need access.
+            </Text>
+          </Flex>
         </Flex>
       </Card>
+
+      {/* Password Reset Modal */}
+      <Dialog.Root open={resetModalOpen} onOpenChange={setResetModalOpen}>
+        <Dialog.Content style={{ maxWidth: '450px' }}>
+          <Dialog.Title>Reset Your Password</Dialog.Title>
+          <Dialog.Description size="2" mb="4">
+            Enter your admin email address and we'll send you a password reset link.
+          </Dialog.Description>
+
+          <form onSubmit={handlePasswordReset}>
+            <Flex direction="column" gap="4">
+              {resetError && (
+                <Callout.Root color="red">
+                  <Callout.Icon><ExclamationTriangleIcon /></Callout.Icon>
+                  <Callout.Text>{resetError}</Callout.Text>
+                </Callout.Root>
+              )}
+
+              {resetSuccess && (
+                <Callout.Root color="green">
+                  <Callout.Icon><CheckIcon /></Callout.Icon>
+                  <Callout.Text>{resetSuccess}</Callout.Text>
+                </Callout.Root>
+              )}
+
+              <label>
+                <Text size="2" weight="medium">Email Address</Text>
+                <TextField.Root
+                  type="email"
+                  placeholder="your.admin.email@example.com"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  disabled={resetLoading}
+                  mt="1"
+                  required
+                />
+              </label>
+
+              <Flex gap="3" mt="2" justify="end">
+                <Dialog.Close>
+                  <Button variant="soft" color="gray" disabled={resetLoading}>
+                    Cancel
+                  </Button>
+                </Dialog.Close>
+                <Button type="submit" loading={resetLoading} disabled={resetLoading}>
+                  {resetLoading ? 'Sending...' : 'Send Reset Link'}
+                </Button>
+              </Flex>
+            </Flex>
+          </form>
+        </Dialog.Content>
+      </Dialog.Root>
     </div>
   );
 };

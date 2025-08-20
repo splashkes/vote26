@@ -82,7 +82,7 @@ serve(async (req) => {
       throw statusError
     }
 
-    // Get artwork details
+    // Get artwork details with event and country info for currency
     const { data: artwork, error: artError } = await supabase
       .from('art')
       .select(`
@@ -90,6 +90,14 @@ serve(async (req) => {
         art_code,
         status,
         current_bid,
+        event_id,
+        events (
+          currency,
+          countries (
+            currency_code,
+            currency_symbol
+          )
+        ),
         artist_profiles (
           name
         )
@@ -143,7 +151,7 @@ serve(async (req) => {
       amount: paymentStatus?.amount || artwork.current_bid,  // Base amount without tax
       amount_with_tax: paymentStatus?.amount_with_tax || null,
       tax_amount: paymentStatus?.tax_amount || null,
-      currency: paymentStatus?.currency || 'USD',
+      currency: paymentStatus?.currency || artwork.events?.countries?.currency_code || artwork.events?.currency || 'USD',
       created_at: paymentStatus?.created_at || null,
       completed_at: paymentStatus?.completed_at || null,
       art_status: artwork.status,

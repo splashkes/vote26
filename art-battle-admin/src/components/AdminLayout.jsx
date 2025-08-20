@@ -64,16 +64,25 @@ const AdminLayout = () => {
     checkAdminStatus();
   }, [user?.email]);
 
-  // Extract selected event from URL params
+  // Extract selected event from URL params and determine if context panel should show
   useEffect(() => {
     const eventId = params.eventId;
+    
+    // Hide context panel for admin-users and invitations pages
+    const hideContextPanelRoutes = ['/admin-users', '/invitations'];
+    const shouldHideContext = hideContextPanelRoutes.some(route => 
+      location.pathname === route || location.pathname.startsWith(route + '/')
+    );
+    
+    setShowContextPanel(!shouldHideContext && !!eventId);
+    
     if (eventId && adminEvents) {
       const event = adminEvents.find(e => e.event_id === eventId || e.id === eventId);
       setSelectedEvent(event || null);
     } else {
       setSelectedEvent(null);
     }
-  }, [params.eventId, adminEvents]);
+  }, [params.eventId, adminEvents, location.pathname]);
 
   // Show loading state
   if (loading || adminLoading) {

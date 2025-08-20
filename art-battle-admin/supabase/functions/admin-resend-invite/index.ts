@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: true, 
-          message: 'New invitation sent successfully (valid for 1 hour)',
+          message: 'New invitation sent successfully (valid for 24 hours)',
           user: inviteData.user
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

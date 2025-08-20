@@ -26,6 +26,8 @@ const Welcome = () => {
   const [linkExpired, setLinkExpired] = useState(false);
   const [expiredToken, setExpiredToken] = useState('');
   const [requestingNewLink, setRequestingNewLink] = useState(false);
+  const [isPasswordReset, setIsPasswordReset] = useState(false);
+  const [forcePasswordChange, setForcePasswordChange] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     password: '',
@@ -33,6 +35,12 @@ const Welcome = () => {
   });
 
   useEffect(() => {
+    // Check for force password change from URL params
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('force_password_change') === 'true') {
+      setForcePasswordChange(true);
+    }
+    
     // Check for errors in URL hash
     const checkForErrors = () => {
       const hashParams = new URLSearchParams(window.location.hash.substring(1));
@@ -63,6 +71,7 @@ const Welcome = () => {
       const hashParams = new URLSearchParams(window.location.hash.substring(1));
       const accessToken = hashParams.get('access_token');
       const refreshToken = hashParams.get('refresh_token');
+      const type = hashParams.get('type');
       
       if (accessToken && refreshToken) {
         try {
@@ -73,8 +82,16 @@ const Welcome = () => {
           
           if (error) {
             console.error('Error setting session:', error);
-            setError('Failed to authenticate. Please try clicking the invite link again.');
+            if (type === 'recovery') {
+              setError('Failed to authenticate for password reset. Please try the reset link again.');
+            } else {
+              setError('Failed to authenticate. Please try clicking the invite link again.');
+            }
           } else {
+            // Check if this is a password reset flow
+            if (type === 'recovery') {
+              setIsPasswordReset(true);
+            }
             // Clear the hash from URL
             window.history.replaceState(null, '', window.location.pathname);
           }
@@ -141,7 +158,7 @@ const Welcome = () => {
       if (resendError) throw resendError;
       if (!data.success) throw new Error(data.error || 'Failed to resend invite');
 
-      setSuccess(data.message || 'A new invitation link has been sent to your email. Please check your inbox.');
+      setSuccess(data.message || 'A new invitation link has been sent to your email. Please check your inbox. The link is valid for 24 hours.');
       setLinkExpired(false);
       
     } catch (err) {
@@ -153,7 +170,7 @@ const Welcome = () => {
   };
 
   const validateForm = () => {
-    if (!formData.name.trim()) {
+    if (!isPasswordReset && !formData.name.trim()) {
       setError('Name is required');
       return false;
     }
@@ -180,25 +197,29 @@ const Welcome = () => {
     setError('');
     
     try {
-      // Update the user's password and name
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: formData.password,
-        data: { 
+      // Update the user's password and optionally name
+      const updateData = { password: formData.password };
+      
+      if (!isPasswordReset) {
+        updateData.data = { 
           name: formData.name,
           display_name: formData.name 
-        }
-      });
+        };
+      }
+      
+      const { error: updateError } = await supabase.auth.updateUser(updateData);
 
       if (updateError) {
         throw updateError;
       }
 
-      // Activate the admin user record
+      // Mark invitation as accepted and activate the admin user record
       if (user?.email) {
         const { error: adminError } = await supabase
           .from('abhq_admin_users')
           .update({ 
             active: true,
+            invitation_accepted_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           })
           .eq('email', user.email);
@@ -209,7 +230,11 @@ const Welcome = () => {
         }
       }
 
-      setSuccess('Welcome! Your admin account has been set up successfully.');
+      if (isPasswordReset) {
+        setSuccess('Password updated successfully! You can now use your new password to sign in.');
+      } else {
+        setSuccess('Welcome! Your admin account has been set up successfully.');
+      }
       
       // Redirect to dashboard after a short delay
       setTimeout(() => {
@@ -285,9 +310,14 @@ const Welcome = () => {
       <Card>
         <form onSubmit={handleSubmit}>
           <Box p="6">
-            <Heading size="6" mb="2">Complete Your Admin Setup</Heading>
+            <Heading size="6" mb="2">
+              {isPasswordReset ? 'Reset Your Password' : 'Complete Your Admin Setup'}
+            </Heading>
             <Text color="gray" mb="6">
-              Welcome to Art Battle Admin! Please set up your account to continue.
+              {isPasswordReset 
+                ? 'Please enter your new password to complete the reset process.'
+                : 'Welcome to Art Battle Admin! Please set up your account to continue.'
+              }
             </Text>
 
             {error && (
@@ -316,17 +346,19 @@ const Welcome = () => {
                 />
               </Box>
 
-              <Box>
-                <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>
-                  Your Name *
-                </Text>
-                <TextField.Root
-                  placeholder="Enter your full name"
-                  value={formData.name}
-                  onChange={(e) => handleInputChange('name', e.target.value)}
-                  disabled={loading}
-                />
-              </Box>
+              {!isPasswordReset && (
+                <Box>
+                  <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>
+                    Your Name *
+                  </Text>
+                  <TextField.Root
+                    placeholder="Enter your full name"
+                    value={formData.name}
+                    onChange={(e) => handleInputChange('name', e.target.value)}
+                    disabled={loading}
+                  />
+                </Box>
+              )}
 
               <Box>
                 <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>
@@ -363,10 +395,10 @@ const Welcome = () => {
                 {loading ? (
                   <Flex align="center" gap="2">
                     <Spinner size="1" />
-                    Setting up...
+                    {isPasswordReset ? 'Updating Password...' : 'Setting up...'}
                   </Flex>
                 ) : (
-                  'Complete Setup'
+                  isPasswordReset ? 'Update Password' : 'Complete Setup'
                 )}
               </Button>
             </Flex>

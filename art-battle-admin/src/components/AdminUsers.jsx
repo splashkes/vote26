@@ -24,7 +24,8 @@ import {
   ExclamationTriangleIcon,
   CheckIcon,
   Cross2Icon,
-  ReloadIcon
+  ReloadIcon,
+  PaperPlaneIcon
 } from '@radix-ui/react-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -45,6 +46,7 @@ const AdminUsers = () => {
   // Form states
   const [inviteLoading, setInviteLoading] = useState(false);
   const [updateLoading, setUpdateLoading] = useState(false);
+  const [resendingUserId, setResendingUserId] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   
@@ -337,6 +339,40 @@ const AdminUsers = () => {
     setSuccess('');
   };
 
+  const handleResendInvite = async (adminUser) => {
+    setResendingUserId(adminUser.id);
+    setError('');
+    setSuccess('');
+    
+    try {
+      const { data, error: resendError } = await supabase.functions.invoke('admin-improved-invite', {
+        body: {
+          email: adminUser.email,
+          level: adminUser.level,
+          cities_access: adminUser.cities_access || [],
+          notes: `Resent invitation on ${new Date().toISOString()}`
+        }
+      });
+
+      if (resendError) throw resendError;
+      if (!data.success) throw new Error(data.error || 'Failed to resend invite');
+
+      setSuccess(`Invitation resent to ${adminUser.email} successfully!`);
+      await fetchAdminUsers(true); // Refresh the list
+      
+      // Clear success message after a delay
+      setTimeout(() => {
+        setSuccess('');
+      }, 3000);
+      
+    } catch (err) {
+      console.error('Error resending invite:', err);
+      setError('Failed to resend invitation: ' + err.message);
+    } finally {
+      setResendingUserId(null);
+    }
+  };
+
   const handleCityToggle = (cityId, formType) => {
     const form = formType === 'invite' ? inviteForm : editForm;
     const setForm = formType === 'invite' ? setInviteForm : setEditForm;
@@ -429,7 +465,7 @@ const AdminUsers = () => {
                 <Table.ColumnHeaderCell>Level</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>City Access</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>Status</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell>Created</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell>Last Login</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>Actions</Table.ColumnHeaderCell>
               </Table.Row>
             </Table.Header>
@@ -480,23 +516,39 @@ const AdminUsers = () => {
                     </Badge>
                   </Table.Cell>
                   <Table.Cell>
-                    <Text size="1" color="gray">
-                      {new Date(adminUser.created_at).toLocaleDateString()}
-                    </Text>
-                    {adminUser.created_by && (
-                      <Text size="1" color="gray" style={{ display: 'block' }}>
-                        by {adminUser.created_by}
+                    {adminUser.last_sign_in_at ? (
+                      <Text size="1" color="gray">
+                        {new Date(adminUser.last_sign_in_at).toLocaleString()}
+                      </Text>
+                    ) : (
+                      <Text size="1" color="orange">
+                        Never logged in
                       </Text>
                     )}
                   </Table.Cell>
                   <Table.Cell>
-                    <Button 
-                      size="1" 
-                      variant="soft"
-                      onClick={() => openEditModal(adminUser)}
-                    >
-                      Edit
-                    </Button>
+                    <Flex gap="2">
+                      <Button 
+                        size="1" 
+                        variant="soft"
+                        onClick={() => openEditModal(adminUser)}
+                      >
+                        Edit
+                      </Button>
+                      {!adminUser.active && (
+                        <Button 
+                          size="1" 
+                          variant="soft"
+                          color="blue"
+                          onClick={() => handleResendInvite(adminUser)}
+                          loading={resendingUserId === adminUser.id}
+                          disabled={resendingUserId === adminUser.id}
+                        >
+                          <PaperPlaneIcon />
+                          {resendingUserId === adminUser.id ? 'Sending...' : 'Resend Invite'}
+                        </Button>
+                      )}
+                    </Flex>
                   </Table.Cell>
                 </Table.Row>
               ))}

@@ -19,7 +19,8 @@ import {
   BarChartIcon,
   LockClosedIcon,
   HamburgerMenuIcon,
-  ChevronRightIcon
+  ChevronRightIcon,
+  EnvelopeClosedIcon
 } from '@radix-ui/react-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -99,7 +100,7 @@ const AdminSidebar = ({ collapsed = false, onToggleCollapse }) => {
     }
   ];
 
-  // Add Admin Users for super admins only
+  // Add Admin Users and Invitations for super admins only
   const navItems = userLevel === 'super' 
     ? [
         ...baseNavItems.slice(0, -1), // All items except Settings
@@ -109,6 +110,13 @@ const AdminSidebar = ({ collapsed = false, onToggleCollapse }) => {
           label: 'Admin Users',
           description: 'Manage administrator accounts',
           color: 'orange'
+        },
+        {
+          to: '/invitations',
+          icon: EnvelopeClosedIcon,
+          label: 'Invitations',
+          description: 'Manage admin invitations',
+          color: 'blue'
         },
         baseNavItems[baseNavItems.length - 1] // Settings at the end
       ]

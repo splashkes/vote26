@@ -28,7 +28,7 @@ BEGIN
   ELSIF TG_TABLE_NAME = 'art_media' THEN
     SELECT e.eid INTO v_event_eid
     FROM art a JOIN events e ON e.id = a.event_id
-    WHERE a.id = NEW.artwork_id;
+    WHERE a.id = NEW.art_id;
   END IF;
 
   -- Only proceed if we have an event EID
@@ -127,7 +127,7 @@ BEGIN
         'endpoints', jsonb_build_array(
           '/live/event/' || v_event_eid || '/media'
         ),
-        'artwork_id', NEW.artwork_id,
+        'art_id', NEW.art_id,
         'timestamp', EXTRACT(EPOCH FROM NOW()),
         'cache_version', v_cache_version
       );

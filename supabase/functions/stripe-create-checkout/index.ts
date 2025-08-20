@@ -127,12 +127,12 @@ serve(async (req) => {
     const event = artwork.events
     const country = event.countries
     
-    let currency = event.currency || country?.currency_code || 'USD'
+    // Primary currency is always from event→country→currency relationship
+    let currency = country?.currency_code || event.currency || 'USD'
     let stripeAccountRegion = event.stripe_account_region || 'international'
     
-    // Override for Canada
+    // Set region based on country
     if (country?.code === 'CA') {
-      currency = 'CAD'
       stripeAccountRegion = 'canada'
     }
 

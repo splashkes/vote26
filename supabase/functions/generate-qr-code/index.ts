@@ -187,7 +187,7 @@ serve(async (req) => {
         },
         generated_at: now.toISOString(),
         expires_at: expiresAt.toISOString(),
-        scan_url: `https://artb.art/upgrade/${qrCode}`,
+        scan_url: `https://artb.art/v2/upgrade/${qrCode}`,
         stats: {
           total_scans: totalScans,
           valid_scans: validScans

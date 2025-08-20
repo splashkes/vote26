@@ -15,6 +15,7 @@ export class BroadcastCacheManager {
     this.endpointPatterns = {
       event: (eid) => `/live/event/${eid}`,
       media: (eid) => `/live/event/${eid}/media`,
+      artists: (eid) => `/live/event/${eid}/artists`,
       bids: (eid, round, easel) => `/live/event/${eid}-${round}-${easel}/bids`
     };
   }
@@ -229,6 +230,18 @@ export class BroadcastCacheManager {
       case 'media_updated':
         // Media changes affect media endpoint
         endpoints.push(this.endpointPatterns.media(eventId));
+        break;
+        
+      case 'artists_updated':
+        // Artist assignments affect main event endpoint and artists endpoint
+        endpoints.push(this.endpointPatterns.event(eventId));
+        endpoints.push(this.endpointPatterns.artists(eventId));
+        break;
+        
+      case 'round_contestants_updated':
+        // Round contestant changes affect main event endpoint and artists endpoint
+        endpoints.push(this.endpointPatterns.event(eventId));
+        endpoints.push(this.endpointPatterns.artists(eventId));
         break;
         
       default:
