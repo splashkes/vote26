@@ -466,6 +466,88 @@ const ArtistsManagement = () => {
     setEditingBio(false);
   };
 
+  // Fetch events for the invite dropdown
+  const fetchEvents = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const { data, error } = await supabase
+        .from('events')
+        .select('id, name, eid, event_start_datetime, cities(name, countries(name))')
+        .order('event_start_datetime', { ascending: false })
+        .limit(50);
+
+      if (!error && data) {
+        setEvents(data);
+      }
+    } catch (error) {
+      console.error('Error fetching events:', error);
+    }
+  };
+
+  // Handle inviting artist to event
+  const handleInviteArtist = () => {
+    setInviteMessage(`Hi ${selectedArtist?.artist_profiles?.name || 'there'},
+
+You're invited to participate in our upcoming Art Battle event! 
+
+We'd love to have you showcase your artistic talents in this exciting live painting competition. 
+
+Please let us know if you're interested in participating.
+
+Best regards,
+Art Battle Team`);
+    setInviteModalOpen(true);
+  };
+
+  // Send invitation
+  const sendInvitation = async () => {
+    if (!selectedEventForInvite || !selectedArtist?.artist_profiles?.email) {
+      alert('Please select an event and ensure the artist has an email address.');
+      return;
+    }
+
+    setInviteLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      const selectedEvent = events.find(e => e.id === selectedEventForInvite);
+      const response = await fetch(`https://xsqdkubgyqwpyvfltnrf.supabase.co/functions/v1/admin-send-invitation`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcWRrdWJneXF3cHl2Zmx0bnJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM0MjE2OTYsImV4cCI6MjA2ODk5NzY5Nn0.hY8v8IDZQTcdAFa_OvQNFd1CyvabGcOZZMn_J6c4c2U'
+        },
+        body: JSON.stringify({
+          artist_number: (selectedArtist.artist_profiles.entry_id || selectedArtist.artist_number).toString(),
+          event_eid: selectedEvent?.eid,
+          message_from_producer: inviteMessage,
+          artist_profile_id: selectedArtist.artist_profiles.id
+        })
+      });
+
+      if (response.ok) {
+        alert('Invitation sent successfully!');
+        setInviteModalOpen(false);
+        setSelectedEventForInvite('');
+        setInviteMessage('');
+        // Refresh artist data to show new invitation
+        fetchAllArtistsData();
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to send invitation');
+      }
+    } catch (error) {
+      console.error('Error sending invitation:', error);
+      alert(`Error sending invitation: ${error.message}`);
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
   const formatTimeSince = (date) => {
     if (!date) return '';
     const now = new Date();
@@ -1020,6 +1102,27 @@ const ArtistsManagement = () => {
                         </>
                       )}
                     </Box>
+
+                    {/* Action Buttons */}
+                    <Box mt="4" pt="3" style={{ borderTop: '1px solid var(--gray-6)' }}>
+                      <Flex gap="2">
+                        {selectedArtist?.artist_profiles?.email && (
+                          <Button 
+                            variant="solid" 
+                            color="blue" 
+                            size="2"
+                            onClick={handleInviteArtist}
+                          >
+                            Invite to Event
+                          </Button>
+                        )}
+                        {!selectedArtist?.artist_profiles?.email && (
+                          <Text size="2" color="gray">
+                            No email address available for invitations
+                          </Text>
+                        )}
+                      </Flex>
+                    </Box>
                   </Box>
                 </Card>
 
@@ -1182,6 +1285,97 @@ const ArtistsManagement = () => {
               </Flex>
             </Box>
           </ScrollArea>
+        </Dialog.Content>
+      </Dialog.Root>
+
+      {/* Invite Artist to Event Modal */}
+      <Dialog.Root open={inviteModalOpen} onOpenChange={setInviteModalOpen}>
+        <Dialog.Content style={{ maxWidth: 600 }}>
+          <Dialog.Title>
+            <Flex align="center" justify="between">
+              <Text size="5" weight="bold">
+                Invite Artist to Event
+              </Text>
+              <Dialog.Close>
+                <Button variant="ghost" size="1">
+                  <Cross2Icon />
+                </Button>
+              </Dialog.Close>
+            </Flex>
+          </Dialog.Title>
+
+          <Box p="4">
+            <Flex direction="column" gap="4">
+              {/* Artist Info */}
+              <Box>
+                <Text size="3" weight="medium" mb="2" style={{ display: 'block' }}>
+                  Inviting: {selectedArtist?.artist_profiles?.name || 'Unknown Artist'}
+                </Text>
+                <Text size="2" color="gray">
+                  Email: {selectedArtist?.artist_profiles?.email}
+                </Text>
+                <Text size="2" color="gray">
+                  Artist #: {selectedArtist?.artist_profiles?.entry_id || selectedArtist?.artist_number || 'Unknown'}
+                </Text>
+              </Box>
+
+              {/* Event Selector */}
+              <Box>
+                <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>
+                  Select Event
+                </Text>
+                <Select.Root value={selectedEventForInvite} onValueChange={setSelectedEventForInvite}>
+                  <Select.Trigger style={{ width: '100%' }} placeholder="Choose an event..." />
+                  <Select.Content>
+                    {events.map((event) => (
+                      <Select.Item key={event.id} value={event.id}>
+                        {event.name || event.eid} - {event.cities?.name ? `${event.cities.name}, ${event.cities.countries?.name}` : 'Location TBD'} 
+                        {event.event_start_datetime && (
+                          <Text size="1" color="gray" style={{ display: 'block' }}>
+                            {new Date(event.event_start_datetime).toLocaleDateString()}
+                          </Text>
+                        )}
+                      </Select.Item>
+                    ))}
+                  </Select.Content>
+                </Select.Root>
+              </Box>
+
+              {/* Message */}
+              <Box>
+                <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>
+                  Invitation Message
+                </Text>
+                <TextArea
+                  value={inviteMessage}
+                  onChange={(e) => setInviteMessage(e.target.value)}
+                  placeholder="Enter your invitation message..."
+                  rows={8}
+                  style={{ width: '100%' }}
+                />
+              </Box>
+
+              {/* Action Buttons */}
+              <Flex justify="end" gap="2">
+                <Button 
+                  variant="soft" 
+                  color="gray" 
+                  onClick={() => setInviteModalOpen(false)}
+                  disabled={inviteLoading}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  variant="solid" 
+                  color="blue" 
+                  onClick={sendInvitation}
+                  disabled={inviteLoading || !selectedEventForInvite || !inviteMessage.trim()}
+                >
+                  {inviteLoading ? <Spinner size="1" /> : 'Send Invitation'}
+                </Button>
+              </Flex>
+            </Flex>
+          </Box>
         </Dialog.Content>
       </Dialog.Root>
 

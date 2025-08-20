@@ -31,7 +31,7 @@ class PublicDataManager {
     const cacheKey = 'events';
     const cached = this.cache.get(cacheKey);
     
-    if (cached && Date.now() - cached.timestamp < 10000) { // 10 second cache
+    if (cached) { // Use cached data if available - no expiration
       console.log('📦 [V2-BROADCAST] Using cached events data');
       return cached.data;
     }
@@ -362,15 +362,8 @@ class PublicDataManager {
     
     this.subscribers.get(key).add(callback);
     
-    // Start polling for this key if not already polling
-    if (!this.refreshIntervals.has(key)) {
-      const interval = setInterval(() => {
-        this.refreshData(key);
-      }, key.startsWith('event-') ? 5000 : 10000); // 5s for events, 10s for event list
-      
-      this.refreshIntervals.set(key, interval);
-      console.log(`🔄 [V2-BROADCAST] Started polling for ${key} (cache refresh every ${key.startsWith('event-') ? '5' : '10'}s)`);
-    }
+    // No auto-polling - removed to prevent constant API calls and flickering
+    console.log(`📡 [V2-BROADCAST] Subscribed to ${key} (manual refresh only)`);
     
     // Return unsubscribe function
     return () => {

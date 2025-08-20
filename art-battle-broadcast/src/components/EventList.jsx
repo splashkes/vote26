@@ -51,17 +51,10 @@ const EventList = () => {
       processEventsData(data);
     });
     
-    // Add a safety timeout to prevent infinite loading
-    const loadingTimeout = setTimeout(() => {
-      if (loading) {
-        console.error('Loading timeout reached - forcing loading to false');
-        setLoading(false);
-        setEvents({ active: [], recent: [], future: [] });
-      }
-    }, 15000); // 15 second timeout
+    // No loading timeout needed with stable caching
+    // The loading state will be properly managed by the fetch completion
     
     return () => {
-      clearTimeout(loadingTimeout);
       unsubscribe();
     };
   }, []); // Remove loading dependency to prevent infinite loop
@@ -89,6 +82,20 @@ const EventList = () => {
     data.forEach((event) => {
       const eventStart = new Date(event.event_start_datetime);
       
+      // Debug AB3019 specifically
+      if (event.eid === 'AB3019') {
+        console.log('🔍 AB3019 Debug:', {
+          eid: event.eid,
+          name: event.name,
+          eventStart: eventStart.toISOString(),
+          now: now.toISOString(),
+          eighteenHoursFromNow: eighteenHoursFromNow.toISOString(),
+          isAfter18Hours: eventStart > eighteenHoursFromNow,
+          category: eventStart > eighteenHoursFromNow ? 'future' : 
+                   eventStart >= eighteenHoursAgo && eventStart <= eighteenHoursFromNow ? 'active' : 'recent'
+        });
+      }
+      
       // Active: 18 hours before to 18 hours after now
       if (eventStart >= eighteenHoursAgo && eventStart <= eighteenHoursFromNow) {
         categorized.active.push(event);
@@ -103,13 +110,24 @@ const EventList = () => {
       }
     });
 
-    // Sort recent events newest first (descending)
+    // Sort each category since endpoint ordering isn't reliable
+    categorized.future.sort((a, b) => 
+      new Date(a.event_start_datetime) - new Date(b.event_start_datetime)
+    );
     categorized.recent.sort((a, b) => 
       new Date(b.event_start_datetime) - new Date(a.event_start_datetime)
     );
 
+    console.log('📊 Event categorization results:', {
+      active: categorized.active.length,
+      recent: categorized.recent.length,
+      future: categorized.future.length,
+      futureEvents: categorized.future.map(e => ({ eid: e.eid, name: e.name }))
+    });
+    
     setEvents(categorized);
     setError(null);
+    setLoading(false);
   };
 
   const fetchEvents = async () => {

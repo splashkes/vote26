@@ -179,6 +179,7 @@ const generatePublicEventData = async (eventId: string) => {
       easel,
       round,
       created_at,
+      artist_id,
       artist_profiles!inner (
         id,
         name,
@@ -243,14 +244,70 @@ const generatePublicEventData = async (eventId: string) => {
   if (voteError) {
     console.warn(`[generatePublicEventData] Vote summary failed: ${voteError.message}`)
   }
+
+  console.log(`[generatePublicEventData] Querying round winners for UUID: ${eventInfo.id}`)
+  
+  // Get round winners data
+  const { data: roundWinners, error: winnersError } = await supabase
+    .from('round_contestants')
+    .select(`
+      is_winner,
+      artist_id,
+      easel_number,
+      rounds!inner(
+        event_id,
+        round_number
+      )
+    `)
+    .eq('rounds.event_id', eventInfo.id)
+    .gt('is_winner', 0)
+  
+  console.log(`[generatePublicEventData] Round winners result:`, {
+    count: roundWinners?.length || 0,
+    error: winnersError
+  })
+  
+  if (winnersError) {
+    console.warn(`[generatePublicEventData] Round winners query failed: ${winnersError.message}`)
+  }
+
+  // Process round winners data to match artworks
+  const processedWinners = processRoundWinners(roundWinners || [], artworks || [])
   
   return {
     event: eventInfo,
     artworks: artworks || [],
     vote_summary: voteSummary || [],
     current_bids: processedBids,
+    round_winners: processedWinners,
     generated_at: new Date().toISOString()
   }
+}
+
+const processRoundWinners = (winners: any[], artworks: any[]) => {
+  const roundWinners: { [key: string]: { [key: string]: string } } = {}
+  
+  winners.forEach(winner => {
+    // Get the round number from the joined rounds data
+    const roundNumber = winner.rounds?.round_number
+    
+    // Find the matching artwork by artist_id, easel, and round
+    const artwork = artworks.find(a => 
+      a.artist_id === winner.artist_id && 
+      a.easel === winner.easel_number &&
+      a.round === roundNumber
+    )
+    
+    if (artwork) {
+      const round = artwork.round || 1
+      if (!roundWinners[round]) roundWinners[round] = {}
+      
+      // is_winner = 1 means winner (only one value > 0 in the data)
+      roundWinners[round][artwork.id] = 'winner'
+    }
+  })
+  
+  return roundWinners
 }
 
 const processBidsForPublic = (bids: any[]) => {

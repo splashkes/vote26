@@ -92,6 +92,7 @@ const EventDetails = () => {
     eventEid, // Use EID for broadcast subscription, not UUID
     async (notificationData) => {
       console.log(`🔄 [V2-BROADCAST] Refreshing data after cache invalidation:`, notificationData);
+      console.log(`🔄 [V2-BROADCAST] Invalidated endpoints:`, notificationData.endpoints);
       
       // Use surgical updates instead of full fetchEventDetails() to avoid constant reloading
       console.log(`🔄 [V2-BROADCAST] Processing surgical updates for invalidated endpoints`);
@@ -124,7 +125,7 @@ const EventDetails = () => {
                     
                     if (targetArtwork) {
                       const topBid = data.bids[0]?.amount || 0;
-                      console.log(`✅ [V2-BROADCAST] Updating bid history for artwork ${targetArtwork.id} - ${data.bids.length} bids, top: $${topBid}`);
+                      console.log(`💰 Bid update: ${data.bids.length} bids, top: $${topBid}`);
                       setBidHistory(prev => ({
                         ...prev,
                         [targetArtwork.id]: data.bids
@@ -139,17 +140,16 @@ const EventDetails = () => {
                   }
                 } else if (endpoint.includes('/media')) {
                   // Handle media endpoint updates
-                  console.log(`✅ [V2-BROADCAST] Refreshing media data for event ${eventEid}`);
+                  console.log(`📸 Refreshing media data for event ${eventEid}`);
                   
                   // Update media data specifically when media endpoint is invalidated
                   if (data && data.media && Array.isArray(data.media)) {
-                    console.log(`🔍 [DEBUG] Media data received:`, data.media.length, 'artworks');
+                    console.log(`📸 Media update: ${data.media.length} artworks`);
                     
                     // Process media data by artwork (same logic as in fetchEventDetails)
                     const mediaByArt = {};
                     data.media.forEach((item, index) => {
                       const artId = item.artwork_id;
-                      console.log(`🔍 [DEBUG] Processing artwork ${index + 1}:`, artId, `Media count: ${item.media?.length || 0}`);
                       
                       if (item.media && Array.isArray(item.media)) {
                         // Convert media format to match initial load format
@@ -157,12 +157,10 @@ const EventDetails = () => {
                           ...mediaItem,
                           media_files: mediaItem.media_files
                         }));
-                        console.log(`🔍 [DEBUG] Added media for ${artId}:`, mediaByArt[artId].length, 'items');
                       }
                     });
                     
-                    console.log(`✅ [V2-BROADCAST] Updated media for ${Object.keys(mediaByArt).length} artworks`);
-                    console.log(`🔍 [DEBUG] Media by art keys:`, Object.keys(mediaByArt));
+                    console.log(`📸 Updated media for ${Object.keys(mediaByArt).length} artworks`);
                     
                     // Update artworks with new media data
                     setArtworks(prevArtworks => {
@@ -170,7 +168,6 @@ const EventDetails = () => {
                         ...artwork,
                         media: mediaByArt[artwork.id] || artwork.media || []
                       }));
-                      console.log(`🔍 [DEBUG] setArtworks called with ${updated.length} artworks`);
                       
                       // CRITICAL: Also update selectedArt if it's currently open
                       if (selectedArt && mediaByArt[selectedArt.id]) {
@@ -178,7 +175,6 @@ const EventDetails = () => {
                           ...selectedArt,
                           media: mediaByArt[selectedArt.id]
                         };
-                        console.log(`🔍 [DEBUG] Updated selectedArt with ${updatedSelectedArt.media.length} media items`);
                         setSelectedArt(updatedSelectedArt);
                       }
                       
@@ -191,7 +187,6 @@ const EventDetails = () => {
                         acc[round].push(artwork);
                         return acc;
                       }, {});
-                      console.log(`🔍 [DEBUG] Updated artworksByRound with ${Object.keys(regrouped).length} rounds`);
                       setArtworksByRound(regrouped);
                       
                       return updated;
@@ -449,7 +444,11 @@ const EventDetails = () => {
           if (cachedData.current_bids) {
             const bidsByArt = {};
             cachedData.current_bids.forEach(bid => {
-              bidsByArt[bid.art_id] = bid.current_bid;
+              bidsByArt[bid.art_id] = {
+                amount: bid.current_bid,
+                count: bid.bid_count || 0,
+                time: bid.bid_time
+              };
             });
             setCurrentBids(bidsByArt);
           }
@@ -465,6 +464,12 @@ const EventDetails = () => {
                 voteCount: vote.raw_vote_count || 0
               };
             }));
+          }
+
+          // Set round winners from cached event data
+          if (cachedData.round_winners) {
+            setRoundWinners(cachedData.round_winners);
+            console.log('✅ [V2-BROADCAST] Round winners loaded from cached endpoint');
           }
           
           console.log('✅ [V2-BROADCAST] EventDetails: Enhanced with cached data - bid history loads on demand');
@@ -686,8 +691,8 @@ const EventDetails = () => {
       setArtworks(artworksWithWeights);
       setVoteWeights(voteWeightMap);
       
-      // Fetch all votes to determine winners
-      await fetchRoundWinners(eventId, artworks);
+      // Winners loaded from cached endpoint in V2-BROADCAST
+      // await fetchRoundWinners(eventId, artworks);
     } catch (error) {
       console.error('Error fetching event details:', error);
       setError(error.message);
@@ -891,8 +896,8 @@ const EventDetails = () => {
       setArtworks(artworksWithWeights);
       setVoteWeights(voteWeightMap);
       
-      // Fetch winners data
-      await fetchRoundWinners(eventId, artworks);
+      // Winners loaded from cached endpoint in V2-BROADCAST
+      // await fetchRoundWinners(eventId, artworks);
       
       console.log('Background refresh completed successfully');
     } catch (error) {
@@ -925,21 +930,22 @@ const EventDetails = () => {
       
       // If status is closed, only show payment modal if there are actual bids
       if (artwork.status === 'closed') {
-        const history = bidHistory[artwork.id];
-        if (!history || history.length === 0) {
+        const bidData = currentBids[artwork.id];
+        if (!bidData || bidData.count === 0) {
           return false;
         }
       }
       
-      // Get bid history for this artwork (already checked above for closed status)
-      const history = bidHistory[artwork.id];
-      if (!history || history.length === 0) {
+      // Check if there are bids for this artwork
+      const bidData = currentBids[artwork.id];
+      if (!bidData || bidData.count === 0) {
         return false;
       }
       
       // Check if current user is the top bidder
+      const history = bidHistory[artwork.id] || [];
       const topBid = history[0]; // Assuming sorted by amount DESC
-      if (!topBid || topBid.person_id !== person.id) {
+      if (!history.length || !topBid || topBid.person_id !== person.id) {
         return false;
       }
       
@@ -1234,7 +1240,7 @@ const EventDetails = () => {
   };
 
   const getMinimumBid = (artId) => {
-    const currentBid = currentBids[artId] || 0;
+    const currentBid = currentBids[artId]?.amount || 0;
     const startingBid = event?.auction_start_bid || 0;
     
     // If there are no current bids, the minimum bid is the starting bid
@@ -1377,7 +1383,7 @@ const EventDetails = () => {
   };
 
   const handleBidIncrement = (artId, direction) => {
-    const currentBid = currentBids[artId] || 0;
+    const currentBid = currentBids[artId]?.amount || 0;
     const currentUserBid = bidAmounts[artId] || getMinimumBid(artId);
     const increment = calculateBidIncrement(currentBid);
     
@@ -1524,6 +1530,85 @@ const EventDetails = () => {
       } catch (bidError) {
         console.error(`❌ [V2-BROADCAST] Failed to load bids for artwork ${artwork.round}-${artwork.easel}:`, bidError);
       }
+    }
+  };
+
+  const handleDeleteMedia = async (mediaId) => {
+    try {
+      // Call edge function to delete media and handle broadcast
+      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/delete-media`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${supabase.supabaseKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          media_id: mediaId,
+          event_eid: event?.eid,
+          art_id: selectedArt?.id,
+          round: selectedArt?.round,
+          easel: selectedArt?.easel
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        console.error('Media deletion failed:', data.error);
+        alert('Failed to delete image. Please try again.');
+        return;
+      }
+
+      console.log('🗑️ Media deleted successfully');
+      
+      // Immediately update local state to remove the deleted media
+      setArtworks(prevArtworks => {
+        const updated = prevArtworks.map(artwork => {
+          if (artwork.id === selectedArt?.id) {
+            return {
+              ...artwork,
+              media: artwork.media?.filter(m => m.media_files?.id !== mediaId) || []
+            };
+          }
+          return artwork;
+        });
+        return updated;
+      });
+      
+      // Also update selectedArt if it's currently open
+      if (selectedArt) {
+        const updatedMedia = selectedArt.media?.filter(m => m.media_files?.id !== mediaId) || [];
+        setSelectedArt({
+          ...selectedArt,
+          media: updatedMedia
+        });
+        
+        // Reset selected image index if we deleted the current image
+        if (selectedImageIndex >= updatedMedia.length) {
+          setSelectedImageIndex(Math.max(0, updatedMedia.length - 1));
+        }
+      }
+      
+      // Update artworksByRound for main grid display
+      setArtworksByRound(prevRounds => {
+        const updated = { ...prevRounds };
+        Object.keys(updated).forEach(round => {
+          updated[round] = updated[round].map(artwork => {
+            if (artwork.id === selectedArt?.id) {
+              return {
+                ...artwork,
+                media: artwork.media?.filter(m => m.media_files?.id !== mediaId) || []
+              };
+            }
+            return artwork;
+          });
+        });
+        return updated;
+      });
+
+    } catch (error) {
+      console.error('Error in handleDeleteMedia:', error);
+      alert('Failed to delete image. Please try again.');
     }
   };
 
@@ -1816,7 +1901,7 @@ const EventDetails = () => {
                         {artwork.artist_profiles?.name || 'Unknown Artist'}
                       </Text>
                       <Text size="1" style={{ display: 'block', marginTop: '2px' }}>
-                        {currentBids[artwork.id] ? (
+                        {currentBids[artwork.id]?.amount ? (
                           <>
                             <Text size="1" color={
                               artwork.status === 'sold' ? 'red' : 
@@ -1824,7 +1909,7 @@ const EventDetails = () => {
                               artwork.status === 'cancelled' ? 'gray' : 
                               'yellow'
                             } weight="medium">
-                              ${Math.round(currentBids[artwork.id])}
+                              ${Math.round(currentBids[artwork.id]?.amount || 0)}
                             </Text>
                             <Text size="1" color="gray">
                               {' • '}
@@ -1884,8 +1969,8 @@ const EventDetails = () => {
                   // Sort each group by highest bid
                   Object.keys(artworksByStatus).forEach(status => {
                     artworksByStatus[status].sort((a, b) => {
-                      const bidA = currentBids[a.id] || 0;
-                      const bidB = currentBids[b.id] || 0;
+                      const bidA = currentBids[a.id]?.amount || 0;
+                      const bidB = currentBids[b.id]?.amount || 0;
                       return bidB - bidA;
                     });
                   });
@@ -1936,11 +2021,11 @@ const EventDetails = () => {
                     const imageUrls = getArtworkImageUrls(artwork, mediaFile);
                     const thumbnail = imageUrls.thumbnail;
                     const hasImage = !!thumbnail;
-                    const currentBid = currentBids[artwork.id] || 0;
-                    const history = bidHistory[artwork.id] || [];
-                    const lastBid = history[0]; // Most recent bid
-                    
-                    // Calculate time ago for last bid
+                    const bidData = currentBids[artwork.id];
+                    const currentBid = bidData?.amount || 0;
+                    const bidCount = bidData?.count || 0;
+                    const lastBidTime = bidData?.time;
+                    // Calculate time ago for last bid using auction data
                     const getTimeAgo = (timestamp) => {
                       if (!timestamp) return null;
                       const now = new Date();
@@ -2036,8 +2121,8 @@ const EventDetails = () => {
                                     ${Math.round(currentBid)}
                                   </Text>
                                   <Text size="1" color="gray">
-                                    {history.length} bid{history.length !== 1 ? 's' : ''}
-                                    {lastBid && ` • ${getTimeAgo(lastBid.created_at)}`}
+                                    {bidCount} bid{bidCount !== 1 ? 's' : ''}
+                                    {lastBidTime && ` • ${getTimeAgo(lastBidTime)}`}
                                   </Text>
                                   {artwork.closing_time && (
                                     <Text size="1" color="orange" weight="medium" style={{ display: 'block', marginTop: '2px' }}>
@@ -2051,7 +2136,7 @@ const EventDetails = () => {
                         </Card>
                         
                         {/* Paid Receipt Display - show if user is authenticated paid buyer */}
-                        {artwork.status === 'paid' && person && history.length > 0 && history[0].person_id === person.id && (
+                        {artwork.status === 'paid' && person && bidHistory[artwork.id]?.length > 0 && bidHistory[artwork.id]?.[0]?.person_id === person.id && (
                           <Card 
                             size="3" 
                             style={{ 
@@ -2198,22 +2283,53 @@ const EventDetails = () => {
                   </Flex>
                 </Dialog.Title>
 
-                <Box my="4">
+                <Box my="4" style={{ textAlign: 'center' }}>
                   {/* Main Image */}
-                  <Box style={{ position: 'relative' }}>
+                  <Box style={{ position: 'relative', display: 'inline-block' }}>
                     {hasImage ? (
-                      <img 
-                        src={imageUrl}
-                        alt={`${selectedArt.artist_profiles?.name || 'Unknown Artist'} - Easel ${selectedArt.easel}`}
-                        style={{ 
-                          maxWidth: '100%',
-                          maxHeight: '60vh',
-                          objectFit: 'contain',
-                          display: 'block',
-                          margin: '0 auto',
-                          borderRadius: '8px'
-                        }}
-                      />
+                      <>
+                        <img 
+                          src={imageUrl}
+                          alt={`${selectedArt.artist_profiles?.name || 'Unknown Artist'} - Easel ${selectedArt.easel}`}
+                          style={{ 
+                            maxWidth: '100%',
+                            maxHeight: '60vh',
+                            objectFit: 'contain',
+                            display: 'block',
+                            borderRadius: '8px'
+                          }}
+                        />
+                        {/* Delete button for admin users - positioned on the image */}
+                        {hasPhotoPermission && currentMedia && (
+                          <button
+                            onClick={() => {
+                              // Get media ID from the media_files object
+                              const mediaId = currentMedia?.media_files?.id;
+                              handleDeleteMedia(mediaId);
+                            }}
+                            style={{
+                              position: 'absolute',
+                              top: '10px',
+                              right: '10px',
+                              width: '24px',
+                              height: '24px',
+                              border: 'none',
+                              borderRadius: '50%',
+                              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                              color: 'white',
+                              cursor: 'pointer',
+                              fontSize: '14px',
+                              fontWeight: 'bold',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              lineHeight: '1'
+                            }}
+                          >
+                            ×
+                          </button>
+                        )}
+                      </>
                     ) : (
                       <Flex
                         style={{
@@ -2305,20 +2421,21 @@ const EventDetails = () => {
                         const thumb = thumbUrls.thumbnail;
                         return (
                           <Box
-                            key={media.id}
-                            onClick={() => setSelectedImageIndex(index)}
+                            key={media.media_id}
                             style={{
                               width: '60px',
                               height: '60px',
                               cursor: 'pointer',
                               border: selectedImageIndex === index ? '2px solid var(--accent-9)' : '2px solid transparent',
                               borderRadius: '4px',
-                              overflow: 'hidden'
+                              overflow: 'hidden',
+                              position: 'relative'
                             }}
                           >
                             <img
                               src={thumb}
                               alt={`Thumbnail ${index + 1}`}
+                              onClick={() => setSelectedImageIndex(index)}
                               style={{
                                 width: '100%',
                                 height: '100%',
@@ -2404,7 +2521,7 @@ const EventDetails = () => {
                     {(selectedArt.status === 'sold' || selectedArt.status === 'paid') && !(eventId && parseInt(eventId.replace('AB', '')) < 2936) && (
                       <PaymentButton
                         artwork={selectedArt}
-                        currentBid={currentBids[selectedArt.id] || selectedArt.current_bid}
+                        currentBid={currentBids[selectedArt.id]?.amount || selectedArt.current_bid}
                         isWinningBidder={(() => {
                           // Check if current user is the winning bidder
                           if (!person || !bidHistory[selectedArt.id] || bidHistory[selectedArt.id].length === 0) {
@@ -2697,7 +2814,7 @@ const EventDetails = () => {
                 {/* Payment Button */}
                 <PaymentButton
                   artwork={autoPaymentModal}
-                  currentBid={currentBids[autoPaymentModal.id] || autoPaymentModal.current_bid}
+                  currentBid={currentBids[autoPaymentModal.id]?.amount || autoPaymentModal.current_bid}
                   isWinningBidder={true}
                   onPaymentComplete={() => {
                     setAutoPaymentModal(null);

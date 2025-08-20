@@ -123,7 +123,7 @@ const EventDetail = () => {
         .from('events')
         .select(`
           *,
-          cities(id, name, country_id, countries(id, name, code)),
+          cities(id, name, country_id, countries(id, name, code, currency_code, currency_symbol)),
           event_admins(id, admin_level, phone),
           rounds(
             id,
@@ -1235,6 +1235,19 @@ The Art Battle Team`);
                     value={event.cities?.countries?.name} 
                     fieldName="cities.countries.name" 
                   />
+                </Text>
+                <Text size="2">
+                  <strong>Currency:</strong>{' '}
+                  <DebugField 
+                    value={event.cities?.countries?.currency_code} 
+                    fieldName="cities.countries.currency_code" 
+                    fallback="N/A"
+                  />
+                  {event.cities?.countries?.currency_symbol && (
+                    <span style={{ marginLeft: '8px', fontWeight: 'bold', color: 'var(--blue-11)' }}>
+                      {event.cities.countries.currency_symbol}
+                    </span>
+                  )}
                 </Text>
               </Flex>
             </Box>
