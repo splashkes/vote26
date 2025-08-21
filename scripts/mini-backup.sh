@@ -16,9 +16,9 @@ set -e
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-BACKUP_BASE_DIR="$PROJECT_DIR/mini-backups"
+BACKUP_BASE_DIR="$PROJECT_DIR/supabase-functions"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-BACKUP_DIR="$BACKUP_BASE_DIR/mini_$TIMESTAMP"
+BACKUP_DIR="$BACKUP_BASE_DIR"
 
 # Database connection
 DB_HOST="${SUPABASE_DB_HOST:-db.xsqdkubgyqwpyvfltnrf.supabase.co}"
@@ -117,15 +117,10 @@ Recovery:
 Backup location: $BACKUP_DIR
 EOF
 
-# 6. Compress
-cd "$BACKUP_BASE_DIR"
-tar -czf "mini_$TIMESTAMP.tar.gz" "mini_$TIMESTAMP"
-rm -rf "mini_$TIMESTAMP"
-
 # Summary
 echo ""
 echo "✅ Mini backup completed!"
-echo "📦 File: $BACKUP_BASE_DIR/mini_$TIMESTAMP.tar.gz"
+echo "📁 Directory: $BACKUP_DIR"
 echo "📊 $deployed_count deployed + $local_count local functions + $db_func_count DB functions"
 echo ""
-echo "To restore: tar -xzf mini_$TIMESTAMP.tar.gz"
+echo "Backup contents can be searched and accessed directly in: $BACKUP_DIR"

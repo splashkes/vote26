@@ -1,0 +1,56 @@
+
+  
+   ID                                   | NAME                           | SLUG                           | STATUS | VERSION | UPDATED_AT (UTC)    
+  --------------------------------------|--------------------------------|--------------------------------|--------|---------|---------------------
+   68e16976-7e7c-4923-b67a-7c22d855a238 | send-sms                       | send-sms                       | ACTIVE | 21      | 2025-08-04 15:11:49 
+   23fec55a-8a4e-4054-a7ff-af7eaee39e1a | cloudflare-direct-upload       | cloudflare-direct-upload       | ACTIVE | 20      | 2025-07-31 17:12:38 
+   ecec9de3-c854-44e4-9c3b-a006ff300243 | test-function                  | test-function                  | ACTIVE | 15      | 2025-07-31 17:06:04 
+   ac7fe2c4-289c-47c6-9264-87610e8c3f8a | slack-webhook                  | slack-webhook                  | ACTIVE | 17      | 2025-08-04 02:16:03 
+   33de40e6-8bb0-49e9-a4ff-21784739c4df | slack-channel-lookup           | slack-channel-lookup           | ACTIVE | 14      | 2025-08-04 12:02:03 
+   c94c954f-9582-4d33-ad06-7296aaa147c5 | stripe-create-checkout         | stripe-create-checkout         | ACTIVE | 29      | 2025-08-20 23:54:13 
+   48f36631-5a03-4684-8ebd-404abbdd54c1 | stripe-webhook-handler         | stripe-webhook-handler         | ACTIVE | 25      | 2025-08-07 14:17:31 
+   5457dcc3-222b-478c-81ec-e4389db42aa9 | stripe-payment-status          | stripe-payment-status          | ACTIVE | 18      | 2025-08-20 02:09:06 
+   04f714a0-8f9b-4b91-88f6-79c0da5d2270 | stripe-payment-success         | stripe-payment-success         | ACTIVE | 6       | 2025-08-07 15:12:59 
+   9f46f40d-c8a2-41e1-9be9-28907854cac6 | generate-qr-code               | generate-qr-code               | ACTIVE | 15      | 2025-08-17 02:52:07 
+   67c32bde-f086-4e96-b93a-bf36f206ce6d | validate-qr-scan               | validate-qr-scan               | ACTIVE | 17      | 2025-08-17 03:35:01 
+   ac213821-da19-4780-8187-affbc3537625 | phone-validation               | phone-validation               | ACTIVE | 6       | 2025-08-09 06:20:36 
+   9dd34012-e1bd-4866-8e05-76c245692f9c | stripe-connect-onboard         | stripe-connect-onboard         | ACTIVE | 6       | 2025-08-10 16:27:57 
+   e8b2f697-7117-4f57-9479-4011cc3663d0 | stripe-connect-debug           | stripe-connect-debug           | ACTIVE | 4       | 2025-08-10 17:36:48 
+   db54fc19-4601-4bdb-9e6e-ec50234f2949 | admin-search-people            | admin-search-people            | ACTIVE | 4       | 2025-08-10 19:18:26 
+   aba08527-a95a-4d3f-a559-e4e432d4c817 | rfm-scoring                    | rfm-scoring                    | ACTIVE | 8       | 2025-08-11 13:07:38 
+   691bf024-162e-40b0-8a1f-490fddae00eb | meta-ads-report                | meta-ads-report                | ACTIVE | 4       | 2025-08-11 13:25:37 
+   849aeecc-3777-4796-a6c8-b70cdc0314d4 | health-report                  | health-report                  | ACTIVE | 11      | 2025-08-11 13:25:32 
+   f308ba25-179a-4ee3-8f37-3f0af4135b65 | eventbrite-data                | eventbrite-data                | ACTIVE | 6       | 2025-08-11 13:25:42 
+   ccb7429c-0265-4ff0-998a-90115d6614f1 | eventbrite-test                | eventbrite-test                | ACTIVE | 1       | 2025-08-11 12:55:45 
+   83ed2e23-ed0d-40e8-95fe-ba284e5f15fb | admin-person-history           | admin-person-history           | ACTIVE | 3       | 2025-08-11 14:07:11 
+   e7480fe9-301d-4551-ac5d-0970c0654f3d | health-report-public           | health-report-public           | ACTIVE | 14      | 2025-08-13 18:44:21 
+   85dc0a58-1107-4dff-9cff-e6a93b692d53 | admin-artist-workflow          | admin-artist-workflow          | ACTIVE | 19      | 2025-08-13 16:25:16 
+   fb8ee4cc-1bca-4248-a7e7-acfac22bee9d | test-artist-query              | test-artist-query              | ACTIVE | 1       | 2025-08-12 10:58:23 
+   00c36efa-af84-4d05-b467-85382692d384 | create-artist-profile          | create-artist-profile          | ACTIVE | 10      | 2025-08-14 02:50:15 
+   ff2f6082-4759-4050-ba94-8d95c528a7a6 | admin-artist-profiles          | admin-artist-profiles          | ACTIVE | 10      | 2025-08-19 18:16:43 
+   49efd4cf-fe62-4fba-b262-de3f744056c5 | set-primary-profile            | set-primary-profile            | ACTIVE | 1       | 2025-08-12 20:43:33 
+   5aa256df-fcf9-489e-98da-54a35124f5dc | create-new-profile             | create-new-profile             | ACTIVE | 1       | 2025-08-12 23:48:54 
+   eb91b1e8-d85d-4448-a71c-d83a901cb926 | admin-create-event             | admin-create-event             | ACTIVE | 10      | 2025-08-18 22:00:13 
+   1ecaee57-a348-4fde-b37a-f76092a71be0 | test-basic                     | test-basic                     | ACTIVE | 1       | 2025-08-13 13:26:19 
+   0ed97aa6-0b9b-4fd1-abf1-c84e01b7d492 | test-events-insert             | test-events-insert             | ACTIVE | 1       | 2025-08-13 13:28:36 
+   aa08c3e1-0db3-4f18-999b-c08b88d90dde | admin-send-invitation          | admin-send-invitation          | ACTIVE | 1       | 2025-08-13 15:22:42 
+   db95b0f9-89d3-4c08-926f-0150aa31259d | admin-artists-search           | admin-artists-search           | ACTIVE | 5       | 2025-08-19 18:29:00 
+   9cbf72a2-abd6-472f-97dd-5cddedaf020a | admin-alias-lookup             | admin-alias-lookup             | ACTIVE | 1       | 2025-08-13 18:06:35 
+   a67e2f52-ad71-4db9-84fe-ec054284aeba | admin-update-event             | admin-update-event             | ACTIVE | 4       | 2025-08-18 22:00:21 
+   bf33567b-28c3-49cb-a41a-3e69b0be956a | create-profile-clean           | create-profile-clean           | ACTIVE | 2       | 2025-08-18 15:06:42 
+   5b52601b-f626-478a-93ed-0d0571ac906d | update-profile-clean           | update-profile-clean           | ACTIVE | 2       | 2025-08-19 05:16:23 
+   2009943e-a0d8-403f-beec-83a97554cb99 | auth-webhook                   | auth-webhook                   | ACTIVE | 2       | 2025-08-17 04:18:53 
+   db0cc42a-d685-4e79-bc8e-9397141f9ebb | v2-public-event                | v2-public-event                | ACTIVE | 28      | 2025-08-20 15:54:51 
+   578099a2-53fd-4f82-8a47-1e53d5ddf493 | v2-public-events               | v2-public-events               | ACTIVE | 2       | 2025-08-18 00:55:49 
+   6ca1cb6e-e1c3-456f-8f6e-f52f28a39a1f | v2-public-bids                 | v2-public-bids                 | ACTIVE | 2       | 2025-08-18 14:23:24 
+   b049d878-ef15-4d00-8226-2ff67b10d3c0 | v2-public-votes                | v2-public-votes                | ACTIVE | 1       | 2025-08-18 00:29:55 
+   5f99c478-e581-4500-84fa-2269c81e831a | v2-test-simple                 | v2-test-simple                 | ACTIVE | 1       | 2025-08-18 01:03:58 
+   b42a9c21-e54b-43af-83cf-3b89c33ee522 | admin-invite-user              | admin-invite-user              | ACTIVE | 31      | 2025-08-19 16:40:58 
+   0af170de-4832-4e85-a569-424ee80adbd9 | admin-resend-invite            | admin-resend-invite            | ACTIVE | 2       | 2025-08-18 15:06:34 
+   c33ad1f9-c375-4aea-8fc7-7e79871ec381 | admin-get-users                | admin-get-users                | ACTIVE | 2       | 2025-08-20 15:32:51 
+   043afd02-2095-47b5-8041-e5ceaa3a43a3 | admin-activate-confirmed-users | admin-activate-confirmed-users | ACTIVE | 1       | 2025-08-18 22:29:30 
+   f96d9a7a-8a2a-4a85-a380-1ed58f483530 | test-admin-insert              | test-admin-insert              | ACTIVE | 1       | 2025-08-19 04:06:18 
+   5552c172-d4a6-4015-b199-605206e838b9 | test-admin-create              | test-admin-create              | ACTIVE | 1       | 2025-08-19 04:55:33 
+   834230dd-89b6-4fa6-913b-0db80c1c5396 | delete-media                   | delete-media                   | ACTIVE | 1       | 2025-08-19 19:25:26 
+   6cdd55b4-7e6b-4863-bf3f-fc732643d38e | admin-improved-invite          | admin-improved-invite          | ACTIVE | 1       | 2025-08-20 15:22:02 
+

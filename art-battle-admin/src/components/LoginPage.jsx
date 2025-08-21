@@ -69,46 +69,15 @@ const LoginPage = () => {
     setResetSuccess('');
     
     try {
-      // First, try to sign in the user to see if they can already log in
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-        email: resetEmail.trim(),
-        password: 'temp-password-that-will-fail'
-      });
-      
-      // If we get here without error, or with a specific "wrong password" error,
-      // it means the user exists and can potentially log in
-      
-      // Instead of sending reset email, let's flag that they want to reset
-      // and try to let them log in normally first
+      // Set flag to redirect to password change after login
       setPasswordResetRequested(true);
       setResetModalOpen(false);
       setEmail(resetEmail.trim());
-      setResetSuccess('Please try logging in with your current password first. If successful, you\'ll be prompted to set a new password.');
+      setResetSuccess('Please try logging in with your current password. If successful, you\'ll be prompted to change your password.');
       
     } catch (err) {
-      // If the above fails, fall back to sending reset email
-      try {
-        const { error: resetError } = await supabase.auth.resetPasswordForEmail(
-          resetEmail.trim(),
-          {
-            redirectTo: 'https://artb.art/admin/welcome?force_password_change=true'
-          }
-        );
-        
-        if (resetError) {
-          setResetError(resetError.message || 'Failed to send password reset email');
-        } else {
-          setResetSuccess('Password reset email sent! Please check your inbox and follow the instructions.');
-          setTimeout(() => {
-            setResetModalOpen(false);
-            setResetEmail('');
-            setResetSuccess('');
-          }, 3000);
-        }
-      } catch (resetErr) {
-        console.error('Password reset error:', resetErr);
-        setResetError('An unexpected error occurred. Please try again.');
-      }
+      console.error('Password reset error:', err);
+      setResetError('An unexpected error occurred. Please try again.');
     } finally {
       setResetLoading(false);
     }

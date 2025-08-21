@@ -2609,7 +2609,7 @@ const EventDetails = () => {
                     {(selectedArt.status === 'sold' || selectedArt.status === 'paid') && !(eventId && parseInt(eventId.replace('AB', '')) < 2936) && (
                       <PaymentButton
                         artwork={selectedArt}
-                        currentBid={currentBids[selectedArt.id]?.amount || selectedArt.current_bid}
+                        currentBid={selectedArt.current_bid}
                         isWinningBidder={(() => {
                           // Check if current user is the winning bidder
                           if (!person || !bidHistory[selectedArt.id] || bidHistory[selectedArt.id].length === 0) {
@@ -2907,7 +2907,7 @@ const EventDetails = () => {
                 {/* Payment Button */}
                 <PaymentButton
                   artwork={autoPaymentModal}
-                  currentBid={currentBids[autoPaymentModal.id]?.amount || autoPaymentModal.current_bid}
+                  currentBid={autoPaymentModal.current_bid}
                   isWinningBidder={true}
                   onPaymentComplete={() => {
                     setAutoPaymentModal(null);

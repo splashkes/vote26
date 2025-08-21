@@ -1,0 +1,17 @@
+Mini Backup Summary
+===================
+Created: Thu Aug 21 00:02:38 UTC 2025
+Backup ID: 20250821_000147
+
+Components:
+- Deployed functions: 1
+- Local functions: 77  
+- Database functions: 207
+- Database triggers: 1 file (all_triggers.sql)
+
+Recovery:
+- Deploy functions: supabase functions deploy [function-name]
+- Restore DB functions: psql -f db-functions/[function].sql
+- Review triggers: cat db-triggers/all_triggers.sql
+
+Backup location: /root/vote_app/vote26/supabase-functions

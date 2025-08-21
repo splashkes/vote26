@@ -111,10 +111,10 @@ const Welcome = () => {
     }
     
     // If user is already logged in and has admin access, redirect to dashboard
-    if (user) {
+    if (user && !forcePasswordChange) {
       checkAdminAccess();
     }
-  }, [user]);
+  }, [user, forcePasswordChange]);
 
   const checkAdminAccess = async () => {
     if (!user?.email) return;
@@ -170,7 +170,7 @@ const Welcome = () => {
   };
 
   const validateForm = () => {
-    if (!isPasswordReset && !formData.name.trim()) {
+    if (!isPasswordReset && !forcePasswordChange && !formData.name.trim()) {
       setError('Name is required');
       return false;
     }
@@ -200,7 +200,7 @@ const Welcome = () => {
       // Update the user's password and optionally name
       const updateData = { password: formData.password };
       
-      if (!isPasswordReset) {
+      if (!isPasswordReset && !forcePasswordChange) {
         updateData.data = { 
           name: formData.name,
           display_name: formData.name 
@@ -230,8 +230,8 @@ const Welcome = () => {
         }
       }
 
-      if (isPasswordReset) {
-        setSuccess('Password updated successfully! You can now use your new password to sign in.');
+      if (isPasswordReset || forcePasswordChange) {
+        setSuccess('Password updated successfully! Redirecting to dashboard...');
       } else {
         setSuccess('Welcome! Your admin account has been set up successfully.');
       }
@@ -311,11 +311,11 @@ const Welcome = () => {
         <form onSubmit={handleSubmit}>
           <Box p="6">
             <Heading size="6" mb="2">
-              {isPasswordReset ? 'Reset Your Password' : 'Complete Your Admin Setup'}
+              {(isPasswordReset || forcePasswordChange) ? 'Change Your Password' : 'Complete Your Admin Setup'}
             </Heading>
             <Text color="gray" mb="6">
-              {isPasswordReset 
-                ? 'Please enter your new password to complete the reset process.'
+              {(isPasswordReset || forcePasswordChange)
+                ? 'Please enter your new password to complete the change process.'
                 : 'Welcome to Art Battle Admin! Please set up your account to continue.'
               }
             </Text>
@@ -346,7 +346,7 @@ const Welcome = () => {
                 />
               </Box>
 
-              {!isPasswordReset && (
+              {!isPasswordReset && !forcePasswordChange && (
                 <Box>
                   <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>
                     Your Name *
@@ -395,10 +395,10 @@ const Welcome = () => {
                 {loading ? (
                   <Flex align="center" gap="2">
                     <Spinner size="1" />
-                    {isPasswordReset ? 'Updating Password...' : 'Setting up...'}
+                    {(isPasswordReset || forcePasswordChange) ? 'Updating Password...' : 'Setting up...'}
                   </Flex>
                 ) : (
-                  isPasswordReset ? 'Update Password' : 'Complete Setup'
+                  (isPasswordReset || forcePasswordChange) ? 'Update Password' : 'Complete Setup'
                 )}
               </Button>
             </Flex>
