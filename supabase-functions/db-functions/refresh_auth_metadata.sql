@@ -71,8 +71,24 @@
    ORDER BY created_at DESC                                                                                +
    LIMIT 1;                                                                                                +
                                                                                                            +
-   -- If no existing person found, create a new one for direct OTP signup                                  +
-   IF v_person_id IS NULL THEN                                                                             +
+   IF v_person_id IS NOT NULL THEN                                                                         +
+     -- Link existing person record                                                                        +
+     UPDATE people                                                                                         +
+     SET                                                                                                   +
+       auth_user_id = v_auth_user_id,                                                                      +
+       auth_phone = v_auth_phone,                                                                          +
+       verified = true,                                                                                    +
+       updated_at = NOW()                                                                                  +
+     WHERE id = v_person_id;                                                                               +
+                                                                                                           +
+     IF v_person_hash IS NULL THEN                                                                         +
+       v_person_hash := encode(digest((v_person_id::text || COALESCE(v_auth_phone, '')), 'sha256'), 'hex');+
+       UPDATE people                                                                                       +
+       SET hash = v_person_hash                                                                            +
+       WHERE id = v_person_id;                                                                             +
+     END IF;                                                                                               +
+   ELSE                                                                                                    +
+     -- Create new person for direct OTP signup                                                            +
      v_person_id := gen_random_uuid();                                                                     +
      v_person_name := 'User';                                                                              +
                                                                                                            +
@@ -103,22 +119,6 @@
        NOW(),                                                                                              +
        NOW()                                                                                               +
      );                                                                                                    +
-   ELSE                                                                                                    +
-     -- Link existing person record                                                                        +
-     UPDATE people                                                                                         +
-     SET                                                                                                   +
-       auth_user_id = v_auth_user_id,                                                                      +
-       auth_phone = v_auth_phone,                                                                          +
-       verified = true,                                                                                    +
-       updated_at = NOW()                                                                                  +
-     WHERE id = v_person_id;                                                                               +
-                                                                                                           +
-     IF v_person_hash IS NULL THEN                                                                         +
-       v_person_hash := encode(digest((v_person_id::text || COALESCE(v_auth_phone, '')), 'sha256'), 'hex');+
-       UPDATE people                                                                                       +
-       SET hash = v_person_hash                                                                            +
-       WHERE id = v_person_id;                                                                             +
-     END IF;                                                                                               +
    END IF;                                                                                                 +
                                                                                                            +
    -- Update auth user metadata                                                                            +
@@ -140,7 +140,7 @@
      'person_hash', v_person_hash,                                                                         +
      'person_name', COALESCE(v_person_name, 'User'),                                                       +
      'linked_phone', v_auth_phone,                                                                         +
-     'action', 'created_new_person'                                                                        +
+     'action', CASE WHEN v_person_name = 'User' THEN 'created_new_person' ELSE 'linked_existing_person' END+
    );                                                                                                      +
                                                                                                            +
  EXCEPTION                                                                                                 +

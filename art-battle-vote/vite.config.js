@@ -5,7 +5,6 @@ import react from '@vitejs/plugin-react'
 const timestamp = Date.now();
 export default defineConfig({
   plugins: [react()],
-  base: '/',
   build: {
     rollupOptions: {
       output: {

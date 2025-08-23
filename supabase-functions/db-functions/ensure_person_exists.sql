@@ -3,7 +3,6 @@
  CREATE OR REPLACE FUNCTION public.ensure_person_exists(p_phone text)             +
   RETURNS uuid                                                                    +
   LANGUAGE plpgsql                                                                +
-  SECURITY DEFINER                                                                +
  AS $function$                                                                    +
  DECLARE                                                                          +
    v_auth_user_id UUID;                                                           +

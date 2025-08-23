@@ -25,9 +25,7 @@ serve(async (req) => {
 
   try {
     // Get Supabase client with service role (internal webhook, no user auth needed)
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+    const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '')
 
     // Parse webhook payload
     const payload: AuthWebhookPayload = await req.json()

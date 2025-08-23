@@ -1,4 +1,9 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { 
+  getCurrencyFromEvent, 
+  formatCurrencyFromEvent, 
+  formatMinimumBidText 
+} from '../utils/currency';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Container,
@@ -32,9 +37,11 @@ import {
 } from '@radix-ui/react-icons';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import publicDataManager from '../lib/PublicDataManager';
+import { useBroadcastCache } from '../hooks/useBroadcastCache';
 import LoadingScreen from './LoadingScreen';
 import { getImageUrl, getArtworkImageUrls } from '../lib/imageHelpers';
-import { injectFlashStyles, applyFlashClass } from '../utils/realtimeFlash';
+// V2 BROADCAST: Perfect cache invalidation system
 
 // Import AdminPanel directly for now
 import AdminPanel from './AdminPanel';
@@ -53,6 +60,7 @@ const EventDetails = () => {
   
   const { user, person } = useAuth();
   const [event, setEvent] = useState(null);
+  const [eventEid, setEventEid] = useState(null); // EID for broadcast subscription
   const [artworks, setArtworks] = useState([]);
   const [selectedArt, setSelectedArt] = useState(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
@@ -81,6 +89,188 @@ const EventDetails = () => {
   const [biddingInProgress, setBiddingInProgress] = useState(false);
   const [autoPaymentModal, setAutoPaymentModal] = useState(null); // For automatic payment modal
   const [paymentModalChecked, setPaymentModalChecked] = useState(false); // Prevent duplicate modals
+  const [voteSummary, setVoteSummary] = useState([]); // V2 BROADCAST: Vote summary from cached data
+  const [bidRanges, setBidRanges] = useState({}); // V2 BROADCAST: Bid ranges from cached data
+  
+  // V2 BROADCAST: Perfect cache invalidation system
+  const { clearEventCache } = useBroadcastCache(
+    eventEid, // Use EID for broadcast subscription, not UUID
+    async (notificationData) => {
+      console.log(`🔄 [V2-BROADCAST] Refreshing data after cache invalidation:`, notificationData);
+      console.log(`🔄 [V2-BROADCAST] Invalidated endpoints:`, notificationData.endpoints);
+      
+      // Use surgical updates instead of full fetchEventDetails() to avoid constant reloading
+      console.log(`🔄 [V2-BROADCAST] Processing surgical updates for invalidated endpoints`);
+      
+      try {
+        // Only re-fetch specific endpoints that were invalidated with coordinated cache-busting
+        if (notificationData.endpoints && notificationData.endpoints.length > 0) {
+          const cacheVersion = notificationData.cache_version || Date.now();
+          
+          for (const endpoint of notificationData.endpoints) {
+            console.log(`🎯 [V2-BROADCAST] Re-fetching invalidated endpoint: ${endpoint}`);
+            
+            try {
+              // Use coordinated cache-busting from broadcast payload for ALL endpoints
+              const fullUrl = `https://artb.art${endpoint}?v=${cacheVersion}`;
+              console.log(`🔄 [V2-BROADCAST] Cache-busting with version: ${cacheVersion}`);
+              const response = await fetch(fullUrl);
+              
+              if (response.ok) {
+                const data = await response.json();
+                
+                // Handle different endpoint types
+                if (endpoint.includes('/bids')) {
+                  // Handle bid endpoint updates
+                  const match = endpoint.match(/\/live\/event\/[^-]+-(\d+)-(\d+)\/bids/);
+                  if (match && artworks.length > 0) {
+                    const round = parseInt(match[1]);
+                    const easel = parseInt(match[2]);
+                    const targetArtwork = artworks.find(art => art.round === round && art.easel === easel);
+                    
+                    if (targetArtwork) {
+                      const topBid = data.bids[0]?.amount || 0;
+                      console.log(`💰 Bid update: ${data.bids.length} bids, top: $${topBid}`);
+                      setBidHistory(prev => ({
+                        ...prev,
+                        [targetArtwork.id]: data.bids
+                      }));
+                      
+                      // Also update currentBids to reflect new highest bid
+                      setCurrentBids(prev => ({
+                        ...prev,
+                        [targetArtwork.id]: {
+                          amount: topBid,
+                          count: data.bids.length,
+                          time: data.bids[0]?.created_at
+                        }
+                      }));
+                    }
+                  }
+                } else if (endpoint.includes('/media')) {
+                  // Handle media endpoint updates
+                  console.log(`📸 Refreshing media data for event ${eventEid}`);
+                  
+                  // Update media data specifically when media endpoint is invalidated
+                  if (data && data.media && Array.isArray(data.media)) {
+                    console.log(`📸 Media update: ${data.media.length} artworks`);
+                    
+                    // Process media data by artwork (same logic as in fetchEventDetails)
+                    const mediaByArt = {};
+                    data.media.forEach((item, index) => {
+                      const artId = item.artwork_id;
+                      
+                      if (item.media && Array.isArray(item.media)) {
+                        // Convert media format to match initial load format
+                        mediaByArt[artId] = item.media.map(mediaItem => ({
+                          ...mediaItem,
+                          media_files: mediaItem.media_files
+                        }));
+                      }
+                    });
+                    
+                    console.log(`📸 Updated media for ${Object.keys(mediaByArt).length} artworks`);
+                    
+                    // Update artworks with new media data
+                    setArtworks(prevArtworks => {
+                      const updated = prevArtworks.map(artwork => ({
+                        ...artwork,
+                        media: mediaByArt[artwork.id] || artwork.media || []
+                      }));
+                      
+                      // CRITICAL: Also update selectedArt if it's currently open
+                      if (selectedArt && mediaByArt[selectedArt.id]) {
+                        const updatedSelectedArt = {
+                          ...selectedArt,
+                          media: mediaByArt[selectedArt.id]
+                        };
+                        setSelectedArt(updatedSelectedArt);
+                      }
+                      
+                      // CRITICAL: Also update artworksByRound for main grid display
+                      const regrouped = updated.reduce((acc, artwork) => {
+                        const round = artwork.round || 1;
+                        if (!acc[round]) {
+                          acc[round] = [];
+                        }
+                        acc[round].push(artwork);
+                        return acc;
+                      }, {});
+                      setArtworksByRound(regrouped);
+                      
+                      return updated;
+                    });
+                  } else {
+                    console.log(`⚠️ [DEBUG] No media data in response:`, data);
+                  }
+                } else if (endpoint.match(/\/live\/event\/[^\/]+$/)) {
+                  // Handle main event endpoint updates (votes, artwork changes, artist assignments)
+                  console.log(`✅ [V2-BROADCAST] Updating main event data from broadcast`);
+                  
+                  // Update main event data surgically instead of full reload
+                  if (data && data.event) {
+                    setEvent(data.event);
+                    console.log(`✅ [V2-BROADCAST] Updated event data surgically`);
+                  }
+                  if (data && data.artworks) {
+                    // CRITICAL: Preserve existing media data when updating artworks
+                    setArtworks(prevArtworks => {
+                      const updatedArtworks = data.artworks.map(newArtwork => {
+                        // Find existing artwork to preserve its media data
+                        const existingArtwork = prevArtworks.find(prev => prev.id === newArtwork.id);
+                        return {
+                          ...newArtwork,
+                          // Preserve existing media data if it exists, otherwise use empty array
+                          media: existingArtwork?.media || []
+                        };
+                      });
+                      
+                      console.log(`🔄 [V2-BROADCAST] About to regroup ${updatedArtworks.length} artworks by rounds (preserving media)...`);
+                      
+                      // CRITICAL: Also update artworksByRound when artworks change (for artist assignments)
+                      try {
+                        const regrouped = updatedArtworks.reduce((acc, artwork) => {
+                          const round = artwork.round || 1;
+                          if (!acc[round]) {
+                            acc[round] = [];
+                          }
+                          acc[round].push(artwork);
+                          return acc;
+                        }, {});
+                        
+                        console.log(`🔄 [V2-BROADCAST] Regrouping complete, setting artworksByRound...`);
+                        setArtworksByRound(regrouped);
+                        
+                        console.log(`✅ [V2-BROADCAST] Updated ${updatedArtworks.length} artworks and regrouped by rounds surgically (media preserved):`, Object.keys(regrouped).map(r => `Round ${r}: ${regrouped[r].length} artworks`));
+                      } catch (error) {
+                        console.error(`❌ [V2-BROADCAST] Error during regrouping:`, error);
+                      }
+                      
+                      return updatedArtworks;
+                    });
+                  } else {
+                    console.warn(`⚠️ [V2-BROADCAST] No artworks data in response or data is null:`, data);
+                  }
+                }
+              } else {
+                console.warn(`⚠️ [V2-BROADCAST] Failed to fetch ${fullUrl}: ${response.status}`);
+              }
+            } catch (error) {
+              console.error(`❌ [V2-BROADCAST] Error fetching ${endpoint}:`, error);
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`❌ [V2-BROADCAST] Failed to refresh data:`, error);
+      }
+    },
+    {
+      autoRefresh: true,
+      refreshDelay: 2000, // 2 second delay to batch multiple notifications
+      debugMode: true // Enable debug logging to troubleshoot media broadcasts
+    }
+  );
+  
   // Initialize activeTab from hash or tab parameter
   const getInitialTab = () => {
     const hash = window.location.hash.replace('#', '');
@@ -89,15 +279,9 @@ const EventDetails = () => {
   const [activeTab, setActiveTab] = useState(getInitialTab());
   const countdownInterval = useRef(null);
   
-  // Connection management state
-  const [connectionState, setConnectionState] = useState('disconnected'); // 'connecting', 'connected', 'disconnected', 'reconnecting'
-  const [reconnectAttempts, setReconnectAttempts] = useState(0);
-  const [subscriptionRefs, setSubscriptionRefs] = useState(new Map()); // Track active subscriptions
-  const reconnectTimeoutRef = useRef(null);
 
   useEffect(() => {
     fetchEventDetails();
-    injectFlashStyles(); // Inject flash animation styles
   }, [eventId]);
 
   // Handle tab parameter from URL hash and authentication check
@@ -142,266 +326,9 @@ const EventDetails = () => {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, [activeTab]);
 
-  // Connection management functions
-  const cleanupSubscriptions = () => {
-    console.log('Cleaning up all subscriptions...');
-    subscriptionRefs.forEach((subscription, key) => {
-      if (subscription && typeof subscription.unsubscribe === 'function') {
-        subscription.unsubscribe();
-      }
-    });
-    setSubscriptionRefs(new Map());
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-    }
-  };
+  // V2 BROADCAST: No subscription management needed - data loads on demand
 
-  const getReconnectDelay = (attempts) => {
-    // Exponential backoff: 1s, 2s, 4s, 8s, 16s, max 60s
-    return Math.min(1000 * Math.pow(2, attempts), 60000);
-  };
-
-  const createManagedSubscription = (channelName, subscriptionConfig) => {
-    const existingSubscription = subscriptionRefs.get(channelName);
-    if (existingSubscription) {
-      console.log(`Subscription ${channelName} already exists, skipping`);
-      return existingSubscription;
-    }
-
-    console.log(`Creating subscription: ${channelName}`);
-    setConnectionState('connecting');
-    
-    const subscription = supabase.channel(channelName);
-    
-    // Add the postgres_changes listener
-    subscription.on('postgres_changes', subscriptionConfig, subscriptionConfig.callback);
-    
-    // Handle connection events
-    subscription.on('system', {}, (payload) => {
-      console.log(`Subscription ${channelName} status:`, payload.status);
-      if (payload.status === 'SUBSCRIBED') {
-        setConnectionState('connected');
-        setReconnectAttempts(0);
-      } else if (payload.status === 'CLOSED') {
-        setConnectionState('disconnected');
-        // Auto-reconnect with exponential backoff
-        handleReconnect(channelName, subscriptionConfig);
-      }
-    });
-
-    const subscribedChannel = subscription.subscribe();
-    
-    // Store reference
-    setSubscriptionRefs(prev => new Map(prev).set(channelName, subscribedChannel));
-    
-    return subscribedChannel;
-  };
-
-  const handleReconnect = (channelName, subscriptionConfig) => {
-    if (reconnectAttempts >= 5) {
-      console.log(`Max reconnection attempts reached for ${channelName}`);
-      setConnectionState('disconnected');
-      return;
-    }
-
-    setConnectionState('reconnecting');
-    const delay = getReconnectDelay(reconnectAttempts);
-    
-    console.log(`Reconnecting ${channelName} in ${delay}ms (attempt ${reconnectAttempts + 1})`);
-    
-    reconnectTimeoutRef.current = setTimeout(() => {
-      setReconnectAttempts(prev => prev + 1);
-      createManagedSubscription(channelName, subscriptionConfig);
-    }, delay);
-  };
-
-  // Handle page visibility changes to pause/resume connections
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        console.log('Page hidden - pausing real-time connections');
-        // Don't cleanup, just note the state change
-      } else {
-        console.log('Page visible - resuming real-time connections');
-        // Reset reconnect attempts when page becomes visible again
-        setReconnectAttempts(0);
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, []);
-
-  // Set up realtime subscriptions for public views
-  useEffect(() => {
-    if (!eventId) return;
-
-    // Subscribe to art table for winner status, auction status changes
-    const artSubscription = supabase
-      .channel(`art-${eventId}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'art',
-        filter: `event_id=eq.${eventId}`
-      }, (payload) => {
-        console.log('Art realtime update:', payload);
-        
-        if (payload.eventType === 'UPDATE') {
-          setArtworks(prev => prev.map(art => {
-            if (art.id === payload.new.id) {
-              // Flash the updated artwork
-              setTimeout(() => {
-                const element = document.querySelector(`[data-art-id="${art.id}"]`);
-                if (element) applyFlashClass(element);
-              }, 0);
-              return { ...art, ...payload.new };
-            }
-            return art;
-          }));
-          
-          // Update round winners if winner status changed
-          if (payload.new.is_winner !== payload.old?.is_winner) {
-            fetchRoundWinners();
-          }
-        }
-      })
-      .subscribe();
-
-    // Subscribe to bids table for live bid updates
-    const bidsSubscription = supabase
-      .channel(`bids-${eventId}`)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'bids'
-      }, async (payload) => {
-        console.log('Bid realtime update:', payload);
-        
-        // Update current bids for the artwork
-        const artId = payload.new.art_id;
-        setCurrentBids(prev => {
-          const newBids = { ...prev, [artId]: payload.new.amount };
-          // Flash the bid display
-          setTimeout(() => {
-            const element = document.querySelector(`[data-bid-art="${artId}"]`);
-            if (element) applyFlashClass(element);
-          }, 0);
-          return newBids;
-        });
-        
-        // Reset bid input to new minimum bid when someone else bids
-        setBidAmounts(prev => {
-          const updated = { ...prev };
-          // Don't reset if this bid is from the current user
-          if (payload.new.person_id !== person?.id) {
-            delete updated[artId]; // This will make getMinimumBid() recalculate
-          }
-          return updated;
-        });
-        
-        // Update bid history
-        fetchBidHistory([artId]);
-      })
-      .subscribe();
-
-    // Subscribe to votes table for admin panel (only if admin)
-    let votesSubscription = null;
-    if (isAdmin) {
-      votesSubscription = supabase
-        .channel(`votes-${eventId}`)
-        .on('postgres_changes', {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'votes',
-          filter: `event_id=eq.${eventId}`
-        }, (payload) => {
-          console.log('Vote realtime update:', payload);
-          // Update vote weights
-          // fetchVoteWeights(); // TODO: Implement this function
-        })
-        .subscribe();
-    }
-
-    // Subscribe to round_contestants - real-time for admins, polling for regular users
-    let roundContestantsSubscription = null;
-    let roundContestantsInterval = null;
-    
-    if (isAdmin) {
-      // Admin users get real-time updates
-      roundContestantsSubscription = supabase
-        .channel(`round-contestants-${eventId}`)
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'round_contestants'
-        }, (payload) => {
-          console.log('Round contestants update:', payload);
-          // Use background refresh to avoid loading screen
-          refreshEventDataSilently();
-          // Flash the info tab if visible
-          setTimeout(() => {
-            const element = document.querySelector('[data-tab="info"]');
-            if (element) applyFlashClass(element, 'realtime-flash-subtle');
-          }, 0);
-        })
-        .subscribe();
-    } else {
-      // Regular users get polling every 5 minutes
-      roundContestantsInterval = setInterval(() => {
-        console.log('Round contestants polling update (5min interval)');
-        refreshEventDataSilently();
-      }, 5 * 60 * 1000); // 5 minutes
-    }
-
-    // Subscribe to art_media for image updates
-    const artMediaSubscription = supabase
-      .channel(`art-media-${eventId}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'art_media'
-      }, async (payload) => {
-        console.log('Art media update:', payload);
-        // Refresh the specific artwork's images
-        if (payload.new?.art_id) {
-          const artId = payload.new.art_id;
-          const { data: mediaData } = await supabase
-            .from('art_media')
-            .select('*')
-            .eq('art_id', artId)
-            .order('created_at', { ascending: false });
-          
-          if (mediaData) {
-            setArtworks(prev => prev.map(art => {
-              if (art.id === artId) {
-                // Flash the artwork image
-                setTimeout(() => {
-                  const element = document.querySelector(`[data-art-image="${artId}"]`);
-                  if (element) applyFlashClass(element);
-                }, 0);
-                return { ...art, art_media: mediaData };
-              }
-              return art;
-            }));
-          }
-        }
-      })
-      .subscribe();
-
-    return () => {
-      // Clean up all subscriptions and intervals
-      cleanupSubscriptions();
-      if (roundContestantsInterval) clearInterval(roundContestantsInterval);
-      
-      // Legacy cleanup for any remaining direct subscriptions
-      if (artSubscription) artSubscription.unsubscribe();
-      if (bidsSubscription) bidsSubscription.unsubscribe();
-      if (votesSubscription) votesSubscription.unsubscribe();
-      if (roundContestantsSubscription) roundContestantsSubscription.unsubscribe();
-      if (artMediaSubscription) artMediaSubscription.unsubscribe();
-    };
-  }, [eventId, isAdmin]);
+  // V2 BROADCAST: Data loads on demand via cached endpoints - no subscriptions needed
 
   useEffect(() => {
     // Check admin permissions from database
@@ -490,21 +417,116 @@ const EventDetails = () => {
       console.log('EventDetails: Starting fetchEventDetails for eventId:', eventId);
       setLoading(true);
       setError(null);
-      
-      // Add timeout protection
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Event loading timed out after 30 seconds')), 30000);
-      });
 
-      // Fetch event details
-      const { data: eventData, error: eventError } = await supabase
-        .from('events')
-        .select('*')
-        .eq('id', eventId)
-        .single();
+      // V2 BROADCAST VERSION: Get ALL data from cached endpoints (no direct Supabase queries)
+      try {
+        console.log('🌐 [V2-BROADCAST] Fetching event data from cached endpoint');
+        
+        // First try to determine EID from eventId parameter
+        let eid = eventId;
+        
+        // If eventId looks like a UUID, we need to find the EID
+        if (eventId.length === 36 && eventId.includes('-')) {
+          console.log('🔍 [V2-BROADCAST] EventId appears to be UUID, need to resolve EID...');
+          // For now, we'll need to get this from the events list or make this work differently
+          // But let's try the cached endpoint directly with the UUID
+          eid = eventId; // Keep as is for now, the endpoint should handle UUID->EID mapping
+        } else {
+          console.log('🌐 [V2-BROADCAST] EventId appears to be EID:', eid);
+        }
+        
+        const cachedData = await publicDataManager.getEventWithVersions(eid);
+        console.log('🌐 [V2-BROADCAST] Versioned event data received:', cachedData ? 'SUCCESS' : 'FAILED');
+        console.log('🌐 [V2-BROADCAST] Artworks in cache:', cachedData?.artworks?.length || 0);
 
-      if (eventError) throw eventError;
-      setEvent(eventData);
+        if (cachedData?.event) {
+          // Set event data from cached endpoint
+          setEvent(cachedData.event);
+          setEventEid(cachedData.event.eid); // Store EID for broadcast subscription
+          console.log('🌐 [V2-BROADCAST] Event EID from cache:', cachedData.event.eid);
+        }
+        
+        if (cachedData?.artworks && cachedData.artworks.length > 0) {
+          console.log('✅ [V2-BROADCAST] EventDetails: Loading artwork data from cached endpoints');
+          
+          // Media data is now included in the versioned response
+          console.log('🌐 [V2-BROADCAST] Processing media data from versioned response');
+          const mediaData = cachedData.media;
+          
+          // Process media data by artwork
+          const mediaByArt = {};
+          if (mediaData && mediaData.media) {
+            mediaData.media.forEach(item => {
+              const artId = item.artwork_id;
+              // The API now returns item.media as an array of media objects (newest first)
+              if (item.media && Array.isArray(item.media)) {
+                mediaByArt[artId] = item.media; // Already sorted newest first by API
+              }
+            });
+          }
+
+          // Enhance cached artworks with media data
+          const enhancedArtworks = cachedData.artworks.map(artwork => ({
+            ...artwork,
+            media: mediaByArt[artwork.id] || []
+          }));
+
+          // Process artworks by round
+          const grouped = {};
+          enhancedArtworks.forEach((artwork) => {
+            const round = artwork.round || 1;
+            if (!grouped[round]) {
+              grouped[round] = [];
+            }
+            grouped[round].push(artwork);
+          });
+
+          setArtworksByRound(grouped);
+          setArtworks(enhancedArtworks);
+          
+          // Set current bids from cached event data
+          if (cachedData.current_bids) {
+            const bidsByArt = {};
+            cachedData.current_bids.forEach(bid => {
+              bidsByArt[bid.art_id] = {
+                amount: bid.current_bid,
+                count: bid.bid_count || 0,
+                time: bid.bid_time
+              };
+            });
+            setCurrentBids(bidsByArt);
+          }
+          
+          // Set vote summary from cached event data
+          if (cachedData.vote_summary) {
+            setVoteSummary(cachedData.vote_summary.map(vote => {
+              return {
+                artId: vote.art_id,
+                artCode: vote.art_code,
+                artistName: vote.artist_name,
+                totalWeight: vote.weighted_vote_total || 0,
+                voteCount: vote.raw_vote_count || 0
+              };
+            }));
+          }
+
+          // Set round winners from cached event data
+          if (cachedData.round_winners) {
+            setRoundWinners(cachedData.round_winners);
+            console.log('✅ [V2-BROADCAST] Round winners loaded from cached endpoint');
+          }
+          
+          console.log('✅ [V2-BROADCAST] EventDetails: Enhanced with cached data - bid history loads on demand');
+          return; // Exit early with cached data - NO FALLBACKS
+        }
+      } catch (cachedError) {
+        console.error('❌ [V2-BROADCAST] CRITICAL: Cached endpoints failed:', cachedError);
+        // Check if it's a 429 rate limit error and provide friendly message
+        if (cachedError.message && cachedError.message.includes('429')) {
+          throw new Error('Oops! Too much refreshing. Please try again in a few minutes.');
+        }
+        throw new Error('API endpoints unavailable. This is a broadcast-only version that requires cached endpoints.');
+      }
 
       // Fetch artworks with artist profiles and media files
       const { data: artworks, error: artError } = await supabase
@@ -604,9 +626,13 @@ const EventDetails = () => {
       const historyByArt = {};
       if (bidsData) {
         bidsData.forEach(bid => {
-          // Track highest bid
-          if (!bidsByArt[bid.art_id] || bid.amount > bidsByArt[bid.art_id]) {
-            bidsByArt[bid.art_id] = bid.amount;
+          // Track highest bid with new format
+          if (!bidsByArt[bid.art_id] || bid.amount > bidsByArt[bid.art_id].amount) {
+            bidsByArt[bid.art_id] = {
+              amount: bid.amount,
+              count: bidsData.filter(b => b.art_id === bid.art_id).length,
+              time: bid.created_at
+            };
           }
           // Track bid history
           if (!historyByArt[bid.art_id]) {
@@ -713,8 +739,8 @@ const EventDetails = () => {
       setArtworks(artworksWithWeights);
       setVoteWeights(voteWeightMap);
       
-      // Fetch all votes to determine winners
-      await fetchRoundWinners(eventId, artworks);
+      // Winners loaded from cached endpoint in V2-BROADCAST
+      // await fetchRoundWinners(eventId, artworks);
     } catch (error) {
       console.error('Error fetching event details:', error);
       setError(error.message);
@@ -839,8 +865,12 @@ const EventDetails = () => {
       const historyByArt = {};
       if (bidsData) {
         bidsData.forEach(bid => {
-          if (!bidsByArt[bid.art_id] || bid.amount > bidsByArt[bid.art_id]) {
-            bidsByArt[bid.art_id] = bid.amount;
+          if (!bidsByArt[bid.art_id] || bid.amount > bidsByArt[bid.art_id].amount) {
+            bidsByArt[bid.art_id] = {
+              amount: bid.amount,
+              count: bidsData.filter(b => b.art_id === bid.art_id).length,
+              time: bid.created_at
+            };
           }
           if (!historyByArt[bid.art_id]) {
             historyByArt[bid.art_id] = [];
@@ -918,8 +948,8 @@ const EventDetails = () => {
       setArtworks(artworksWithWeights);
       setVoteWeights(voteWeightMap);
       
-      // Fetch winners data
-      await fetchRoundWinners(eventId, artworks);
+      // Winners loaded from cached endpoint in V2-BROADCAST
+      // await fetchRoundWinners(eventId, artworks);
       
       console.log('Background refresh completed successfully');
     } catch (error) {
@@ -952,21 +982,22 @@ const EventDetails = () => {
       
       // If status is closed, only show payment modal if there are actual bids
       if (artwork.status === 'closed') {
-        const history = bidHistory[artwork.id];
-        if (!history || history.length === 0) {
+        const bidData = currentBids[artwork.id];
+        if (!bidData || bidData.count === 0) {
           return false;
         }
       }
       
-      // Get bid history for this artwork (already checked above for closed status)
-      const history = bidHistory[artwork.id];
-      if (!history || history.length === 0) {
+      // Check if there are bids for this artwork
+      const bidData = currentBids[artwork.id];
+      if (!bidData || bidData.count === 0) {
         return false;
       }
       
       // Check if current user is the top bidder
+      const history = bidHistory[artwork.id] || [];
       const topBid = history[0]; // Assuming sorted by amount DESC
-      if (!topBid || topBid.person_id !== person.id) {
+      if (!history.length || !topBid || topBid.person_id !== person.id) {
         return false;
       }
       
@@ -986,29 +1017,38 @@ const EventDetails = () => {
     if (!artIds || artIds.length === 0) return;
     
     try {
-      // Use RPC function to get bid history with proper names (bypasses RLS)
-      const { data, error } = await supabase.rpc('get_bid_history_with_names', {
-        p_art_ids: artIds
-      });
+      console.log('🌐 [V2-BROADCAST] Loading bid history for artworks using cached endpoints');
       
-      if (error) {
-        console.error('Error fetching bid history:', error);
-        return;
-      }
-      
-      // Group bids by art_id
+      // V2 BROADCAST VERSION: Load bid history from cached endpoints
+      // For each artwork, we need to determine the round and easel to make the API call
       const historyByArt = {};
-      data.forEach(bid => {
-        if (!historyByArt[bid.art_id]) {
-          historyByArt[bid.art_id] = [];
+      
+      for (const artId of artIds) {
+        // Find the artwork to get round and easel
+        const artwork = artworks.find(art => art.id === artId);
+        if (!artwork || !event?.eid) {
+          console.warn(`⚠️ [V2-BROADCAST] Cannot load bids for artwork ${artId} - missing artwork or event data`);
+          continue;
         }
-        historyByArt[bid.art_id].push(bid);
-      });
+        
+        console.log(`🌐 [V2-BROADCAST] Loading versioned bid history for artwork ${artwork.round}-${artwork.easel}`);
+        
+        try {
+          const bidData = await publicDataManager.getArtworkBidsWithVersions(event.eid, artwork.round, artwork.easel, cachedData.cacheVersions || new Map());
+          
+          if (bidData && bidData.bids) {
+            historyByArt[artId] = bidData.bids;
+            console.log(`✅ [V2-BROADCAST] Loaded ${bidData.bids.length} bids for artwork ${artwork.round}-${artwork.easel}`);
+          }
+        } catch (bidError) {
+          console.error(`❌ [V2-BROADCAST] Failed to load bids for artwork ${artwork.round}-${artwork.easel}:`, bidError);
+        }
+      }
       
       // Update bid history state
       setBidHistory(prev => ({ ...prev, ...historyByArt }));
     } catch (error) {
-      console.error('Error in fetchBidHistory:', error);
+      console.error('❌ [V2-BROADCAST] Error in fetchBidHistory:', error);
     }
   };
 
@@ -1118,7 +1158,7 @@ const EventDetails = () => {
       // Add 2 second delay to simulate server processing
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Use the secure RPC function with EID/round/easel
+      // Back to simplified function to test basic INSERT
       const { data, error } = await supabase
         .rpc('cast_vote_secure', {
           p_eid: event.eid,
@@ -1126,7 +1166,11 @@ const EventDetails = () => {
           p_easel: confirmVote.easel
         });
 
+      console.log('Vote function call params:', { p_art_id: confirmVote.id });
+      console.log('Artwork ID:', confirmVote.id, 'EID:', event.eid, 'Round:', confirmVote.round, 'Easel:', confirmVote.easel);
       console.log('Vote function response:', { data, error });
+      console.log('Vote function data details:', JSON.stringify(data, null, 2));
+      console.log('Vote function error details:', JSON.stringify(error, null, 2));
       
       if (error) {
         console.error('Vote RPC error:', error);
@@ -1135,6 +1179,7 @@ const EventDetails = () => {
       
       if (!data || !data.success) {
         console.error('Vote function returned error:', data);
+        console.error('Error details:', data?.error, 'Detail:', data?.detail);
         setVoteError(data?.error || 'Failed to register vote');
       } else {
         // Vote successful - log weight info
@@ -1194,6 +1239,14 @@ const EventDetails = () => {
     return Math.ceil(increment / 5) * 5;
   };
 
+  // Helper function to get round title
+  const getRoundTitle = (round, artworksInRound) => {
+    if (artworksInRound.length === 1) {
+      return 'Featured Artist';
+    }
+    return `Round ${round}`;
+  };
+
   const getBiddingStatus = (artwork) => {
     if (!artwork) return null;
 
@@ -1247,7 +1300,7 @@ const EventDetails = () => {
   };
 
   const getMinimumBid = (artId) => {
-    const currentBid = currentBids[artId] || 0;
+    const currentBid = currentBids[artId]?.amount || 0;
     const startingBid = event?.auction_start_bid || 0;
     
     // If there are no current bids, the minimum bid is the starting bid
@@ -1390,7 +1443,7 @@ const EventDetails = () => {
   };
 
   const handleBidIncrement = (artId, direction) => {
-    const currentBid = currentBids[artId] || 0;
+    const currentBid = currentBids[artId]?.amount || 0;
     const currentUserBid = bidAmounts[artId] || getMinimumBid(artId);
     const increment = calculateBidIncrement(currentBid);
     
@@ -1474,16 +1527,24 @@ const EventDetails = () => {
         throw new Error(data?.error || 'Failed to place bid');
       }
 
-      // Update current bids with the actual amount from the response
+      // Update current bids with the new format including currency info
       setCurrentBids(prev => ({
         ...prev,
-        [confirmBid.artId]: data.amount || confirmBid.amount
+        [confirmBid.artId]: {
+          amount: data.amount || confirmBid.amount,
+          count: (prev[confirmBid.artId]?.count || 0) + 1,
+          time: new Date().toISOString()
+        }
       }));
 
-      // Clear bid amount
+      // Update bid amount to new minimum bid
+      const newCurrentBid = data.amount || confirmBid.amount;
+      const newIncrement = calculateBidIncrement(newCurrentBid);
+      const newMinimumBid = newCurrentBid + newIncrement;
+      
       setBidAmounts(prev => ({
         ...prev,
-        [confirmBid.artId]: ''
+        [confirmBid.artId]: newMinimumBid
       }));
 
       // Update the artwork's closing time if it was extended
@@ -1514,12 +1575,128 @@ const EventDetails = () => {
     }
   };
 
-  const handleArtClick = (artwork) => {
+  const handleArtClick = async (artwork) => {
     setSelectedArt(artwork);
     setSelectedImageIndex(0); // Start with the first (latest) image
     setVoteError('');
     setBidError('');
     setBidSuccess(false);
+    
+    // Initialize bid amount to minimum bid if not already set
+    if (artwork && !bidAmounts[artwork.id]) {
+      const currentBid = currentBids[artwork.id]?.amount || 0;
+      const startingBid = event?.auction_start_bid || 0;
+      
+      let minimumBid;
+      if (currentBid === 0) {
+        minimumBid = startingBid;
+      } else {
+        const increment = calculateBidIncrement(currentBid);
+        minimumBid = currentBid + increment;
+      }
+      
+      setBidAmounts(prev => ({
+        ...prev,
+        [artwork.id]: minimumBid
+      }));
+    }
+    
+    // V2 BROADCAST VERSION: Load bid history on demand when artwork is clicked
+    if (artwork && !bidHistory[artwork.id] && event?.eid) {
+      console.log(`🌐 [V2-BROADCAST] Loading bid history on-demand for artwork ${artwork.round}-${artwork.easel}`);
+      try {
+        const bidData = await publicDataManager.getArtworkBids(event.eid, artwork.round, artwork.easel);
+        
+        if (bidData && bidData.bids) {
+          setBidHistory(prev => ({
+            ...prev,
+            [artwork.id]: bidData.bids
+          }));
+          console.log(`✅ [V2-BROADCAST] Loaded ${bidData.bids.length} bids for artwork ${artwork.round}-${artwork.easel}`);
+        }
+      } catch (bidError) {
+        console.error(`❌ [V2-BROADCAST] Failed to load bids for artwork ${artwork.round}-${artwork.easel}:`, bidError);
+      }
+    }
+  };
+
+  const handleDeleteMedia = async (mediaId) => {
+    try {
+      // Call edge function to delete media and handle broadcast
+      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/delete-media`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${supabase.supabaseKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          media_id: mediaId,
+          event_eid: event?.eid,
+          art_id: selectedArt?.id,
+          round: selectedArt?.round,
+          easel: selectedArt?.easel
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        console.error('Media deletion failed:', data.error);
+        alert('Failed to delete image. Please try again.');
+        return;
+      }
+
+      console.log('🗑️ Media deleted successfully');
+      
+      // Immediately update local state to remove the deleted media
+      setArtworks(prevArtworks => {
+        const updated = prevArtworks.map(artwork => {
+          if (artwork.id === selectedArt?.id) {
+            return {
+              ...artwork,
+              media: artwork.media?.filter(m => m.media_files?.id !== mediaId) || []
+            };
+          }
+          return artwork;
+        });
+        return updated;
+      });
+      
+      // Also update selectedArt if it's currently open
+      if (selectedArt) {
+        const updatedMedia = selectedArt.media?.filter(m => m.media_files?.id !== mediaId) || [];
+        setSelectedArt({
+          ...selectedArt,
+          media: updatedMedia
+        });
+        
+        // Reset selected image index if we deleted the current image
+        if (selectedImageIndex >= updatedMedia.length) {
+          setSelectedImageIndex(Math.max(0, updatedMedia.length - 1));
+        }
+      }
+      
+      // Update artworksByRound for main grid display
+      setArtworksByRound(prevRounds => {
+        const updated = { ...prevRounds };
+        Object.keys(updated).forEach(round => {
+          updated[round] = updated[round].map(artwork => {
+            if (artwork.id === selectedArt?.id) {
+              return {
+                ...artwork,
+                media: artwork.media?.filter(m => m.media_files?.id !== mediaId) || []
+              };
+            }
+            return artwork;
+          });
+        });
+        return updated;
+      });
+
+    } catch (error) {
+      console.error('Error in handleDeleteMedia:', error);
+      alert('Failed to delete image. Please try again.');
+    }
   };
 
   const closeArtDialog = () => {
@@ -1703,7 +1880,7 @@ const EventDetails = () => {
             
             <Card mt="4">
               <Heading size="4" mb="2">Artists</Heading>
-              <ArtistsList eventId={eventId} />
+              <ArtistsList eventId={eventId} eventEid={eventEid} />
             </Card>
           </Tabs.Content>
 
@@ -1711,7 +1888,7 @@ const EventDetails = () => {
             {/* Artworks grouped by round */}
             {Object.keys(artworksByRound).sort((a, b) => a - b).map(round => (
         <Box key={round} mb="6">
-          <Heading size="5" mb="4">Round {round}</Heading>
+          <Heading size="5" mb="4">{getRoundTitle(round, artworksByRound[round])}</Heading>
           <Grid columns={{ initial: '2', sm: '3', md: '4' }} gap="4">
               {artworksByRound[round].map(artwork => {
                 // Get primary or latest media (newest first)
@@ -1811,7 +1988,7 @@ const EventDetails = () => {
                         {artwork.artist_profiles?.name || 'Unknown Artist'}
                       </Text>
                       <Text size="1" style={{ display: 'block', marginTop: '2px' }}>
-                        {currentBids[artwork.id] ? (
+                        {currentBids[artwork.id]?.amount ? (
                           <>
                             <Text size="1" color={
                               artwork.status === 'sold' ? 'red' : 
@@ -1819,7 +1996,7 @@ const EventDetails = () => {
                               artwork.status === 'cancelled' ? 'gray' : 
                               'yellow'
                             } weight="medium">
-                              ${Math.round(currentBids[artwork.id])}
+                              {formatCurrencyFromEvent(currentBids[artwork.id]?.amount || 0, event, 'display')}
                             </Text>
                             <Text size="1" color="gray">
                               {' • '}
@@ -1879,8 +2056,8 @@ const EventDetails = () => {
                   // Sort each group by highest bid
                   Object.keys(artworksByStatus).forEach(status => {
                     artworksByStatus[status].sort((a, b) => {
-                      const bidA = currentBids[a.id] || 0;
-                      const bidB = currentBids[b.id] || 0;
+                      const bidA = currentBids[a.id]?.amount || 0;
+                      const bidB = currentBids[b.id]?.amount || 0;
                       return bidB - bidA;
                     });
                   });
@@ -1931,11 +2108,11 @@ const EventDetails = () => {
                     const imageUrls = getArtworkImageUrls(artwork, mediaFile);
                     const thumbnail = imageUrls.thumbnail;
                     const hasImage = !!thumbnail;
-                    const currentBid = currentBids[artwork.id] || 0;
-                    const history = bidHistory[artwork.id] || [];
-                    const lastBid = history[0]; // Most recent bid
-                    
-                    // Calculate time ago for last bid
+                    const bidData = currentBids[artwork.id];
+                    const currentBid = bidData?.amount || 0;
+                    const bidCount = bidData?.count || 0;
+                    const lastBidTime = bidData?.time;
+                    // Calculate time ago for last bid using auction data
                     const getTimeAgo = (timestamp) => {
                       if (!timestamp) return null;
                       const now = new Date();
@@ -2028,11 +2205,11 @@ const EventDetails = () => {
                                 
                                 <Box style={{ textAlign: 'right' }} data-bid-art={artwork.id}>
                                   <Text size="4" weight="bold" style={{ display: 'block' }}>
-                                    ${Math.round(currentBid)}
+                                    {formatCurrencyFromEvent(currentBid, event, 'display')}
                                   </Text>
                                   <Text size="1" color="gray">
-                                    {history.length} bid{history.length !== 1 ? 's' : ''}
-                                    {lastBid && ` • ${getTimeAgo(lastBid.created_at)}`}
+                                    {bidCount} bid{bidCount !== 1 ? 's' : ''}
+                                    {lastBidTime && ` • ${getTimeAgo(lastBidTime)}`}
                                   </Text>
                                   {artwork.closing_time && (
                                     <Text size="1" color="orange" weight="medium" style={{ display: 'block', marginTop: '2px' }}>
@@ -2046,7 +2223,7 @@ const EventDetails = () => {
                         </Card>
                         
                         {/* Paid Receipt Display - show if user is authenticated paid buyer */}
-                        {artwork.status === 'paid' && person && history.length > 0 && history[0].person_id === person.id && (
+                        {artwork.status === 'paid' && person && bidHistory[artwork.id]?.length > 0 && bidHistory[artwork.id]?.[0]?.person_id === person.id && (
                           <Card 
                             size="3" 
                             style={{ 
@@ -2089,7 +2266,7 @@ const EventDetails = () => {
                                   </Flex>
                                   <Flex justify="between">
                                     <Text size="2" weight="medium">Final Bid:</Text>
-                                    <Text size="2" weight="bold">${Math.round(currentBid)}</Text>
+                                    <Text size="2" weight="bold">{formatCurrencyFromEvent(currentBid, event, 'display')}</Text>
                                   </Flex>
                                   <Flex justify="between">
                                     <Text size="2" weight="medium">Buyer:</Text>
@@ -2133,6 +2310,7 @@ const EventDetails = () => {
                 artworks={artworks}
                 currentTime={currentTime}
                 user={user}
+                onDataChange={clearEventCache}
               />
             )}
             {!isAdmin && (
@@ -2193,22 +2371,53 @@ const EventDetails = () => {
                   </Flex>
                 </Dialog.Title>
 
-                <Box my="4">
+                <Box my="4" style={{ textAlign: 'center' }}>
                   {/* Main Image */}
-                  <Box style={{ position: 'relative' }}>
+                  <Box style={{ position: 'relative', display: 'inline-block' }}>
                     {hasImage ? (
-                      <img 
-                        src={imageUrl}
-                        alt={`${selectedArt.artist_profiles?.name || 'Unknown Artist'} - Easel ${selectedArt.easel}`}
-                        style={{ 
-                          maxWidth: '100%',
-                          maxHeight: '60vh',
-                          objectFit: 'contain',
-                          display: 'block',
-                          margin: '0 auto',
-                          borderRadius: '8px'
-                        }}
-                      />
+                      <>
+                        <img 
+                          src={imageUrl}
+                          alt={`${selectedArt.artist_profiles?.name || 'Unknown Artist'} - Easel ${selectedArt.easel}`}
+                          style={{ 
+                            maxWidth: '100%',
+                            maxHeight: '60vh',
+                            objectFit: 'contain',
+                            display: 'block',
+                            borderRadius: '8px'
+                          }}
+                        />
+                        {/* Delete button for admin users - positioned on the image */}
+                        {hasPhotoPermission && currentMedia && (
+                          <button
+                            onClick={() => {
+                              // Get media ID from the media_files object
+                              const mediaId = currentMedia?.media_files?.id;
+                              handleDeleteMedia(mediaId);
+                            }}
+                            style={{
+                              position: 'absolute',
+                              top: '10px',
+                              right: '10px',
+                              width: '24px',
+                              height: '24px',
+                              border: 'none',
+                              borderRadius: '50%',
+                              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                              color: 'white',
+                              cursor: 'pointer',
+                              fontSize: '14px',
+                              fontWeight: 'bold',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              lineHeight: '1'
+                            }}
+                          >
+                            ×
+                          </button>
+                        )}
+                      </>
                     ) : (
                       <Flex
                         style={{
@@ -2300,20 +2509,21 @@ const EventDetails = () => {
                         const thumb = thumbUrls.thumbnail;
                         return (
                           <Box
-                            key={media.id}
-                            onClick={() => setSelectedImageIndex(index)}
+                            key={media.media_id}
                             style={{
                               width: '60px',
                               height: '60px',
                               cursor: 'pointer',
                               border: selectedImageIndex === index ? '2px solid var(--accent-9)' : '2px solid transparent',
                               borderRadius: '4px',
-                              overflow: 'hidden'
+                              overflow: 'hidden',
+                              position: 'relative'
                             }}
                           >
                             <img
                               src={thumb}
                               alt={`Thumbnail ${index + 1}`}
+                              onClick={() => setSelectedImageIndex(index)}
                               style={{
                                 width: '100%',
                                 height: '100%',
@@ -2399,7 +2609,7 @@ const EventDetails = () => {
                     {(selectedArt.status === 'sold' || selectedArt.status === 'paid') && !(eventId && parseInt(eventId.replace('AB', '')) < 2936) && (
                       <PaymentButton
                         artwork={selectedArt}
-                        currentBid={currentBids[selectedArt.id] || selectedArt.current_bid}
+                        currentBid={selectedArt.current_bid}
                         isWinningBidder={(() => {
                           // Check if current user is the winning bidder
                           if (!person || !bidHistory[selectedArt.id] || bidHistory[selectedArt.id].length === 0) {
@@ -2431,7 +2641,7 @@ const EventDetails = () => {
                         
                         <Box style={{ minWidth: '120px', textAlign: 'center' }}>
                           <Text size="6" weight="bold">
-                            ${bidAmounts[selectedArt.id] || getMinimumBid(selectedArt.id)}
+                            {formatCurrencyFromEvent(bidAmounts[selectedArt.id] || getMinimumBid(selectedArt.id), event, 'display')}
                           </Text>
                         </Box>
                         
@@ -2446,7 +2656,12 @@ const EventDetails = () => {
                       </Flex>
                       
                       <Text size="1" color="gray" style={{ display: 'block', marginTop: '0.5rem', textAlign: 'center' }}>
-                        Next minimum bid: ${getMinimumBid(selectedArt.id)}
+                        {(() => {
+                          const currentBid = currentBids[selectedArt.id]?.amount || 0;
+                          const minimumBid = getMinimumBid(selectedArt.id);
+                          const currency = getCurrencyFromEvent(event);
+                          return formatMinimumBidText(currentBid, minimumBid, currency.code, currency.symbol);
+                        })()}
                       </Text>
                     </Box>
                     
@@ -2464,7 +2679,7 @@ const EventDetails = () => {
                       ) : !user ? (
                         'Sign in to bid'
                       ) : (
-                        'Place Bid'
+                        formatCurrencyFromEvent(bidAmounts[selectedArt.id] || getMinimumBid(selectedArt.id), event, 'button')
                       )}
                     </Button>
                     </>
@@ -2487,7 +2702,9 @@ const EventDetails = () => {
                     {bidHistory[selectedArt.id] && bidHistory[selectedArt.id].length > 0 && (
                       <Box mt="4">
                         <Separator size="4" mb="3" />
-                        <Heading size="3" mb="3">Bid History</Heading>
+                        <Heading size="3" mb="3">
+                          Bid History ({bidHistory[selectedArt.id].length} bids)
+                        </Heading>
                         <Flex direction="column" gap="2">
                           {bidHistory[selectedArt.id].map((bid, index) => (
                             <Flex key={index} justify="between" align="center">
@@ -2601,7 +2818,7 @@ const EventDetails = () => {
           <AlertDialog.Description size="2">
             <Flex direction="column" gap="2">
               <Text>
-                You are about to place a bid of <strong>${confirmBid?.amount?.toFixed(2)}</strong> for:
+                You are about to place a bid of <strong>{formatCurrencyFromEvent(confirmBid?.amount || 0, event, 'confirmation')}</strong> for:
               </Text>
               <Box style={{ 
                 background: 'var(--gray-3)', 
@@ -2690,7 +2907,7 @@ const EventDetails = () => {
                 {/* Payment Button */}
                 <PaymentButton
                   artwork={autoPaymentModal}
-                  currentBid={currentBids[autoPaymentModal.id] || autoPaymentModal.current_bid}
+                  currentBid={autoPaymentModal.current_bid}
                   isWinningBidder={true}
                   onPaymentComplete={() => {
                     setAutoPaymentModal(null);

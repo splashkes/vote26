@@ -193,16 +193,16 @@ export const AuthProvider = ({ children }) => {
     const now = Math.floor(Date.now() / 1000);
     const timeUntilExpiry = expiresAt - now;
     
-    // Show warning if session expires in less than 10 minutes but more than 5
-    if (timeUntilExpiry <= 600 && timeUntilExpiry > 300) {
+    // Show warning only if session expires in less than 3 minutes (for 4-hour events)
+    if (timeUntilExpiry <= 180 && timeUntilExpiry > 60) {
       const minutesLeft = Math.floor(timeUntilExpiry / 60);
       setSessionWarning(`Session expires in ${minutesLeft} minute${minutesLeft !== 1 ? 's' : ''}`);
     } else {
       setSessionWarning(null);
     }
     
-    // If token is still valid for more than 5 minutes, no refresh needed
-    if (timeUntilExpiry > 300) return session;
+    // If token is still valid for more than 2 minutes, no refresh needed  
+    if (timeUntilExpiry > 120) return session;
     
     console.log('AuthContext: Refreshing session (expires in', timeUntilExpiry, 'seconds)');
     setIsRefreshing(true);
@@ -271,31 +271,29 @@ export const AuthProvider = ({ children }) => {
       await refreshSessionIfNeeded();
     }, 45 * 60 * 1000); // 45 minutes
     
-    // Also refresh when page becomes visible (user returns to tab)
+    // Only check session on visibility change if session expires in < 5 minutes (reduce excessive calls)
     const handleVisibilityChange = async () => {
       if (!document.hidden && session) {
-        console.log('AuthContext: Page visible, checking session');
-        await refreshSessionIfNeeded();
+        const expiresAt = session.expires_at;
+        const now = Math.floor(Date.now() / 1000);
+        const timeUntilExpiry = expiresAt - now;
+        
+        // Only check if session expires soon to reduce spam
+        if (timeUntilExpiry <= 300) {
+          console.log('AuthContext: Page visible, checking session (expires soon)');
+          await refreshSessionIfNeeded();
+        }
       }
     };
     
-    // Add page visibility listener for when user returns to the app
+    // Reduced frequency visibility checking
     document.addEventListener('visibilitychange', handleVisibilityChange);
     
-    // Refresh on window focus as well
-    const handleFocus = async () => {
-      if (session) {
-        console.log('AuthContext: Window focused, checking session');
-        await refreshSessionIfNeeded();
-      }
-    };
-    
-    window.addEventListener('focus', handleFocus);
+    // Remove focus listener to reduce excessive session checks
     
     return () => {
       clearInterval(refreshInterval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', handleFocus);
     };
   }, [session]);
 

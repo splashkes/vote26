@@ -18,6 +18,7 @@ import {
 import { ChevronDownIcon, ChevronUpIcon, PersonIcon, ExitIcon } from '@radix-ui/react-icons';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import publicDataManager from '../lib/PublicDataManager';
 import AuthModal from './AuthModal';
 import LoadingScreen from './LoadingScreen';
 import { getImageUrl } from '../lib/imageHelpers';
@@ -30,8 +31,7 @@ const EventList = () => {
   const [retryCountdown, setRetryCountdown] = useState(0);
   const [isRetrying, setIsRetrying] = useState(false);
   const [expandedEvent, setExpandedEvent] = useState(null);
-  const [topArtworks, setTopArtworks] = useState({});
-  const [loadingArtworks, setLoadingArtworks] = useState({});
+  // V2 BROADCAST VERSION - Artwork preview state removed
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authRedirectTo, setAuthRedirectTo] = useState(null);
   const [visibleCounts, setVisibleCounts] = useState({
@@ -45,23 +45,95 @@ const EventList = () => {
   useEffect(() => {
     fetchEvents();
     
-    // Add a safety timeout to prevent infinite loading
-    const loadingTimeout = setTimeout(() => {
-      if (loading) {
-        console.error('Loading timeout reached - forcing loading to false');
-        setLoading(false);
-        setEvents({ active: [], recent: [], future: [] });
-      }
-    }, 15000); // 15 second timeout
+    // Subscribe to events data updates
+    const unsubscribe = publicDataManager.subscribe('events', (data) => {
+      console.log('📡 [V2-BROADCAST] Received events update from cache');
+      processEventsData(data);
+    });
     
-    return () => clearTimeout(loadingTimeout);
+    // No loading timeout needed with stable caching
+    // The loading state will be properly managed by the fetch completion
+    
+    return () => {
+      unsubscribe();
+    };
   }, []); // Remove loading dependency to prevent infinite loop
+
+  // Process events data from any source (PublicDataManager or fallback)
+  const processEventsData = (data) => {
+    if (!data || !Array.isArray(data)) {
+      setEvents({ active: [], recent: [], future: [] });
+      return;
+    }
+
+    const now = new Date();
+    const eighteenHoursAgo = new Date(now.getTime() - 18 * 60 * 60 * 1000);
+    const eighteenHoursFromNow = new Date(now.getTime() + 18 * 60 * 60 * 1000);
+    const twoMonthsAgo = new Date();
+    twoMonthsAgo.setDate(twoMonthsAgo.getDate() - 60);
+
+    // Categorize events
+    const categorized = {
+      active: [],
+      recent: [],
+      future: [],
+    };
+
+    data.forEach((event) => {
+      const eventStart = new Date(event.event_start_datetime);
+      
+      // Debug AB3019 specifically
+      if (event.eid === 'AB3019') {
+        console.log('🔍 AB3019 Debug:', {
+          eid: event.eid,
+          name: event.name,
+          eventStart: eventStart.toISOString(),
+          now: now.toISOString(),
+          eighteenHoursFromNow: eighteenHoursFromNow.toISOString(),
+          isAfter18Hours: eventStart > eighteenHoursFromNow,
+          category: eventStart > eighteenHoursFromNow ? 'future' : 
+                   eventStart >= eighteenHoursAgo && eventStart <= eighteenHoursFromNow ? 'active' : 'recent'
+        });
+      }
+      
+      // Active: 18 hours before to 18 hours after now
+      if (eventStart >= eighteenHoursAgo && eventStart <= eighteenHoursFromNow) {
+        categorized.active.push(event);
+      } 
+      // Recent: 18 hours ago to 2 months ago
+      else if (eventStart < eighteenHoursAgo && eventStart >= twoMonthsAgo) {
+        categorized.recent.push(event);
+      } 
+      // Future/Upcoming: 18 hours from now onwards (all future events)
+      else if (eventStart > eighteenHoursFromNow) {
+        categorized.future.push(event);
+      }
+    });
+
+    // Sort each category since endpoint ordering isn't reliable
+    categorized.future.sort((a, b) => 
+      new Date(a.event_start_datetime) - new Date(b.event_start_datetime)
+    );
+    categorized.recent.sort((a, b) => 
+      new Date(b.event_start_datetime) - new Date(a.event_start_datetime)
+    );
+
+    console.log('📊 Event categorization results:', {
+      active: categorized.active.length,
+      recent: categorized.recent.length,
+      future: categorized.future.length,
+      futureEvents: categorized.future.map(e => ({ eid: e.eid, name: e.name }))
+    });
+    
+    setEvents(categorized);
+    setError(null);
+    setLoading(false);
+  };
 
   const fetchEvents = async () => {
     try {
-      console.log('Starting to fetch events...');
+      console.log('🚀 [V2-BROADCAST] Starting to fetch events using cached endpoints...');
       console.log('Network status:', navigator.onLine ? 'online' : 'offline');
-      console.log('User agent:', navigator.userAgent);
       
       // Check and refresh session if needed before making API calls
       if (user && refreshSessionIfNeeded) {
@@ -69,152 +141,73 @@ const EventList = () => {
         await refreshSessionIfNeeded();
       }
       
-      const now = new Date();
-      // Event categorization by date
-      const eighteenHoursAgo = new Date(now.getTime() - 18 * 60 * 60 * 1000);
-      const eighteenHoursFromNow = new Date(now.getTime() + 18 * 60 * 60 * 1000);
-
-      // Fetch all events within our time range
-      // Get events from 2 months ago to ALL future events (no limit)
-      const twoMonthsAgo = new Date();
-      twoMonthsAgo.setDate(twoMonthsAgo.getDate() - 60);
+      // Use PublicDataManager for cached endpoint data
+      const data = await publicDataManager.getEvents();
+      console.log('✅ [V2-BROADCAST] Events loaded from cached endpoint:', data?.length, 'events');
       
-      // Add timeout to the request
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Request timed out after 10 seconds')), 10000);
-      });
-
-      const queryPromise = supabase
-        .from('events')
-        .select(`
-          id,
-          eid,
-          name,
-          event_start_datetime,
-          event_end_datetime,
-          venue,
-          enable_auction,
-          vote_by_link
-        `)
-        .eq('enabled', true)
-        .eq('show_in_app', true)
-        .gte('event_start_datetime', twoMonthsAgo.toISOString())
-        .order('event_start_datetime', { ascending: true });
-
-      let { data, error } = await Promise.race([queryPromise, timeoutPromise]);
-      console.log('Events fetch completed:', { dataLength: data?.length, error });
-
-      if (error) {
-        // Handle auth errors specially
-        if (error.message?.includes('JWT') || error.message?.includes('token') || error.message?.includes('401') || error.message?.includes('403')) {
-          console.log('Auth error detected, attempting session refresh...');
-          if (refreshSessionIfNeeded) {
-            await refreshSessionIfNeeded();
-            // Retry once after refresh
-            const retryResult = await supabase.from('events').select(`
-              id, eid, name, event_start_datetime, event_end_datetime, venue, enable_auction, vote_by_link
-            `).eq('enabled', true).eq('show_in_app', true).gte('event_start_datetime', twoMonthsAgo.toISOString()).order('event_start_datetime', { ascending: true });
-            
-            if (retryResult.error) throw retryResult.error;
-            data = retryResult.data; // Use retry result
-            error = null; // Clear error since retry succeeded
-          }
-        }
-        if (error) throw error;
-      }
-      
-      // Processing event list data
-
-      // Check for actual duplicates by ID
-      const uniqueIds = new Set();
-      const duplicates = [];
-      data?.forEach(event => {
-        if (uniqueIds.has(event.id)) {
-          duplicates.push(event);
-        }
-        uniqueIds.add(event.id);
-      });
-      
-      if (duplicates.length > 0) {
-        console.log('DUPLICATE EVENTS FOUND:', duplicates);
-      }
-
-      // Categorize events
-      const categorized = {
-        active: [],
-        recent: [],
-        future: [],
-      };
-
-      data.forEach((event) => {
-        const eventStart = new Date(event.event_start_datetime);
-        
-        // Active: 18 hours before to 18 hours after now
-        if (eventStart >= eighteenHoursAgo && eventStart <= eighteenHoursFromNow) {
-          categorized.active.push(event);
-        } 
-        // Recent: 18 hours ago to 2 months ago
-        else if (eventStart < eighteenHoursAgo && eventStart >= twoMonthsAgo) {
-          categorized.recent.push(event);
-        } 
-        // Future/Upcoming: 18 hours from now onwards (all future events)
-        else if (eventStart > eighteenHoursFromNow) {
-          categorized.future.push(event);
-        }
-      });
-
-      // Sort recent events newest first (descending)
-      categorized.recent.sort((a, b) => 
-        new Date(b.event_start_datetime) - new Date(a.event_start_datetime)
-      );
-      
-      // Active and future are already sorted ascending from the query
-
-      // Event categorization complete
-
-      setEvents(categorized);
-      setError(null); // Clear any previous errors
+      processEventsData(data);
     } catch (error) {
-      console.error('Error fetching events:', error);
+      console.error('❌ [V2-BROADCAST] Error fetching events from cached endpoint:', error);
+      console.log('🔄 [V2-BROADCAST] Falling back to direct Supabase query...');
       
-      setError(error.message);
-      
-      // Show user-friendly error message
-      if (error.message.includes('timeout')) {
-        console.error('Request timed out - network may be slow');
-      } else if (error.message.includes('fetch')) {
-        console.error('Network error occurred');
-      } else {
-        console.error('Unexpected error:', error.message);
-      }
-      
-      // Auto-retry up to 3 times with geometric progression: 4s, 8s, 16s
-      if (retryCount < 3) {
-        const delay = Math.pow(2, retryCount + 2) * 1000; // 4s, 8s, 16s
-        console.log(`Retrying in ${delay}ms (attempt ${retryCount + 1}/3)...`);
+      // Fallback to direct Supabase query if cached endpoint fails
+      try {
+        const twoMonthsAgo = new Date();
+        twoMonthsAgo.setDate(twoMonthsAgo.getDate() - 60);
         
-        setIsRetrying(true);
-        setRetryCountdown(Math.floor(delay / 1000));
+        const { data, error } = await supabase
+          .from('events')
+          .select(`
+            id,
+            eid,
+            name,
+            event_start_datetime,
+            event_end_datetime,
+            venue,
+            enable_auction,
+            vote_by_link
+          `)
+          .eq('enabled', true)
+          .eq('show_in_app', true)
+          .gte('event_start_datetime', twoMonthsAgo.toISOString())
+          .order('event_start_datetime', { ascending: true });
+
+        if (error) throw error;
         
-        // Start countdown
-        const countdownInterval = setInterval(() => {
-          setRetryCountdown(prev => {
-            if (prev <= 1) {
-              clearInterval(countdownInterval);
-              return 0;
-            }
-            return prev - 1;
-          });
-        }, 1000);
+        console.log('📡 [V2-BROADCAST] Fallback: Loaded events from Supabase directly:', data?.length, 'events');
+        processEventsData(data);
+      } catch (fallbackError) {
+        console.error('❌ [V2-BROADCAST] Fallback also failed:', fallbackError);
+        setError(fallbackError.message);
         
-        setTimeout(() => {
-          setIsRetrying(false);
-          setRetryCount(prev => prev + 1);
-          fetchEvents();
-        }, delay);
-      } else {
-        // Set empty state after all retries failed
-        setEvents({ active: [], recent: [], future: [] });
+        // Auto-retry up to 3 times with geometric progression: 4s, 8s, 16s
+        if (retryCount < 3) {
+          const delay = Math.pow(2, retryCount + 2) * 1000; // 4s, 8s, 16s
+          console.log(`🔄 [V2-BROADCAST] Retrying in ${delay}ms (attempt ${retryCount + 1}/3)...`);
+          
+          setIsRetrying(true);
+          setRetryCountdown(Math.floor(delay / 1000));
+          
+          // Start countdown
+          const countdownInterval = setInterval(() => {
+            setRetryCountdown(prev => {
+              if (prev <= 1) {
+                clearInterval(countdownInterval);
+                return 0;
+              }
+              return prev - 1;
+            });
+          }, 1000);
+          
+          setTimeout(() => {
+            setIsRetrying(false);
+            setRetryCount(prev => prev + 1);
+            fetchEvents();
+          }, delay);
+        } else {
+          // Set empty state after all retries failed
+          setEvents({ active: [], recent: [], future: [] });
+        }
       }
     } finally {
       setLoading(false);
@@ -240,93 +233,8 @@ const EventList = () => {
     } else {
       setExpandedEvent(eventId);
       
-      // Fetch top voted artworks if not already loaded
-      if (!topArtworks[eventId] && !loadingArtworks[eventId]) {
-        setLoadingArtworks(prev => ({ ...prev, [eventId]: true }));
-        
-        try {
-          // First get artworks with vote counts using art_uuid
-          const { data: voteCounts, error: voteError } = await supabase
-            .from('votes')
-            .select('art_uuid')
-            .eq('event_id', eventId)
-            .not('art_uuid', 'is', null);
-            
-          if (voteError) throw voteError;
-          
-          // Count votes per artwork
-          const votesByArt = {};
-          voteCounts?.forEach(vote => {
-            if (vote.art_uuid) {
-              votesByArt[vote.art_uuid] = (votesByArt[vote.art_uuid] || 0) + 1;
-            }
-          });
-          
-          // Get top 4 most voted art IDs
-          const topArtIds = Object.entries(votesByArt)
-            .sort(([,a], [,b]) => b - a)
-            .slice(0, 4)
-            .map(([artId]) => artId);
-            
-          if (topArtIds.length === 0) {
-            setTopArtworks(prev => ({ ...prev, [eventId]: [] }));
-            return;
-          }
-          
-          // Fetch artwork details with media
-          const { data: artworksData, error } = await supabase
-            .from('art')
-            .select(`
-              id,
-              easel,
-              round,
-              artist_profiles!art_artist_id_fkey (
-                name
-              ),
-              art_media (
-                media_files!art_media_media_id_fkey (
-                  thumbnail_url,
-                  compressed_url,
-                  created_at
-                )
-              )
-            `)
-            .in('id', topArtIds);
-            
-          if (error) throw error;
-          
-          // Process the data to get vote counts and images
-          const processedArtworks = artworksData?.map(artwork => {
-            // Sort media by created_at to get latest first
-            const sortedMedia = artwork.art_media?.sort((a, b) => {
-              const dateA = new Date(a.media_files?.created_at || 0);
-              const dateB = new Date(b.media_files?.created_at || 0);
-              return dateB - dateA;
-            }) || [];
-            
-            const latestMedia = sortedMedia[0];
-            
-            return {
-              id: artwork.id,
-              easel: artwork.easel,
-              round: artwork.round,
-              artistName: artwork.artist_profiles?.name || 'Unknown Artist',
-              voteCount: votesByArt[artwork.id] || 0,
-              thumbnail: getImageUrl(artwork, latestMedia?.media_files, 'thumbnail') || '/placeholder.jpg',
-              mediaFile: latestMedia?.media_files // Keep reference for potential future use
-            };
-          }) || [];
-          
-          // Sort by vote count to maintain order
-          processedArtworks.sort((a, b) => b.voteCount - a.voteCount);
-          
-          setTopArtworks(prev => ({ ...prev, [eventId]: processedArtworks }));
-        } catch (error) {
-          console.error('Error fetching top artworks:', error);
-        } finally {
-          setLoadingArtworks(prev => ({ ...prev, [eventId]: false }));
-        }
-      }
+      // V2 BROADCAST VERSION - Artwork previews disabled to avoid direct Supabase queries
+      console.log('🚀 [V2-BROADCAST] Event expansion - artwork previews disabled in broadcast version');
     }
   };
 
@@ -397,72 +305,10 @@ const EventList = () => {
           <>
             <Separator size="4" my="3" />
             <Box>
-              <Flex direction="column" gap="3">
-                
-                {/* Top Voted Artworks */}
-                <Box>
-                  {loadingArtworks[event.id] ? (
-                    <Flex justify="center" py="3">
-                      <Spinner size="2" />
-                    </Flex>
-                  ) : topArtworks[event.id]?.length > 0 ? (
-                    (() => {
-                      // Calculate total votes in the event
-                      const totalVotes = topArtworks[event.id].reduce((sum, artwork) => sum + artwork.voteCount, 0);
-                      
-                      // Only show thumbnails if there are at least 10 votes total
-                      if (totalVotes >= 10) {
-                        return (
-                          <Grid columns="4" gap="2">
-                            {topArtworks[event.id].map((artwork) => (
-                              <Flex
-                                key={artwork.id}
-                                direction="column"
-                                gap="1"
-                                style={{ cursor: 'pointer' }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  navigate(`/event/${event.id}`);
-                                }}
-                              >
-                                <Box 
-                                  style={{ 
-                                    position: 'relative',
-                                    paddingBottom: '100%',
-                                    backgroundColor: 'var(--gray-3)',
-                                    borderRadius: '4px',
-                                    overflow: 'hidden'
-                                  }}
-                                >
-                                  <img
-                                    src={artwork.thumbnail}
-                                    alt={artwork.artistName}
-                                    style={{
-                                      position: 'absolute',
-                                      top: 0,
-                                      left: 0,
-                                      width: '100%',
-                                      height: '100%',
-                                      objectFit: 'cover'
-                                    }}
-                                  />
-                                </Box>
-                                <Text size="1" color="gray" style={{ textAlign: 'center' }}>
-                                  {artwork.artistName}
-                                </Text>
-                              </Flex>
-                            ))}
-                          </Grid>
-                        );
-                      } else {
-                        return null; // Show nothing if less than 10 votes
-                      }
-                    })()
-                  ) : (
-                    <Text size="2" color="gray">No votes yet</Text>
-                  )}
-                </Box>
-              </Flex>
+              {/* V2 BROADCAST VERSION - Simple expanded view without artwork previews */}
+              <Text size="2" color="gray" mb="3">
+                Click "Enter Event" to see artwork details, voting, and bidding
+              </Text>
               
               <Button
                 size="3"

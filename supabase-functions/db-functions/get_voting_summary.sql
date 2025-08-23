@@ -15,13 +15,13 @@
    FROM events                                                        +
    WHERE id = p_event_id;                                             +
                                                                       +
-   -- Get voting stats                                                +
+   -- Get voting stats - FIX: join on art_code, not id                +
    SELECT                                                             +
      COUNT(*) as total_votes,                                         +
      COUNT(DISTINCT person_id) as unique_voters                       +
    INTO v_total_votes, v_unique_voters                                +
    FROM votes v                                                       +
-   JOIN art a ON v.art_id = a.id                                      +
+   JOIN art a ON v.art_id = a.art_code                                +
    WHERE a.event_id = p_event_id                                      +
      AND v.round = v_current_round;                                   +
                                                                       +

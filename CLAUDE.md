@@ -14,3 +14,4 @@
 
 - Please use the deploy script to deploy ALWAYS
 - To deploy and copy to CDN you must run: /root/vote_app/vote26/art-battle-vote/deploy.sh - and this has NPM run build built right in! No need to run separately
+- you can look in /root/vote_app/vote26/supabase-functions which has a copy of the functions

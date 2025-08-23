@@ -190,7 +190,8 @@ const ArtUpload = ({ artwork, onUploadComplete }) => {
           media_id: mediaFile.id,
           media_type: 'image',
           is_primary: false,
-          display_order: 0
+          display_order: 0,
+          created_by: session.user.id
         });
       
       if (linkError) throw linkError;

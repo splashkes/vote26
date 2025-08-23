@@ -200,18 +200,7 @@ const generatePublicEventData = async (eventId)=>{
   }
   console.log(`[generatePublicEventData] Processing bids data`);
   const processedBids = processBidsForPublic(currentBids || []);
-  console.log(`[generatePublicEventData] Calling get_voting_summary RPC for UUID: ${eventInfo.id}`);
-  // Get vote summary using the correct UUID
-  const { data: voteSummary, error: voteError } = await supabase.rpc('get_voting_summary', {
-    p_event_id: eventInfo.id
-  });
-  console.log(`[generatePublicEventData] Vote summary result:`, {
-    data: voteSummary,
-    error: voteError
-  });
-  if (voteError) {
-    console.warn(`[generatePublicEventData] Vote summary failed: ${voteError.message}`);
-  }
+  console.log(`[generatePublicEventData] Skipping vote summary (not used by frontend)`);
   console.log(`[generatePublicEventData] Querying round winners for UUID: ${eventInfo.id}`);
   // Get round winners data
   const { data: roundWinners, error: winnersError } = await supabase.from('round_contestants').select(`
@@ -244,7 +233,7 @@ const generatePublicEventData = async (eventId)=>{
   return {
     event: processedEvent,
     artworks: artworks || [],
-    vote_summary: voteSummary || [],
+    vote_summary: [],
     current_bids: processedBids,
     round_winners: processedWinners,
     generated_at: new Date().toISOString()
@@ -369,11 +358,9 @@ const generateEventMediaData = async (eventId)=>{
     generated_at: new Date().toISOString()
   };
 };
-
-const generateEventArtistsData = async (eventId) => {
+const generateEventArtistsData = async (eventId)=>{
   console.log(`[generateEventArtistsData] Starting for eventId: ${eventId}`);
   const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
-  
   console.log(`[generateEventArtistsData] Getting event info for: ${eventId}`);
   // Handle both UUID and EID inputs for artists endpoint
   let eventQuery;
@@ -386,19 +373,14 @@ const generateEventArtistsData = async (eventId) => {
     console.log(`[generateEventArtistsData] Querying by EID: ${eventId}`);
     eventQuery = supabase.from('events').select('id, eid').eq('eid', eventId).single();
   }
-
   const { data: eventInfo, error: eventError } = await eventQuery;
   if (eventError || !eventInfo) {
     console.error(`[generateEventArtistsData] Event not found: ${eventId}`);
     throw new Error(`Event ${eventId} not found`);
   }
-
   console.log(`[generateEventArtistsData] Querying artists for event UUID: ${eventInfo.id}`);
-  
   // Get all artists assigned to this event with their profiles and bio information
-  const { data: eventArtists, error: artistsError } = await supabase
-    .from('event_artists')
-    .select(`
+  const { data: eventArtists, error: artistsError } = await supabase.from('event_artists').select(`
       artist_id,
       status,
       artist_profiles!inner (
@@ -413,23 +395,17 @@ const generateEventArtistsData = async (eventId) => {
         created_at,
         updated_at
       )
-    `)
-    .eq('event_id', eventInfo.id)
-    .eq('status', 'confirmed')
-    .order('artist_profiles(name)');
-
+    `).eq('event_id', eventInfo.id).eq('status', 'confirmed').order('artist_profiles(name)');
   console.log(`[generateEventArtistsData] Artists query result:`, {
     count: eventArtists?.length || 0,
     error: artistsError
   });
-
   if (artistsError) {
     console.error(`[generateEventArtistsData] Artists query error:`, artistsError);
     throw new Error(`Artists query failed: ${artistsError.message}`);
   }
-
   // Process and format artist data
-  const artists = eventArtists?.map(ea => {
+  const artists = eventArtists?.map((ea)=>{
     const profile = ea.artist_profiles;
     return {
       id: profile.id,
@@ -444,10 +420,8 @@ const generateEventArtistsData = async (eventId) => {
       updated_at: profile.updated_at,
       event_status: ea.status
     };
-  }).sort((a, b) => a.name.localeCompare(b.name)) || [];
-
+  }).sort((a, b)=>a.name.localeCompare(b.name)) || [];
   console.log(`[generateEventArtistsData] Successfully processed ${artists.length} artists for event ${eventId}`);
-
   return {
     event_id: eventId,
     event_eid: eventInfo.eid,
@@ -456,7 +430,6 @@ const generateEventArtistsData = async (eventId) => {
     generated_at: new Date().toISOString()
   };
 };
-
 const generateArtworkBidsData = async (eventId, round, easel)=>{
   console.log(`[generateArtworkBidsData] Starting for eventId: ${eventId}, round: ${round}, easel: ${easel}`);
   const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
