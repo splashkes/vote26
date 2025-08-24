@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 
 const AuthContext = createContext({});
@@ -13,6 +13,8 @@ export const AuthProvider = ({ children }) => {
   const [metadataSyncAttempts, setMetadataSyncAttempts] = useState({});
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [sessionWarning, setSessionWarning] = useState(null);
+  const [adminEvents, setAdminEvents] = useState({}); // Cache admin events locally
+  const adminEventsFetched = useRef(false); // Prevent duplicate fetches
 
   useEffect(() => {
     console.log('AuthContext: Initializing...');
@@ -34,6 +36,7 @@ export const AuthProvider = ({ children }) => {
         
         if (session?.user) {
           await extractPersonFromMetadata(session.user);
+          await fetchAndCacheAdminEvents(session.user);
         }
       } catch (error) {
         console.error('AuthContext: Failed to initialize:', error);
@@ -56,13 +59,102 @@ export const AuthProvider = ({ children }) => {
       
       if (session?.user) {
         await extractPersonFromMetadata(session.user);
+        // Fetch admin events if we don't have them yet (check both flag and empty adminEvents)
+        if (event === 'SIGNED_IN' && !adminEventsFetched.current) {
+          adminEventsFetched.current = true;
+          await fetchAndCacheAdminEvents(session.user);
+        }
       } else {
         setPerson(null);
+        setAdminEvents({});
+        adminEventsFetched.current = false;
+        // Clear admin cache from localStorage
+        if (user?.phone) {
+          localStorage.removeItem(`admin_events_${user.phone}`);
+        }
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // Load admin events from localStorage on init (only once per phone number)
+  useEffect(() => {
+    if (!loading && user && user.phone && !adminEventsFetched.current) {
+      const storageKey = `admin_events_${user.phone}`;
+      const cached = localStorage.getItem(storageKey);
+      if (cached) {
+        try {
+          const parsedCache = JSON.parse(cached);
+          setAdminEvents(parsedCache);
+          adminEventsFetched.current = true; // Mark as fetched since we loaded from cache
+          console.log('Loaded cached admin events from localStorage');
+        } catch (err) {
+          console.warn('Failed to parse cached admin events:', err);
+          localStorage.removeItem(storageKey);
+          adminEventsFetched.current = true; // Mark as attempted even if failed
+        }
+      } else {
+        // No cached data found, mark as fetched to prevent waiting
+        adminEventsFetched.current = true;
+      }
+    }
+  }, [user, loading]);
+
+  // Fetch admin events only when needed (not on every login)
+  const fetchAndCacheAdminEvents = async (authUser) => {
+    if (!authUser?.phone) return;
+    
+    // Make this completely non-blocking and failure-safe
+    setTimeout(async () => {
+      try {
+        const { data, error } = await supabase
+          .rpc('get_user_admin_events', { p_user_phone: authUser.phone });
+        
+        if (!error && data && data.length > 0) {
+          const adminMap = {};
+          // data should be array of { event_id, admin_level, event_eid }
+          data.forEach(({ event_id, admin_level, event_eid }) => {
+            adminMap[event_id] = admin_level;
+            if (event_eid) {
+              adminMap[event_eid] = admin_level; // Also cache by EID
+            }
+          });
+          
+          setAdminEvents(adminMap);
+          
+          // Cache in localStorage only if user has admin privileges
+          const storageKey = `admin_events_${authUser.phone}`;
+          localStorage.setItem(storageKey, JSON.stringify(adminMap));
+        } else {
+          // User is not admin for any events - don't create localStorage entries
+          setAdminEvents({});
+        }
+      } catch (err) {
+        console.warn('Failed to fetch admin events (non-critical):', err);
+        setAdminEvents({});
+      }
+    }, 100); // Small delay to prevent auth loops
+  };
+
+  // Helper functions for components to use instead of broken adminHelpers
+  const isEventAdmin = (eventId, minLevel = 'voting') => {
+    const level = adminEvents[eventId];
+    if (!level) return false;
+    
+    const hierarchy = {
+      'super': ['super', 'producer', 'photo', 'voting'],
+      'producer': ['producer', 'photo', 'voting'],
+      'photo': ['photo', 'voting'],
+      'voting': ['voting']
+    };
+    
+    return hierarchy[level]?.includes(minLevel) || false;
+  };
+
+  const getAdminLevel = (eventId) => {
+    return adminEvents[eventId] || null;
+  };
 
   const extractPersonFromMetadata = async (authUser) => {
     // Extract person data from auth metadata (no database query needed!)
@@ -163,6 +255,7 @@ export const AuthProvider = ({ children }) => {
         const { data: { session } } = await supabase.auth.refreshSession();
         if (session?.user) {
           await extractPersonFromMetadata(session.user);
+          await fetchAndCacheAdminEvents(session.user);
         }
       }, 500);
     }
@@ -308,6 +401,10 @@ export const AuthProvider = ({ children }) => {
     verifyOtp,
     signOut,
     refreshSessionIfNeeded,
+    // Admin helpers (local, fast, no network calls)
+    isEventAdmin,
+    getAdminLevel,
+    adminEvents
   };
 
   return (

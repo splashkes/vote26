@@ -17,7 +17,6 @@ import { supabase } from '../lib/supabase';
 
 const QRAdminPanel = ({ eventId }) => {
   const [qrSecret, setQrSecret] = useState(null);
-  const [qrStats, setQrStats] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
@@ -55,29 +54,8 @@ const QRAdminPanel = ({ eventId }) => {
 
       setQrSecret(secret);
 
-      // Get scan statistics
-      const { data: scanStats, error: statsError } = await supabase
-        .from('people_qr_scans')
-        .select('id, is_valid, scan_timestamp')
-        .eq('event_id', eventId);
-
-      if (statsError) {
-        console.error('Error fetching scan stats:', statsError);
-      } else {
-        const totalScans = scanStats?.length || 0;
-        const validScans = scanStats?.filter(scan => scan.is_valid).length || 0;
-        const recentScans = scanStats?.filter(scan => {
-          const scanTime = new Date(scan.scan_timestamp);
-          const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-          return scanTime > oneHourAgo;
-        }).length || 0;
-
-        setQrStats({
-          total: totalScans,
-          valid: validScans,
-          recent: recentScans
-        });
-      }
+      // QR scan statistics removed due to performance issues with large datasets
+      // Admin can still generate and manage QR secrets without viewing scan counts
 
     } catch (err) {
       console.error('Error fetching QR data:', err);
@@ -227,51 +205,6 @@ const QRAdminPanel = ({ eventId }) => {
         </Flex>
       </Card>
 
-      {/* QR Statistics */}
-      {qrStats && (
-        <Card size="2" mb="4">
-          <Flex direction="column" gap="4">
-            <Heading size="3">Scan Statistics</Heading>
-            
-            <Flex gap="4">
-              <Box style={{ textAlign: 'center' }}>
-                <Text size="5" weight="bold" display="block" color="blue">
-                  {qrStats.total}
-                </Text>
-                <Text size="2" color="gray">Total Scans</Text>
-              </Box>
-              
-              <Separator orientation="vertical" size="2" />
-              
-              <Box style={{ textAlign: 'center' }}>
-                <Text size="5" weight="bold" display="block" color="green">
-                  {qrStats.valid}
-                </Text>
-                <Text size="2" color="gray">Valid Scans</Text>
-              </Box>
-              
-              <Separator orientation="vertical" size="2" />
-              
-              <Box style={{ textAlign: 'center' }}>
-                <Text size="5" weight="bold" display="block" color="orange">
-                  {qrStats.recent}
-                </Text>
-                <Text size="2" color="gray">Last Hour</Text>
-              </Box>
-            </Flex>
-
-            <Button 
-              size="2" 
-              variant="soft" 
-              onClick={fetchQRData}
-              disabled={loading}
-            >
-              {loading ? <Spinner size="1" /> : <ReloadIcon />}
-              Refresh Stats
-            </Button>
-          </Flex>
-        </Card>
-      )}
 
       {/* How It Works */}
       <Card size="2" style={{ background: 'var(--blue-2)' }}>

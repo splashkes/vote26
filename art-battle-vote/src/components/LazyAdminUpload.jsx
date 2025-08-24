@@ -1,41 +1,15 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { Box, Spinner, Text } from '@radix-ui/themes';
+import { useAuth } from '../contexts/AuthContext';
 
 // Lazy load the admin upload component
 const AdminImageUpload = lazy(() => import('./AdminImageUpload'));
 
-const LazyAdminUpload = ({ isAdmin, eventId, eventCode, artCode, user, ...props }) => {
-  const [hasPhotoPermission, setHasPhotoPermission] = useState(false);
-  const [checkingPermission, setCheckingPermission] = useState(true);
-
-  useEffect(() => {
-    const checkPhotoPermission = async () => {
-      if (!isAdmin || !eventId || !user) {
-        setHasPhotoPermission(false);
-        setCheckingPermission(false);
-        return;
-      }
-
-      try {
-        const { checkEventAdminPermission } = await import('../lib/adminHelpers');
-        // Check if user has photo permission or higher (photo, producer, super)
-        const hasPermission = await checkEventAdminPermission(eventId, 'photo', user?.phone);
-        setHasPhotoPermission(hasPermission);
-      } catch (error) {
-        console.error('Error checking photo permission:', error);
-        setHasPhotoPermission(false);
-      } finally {
-        setCheckingPermission(false);
-      }
-    };
-
-    checkPhotoPermission();
-  }, [isAdmin, eventId, user]);
-
-  // Don't render while checking permissions
-  if (checkingPermission) {
-    return null;
-  }
+const LazyAdminUpload = ({ eventId, eventCode, artCode, ...props }) => {
+  const { user, isEventAdmin } = useAuth();
+  
+  // Use local admin check (no network calls!)
+  const hasPhotoPermission = user && eventId && isEventAdmin(eventId, 'photo');
 
   // Only render for admin users with photo permissions
   if (!hasPhotoPermission) {

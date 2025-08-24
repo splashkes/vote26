@@ -82,19 +82,6 @@ const EventList = () => {
     data.forEach((event) => {
       const eventStart = new Date(event.event_start_datetime);
       
-      // Debug AB3019 specifically
-      if (event.eid === 'AB3019') {
-        console.log('🔍 AB3019 Debug:', {
-          eid: event.eid,
-          name: event.name,
-          eventStart: eventStart.toISOString(),
-          now: now.toISOString(),
-          eighteenHoursFromNow: eighteenHoursFromNow.toISOString(),
-          isAfter18Hours: eventStart > eighteenHoursFromNow,
-          category: eventStart > eighteenHoursFromNow ? 'future' : 
-                   eventStart >= eighteenHoursAgo && eventStart <= eighteenHoursFromNow ? 'active' : 'recent'
-        });
-      }
       
       // Active: 18 hours before to 18 hours after now
       if (eventStart >= eighteenHoursAgo && eventStart <= eighteenHoursFromNow) {

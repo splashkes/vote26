@@ -2,8 +2,23 @@
 
 # Vote26 Deployment Script
 # Deploys the Art Battle Vote app to DigitalOcean CDN
+# Usage: ./deploy.sh [--optimize]
+#   --optimize: Enable aggressive compression with Terser (removes console.logs, smaller bundle)
 
 set -e  # Exit on error
+
+# Parse command line arguments
+OPTIMIZE_BUILD=false
+for arg in "$@"; do
+    case $arg in
+        --optimize)
+            OPTIMIZE_BUILD=true
+            shift
+            ;;
+        *)
+            ;;
+    esac
+done
 
 # Colors for output
 RED='\033[0;31m'
@@ -50,12 +65,23 @@ check_command "s3cmd"
 check_command "npm"
 
 # Build the app
-print_status "Building the application for production..."
-if npm run build; then
-    print_success "Build completed successfully"
+if [ "$OPTIMIZE_BUILD" = true ]; then
+    print_status "Building the application with AGGRESSIVE OPTIMIZATION (Terser + console removal)..."
+    print_warning "This will take longer but produce a much smaller bundle..."
+    if OPTIMIZE=true npm run build; then
+        print_success "Optimized build completed successfully"
+    else
+        print_error "Optimized build failed"
+        exit 1
+    fi
 else
-    print_error "Build failed"
-    exit 1
+    print_status "Building the application for production..."
+    if npm run build; then
+        print_success "Build completed successfully"
+    else
+        print_error "Build failed"
+        exit 1
+    fi
 fi
 
 # Check if dist folder exists

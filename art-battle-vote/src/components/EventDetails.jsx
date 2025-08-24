@@ -58,7 +58,7 @@ const EventDetails = () => {
   const { eventId, tab } = useParams();
   const navigate = useNavigate();
   
-  const { user, person } = useAuth();
+  const { user, person, isEventAdmin } = useAuth();
   const [event, setEvent] = useState(null);
   const [eventEid, setEventEid] = useState(null); // EID for broadcast subscription
   const [artworks, setArtworks] = useState([]);
@@ -339,19 +339,12 @@ const EventDetails = () => {
         return;
       }
       
-      try {
-        const { isEventAdmin, checkEventAdminPermission } = await import('../lib/adminHelpers');
-        const adminStatus = await isEventAdmin(eventId, user);
-        setIsAdmin(adminStatus);
-        
-        // Check if user has photo permission or higher (photo, producer, super)
-        const photoPermission = await checkEventAdminPermission(eventId, 'photo', user?.phone);
-        setHasPhotoPermission(photoPermission);
-      } catch (error) {
-        console.error('Error checking admin status:', error);
-        setIsAdmin(false);
-        setHasPhotoPermission(false);
-      }
+      // Use local admin check from AuthContext (no network calls!)
+      const adminStatus = isEventAdmin(eventId);
+      const photoPermission = isEventAdmin(eventId, 'photo');
+      
+      setIsAdmin(adminStatus);
+      setHasPhotoPermission(photoPermission);
     };
     
     checkAdminStatus();

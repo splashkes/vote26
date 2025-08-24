@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 import {
   Box,
   Heading,
@@ -35,6 +36,7 @@ const AdminPanel = ({
   user = null,
   onDataChange = () => {}
 }) => {
+  const { getAdminLevel } = useAuth();
   const [auctionEndTime, setAuctionEndTime] = useState(null);
   const [auctionWarningActive, setAuctionWarningActive] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -129,21 +131,16 @@ const AdminPanel = ({
 
   // Check admin level when component mounts or user changes
   useEffect(() => {
-    const checkAdminLevel = async () => {
-      if (!eventId || !user) return;
+    const checkAdminLevel = () => {
+      if (!eventId) return;
       
-      try {
-        const { getUserAdminLevel } = await import('../lib/adminHelpers');
-        const level = await getUserAdminLevel(eventId, user?.phone);
-        setAdminLevel(level);
-        console.log('Admin level:', level);
-      } catch (error) {
-        console.error('Error checking admin level:', error);
-      }
+      // Use local admin level from AuthContext (no network calls!)
+      const level = getAdminLevel(eventId);
+      setAdminLevel(level);
     };
     
     checkAdminLevel();
-  }, [eventId, user]);
+  }, [eventId, getAdminLevel]);
 
   // Fetch event data when eventId changes
   useEffect(() => {

@@ -26,6 +26,43 @@ const UpgradeHandler = () => {
   const [error, setError] = useState(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
 
+  // Helper function to log QR validation attempts for debugging
+  const logQRValidation = async (eventType, errorType = null, errorMessage = null, success = false, additionalMetadata = {}) => {
+    try {
+      // Console logging for immediate debugging
+      if (success) {
+        console.log(`✅ QR Validation Success:`, { qrCode, user: user?.phone, eventType });
+      } else {
+        console.warn(`❌ QR Validation Failed:`, { qrCode, user: user?.phone, errorType, errorMessage });
+      }
+
+      // Database logging for historical analysis
+      const logData = {
+        event_type: eventType,
+        qr_code: qrCode,
+        auth_user_id: user?.id || null,
+        phone: user?.phone || null,
+        user_agent: navigator.userAgent,
+        success: success,
+        error_type: errorType,
+        error_message: errorMessage,
+        metadata: {
+          url: window.location.href,
+          referrer: document.referrer,
+          timestamp: new Date().toISOString(),
+          ...additionalMetadata
+        }
+      };
+
+      // Insert log entry (non-blocking - don't fail QR flow if logging fails)
+      await supabase.from('event_auth_logs').insert(logData).catch(logErr => {
+        console.warn('Failed to log QR validation to database:', logErr);
+      });
+    } catch (err) {
+      console.warn('Error in QR validation logging:', err);
+    }
+  };
+
   // Validate QR scan
   const validateQRScan = async () => {
     if (!user) {
@@ -41,9 +78,9 @@ const UpgradeHandler = () => {
       console.log('Starting QR validation for code:', qrCode);
       console.log('User authenticated:', !!user);
 
-      // Create a timeout promise
+      // Create a timeout promise (reduced from 15s to 5s for faster fallback)
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Request timed out after 15 seconds')), 15000);
+        setTimeout(() => reject(new Error('Request timed out after 5 seconds')), 5000);
       });
 
       // Make the function call with timeout
@@ -67,40 +104,38 @@ const UpgradeHandler = () => {
         throw error;
       }
 
+      // Log successful QR validation
+      await logQRValidation('qr_validation', null, null, true, { 
+        event_id: data.event?.id,
+        event_name: data.event?.name 
+      });
+
       setResult(data);
       setEvent(data.event);
 
     } catch (err) {
-      console.error('Error validating QR scan:', err);
-      
-      // Handle specific error cases and provide fallback navigation
-      let errorMessage = 'Failed to validate QR code';
-      let showFallbackNavigation = false;
-      
+      // Determine error type for logging
+      let errorType = 'unknown_error';
       if (err.message.includes('timeout')) {
-        errorMessage = 'Request timed out - please check your internet connection and try again';
-        showFallbackNavigation = true;
+        errorType = 'timeout';
       } else if (err.message.includes('fetch')) {
-        errorMessage = 'Network error - please check your internet connection';
-        showFallbackNavigation = true;
+        errorType = 'network_error';
       } else if (err.message.includes('AUTH')) {
-        errorMessage = 'Authentication error - please sign out and sign back in';
+        errorType = 'auth_failure';
       } else if (err.message.includes('500') || err.message.includes('Internal Server Error')) {
-        errorMessage = 'Server error while validating QR code. You can still proceed to the events.';
-        showFallbackNavigation = true;
+        errorType = 'server_error';
       } else if (err.message) {
-        errorMessage = `Error: ${err.message}`;
-        showFallbackNavigation = true;
+        errorType = 'qr_validation_failed';
       }
-      
-      setError(errorMessage);
-      
-      // For certain errors, still allow navigation to events list
-      if (showFallbackNavigation) {
-        setTimeout(() => {
-          navigate('/');
-        }, 3000);
-      }
+
+      // Log error for debugging (but don't show to user)
+      await logQRValidation('qr_validation', errorType, err.message, false);
+
+      // SILENT FALLBACK: Don't show error to user, just redirect to events
+      // This prevents loading loops when QR codes are expired/deleted
+      setTimeout(() => {
+        navigate('/');
+      }, 1000); // Immediate redirect after brief delay
     } finally {
       setLoading(false);
     }
@@ -112,6 +147,20 @@ const UpgradeHandler = () => {
       validateQRScan();
     }
   }, [qrCode, user]);
+
+  // Component-level safety timeout - never let users wait more than 8 seconds
+  useEffect(() => {
+    const safetyTimeout = setTimeout(() => {
+      if (loading) {
+        console.warn('⏰ Component safety timeout reached - forcing redirect to events');
+        logQRValidation('qr_validation', 'component_timeout', 'Component safety timeout after 8 seconds', false);
+        setLoading(false);
+        navigate('/');
+      }
+    }, 8000);
+
+    return () => clearTimeout(safetyTimeout);
+  }, [loading, navigate]);
 
   if (!qrCode) {
     return (
@@ -184,61 +233,31 @@ const UpgradeHandler = () => {
     );
   }
 
-  if (error) {
-    return (
-      <>
-        <Box p="6" maxWidth="600px" mx="auto">
-          <Card size="3">
-            <Flex direction="column" gap="4">
-              <Callout.Root color="red">
-                <Callout.Icon>
-                  <ExclamationTriangleIcon />
-                </Callout.Icon>
-                <Callout.Text>{error}</Callout.Text>
-              </Callout.Root>
-              
-              <Flex direction="column" gap="3">
-                <Button onClick={() => validateQRScan()} variant="soft">
-                  Try Again
-                </Button>
-                <Button onClick={() => navigate('/')} variant="outline">
-                  Go to Events
-                </Button>
-              </Flex>
-            </Flex>
-          </Card>
-        </Box>
-        <AuthModal 
-          open={showAuthModal} 
-          onOpenChange={setShowAuthModal}
-        />
-      </>
-    );
-  }
+  // REMOVED: Error state UI - errors now redirect silently to events
+  // This prevents users from seeing "QR code expired" messages and getting stuck
 
   if (result) {
     const isValid = result.is_valid && result.success;
     
+    // If QR is invalid, silently redirect to events (no error message to user)
+    if (!isValid) {
+      console.warn('QR code invalid, redirecting silently to events');
+      logQRValidation('qr_validation', 'invalid_qr_result', result.message, false, { result });
+      setTimeout(() => navigate('/'), 100);
+      return null;
+    }
+    
+    // Only show success UI for valid QR codes
     return (
       <>
         <Box p="6" maxWidth="600px" mx="auto">
           <Card size="3">
             <Flex direction="column" gap="4">
-              {/* Result Status */}
+              {/* Success Status Only */}
               <Flex direction="column" align="center" gap="3">
-                {isValid ? (
-                  <CheckIcon width="50" height="50" color="green" />
-                ) : (
-                  <ExclamationTriangleIcon width="50" height="50" color="orange" />
-                )}
-                
-                <Heading size="6" align="center">
-                  {isValid ? '🔥 You\'re Powered Up!' : 'QR Code Issue'}
-                </Heading>
-                
-                <Text size="3" align="center" color={isValid ? "green" : "orange"}>
-                  {result.message}
-                </Text>
+                <CheckIcon width="50" height="50" color="green" />
+                <Heading size="6" align="center">🔥 You're Powered Up!</Heading>
+                <Text size="3" align="center" color="green">{result.message}</Text>
               </Flex>
 
               {/* Event Info */}
@@ -249,33 +268,23 @@ const UpgradeHandler = () => {
                     {event.venue && (
                       <Text size="2" color="gray">{event.venue}</Text>
                     )}
-                    {isValid && (
-                      <Flex align="center" gap="2" mt="2">
-                        <CheckIcon color="green" />
-                        <Text size="2" color="green" weight="medium">
-                          Extra vote power activated!
-                        </Text>
-                      </Flex>
-                    )}
+                    <Flex align="center" gap="2" mt="2">
+                      <CheckIcon color="green" />
+                      <Text size="2" color="green" weight="medium">
+                        Extra vote power activated!
+                      </Text>
+                    </Flex>
                   </Flex>
                 </Card>
               )}
 
-              {/* Instructions */}
-              {isValid ? (
-                <Callout.Root color="green">
-                  <Callout.Text>
-                    <strong>Nice!</strong> Your votes now pack extra punch at this Art Battle. 
-                    Go vote for your favorites!
-                  </Callout.Text>
-                </Callout.Root>
-              ) : (
-                <Callout.Root color="orange">
-                  <Callout.Text>
-                    Oops! This QR code expired. Grab a fresh one from the event screen!
-                  </Callout.Text>
-                </Callout.Root>
-              )}
+              {/* Success Instructions */}
+              <Callout.Root color="green">
+                <Callout.Text>
+                  <strong>Nice!</strong> Your votes now pack extra punch at this Art Battle. 
+                  Go vote for your favorites!
+                </Callout.Text>
+              </Callout.Root>
 
               {/* Action Buttons */}
               <Flex gap="3" justify="center">
