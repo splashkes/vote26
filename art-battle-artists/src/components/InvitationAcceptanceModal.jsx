@@ -187,7 +187,11 @@ const InvitationAcceptanceModal = ({
       confirmationData: {
         legalName: formData.legalName,
         socialPromotionConsent: formData.socialPromotion,
-        socialUsernames: formData.socialUsernames,
+        socialUsernames: {
+          ...formData.socialUsernames,
+          // Include pronouns in confirmation record for historical tracking
+          pronouns: formData.pronouns === 'Other' ? formData.pronounsOther : formData.pronouns
+        },
         messageToOrganizers: formData.messageToOrganizers,
         publicMessage: formData.publicMessage,
         paymentMethod: formData.paymentMethod,

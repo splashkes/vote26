@@ -32,8 +32,9 @@
      FROM bids                                                                                        +
      WHERE art_id = v_artwork.id;                                                                     +
                                                                                                       +
-     -- Determine target status: 'sold' if has bids AND artist_id, otherwise 'closed'                 +
-     IF v_bid_count > 0 AND v_artwork.artist_id IS NOT NULL THEN                                      +
+     -- FIXED LOGIC: 'sold' only if has bids, otherwise 'closed'                                      +
+     -- No need to check artist_id - bids are what matter for sale status                             +
+     IF v_bid_count > 0 THEN                                                                          +
        v_target_status := 'sold';                                                                     +
      ELSE                                                                                             +
        v_target_status := 'closed';                                                                   +
@@ -78,7 +79,8 @@
        'error', SQLERRM,                                                                              +
        'sold_count', v_sold_count,                                                                    +
        'closed_count', v_closed_count,                                                                +
-       'error_count', v_error_count                                                                   +
+       'error_count', v_error_count,                                                                  +
+       'timestamp', NOW()                                                                             +
      );                                                                                               +
  END;                                                                                                 +
  $function$                                                                                           +

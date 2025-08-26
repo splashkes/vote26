@@ -1,0 +1,271 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Art Battle - Real-time Activity Monitoring",
+    "tags": ["art-battle", "real-time", "monitoring", "alerts"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Live Activity Feed",
+        "type": "logs",
+        "targets": [
+          {
+            "expr": "postgresql_query{query=\"SELECT created_at, CASE WHEN event_type = 'qr_validation' THEN '📱 QR Scan' WHEN success THEN '✅ Vote Cast' ELSE '❌ Error' END as activity_type, COALESCE(error_message, 'Success') as message, phone FROM (SELECT created_at, event_type, success, error_message, phone FROM event_auth_logs WHERE created_at >= NOW() - INTERVAL '1 hour' UNION ALL SELECT v.created_at, 'vote_cast' as event_type, true as success, 'Vote cast successfully' as error_message, p.phone FROM votes v JOIN people p ON v.person_id = p.id WHERE v.created_at >= NOW() - INTERVAL '1 hour' UNION ALL SELECT b.created_at, 'bid_placed' as event_type, true as success, CONCAT('Bid placed: $', b.amount) as error_message, p.phone FROM bids b JOIN people p ON b.person_id = p.id WHERE b.created_at >= NOW() - INTERVAL '1 hour') combined ORDER BY created_at DESC LIMIT 100\"}"
+          }
+        ],
+        "options": {
+          "showTime": true,
+          "showLabels": false,
+          "sortOrder": "Descending",
+          "wrapLogMessage": false
+        },
+        "gridPos": {"h": 12, "w": 12, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Active Users Right Now",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "postgresql_query{query=\"SELECT COUNT(DISTINCT person_id) as active_users FROM (SELECT person_id FROM event_auth_logs WHERE created_at >= NOW() - INTERVAL '5 minutes' UNION SELECT person_id FROM votes WHERE created_at >= NOW() - INTERVAL '5 minutes' UNION SELECT person_id FROM bids WHERE created_at >= NOW() - INTERVAL '5 minutes') active\"}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 5},
+                {"color": "green", "value": 20}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 6, "w": 6, "x": 12, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "Current Event Activity",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "postgresql_query{query=\"SELECT e.name, COUNT(DISTINCT activity.person_id) as active_users FROM events e JOIN (SELECT v.person_id, a.event_id FROM votes v JOIN art a ON v.art_uuid = a.id WHERE v.created_at >= NOW() - INTERVAL '10 minutes' UNION SELECT b.person_id, a.event_id FROM bids b JOIN art a ON b.art_id = a.id WHERE b.created_at >= NOW() - INTERVAL '10 minutes') activity ON e.id = activity.event_id GROUP BY e.id, e.name ORDER BY active_users DESC LIMIT 1\"}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null}
+              ]
+            },
+            "noValue": "No Active Events"
+          }
+        },
+        "gridPos": {"h": 6, "w": 6, "x": 18, "y": 0}
+      },
+      {
+        "id": 4,
+        "title": "Error Rate Alert",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "postgresql_query{query=\"SELECT ROUND(100.0 * SUM(CASE WHEN success = false THEN 1 ELSE 0 END) / COUNT(*), 2) as error_rate FROM event_auth_logs WHERE created_at >= NOW() - INTERVAL '15 minutes'\"}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 5},
+                {"color": "red", "value": 15}
+              ]
+            },
+            "unit": "percent"
+          }
+        },
+        "gridPos": {"h": 6, "w": 6, "x": 12, "y": 6}
+      },
+      {
+        "id": 5,
+        "title": "Revenue This Hour",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "postgresql_query{query=\"SELECT COALESCE(SUM(amount), 0) as hourly_revenue FROM bids WHERE created_at >= DATE_TRUNC('hour', NOW())\"}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 100},
+                {"color": "green", "value": 500}
+              ]
+            },
+            "unit": "currencyUSD"
+          }
+        },
+        "gridPos": {"h": 6, "w": 6, "x": 18, "y": 6}
+      },
+      {
+        "id": 6,
+        "title": "Activity Heatmap (Last 24 Hours)",
+        "type": "heatmap",
+        "targets": [
+          {
+            "expr": "postgresql_query{query=\"SELECT EXTRACT(HOUR FROM created_at) as hour, EXTRACT(DOW FROM created_at) as day_of_week, COUNT(*) as activity_count FROM (SELECT created_at FROM votes WHERE created_at >= NOW() - INTERVAL '7 days' UNION ALL SELECT created_at FROM bids WHERE created_at >= NOW() - INTERVAL '7 days' UNION ALL SELECT created_at FROM event_auth_logs WHERE success = true AND created_at >= NOW() - INTERVAL '7 days') combined GROUP BY EXTRACT(HOUR FROM created_at), EXTRACT(DOW FROM created_at) ORDER BY day_of_week, hour\"}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "hideFrom": {"legend": false, "tooltip": false, "vis": false},
+              "scaleDistribution": {"type": "linear"}
+            }
+          }
+        },
+        "options": {
+          "calculate": false,
+          "cellGap": 2,
+          "color": {
+            "exponent": 0.5,
+            "fill": "dark-orange",
+            "mode": "scheme",
+            "reverse": false,
+            "scale": "exponential",
+            "scheme": "Spectral",
+            "steps": 64
+          },
+          "exemplars": {"color": "rgba(255,0,255,0.7)"},
+          "filterValues": {"le": 1e-9},
+          "legend": {"show": false},
+          "rowsFrame": {"layout": "auto"},
+          "tooltip": {"show": true, "yHistogram": false},
+          "yAxis": {"axisPlacement": "left", "reverse": false}
+        },
+        "gridPos": {"h": 10, "w": 24, "x": 0, "y": 12}
+      },
+      {
+        "id": 7,
+        "title": "Top Performing Artworks (Live Bidding)",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "postgresql_query{query=\"SELECT a.art_code, e.eid as event_id, a.current_bid, COUNT(b.id) as bid_count, MAX(b.created_at) as last_bid_time, EXTRACT(EPOCH FROM (NOW() - MAX(b.created_at)))/60 as minutes_since_last_bid FROM art a JOIN events e ON a.event_id = e.id JOIN bids b ON a.id = b.art_id WHERE b.created_at >= NOW() - INTERVAL '2 hours' GROUP BY a.id, a.art_code, e.eid, a.current_bid HAVING COUNT(b.id) >= 3 ORDER BY COUNT(b.id) DESC, a.current_bid DESC LIMIT 10\"}"
+          }
+        ],
+        "fieldConfig": {
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "current_bid"},
+              "properties": [
+                {
+                  "id": "unit",
+                  "value": "currencyUSD"
+                },
+                {
+                  "id": "custom.displayMode",
+                  "value": "gradient-gauge"
+                }
+              ]
+            },
+            {
+              "matcher": {"id": "byName", "options": "minutes_since_last_bid"},
+              "properties": [
+                {
+                  "id": "custom.cellOptions",
+                  "value": {"type": "color-background", "mode": "basic"}
+                },
+                {
+                  "id": "thresholds",
+                  "value": {
+                    "steps": [
+                      {"color": "green", "value": 0},
+                      {"color": "yellow", "value": 5},
+                      {"color": "red", "value": 15}
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "renameByName": {
+                "art_code": "Artwork",
+                "event_id": "Event",
+                "current_bid": "Current Bid",
+                "bid_count": "Bid Count",
+                "last_bid_time": "Last Bid",
+                "minutes_since_last_bid": "Min Since Bid"
+              }
+            }
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 22}
+      },
+      {
+        "id": 8,
+        "title": "System Health Alerts",
+        "type": "alertlist",
+        "options": {
+          "alertName": "",
+          "dashboardAlerts": false,
+          "groupBy": [],
+          "groupMode": "",
+          "maxItems": 10,
+          "query": "",
+          "recent": false,
+          "search": "",
+          "showOptions": "current",
+          "sortOrder": 1,
+          "stateFilter": [],
+          "tags": ["art-battle"]
+        },
+        "gridPos": {"h": 6, "w": 12, "x": 0, "y": 30}
+      },
+      {
+        "id": 9,
+        "title": "Database Connection Health",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "postgresql_up{instance=\"db.xsqdkubgyqwpyvfltnrf.supabase.co:5432\"}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "green", "value": 1}
+              ]
+            },
+            "mappings": [
+              {"options": {"0": {"text": "❌ Down"}}, "type": "value"},
+              {"options": {"1": {"text": "✅ Healthy"}}, "type": "value"}
+            ]
+          }
+        },
+        "gridPos": {"h": 6, "w": 12, "x": 12, "y": 30}
+      }
+    ],
+    "time": {"from": "now-1h", "to": "now"},
+    "refresh": "30s",
+    "templating": {
+      "list": []
+    }
+  }
+}

@@ -1,0 +1,203 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Art Battle - User Journey & Conversion Tracking",
+    "tags": ["art-battle", "user-journey", "conversion", "analytics"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "User Registration Flow",
+        "type": "sankey",
+        "targets": [
+          {
+            "expr": "postgresql_query{query=\"SELECT 'Landing' as source, 'QR Scan' as target, COUNT(DISTINCT person_id) as value FROM event_auth_logs WHERE event_type = 'qr_validation' AND created_at >= NOW() - INTERVAL '24 hours' UNION ALL SELECT 'QR Scan' as source, 'Successful Auth' as target, COUNT(DISTINCT person_id) as value FROM event_auth_logs WHERE event_type = 'qr_validation' AND success = true AND created_at >= NOW() - INTERVAL '24 hours' UNION ALL SELECT 'Successful Auth' as source, 'First Vote' as target, COUNT(DISTINCT v.person_id) as value FROM event_auth_logs e JOIN votes v ON e.person_id = v.person_id WHERE e.event_type = 'qr_validation' AND e.success = true AND v.created_at >= e.created_at AND e.created_at >= NOW() - INTERVAL '24 hours' UNION ALL SELECT 'First Vote' as source, 'First Bid' as target, COUNT(DISTINCT b.person_id) as value FROM event_auth_logs e JOIN votes v ON e.person_id = v.person_id JOIN bids b ON v.person_id = b.person_id WHERE e.event_type = 'qr_validation' AND e.success = true AND v.created_at >= e.created_at AND b.created_at >= v.created_at AND e.created_at >= NOW() - INTERVAL '24 hours'\"}"
+          }
+        ],
+        "gridPos": {"h": 12, "w": 24, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Time to First Vote After QR Scan",
+        "type": "histogram",
+        "targets": [
+          {
+            "expr": "postgresql_query{query=\"SELECT EXTRACT(EPOCH FROM (v.created_at - e.created_at))/60 as minutes_to_vote FROM event_auth_logs e JOIN votes v ON e.person_id = v.person_id WHERE e.event_type = 'qr_validation' AND e.success = true AND v.created_at >= e.created_at AND e.created_at >= NOW() - INTERVAL '7 days' AND EXTRACT(EPOCH FROM (v.created_at - e.created_at))/60 <= 60\"}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "hideFrom": {"legend": false, "tooltip": false, "vis": false}
+            }
+          }
+        },
+        "options": {
+          "bucketSize": 5,
+          "bucketBound": "auto"
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12}
+      },
+      {
+        "id": 3,
+        "title": "Time to First Bid After Vote",
+        "type": "histogram",
+        "targets": [
+          {
+            "expr": "postgresql_query{query=\"SELECT EXTRACT(EPOCH FROM (b.created_at - v.created_at))/60 as minutes_to_bid FROM votes v JOIN bids b ON v.person_id = b.person_id WHERE b.created_at >= v.created_at AND v.created_at >= NOW() - INTERVAL '7 days' AND EXTRACT(EPOCH FROM (b.created_at - v.created_at))/60 <= 120\"}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "hideFrom": {"legend": false, "tooltip": false, "vis": false}
+            }
+          }
+        },
+        "options": {
+          "bucketSize": 10,
+          "bucketBound": "auto"
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12}
+      },
+      {
+        "id": 4,
+        "title": "User Lifetime Value Journey",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "postgresql_query{query=\"WITH user_journey AS (SELECT p.phone, p.created_at as registration_time, MIN(v.created_at) as first_vote_time, MIN(b.created_at) as first_bid_time, COUNT(DISTINCT v.id) as total_votes, COUNT(DISTINCT b.id) as total_bids, SUM(b.amount) as total_bid_amount, MAX(b.created_at) as last_activity FROM people p LEFT JOIN votes v ON p.id = v.person_id LEFT JOIN bids b ON p.id = b.person_id WHERE p.created_at >= NOW() - INTERVAL '30 days' GROUP BY p.id, p.phone, p.created_at) SELECT phone, registration_time, EXTRACT(EPOCH FROM (first_vote_time - registration_time))/60 as minutes_to_first_vote, EXTRACT(EPOCH FROM (first_bid_time - first_vote_time))/60 as minutes_vote_to_bid, total_votes, total_bids, COALESCE(total_bid_amount, 0) as total_spent, CASE WHEN total_bids > 0 THEN 'High Value' WHEN total_votes > 5 THEN 'Medium Value' WHEN total_votes > 0 THEN 'Low Value' ELSE 'Inactive' END as user_segment FROM user_journey ORDER BY total_bid_amount DESC NULLS LAST\"}"
+          }
+        ],
+        "fieldConfig": {
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "user_segment"},
+              "properties": [
+                {
+                  "id": "custom.cellOptions",
+                  "value": {"type": "color-background", "mode": "basic"}
+                },
+                {
+                  "id": "mappings",
+                  "value": [
+                    {"options": {"High Value": {"color": "green", "index": 0}}},
+                    {"options": {"Medium Value": {"color": "yellow", "index": 1}}},
+                    {"options": {"Low Value": {"color": "orange", "index": 2}}},
+                    {"options": {"Inactive": {"color": "red", "index": 3}}}
+                  ]
+                }
+              ]
+            },
+            {
+              "matcher": {"id": "byName", "options": "total_spent"},
+              "properties": [
+                {
+                  "id": "unit",
+                  "value": "currencyUSD"
+                },
+                {
+                  "id": "custom.displayMode",
+                  "value": "gradient-gauge"
+                }
+              ]
+            }
+          ]
+        },
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "renameByName": {
+                "phone": "Phone",
+                "registration_time": "Registered",
+                "minutes_to_first_vote": "Min to Vote",
+                "minutes_vote_to_bid": "Min Vote→Bid",
+                "total_votes": "Total Votes",
+                "total_bids": "Total Bids", 
+                "total_spent": "Total Spent",
+                "user_segment": "Segment"
+              }
+            }
+          }
+        ],
+        "gridPos": {"h": 12, "w": 24, "x": 0, "y": 20}
+      },
+      {
+        "id": 5,
+        "title": "Vote Weight Distribution",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "postgresql_query{query=\"SELECT CASE WHEN vote_weight > 1.0 THEN 'QR Bonus Users' ELSE 'Standard Users' END as user_type, COUNT(*) as vote_count FROM votes WHERE created_at >= NOW() - INTERVAL '7 days' GROUP BY user_type\"}"
+          }
+        ],
+        "fieldConfig": {
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "QR Bonus Users"},
+              "properties": [{"id": "color", "value": {"fixedColor": "green", "mode": "fixed"}}]
+            },
+            {
+              "matcher": {"id": "byName", "options": "Standard Users"},
+              "properties": [{"id": "color", "value": {"fixedColor": "blue", "mode": "fixed"}}]
+            }
+          ]
+        },
+        "options": {
+          "pieType": "donut",
+          "tooltip": {"mode": "single", "sort": "none"},
+          "legend": {"displayMode": "list", "placement": "right"}
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32}
+      },
+      {
+        "id": 6,
+        "title": "User Retention (Return Visits)",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "postgresql_query{query=\"WITH user_visits AS (SELECT person_id, COUNT(DISTINCT DATE(created_at)) as visit_days FROM votes WHERE created_at >= NOW() - INTERVAL '30 days' GROUP BY person_id) SELECT COUNT(CASE WHEN visit_days > 1 THEN 1 END) as returning_users, COUNT(*) as total_users, ROUND(100.0 * COUNT(CASE WHEN visit_days > 1 THEN 1 END) / COUNT(*), 2) as retention_rate FROM user_visits\"}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 20},
+                {"color": "green", "value": 40}
+              ]
+            },
+            "unit": "percent"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32}
+      },
+      {
+        "id": 7,
+        "title": "Bidding Patterns by User Segment",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "postgresql_query{query=\"SELECT DATE_TRUNC('day', b.created_at) as time, AVG(b.amount) as avg_bid_amount, CASE WHEN user_bids.bid_count > 10 THEN 'Power Bidder' WHEN user_bids.bid_count > 3 THEN 'Active Bidder' ELSE 'Casual Bidder' END as user_type FROM bids b JOIN (SELECT person_id, COUNT(*) as bid_count FROM bids WHERE created_at >= NOW() - INTERVAL '30 days' GROUP BY person_id) user_bids ON b.person_id = user_bids.person_id WHERE b.created_at >= NOW() - INTERVAL '7 days' GROUP BY DATE_TRUNC('day', b.created_at), user_type ORDER BY time, user_type\"}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "currencyUSD"
+          }
+        },
+        "options": {
+          "tooltip": {"mode": "single", "sort": "none"},
+          "legend": {"calcs": ["mean"], "displayMode": "list", "placement": "bottom"}
+        },
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 40}
+      }
+    ],
+    "time": {"from": "now-7d", "to": "now"},
+    "refresh": "15m"
+  }
+}

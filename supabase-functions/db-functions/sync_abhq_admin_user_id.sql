@@ -3,6 +3,7 @@
  CREATE OR REPLACE FUNCTION public.sync_abhq_admin_user_id()  +
   RETURNS trigger                                             +
   LANGUAGE plpgsql                                            +
+  SECURITY DEFINER                                            +
  AS $function$                                                +
  BEGIN                                                        +
    -- Try to find user_id from auth.users table               +

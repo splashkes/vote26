@@ -223,17 +223,17 @@
      -- Queue Slack notification (non-blocking)                                                               +
      BEGIN                                                                                                    +
        INSERT INTO slack_notifications (                                                                      +
-         event_type,                                                                                          +
+         message_type,     -- FIXED: Use message_type instead of event_type                                   +
          event_id,                                                                                            +
-         person_id,                                                                                           +
-         metadata                                                                                             +
+         payload                                                                                              +
        ) VALUES (                                                                                             +
          'vote_cast',                                                                                         +
          v_event_id,                                                                                          +
-         v_person_id,                                                                                         +
          jsonb_build_object(                                                                                  +
+           'person_id', v_person_id,                                                                          +
            'art_id', v_art_uuid,                                                                              +
            'round', p_round,                                                                                  +
+           'easel', p_easel,                                                                                  +
            'nickname', v_nickname,                                                                            +
            'phone_last4', RIGHT(v_auth_phone, 4),                                                             +
            'vote_weight', v_final_weight,                                                                     +

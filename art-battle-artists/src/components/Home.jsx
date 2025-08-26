@@ -10,6 +10,8 @@ import {
   Grid,
   Callout,
   Skeleton,
+  Dialog,
+  TextArea,
 } from '@radix-ui/themes';
 import { 
   PersonIcon, 
@@ -37,6 +39,9 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
   const [applications, setApplications] = useState([]);
   const [invitations, setInvitations] = useState([]);
   const [confirmations, setConfirmations] = useState([]);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [selectedConfirmation, setSelectedConfirmation] = useState(null);
+  const [cancelReason, setCancelReason] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [accepting, setAccepting] = useState({});
@@ -243,26 +248,8 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
       const { data: worksData, error: worksError } = await supabase
         .rpc('get_unified_sample_works', { profile_id: profile.id });
 
-      console.log('Home: Sample works query result:', { 
-        worksData, 
-        worksError, 
-        worksCount: worksData?.length || 0,
-        profile_id: profile.id 
-      });
       if (worksError) throw worksError;
       setSampleWorks(worksData || []);
-      console.log('Home: Set sample works state:', { 
-        worksCount: (worksData || []).length,
-        firstWork: worksData?.[0] ? {
-          id: worksData[0].id,
-          title: worksData[0].title,
-          media_file: worksData[0].media_file ? {
-            original_url: worksData[0].media_file.original_url,
-            compressed_url: worksData[0].media_file.compressed_url,
-            cloudflare_id: worksData[0].media_file.cloudflare_id
-          } : null
-        } : null
-      });
 
       // Load applications for selected profile
       const { data: appsData, error: appsError } = await supabase
@@ -281,7 +268,6 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
         .order('applied_at', { ascending: false })
         .limit(5);
 
-      console.log('Home: Applications query result:', { appsData, appsError });
       if (appsError) throw appsError;
       setApplications(appsData || []);
 
@@ -303,18 +289,19 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
       if (invitationsRaw && invitationsRaw.length > 0) {
         for (const invitation of invitationsRaw) {
           if (invitation.event_eid) {
-            const { data: eventData } = await supabase
-              .from('events')
-              .select(`
-                id,
-                eid,
-                name,
-                event_start_datetime,
-                venue,
-                city:cities(name)
-              `)
-              .eq('eid', invitation.event_eid)
-              .single();
+            const { data: eventResponse, error: eventError } = await supabase.functions.invoke(
+              'get-event-details-for-artist-profile',
+              {
+                body: { event_eid: invitation.event_eid }
+              }
+            );
+
+            let eventData = null;
+            if (eventResponse && eventResponse.success) {
+              eventData = eventResponse.event;
+            } else {
+              console.error('Failed to get event details for invitation:', eventError || eventResponse?.error);
+            }
 
             invitationsData.push({
               ...invitation,
@@ -324,17 +311,23 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
         }
       }
 
-      console.log('Home: Invitations query result:', { invitationsData, invitationsError });
       if (invitationsError) throw invitationsError;
       setInvitations(invitationsData || []);
 
-      // Load confirmations for selected profile
+      // Load confirmations for selected profile (excluding withdrawn)
       const { data: confirmationsRaw, error: confirmationsError } = await supabase
         .from('artist_confirmations')
         .select('*')
         .eq('artist_profile_id', profile.id)
         .eq('confirmation_status', 'confirmed')
         .order('created_at', { ascending: false });
+
+      console.log('DEBUG: Confirmations query result:', {
+        profile_id: profile.id,
+        confirmationsRaw,
+        confirmationsError,
+        query_url: 'artist_confirmations filtered by profile_id and confirmed status'
+      });
 
       if (confirmationsError) throw confirmationsError;
 
@@ -343,19 +336,19 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
       if (confirmationsRaw && confirmationsRaw.length > 0) {
         for (const confirmation of confirmationsRaw) {
           if (confirmation.event_eid) {
-            const { data: eventData } = await supabase
-              .from('events')
-              .select(`
-                id,
-                eid,
-                name,
-                event_start_datetime,
-                event_end_datetime,
-                venue,
-                city:cities(name)
-              `)
-              .eq('eid', confirmation.event_eid)
-              .single();
+            const { data: eventResponse, error: eventError } = await supabase.functions.invoke(
+              'get-event-details-for-artist-profile',
+              {
+                body: { event_eid: confirmation.event_eid }
+              }
+            );
+
+            let eventData = null;
+            if (eventResponse && eventResponse.success) {
+              eventData = eventResponse.event;
+            } else {
+              console.error('Failed to get event details for confirmation:', eventError || eventResponse?.error);
+            }
 
             confirmationsData.push({
               ...confirmation,
@@ -365,8 +358,20 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
         }
       }
 
-      console.log('Home: Confirmations query result:', { confirmationsData, confirmationsError });
+      console.log('DEBUG: Setting confirmations state:', {
+        confirmationsData_length: (confirmationsData || []).length,
+        confirmationsData: confirmationsData,
+        current_confirmations_state: confirmations.length
+      });
       setConfirmations(confirmationsData || []);
+      
+      // Force a complete state refresh for debugging
+      setTimeout(() => {
+        console.log('DEBUG: Confirmations state after setState:', {
+          confirmations_length: confirmations.length,
+          confirmations_content: confirmations
+        });
+      }, 100);
     } catch (err) {
       console.error('Home: Error in loadProfileData:', err);
       setError('Failed to load profile data: ' + err.message);
@@ -515,68 +520,46 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
     setError('');
 
     try {
-      // Double-check if already confirmed (in case of race condition)
-      const alreadyConfirmed = confirmations.find(conf => conf.event_eid === selectedInvitation.event_eid);
-      if (alreadyConfirmed) {
-        throw new Error('You have already accepted an invitation for this event!');
-      }
+      console.log('Attempting to accept invitation:', {
+        submissionData: submissionData,
+        invitationId: selectedInvitation.id,
+        eventEid: submissionData.eventEid
+      });
 
-      // Update artist profile with pronouns if provided
-      if (submissionData.profileUpdates) {
-        const { error: profileUpdateError } = await supabase
-          .from('artist_profiles')
-          .update(submissionData.profileUpdates)
-          .eq('id', submissionData.artistProfileId);
-
-        if (profileUpdateError) throw profileUpdateError;
-      }
-
-      // Create comprehensive confirmation entry
-      const { error: confirmError } = await supabase
-        .from('artist_confirmations')
-        .insert({
-          artist_profile_id: submissionData.artistProfileId,
-          event_eid: submissionData.eventEid,
-          artist_number: submissionData.artistNumber,
-          confirmation_status: 'confirmed',
-          entry_date: new Date().toISOString(),
-          form_19_entry_id: null, // Explicitly set to null since this should not be used
-          
-          // Enhanced confirmation data
-          legal_name: submissionData.confirmationData.legalName,
-          social_promotion_consent: submissionData.confirmationData.socialPromotionConsent,
-          social_usernames: submissionData.confirmationData.socialUsernames,
-          message_to_organizers: submissionData.confirmationData.messageToOrganizers,
-          public_message: submissionData.confirmationData.publicMessage,
-          payment_method: submissionData.confirmationData.paymentMethod,
-          payment_details: submissionData.confirmationData.paymentDetails,
-          legal_agreements: submissionData.confirmationData.legalAgreements,
-          promotion_artwork_url: submissionData.confirmationData.promotionArtworkUrl,
-          
-          metadata: {
-            accepted_invitation_at: new Date().toISOString(),
-            original_invitation_id: selectedInvitation.id,
-            accepted_via: 'artist_portal_enhanced_home'
-          }
-        });
-
-      if (confirmError) throw confirmError;
-
-      // Update the invitation with accepted_at timestamp to hide it from UI
-      try {
-        const { error: invitationUpdateError } = await supabase
-          .from('artist_invitations')
-          .update({
-            accepted_at: new Date().toISOString()
-          })
-          .eq('id', selectedInvitation.id);
-
-        if (invitationUpdateError) {
-          console.warn('Failed to update invitation accepted_at:', invitationUpdateError.message);
-          // Continue anyway - the confirmation is created, which is the important part
+      const { data, error } = await supabase.functions.invoke('accept-invitation', {
+        body: {
+          submissionData: submissionData,
+          invitationId: selectedInvitation.id
         }
-      } catch (invitationError) {
-        console.warn('Error updating invitation:', invitationError.message);
+      });
+
+      console.log('Accept invitation response:', { data, error });
+
+      if (error) {
+        // Try to get the actual error message from the response body
+        let errorMessage = error.message;
+        let debugInfo = null;
+        
+        if (error.context && error.context.text) {
+          try {
+            const responseText = await error.context.text();
+            console.log('Raw accept invitation response:', responseText);
+            const parsed = JSON.parse(responseText);
+            errorMessage = parsed.error || parsed.message || errorMessage;
+            debugInfo = parsed.debug;
+            
+            if (debugInfo) {
+              console.log('Accept invitation debug info:', debugInfo);
+            }
+          } catch (e) {
+            console.log('Could not parse error response:', e);
+          }
+        }
+        throw new Error(errorMessage);
+      }
+
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to accept invitation');
       }
 
       // Reload data to show updated status
@@ -587,10 +570,98 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
       // Close the modal
       setShowInvitationModal(false);
       setSelectedInvitation(null);
+      
+      // Show success message
+      setError(''); // Clear any previous errors
+      console.log('Invitation successfully accepted');
+
     } catch (err) {
       setError('Failed to accept invitation: ' + err.message);
     } finally {
       setAccepting(prev => ({ ...prev, [selectedInvitation.id]: false }));
+    }
+  };
+
+  // Handle cancel confirmation modal
+  const handleCancelConfirmation = (confirmation) => {
+    setSelectedConfirmation(confirmation);
+    setShowCancelModal(true);
+    setCancelReason('');
+  };
+
+  // Submit cancellation
+  const handleCancelSubmit = async () => {
+    try {
+      setLoading(true);
+
+      console.log('Attempting to cancel confirmation:', {
+        selectedConfirmation: selectedConfirmation,
+        confirmation_id: selectedConfirmation?.id,
+        reason: cancelReason
+      });
+
+      // Check auth session before making the call
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log('Auth session for edge function call:', { 
+        hasSession: !!session, 
+        accessToken: session?.access_token ? 'present' : 'missing',
+        user: session?.user?.id 
+      });
+
+      const { data, error } = await supabase.functions.invoke('cancel-confirmation', {
+        body: {
+          confirmation_id: selectedConfirmation.id,
+          reason: cancelReason
+        }
+      });
+
+      console.log('Cancel confirmation response:', { data, error });
+
+      if (error) {
+        // Try to get the actual error message from the response body
+        let errorMessage = error.message;
+        let debugInfo = null;
+        
+        if (error.context && error.context.text) {
+          try {
+            const responseText = await error.context.text();
+            console.log('Raw edge function response:', responseText);
+            const parsed = JSON.parse(responseText);
+            errorMessage = parsed.error || parsed.message || errorMessage;
+            debugInfo = parsed.debug;
+            
+            if (debugInfo) {
+              console.log('Edge function debug info:', debugInfo);
+            }
+          } catch (e) {
+            console.log('Could not parse error response:', e);
+          }
+        }
+        throw new Error(errorMessage);
+      }
+
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to cancel confirmation');
+      }
+
+      // Reload data to show updated status
+      if (selectedProfile) {
+        await loadProfileData(selectedProfile);
+      }
+
+      // Close modal
+      setShowCancelModal(false);
+      setSelectedConfirmation(null);
+      setCancelReason('');
+      
+      // Show success message
+      setError(''); // Clear any previous errors
+      console.log('Confirmation successfully cancelled');
+
+    } catch (err) {
+      setError('Failed to cancel confirmation: ' + err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -952,6 +1023,18 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
                           🎉 You are confirmed to participate in this event! Get ready to paint!
                         </Callout.Text>
                       </Callout.Root>
+                      
+                      {/* Cancel Confirmation Button */}
+                      <Flex justify="end" style={{ marginTop: '12px' }}>
+                        <Button 
+                          variant="ghost" 
+                          color="red" 
+                          size="1"
+                          onClick={() => handleCancelConfirmation(confirmation)}
+                        >
+                          Cancel Participation
+                        </Button>
+                      </Flex>
                     </Flex>
                   </Card>
                 ))}
@@ -1158,12 +1241,6 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
                   <Text size="2" weight="medium" color="gray" mb="3" display="block">Sample Works</Text>
                   <Grid columns="3" gap="2">
                     {sampleWorks.slice(0, 9).map((work, index) => {
-                      console.log(`Home: Dashboard image ${index}:`, {
-                        work_id: work.id,
-                        work_title: work.title,
-                        source_type: work.source_type,
-                        image_url: work.image_url
-                      });
                       return (
                         <Box 
                           key={work.id} 
@@ -1280,6 +1357,61 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
           onAccept={processInvitationAcceptance}
           loading={accepting[selectedInvitation.id]}
         />
+      )}
+
+      {/* Cancel Confirmation Modal */}
+      {selectedConfirmation && (
+        <Dialog.Root open={showCancelModal} onOpenChange={setShowCancelModal}>
+          <Dialog.Content maxWidth="500px">
+            <Dialog.Title>
+              Cancel Your Participation
+            </Dialog.Title>
+            <Dialog.Description size="2" mb="4">
+              Are you sure you want to cancel your participation in{' '}
+              <strong>{selectedConfirmation.events?.name || selectedConfirmation.event_eid}</strong>{' '}
+              in {selectedConfirmation.events?.city || 'this city'} on{' '}
+              {selectedConfirmation.events?.event_start_datetime ? 
+                new Date(selectedConfirmation.events.event_start_datetime).toLocaleDateString('en-US', {
+                  weekday: 'long',
+                  year: 'numeric', 
+                  month: 'long',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                }) : 'the scheduled date'
+              }?
+            </Dialog.Description>
+
+            <Flex direction="column" gap="3">
+              <Box>
+                <Text size="2" weight="medium" mb="2" display="block">
+                  Reason for cancellation (optional):
+                </Text>
+                <TextArea
+                  placeholder="Please let us know why you're cancelling..."
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  rows={3}
+                />
+              </Box>
+
+              <Flex gap="3" justify="end">
+                <Dialog.Close>
+                  <Button variant="soft" color="gray">
+                    Keep Participation
+                  </Button>
+                </Dialog.Close>
+                <Button 
+                  color="red" 
+                  onClick={handleCancelSubmit}
+                  disabled={loading}
+                >
+                  {loading ? 'Cancelling...' : 'Yes, Cancel Participation'}
+                </Button>
+              </Flex>
+            </Flex>
+          </Dialog.Content>
+        </Dialog.Root>
       )}
     </Flex>
   );

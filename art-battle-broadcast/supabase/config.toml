@@ -1,0 +1,7 @@
+# Supabase configuration file
+
+[functions.auction-csv-export]
+verify_jwt = false
+
+[functions.artist-email-export]
+verify_jwt = false

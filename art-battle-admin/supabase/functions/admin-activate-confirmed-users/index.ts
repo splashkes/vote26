@@ -70,6 +70,24 @@ Deno.serve(async (req) => {
 
     console.log('Successfully activated admin user:', record.email)
 
+    // Queue Slack notification for admin confirmation
+    try {
+      const { data: slackResult, error: slackError } = await supabase.rpc('send_admin_confirmation_slack', {
+        p_email: record.email,
+        p_admin_id: adminUser.id
+      })
+
+      if (slackError) {
+        console.error('Slack notification error:', slackError)
+        // Don't fail the entire function if Slack fails
+      } else {
+        console.log('Slack notification queued for admin confirmation:', record.email, 'ID:', slackResult?.notification_id)
+      }
+    } catch (slackError) {
+      console.error('Failed to queue Slack notification for confirmation:', slackError)
+      // Don't fail the entire function if Slack fails
+    }
+
     return new Response(
       JSON.stringify({ 
         success: true, 

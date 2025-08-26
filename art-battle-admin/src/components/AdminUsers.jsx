@@ -172,7 +172,7 @@ const AdminUsers = () => {
     try {
       // Make a direct fetch request to get raw error details
       const session = await supabase.auth.getSession();
-      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/admin-invite-user`, {
+      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/admin-improved-invite`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.data.session?.access_token}`,

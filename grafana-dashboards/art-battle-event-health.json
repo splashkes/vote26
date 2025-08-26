@@ -1,0 +1,191 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Art Battle - Event Health Status",
+    "tags": ["art-battle", "events", "health"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Upcoming Events - Health Check",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "postgresql_query{query=\"SELECT e.eid, e.name, e.event_start_datetime, e.venue, CASE WHEN e.event_start_datetime > NOW() + INTERVAL '7 days' THEN 'green' WHEN e.event_start_datetime > NOW() + INTERVAL '3 days' THEN 'yellow' ELSE 'red' END as urgency_status, CASE WHEN COUNT(ea.id) > 0 THEN 'green' ELSE 'red' END as admin_status, CASE WHEN COUNT(eqs.id) > 0 THEN 'green' ELSE 'red' END as qr_status, CASE WHEN COUNT(ap.id) > 0 THEN 'green' ELSE 'yellow' END as artist_status, CASE WHEN COUNT(a.id) >= 12 THEN 'green' WHEN COUNT(a.id) >= 6 THEN 'yellow' ELSE 'red' END as artwork_status FROM events e LEFT JOIN event_admins ea ON e.id = ea.event_id LEFT JOIN event_qr_secrets eqs ON e.id = eqs.event_id AND eqs.is_active = true LEFT JOIN event_artists ea2 ON e.id = ea2.event_id LEFT JOIN artist_profiles ap ON ea2.artist_profile_id = ap.id LEFT JOIN art a ON e.id = a.event_id WHERE e.event_start_datetime > NOW() AND e.event_start_datetime < NOW() + INTERVAL '30 days' GROUP BY e.id, e.eid, e.name, e.event_start_datetime, e.venue ORDER BY e.event_start_datetime\"}"
+          }
+        ],
+        "fieldConfig": {
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "urgency_status"},
+              "properties": [
+                {
+                  "id": "custom.cellOptions",
+                  "value": {
+                    "type": "color-background",
+                    "mode": "basic"
+                  }
+                },
+                {
+                  "id": "mappings",
+                  "value": [
+                    {"options": {"green": {"color": "green", "index": 0}}},
+                    {"options": {"yellow": {"color": "yellow", "index": 1}}},
+                    {"options": {"red": {"color": "red", "index": 2}}}
+                  ]
+                }
+              ]
+            },
+            {
+              "matcher": {"id": "byName", "options": "admin_status"},
+              "properties": [
+                {
+                  "id": "custom.cellOptions",
+                  "value": {"type": "color-background", "mode": "basic"}
+                },
+                {
+                  "id": "mappings",
+                  "value": [
+                    {"options": {"green": {"color": "green", "index": 0, "text": "✅ Ready"}}},
+                    {"options": {"red": {"color": "red", "index": 1, "text": "❌ No Admins"}}}
+                  ]
+                }
+              ]
+            },
+            {
+              "matcher": {"id": "byName", "options": "qr_status"},
+              "properties": [
+                {
+                  "id": "custom.cellOptions",
+                  "value": {"type": "color-background", "mode": "basic"}
+                },
+                {
+                  "id": "mappings",
+                  "value": [
+                    {"options": {"green": {"color": "green", "index": 0, "text": "✅ QR Active"}}},
+                    {"options": {"red": {"color": "red", "index": 1, "text": "❌ No QR"}}}
+                  ]
+                }
+              ]
+            },
+            {
+              "matcher": {"id": "byName", "options": "artist_status"},
+              "properties": [
+                {
+                  "id": "custom.cellOptions",
+                  "value": {"type": "color-background", "mode": "basic"}
+                },
+                {
+                  "id": "mappings",
+                  "value": [
+                    {"options": {"green": {"color": "green", "index": 0, "text": "✅ Artists Ready"}}},
+                    {"options": {"yellow": {"color": "yellow", "index": 1, "text": "⚠️ Few Artists"}}}
+                  ]
+                }
+              ]
+            },
+            {
+              "matcher": {"id": "byName", "options": "artwork_status"},
+              "properties": [
+                {
+                  "id": "custom.cellOptions",
+                  "value": {"type": "color-background", "mode": "basic"}
+                },
+                {
+                  "id": "mappings",
+                  "value": [
+                    {"options": {"green": {"color": "green", "index": 0, "text": "✅ 12+ Works"}}},
+                    {"options": {"yellow": {"color": "yellow", "index": 1, "text": "⚠️ 6-11 Works"}}},
+                    {"options": {"red": {"color": "red", "index": 2, "text": "❌ <6 Works"}}}
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {},
+              "indexByName": {},
+              "renameByName": {
+                "eid": "Event ID",
+                "name": "Event Name",
+                "event_start_datetime": "Start Date",
+                "venue": "Venue",
+                "urgency_status": "⏰ Timeline",
+                "admin_status": "👥 Admins",
+                "qr_status": "📱 QR Code",
+                "artist_status": "🎨 Artists",
+                "artwork_status": "🖼️ Artworks"
+              }
+            }
+          }
+        ],
+        "gridPos": {"h": 12, "w": 24, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Event Setup Progress",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "postgresql_query{query=\"SELECT COUNT(*) as total_events, SUM(CASE WHEN admin_count > 0 AND qr_active > 0 AND artist_count >= 6 AND artwork_count >= 12 THEN 1 ELSE 0 END) as ready_events FROM (SELECT e.id, COUNT(DISTINCT ea.id) as admin_count, COUNT(DISTINCT eqs.id) as qr_active, COUNT(DISTINCT ap.id) as artist_count, COUNT(DISTINCT a.id) as artwork_count FROM events e LEFT JOIN event_admins ea ON e.id = ea.event_id LEFT JOIN event_qr_secrets eqs ON e.id = eqs.event_id AND eqs.is_active = true LEFT JOIN event_artists ea2 ON e.id = ea2.event_id LEFT JOIN artist_profiles ap ON ea2.artist_profile_id = ap.id LEFT JOIN art a ON e.id = a.event_id WHERE e.event_start_datetime > NOW() AND e.event_start_datetime < NOW() + INTERVAL '30 days' GROUP BY e.id) sub\"}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "displayMode": "gradient-gauge",
+              "orientation": "horizontal"
+            },
+            "mappings": [],
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 0.5},
+                {"color": "green", "value": 0.8}
+              ]
+            },
+            "unit": "percentunit"
+          }
+        },
+        "transformations": [
+          {
+            "id": "calculateField",
+            "options": {
+              "alias": "Ready Percentage",
+              "binary": {"left": "ready_events", "operator": "/", "right": "total_events"}
+            }
+          }
+        ],
+        "gridPos": {"h": 6, "w": 12, "x": 0, "y": 12}
+      },
+      {
+        "id": 3,
+        "title": "Critical Issues Alert",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "postgresql_query{query=\"SELECT COUNT(*) as critical_issues FROM (SELECT e.id FROM events e LEFT JOIN event_admins ea ON e.id = ea.event_id LEFT JOIN event_qr_secrets eqs ON e.id = eqs.event_id AND eqs.is_active = true LEFT JOIN art a ON e.id = a.event_id WHERE e.event_start_datetime > NOW() AND e.event_start_datetime < NOW() + INTERVAL '7 days' GROUP BY e.id HAVING COUNT(DISTINCT ea.id) = 0 OR COUNT(DISTINCT eqs.id) = 0 OR COUNT(DISTINCT a.id) < 6) sub\"}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "red", "value": 1}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 6, "w": 12, "x": 12, "y": 12}
+      }
+    ],
+    "time": {"from": "now-1h", "to": "now"},
+    "refresh": "1m"
+  }
+}

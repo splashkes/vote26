@@ -184,7 +184,8 @@ const EventApplications = () => {
       const { data, error } = await supabase
         .from('artist_confirmations')
         .select('*')
-        .eq('artist_profile_id', artistProfileId);
+        .eq('artist_profile_id', artistProfileId)
+        .eq('confirmation_status', 'confirmed');
 
       if (error) throw error;
       
@@ -213,39 +214,17 @@ const EventApplications = () => {
     setError('');
 
     try {
-      // Get artist profile entry_id and event eid
-      const { data: profileData, error: profileError } = await supabase
-        .from('artist_profiles')
-        .select('entry_id')
-        .eq('id', artistProfileId)
-        .single();
-
-      if (profileError) throw new Error('Failed to get artist profile: ' + profileError.message);
-
-      const { data: eventData, error: eventError } = await supabase
-        .from('events')
-        .select('eid')
-        .eq('id', selectedEvent.id)
-        .single();
-
-      if (eventError) throw new Error('Failed to get event: ' + eventError.message);
-
-      const { error } = await supabase
-        .from('artist_applications')
-        .insert({
+      // Use edge function to submit application (ensures triggers fire)
+      const { data, error } = await supabase.functions.invoke('submit-application', {
+        body: {
           artist_profile_id: artistProfileId,
           event_id: selectedEvent.id,
-          application_status: 'pending',
-          artist_number: profileData.entry_id?.toString(),
-          event_eid: eventData.eid,
-          message_to_producer: applicationMessage || null,
-          metadata: {
-            applied_via: 'artist_portal',
-            applied_at: new Date().toISOString()
-          }
-        });
+          application_message: applicationMessage || null
+        }
+      });
 
       if (error) throw error;
+      if (!data.success) throw new Error(data.error || 'Failed to submit application');
 
       await fetchApplications();
       setShowApplicationModal(false);

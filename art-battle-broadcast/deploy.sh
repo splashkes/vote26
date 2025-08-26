@@ -15,7 +15,7 @@ NC='\033[0m' # No Color
 # Configuration
 CDN_BUCKET="artb"
 CDN_REGION="tor1"
-CDN_PATH="vote26-v2"  # Deploy to vote26-v2 subdirectory
+CDN_PATH="vote26"  # Deploy to vote26 subdirectory
 
 # Function to print colored output
 print_status() {

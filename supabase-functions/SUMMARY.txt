@@ -1,12 +1,12 @@
 Mini Backup Summary
 ===================
-Created: Fri Aug 22 06:26:59 UTC 2025
-Backup ID: 20250822_062609
+Created: Tue Aug 26 14:25:37 UTC 2025
+Backup ID: 20250826_142438
 
 Components:
 - Deployed functions: 1
-- Local functions: 77  
-- Database functions: 213
+- Local functions: 97  
+- Database functions: 240
 - Database triggers: 1 file (all_triggers.sql)
 
 Recovery:

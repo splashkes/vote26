@@ -21,7 +21,7 @@ function App() {
       radius="medium"
     >
       <AuthProvider>
-        <Router basename="/v2">
+        <Router basename="/">
           <div className="app">
             <Routes>
               <Route path="/" element={<EventList />} />

@@ -1,0 +1,20 @@
+{file:///tmp/user_fn_xsqdkubgyqwpyvfltnrf_68e16976-7e7c-4923-b67a-7c22d855a238_8/source/supabase/functions/send-sms/index.ts
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+const corsHeaders = {
+    const { to, from, body, messageId } = await req.json();
+    const TWILIO_ACCOUNT_SID = Deno.env.get('TWILIO_ACCOUNT_SID');
+    const TWILIO_AUTH_TOKEN = Deno.env.get('TWILIO_AUTH_TOKEN');
+    const TWILIO_FROM_NUMBER = Deno.env.get('TWILIO_FROM_NUMBER');
+    const fromNumber = from || TWILIO_FROM_NUMBER;
+    const formatPhoneNumber = (phone)=>{
+      const cleaned = phone.replace(/\D/g, '');
+    const toFormatted = formatPhoneNumber(to);
+    const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`;
+    const authHeader = btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`);
+    const formData = new URLSearchParams({
+    const twilioResponse = await fetch(twilioUrl, {
+    const twilioData = await twilioResponse.json();
+    console.error('Error in send-sms function:', error);
+import { delay } from "../async/mod.ts";
+/** Thrown by Server after it has been closed. */ const ERROR_SERVER_CLOSED = "Server closed";
+/** Default port for serving HTTP. */ const HTTP_PORT = 80;

@@ -244,6 +244,27 @@ Deno.serve(async (req) => {
     const action = isResendingInvite ? 'resent' : 'sent'
     const expiresAt = new Date(Date.now() + (INVITATION_VALIDITY_HOURS * 60 * 60 * 1000))
     
+    // Queue Slack notification for admin invitations
+    try {
+      const { data: slackResult, error: slackError } = await supabase.rpc('send_admin_invitation_slack', {
+        p_email: email,
+        p_level: level,
+        p_invited_by: user.email,
+        p_cities_access: cities_access || [],
+        p_notes: notes || `Invitation ${action} by ${user.email} on ${new Date().toISOString()}`
+      })
+
+      if (slackError) {
+        console.error('Slack notification error:', slackError)
+        // Don't fail the entire function if Slack fails
+      } else {
+        console.log('Slack notification queued for admin invitation:', email, 'ID:', slackResult?.notification_id)
+      }
+    } catch (slackError) {
+      console.error('Failed to queue Slack notification for invitation:', slackError)
+      // Don't fail the entire function if Slack fails
+    }
+    
     return new Response(
       JSON.stringify({ 
         success: true, 

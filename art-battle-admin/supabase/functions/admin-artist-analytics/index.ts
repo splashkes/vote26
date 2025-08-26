@@ -36,8 +36,8 @@ serve(async (req) => {
 
       const performanceData = {}
 
-      for (const artistId of artistIds) {
-        // Get auction performance
+      for (const artistNumber of artistIds) {
+        // Get auction performance - join via artist_number instead of artist_id
         const { data: auctionData } = await supabase
           .from('bids')
           .select(`
@@ -45,25 +45,39 @@ serve(async (req) => {
             art(
               events(id, eid, name),
               final_price,
-              artist_id
+              artist_number
             )
           `)
-          .eq('art.artist_id', artistId)
+          .eq('art.artist_number', artistNumber)
 
-        // Get event participation
-        const { data: participationData } = await supabase
-          .from('round_contestants')
-          .select(`
-            event_id,
-            round_number,
-            easel_number,
-            events(id, eid, name, event_start_datetime)
-          `)
-          .eq('artist_id', artistId)
+        // Get event participation - need to get artist UUID first from entry_id
+        const { data: artistProfile } = await supabase
+          .from('artist_profiles')
+          .select('id')
+          .eq('entry_id', artistNumber)
+          .single()
+
+        let participationData = []
+        if (artistProfile) {
+          const { data } = await supabase
+            .from('round_contestants')
+            .select(`
+              event_id,
+              round_number,
+              easel_number,
+              events(id, eid, name, event_start_datetime)
+            `)
+            .eq('artist_id', artistProfile.id)
+          participationData = data || []
+        }
 
         // Get win data (rounds where they had highest bids)
-        const { data: winData } = await supabase
-          .rpc('get_artist_wins', { artist_uuid: artistId })
+        let winData = []
+        if (artistProfile) {
+          const { data } = await supabase
+            .rpc('get_artist_wins', { artist_uuid: artistProfile.id })
+          winData = data || []
+        }
 
         // Calculate metrics
         const auctionAmounts = auctionData?.map(bid => bid.amount).filter(Boolean) || []
@@ -72,7 +86,7 @@ serve(async (req) => {
         const totalRounds = participationData?.length || 0
         const wins = winData?.length || 0
 
-        performanceData[artistId] = {
+        performanceData[artistNumber] = {
           avgAuctionValue: auctionAmounts.length > 0 
             ? auctionAmounts.reduce((sum, amount) => sum + amount, 0) / auctionAmounts.length 
             : 0,

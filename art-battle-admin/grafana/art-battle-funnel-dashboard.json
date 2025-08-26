@@ -1,0 +1,806 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": "-- Grafana --",
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "gnetId": null,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": "PostgreSQL",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "conversion_rate_percent"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "gradient-gauge"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "drop_off_rate_percent" 
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-RedYellowGreen"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "showHeader": true
+      },
+      "pluginVersion": "8.0.0",
+      "targets": [
+        {
+          "format": "table",
+          "group": [],
+          "metricColumn": "none",
+          "rawQuery": true,
+          "rawSql": "WITH funnel_steps AS (\n  SELECT \n    'QR Discovery' as step,\n    1 as step_order,\n    COUNT(DISTINCT person_id) as unique_users,\n    COUNT(*) as total_events\n  FROM people_qr_scans \n  WHERE created_at >= NOW() - INTERVAL '${__range_s:regex} seconds'\n  \n  UNION ALL\n  \n  SELECT \n    'Event Registration',\n    2,\n    COUNT(DISTINCT person_id),\n    COUNT(*)\n  FROM event_registrations\n  WHERE created_at >= NOW() - INTERVAL '${__range_s:regex} seconds'\n  \n  UNION ALL\n  \n  SELECT \n    'Voting Participation',\n    3, \n    COUNT(DISTINCT person_id),\n    COUNT(*)\n  FROM votes\n  WHERE created_at >= NOW() - INTERVAL '${__range_s:regex} seconds'\n  \n  UNION ALL\n  \n  SELECT \n    'Auction Bidding',\n    4,\n    COUNT(DISTINCT person_id),\n    COUNT(*)\n  FROM bids \n  WHERE created_at >= NOW() - INTERVAL '${__range_s:regex} seconds'\n  \n  UNION ALL\n  \n  SELECT \n    'Payment Completed',\n    5,\n    COUNT(DISTINCT person_id),\n    COUNT(*)\n  FROM payment_processing\n  WHERE status IN ('completed', 'succeeded')\n    AND created_at >= NOW() - INTERVAL '${__range_s:regex} seconds'\n),\nfunnel_with_rates AS (\n  SELECT \n    fs.*,\n    LAG(fs.unique_users) OVER (ORDER BY fs.step_order) as prev_step_users\n  FROM funnel_steps fs\n)\nSELECT \n  step,\n  unique_users,\n  total_events,\n  CASE \n    WHEN prev_step_users > 0 THEN \n      ROUND((unique_users::numeric / prev_step_users * 100), 2)\n    ELSE 100.0\n  END as conversion_rate_percent,\n  CASE \n    WHEN prev_step_users > 0 THEN \n      (prev_step_users - unique_users)\n    ELSE 0\n  END as users_lost,\n  CASE \n    WHEN prev_step_users > 0 THEN \n      ROUND(((prev_step_users - unique_users)::numeric / prev_step_users * 100), 2)\n    ELSE 0.0\n  END as drop_off_rate_percent\nFROM funnel_with_rates\nORDER BY step_order;",
+          "refId": "A",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "column"
+              }
+            ]
+          ],
+          "timeColumn": "time",
+          "where": [
+            {
+              "name": "$__timeFilter",
+              "params": [],
+              "type": "macro"
+            }
+          ]
+        }
+      ],
+      "title": "User Journey Funnel Overview",
+      "type": "table"
+    },
+    {
+      "datasource": "PostgreSQL",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "tooltip": false,
+              "vis": false,
+              "legend": false
+            }
+          },
+          "mappings": [],
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 2,
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "pieType": "pie",
+        "tooltip": {
+          "mode": "single"
+        },
+        "legend": {
+          "displayMode": "visible",
+          "placement": "right"
+        }
+      },
+      "targets": [
+        {
+          "format": "table",
+          "group": [],
+          "metricColumn": "none",
+          "rawQuery": true,
+          "rawSql": "SELECT \n  step,\n  unique_users as value\nFROM (\n  SELECT \n    'QR Discovery' as step,\n    1 as step_order,\n    COUNT(DISTINCT person_id) as unique_users\n  FROM people_qr_scans \n  WHERE created_at >= $__timeFrom() AND created_at <= $__timeTo()\n  \n  UNION ALL\n  \n  SELECT \n    'Event Registration',\n    2,\n    COUNT(DISTINCT person_id)\n  FROM event_registrations\n  WHERE created_at >= $__timeFrom() AND created_at <= $__timeTo()\n  \n  UNION ALL\n  \n  SELECT \n    'Voting',\n    3, \n    COUNT(DISTINCT person_id)\n  FROM votes\n  WHERE created_at >= $__timeFrom() AND created_at <= $__timeTo()\n  \n  UNION ALL\n  \n  SELECT \n    'Bidding',\n    4,\n    COUNT(DISTINCT person_id)\n  FROM bids \n  WHERE created_at >= $__timeFrom() AND created_at <= $__timeTo()\n  \n  UNION ALL\n  \n  SELECT \n    'Payment',\n    5,\n    COUNT(DISTINCT person_id)\n  FROM payment_processing\n  WHERE status IN ('completed', 'succeeded')\n    AND created_at >= $__timeFrom() AND created_at <= $__timeTo()\n) funnel\nORDER BY step_order;",
+          "refId": "A",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "column"
+              }
+            ]
+          ],
+          "timeColumn": "time",
+          "where": [
+            {
+              "name": "$__timeFilter",
+              "params": [],
+              "type": "macro"
+            }
+          ]
+        }
+      ],
+      "title": "Funnel Distribution",
+      "type": "piechart"
+    },
+    {
+      "datasource": "PostgreSQL",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 10
+              },
+              {
+                "color": "green",
+                "value": 50
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 3,
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "text": {}
+      },
+      "pluginVersion": "8.0.0",
+      "targets": [
+        {
+          "format": "table",
+          "group": [],
+          "metricColumn": "none",
+          "rawQuery": true,
+          "rawSql": "-- Key Conversion Rates as Gauges\nSELECT \n  'Voting to Bidding' as metric,\n  CASE \n    WHEN voters > 0 THEN ROUND((bidders::numeric / voters * 100), 2)\n    ELSE 0\n  END as conversion_rate\nFROM (\n  SELECT \n    (SELECT COUNT(DISTINCT person_id) FROM votes WHERE created_at >= $__timeFrom() AND created_at <= $__timeTo()) as voters,\n    (SELECT COUNT(DISTINCT person_id) FROM bids WHERE created_at >= $__timeFrom() AND created_at <= $__timeTo()) as bidders\n) rates\n\nUNION ALL\n\nSELECT \n  'Bidding to Payment' as metric,\n  CASE \n    WHEN bidders > 0 THEN ROUND((payers::numeric / bidders * 100), 2)\n    ELSE 0\n  END as conversion_rate\nFROM (\n  SELECT \n    (SELECT COUNT(DISTINCT person_id) FROM bids WHERE created_at >= $__timeFrom() AND created_at <= $__timeTo()) as bidders,\n    (SELECT COUNT(DISTINCT person_id) FROM payment_processing WHERE status IN ('completed', 'succeeded') AND created_at >= $__timeFrom() AND created_at <= $__timeTo()) as payers\n) rates\n\nUNION ALL\n\nSELECT \n  'Payment Success Rate' as metric,\n  CASE \n    WHEN total_attempts > 0 THEN ROUND((successful::numeric / total_attempts * 100), 2)\n    ELSE 0\n  END as conversion_rate\nFROM (\n  SELECT \n    (SELECT COUNT(*) FROM payment_processing WHERE created_at >= $__timeFrom() AND created_at <= $__timeTo()) as total_attempts,\n    (SELECT COUNT(*) FROM payment_processing WHERE status IN ('completed', 'succeeded') AND created_at >= $__timeFrom() AND created_at <= $__timeTo()) as successful\n) rates;",
+          "refId": "A",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "column"
+              }
+            ]
+          ],
+          "timeColumn": "time",
+          "where": [
+            {
+              "name": "$__timeFilter",
+              "params": [],
+              "type": "macro"
+            }
+          ]
+        }
+      ],
+      "title": "Critical Conversion Rates",
+      "type": "bargauge"
+    },
+    {
+      "datasource": "PostgreSQL",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "vis": false,
+              "legend": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      },
+      "id": 4,
+      "options": {
+        "tooltip": {
+          "mode": "single"
+        },
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "pluginVersion": "8.0.0",
+      "targets": [
+        {
+          "format": "time_series",
+          "group": [],
+          "metricColumn": "none",
+          "rawQuery": true,
+          "rawSql": "SELECT \n  $__timeGroup(created_at,'1d') as time,\n  'QR Scans' as metric,\n  COUNT(DISTINCT person_id) as value\nFROM people_qr_scans \nWHERE $__timeFilter(created_at)\nGROUP BY time\nORDER BY time\n\nUNION ALL\n\nSELECT \n  $__timeGroup(created_at,'1d') as time,\n  'Registrations' as metric,\n  COUNT(DISTINCT person_id) as value\nFROM event_registrations \nWHERE $__timeFilter(created_at)\nGROUP BY time\nORDER BY time\n\nUNION ALL\n\nSELECT \n  $__timeGroup(created_at,'1d') as time,\n  'Votes' as metric,\n  COUNT(DISTINCT person_id) as value\nFROM votes \nWHERE $__timeFilter(created_at)\nGROUP BY time\nORDER BY time\n\nUNION ALL\n\nSELECT \n  $__timeGroup(created_at,'1d') as time,\n  'Bids' as metric,\n  COUNT(DISTINCT person_id) as value\nFROM bids \nWHERE $__timeFilter(created_at)\nGROUP BY time\nORDER BY time\n\nUNION ALL\n\nSELECT \n  $__timeGroup(created_at,'1d') as time,\n  'Payments' as metric,\n  COUNT(DISTINCT person_id) as value\nFROM payment_processing \nWHERE $__timeFilter(created_at)\n  AND status IN ('completed', 'succeeded')\nGROUP BY time\nORDER BY time;",
+          "refId": "A",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "column"
+              }
+            ]
+          ],
+          "timeColumn": "time",
+          "where": [
+            {
+              "name": "$__timeFilter",
+              "params": [],
+              "type": "macro"
+            }
+          ]
+        }
+      ],
+      "title": "Daily Funnel Activity Trends",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "PostgreSQL",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "revenue"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "gradient-gauge"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 25
+      },
+      "id": 5,
+      "options": {
+        "showHeader": true
+      },
+      "pluginVersion": "8.0.0",
+      "targets": [
+        {
+          "format": "table",
+          "group": [],
+          "metricColumn": "none",
+          "rawQuery": true,
+          "rawSql": "-- Per-event funnel performance\nSELECT \n  e.name as event_name,\n  c.name as city,\n  co.name as country,\n  e.event_start_datetime,\n  COUNT(DISTINCT v.person_id) as voters,\n  COUNT(DISTINCT b.person_id) as bidders,\n  COUNT(DISTINCT p.person_id) as buyers,\n  COUNT(DISTINCT b.id) as total_bids,\n  COUNT(DISTINCT p.id) as total_payments,\n  ROUND(COALESCE(SUM(p.amount), 0), 2) as revenue,\n  CASE \n    WHEN COUNT(DISTINCT v.person_id) > 0 THEN \n      ROUND((COUNT(DISTINCT b.person_id)::numeric / COUNT(DISTINCT v.person_id) * 100), 2)\n    ELSE 0\n  END as voting_to_bidding_rate,\n  CASE \n    WHEN COUNT(DISTINCT b.person_id) > 0 THEN \n      ROUND((COUNT(DISTINCT p.person_id)::numeric / COUNT(DISTINCT b.person_id) * 100), 2)\n    ELSE 0\n  END as bidding_to_payment_rate\nFROM events e\nJOIN cities c ON e.city_id = c.id\nJOIN countries co ON c.country_id = co.id\nLEFT JOIN votes v ON e.id = v.event_id AND v.created_at >= $__timeFrom() AND v.created_at <= $__timeTo()\nLEFT JOIN bids b ON e.id = b.event_id AND b.created_at >= $__timeFrom() AND b.created_at <= $__timeTo()\nLEFT JOIN payment_processing p ON e.id = p.event_id AND p.created_at >= $__timeFrom() AND p.created_at <= $__timeTo() AND p.status IN ('completed', 'succeeded')\nWHERE e.event_start_datetime >= $__timeFrom()::date - INTERVAL '30 days'\nGROUP BY e.id, e.name, c.name, co.name, e.event_start_datetime\nHAVING COUNT(DISTINCT v.person_id) > 0 OR COUNT(DISTINCT b.person_id) > 0\nORDER BY revenue DESC, voters DESC;",
+          "refId": "A",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "column"
+              }
+            ]
+          ],
+          "timeColumn": "time",
+          "where": [
+            {
+              "name": "$__timeFilter",
+              "params": [],
+              "type": "macro"
+            }
+          ]
+        }
+      ],
+      "title": "Event-by-Event Funnel Performance",
+      "type": "table"
+    },
+    {
+      "datasource": "PostgreSQL",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 33
+      },
+      "id": 6,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "text": {},
+        "textMode": "auto"
+      },
+      "pluginVersion": "8.0.0",
+      "targets": [
+        {
+          "format": "table",
+          "group": [],
+          "metricColumn": "none",
+          "rawQuery": true,
+          "rawSql": "SELECT \n  COALESCE(SUM(amount), 0) as total_revenue\nFROM payment_processing\nWHERE status IN ('completed', 'succeeded')\n  AND created_at >= $__timeFrom() \n  AND created_at <= $__timeTo();",
+          "refId": "A",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "column"
+              }
+            ]
+          ],
+          "timeColumn": "time",
+          "where": [
+            {
+              "name": "$__timeFilter",
+              "params": [],
+              "type": "macro"
+            }
+          ]
+        }
+      ],
+      "title": "Total Revenue",
+      "type": "stat"
+    },
+    {
+      "datasource": "PostgreSQL",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 33
+      },
+      "id": 7,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "text": {},
+        "textMode": "auto"
+      },
+      "pluginVersion": "8.0.0",
+      "targets": [
+        {
+          "format": "table",
+          "group": [],
+          "metricColumn": "none",
+          "rawQuery": true,
+          "rawSql": "SELECT \n  COUNT(DISTINCT person_id) as paying_customers\nFROM payment_processing\nWHERE status IN ('completed', 'succeeded')\n  AND created_at >= $__timeFrom() \n  AND created_at <= $__timeTo();",
+          "refId": "A",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "column"
+              }
+            ]
+          ],
+          "timeColumn": "time",
+          "where": [
+            {
+              "name": "$__timeFilter",
+              "params": [],
+              "type": "macro"
+            }
+          ]
+        }
+      ],
+      "title": "Paying Customers",
+      "type": "stat"
+    },
+    {
+      "datasource": "PostgreSQL",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 33
+      },
+      "id": 8,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "text": {},
+        "textMode": "auto"
+      },
+      "pluginVersion": "8.0.0",
+      "targets": [
+        {
+          "format": "table",
+          "group": [],
+          "metricColumn": "none",
+          "rawQuery": true,
+          "rawSql": "SELECT \n  CASE \n    WHEN COUNT(DISTINCT person_id) > 0 THEN \n      ROUND(SUM(amount) / COUNT(DISTINCT person_id), 2)\n    ELSE 0\n  END as avg_revenue_per_customer\nFROM payment_processing\nWHERE status IN ('completed', 'succeeded')\n  AND created_at >= $__timeFrom() \n  AND created_at <= $__timeTo();",
+          "refId": "A",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "column"
+              }
+            ]
+          ],
+          "timeColumn": "time",
+          "where": [
+            {
+              "name": "$__timeFilter",
+              "params": [],
+              "type": "macro"
+            }
+          ]
+        }
+      ],
+      "title": "Avg Revenue Per Customer",
+      "type": "stat"
+    },
+    {
+      "datasource": "PostgreSQL",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 33
+      },
+      "id": 9,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "text": {},
+        "textMode": "auto"
+      },
+      "pluginVersion": "8.0.0",
+      "targets": [
+        {
+          "format": "table",
+          "group": [],
+          "metricColumn": "none",
+          "rawQuery": true,
+          "rawSql": "SELECT \n  COUNT(*) as total_bids\nFROM bids\nWHERE created_at >= $__timeFrom() \n  AND created_at <= $__timeTo();",
+          "refId": "A",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "column"
+              }
+            ]
+          ],
+          "timeColumn": "time",
+          "where": [
+            {
+              "name": "$__timeFilter",
+              "params": [],
+              "type": "macro"
+            }
+          ]
+        }
+      ],
+      "title": "Total Bids",
+      "type": "stat"
+    }
+  ],
+  "schemaVersion": 27,
+  "style": "dark",
+  "tags": [
+    "art-battle",
+    "funnel",
+    "conversion"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Art Battle User Journey Funnel",
+  "uid": "art-battle-funnel",
+  "version": 1
+}

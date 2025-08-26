@@ -68,6 +68,14 @@ const AdminPanel = ({
   const [peopleSearchResults, setPeopleSearchResults] = useState([]);
   const [selectedAdminLevel, setSelectedAdminLevel] = useState('voting');
   const [adminMessage, setAdminMessage] = useState(null); // { type: 'success' | 'error', text: string }
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [eventData, setEventData] = useState(null);
+  const [paymentFormData, setPaymentFormData] = useState({
+    actualAmount: '',
+    actualTax: '',
+    paymentMethod: 'cash',
+    collectionNotes: ''
+  });
 
   // Helper function to show temporary messages
   const showAdminMessage = (type, text) => {
@@ -152,20 +160,43 @@ const AdminPanel = ({
       if (adminLevel === 'super') {
         fetchEventAdmins();
       }
-      if (adminMode === 'auction') {
+      // Only fetch auction data if we have adminLevel set (to avoid calling before admin privileges are known)
+      if (adminMode === 'auction' && adminLevel !== null) {
         fetchAuctionData();
         fetchAuctionTimerStatus();
       }
     }
+  }, [eventId, adminLevel]);
+
+  // Fetch event data for CSV export URL
+  useEffect(() => {
+    if (eventId) {
+      const fetchEventData = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('events')
+            .select('eid, name')
+            .eq('id', eventId)
+            .single()
+          
+          if (!error && data) {
+            setEventData(data);
+          }
+        } catch (error) {
+          console.error('Error fetching event data:', error);
+        }
+      };
+      fetchEventData();
+    }
   }, [eventId]);
 
-  // Fetch auction data when switching to auction tab
+  // Fetch auction data when switching to auction tab or admin level changes
   useEffect(() => {
-    if (eventId && adminMode === 'auction') {
+    if (eventId && adminMode === 'auction' && adminLevel !== null) {
       fetchAuctionData();
       fetchAuctionTimerStatus();
     }
-  }, [adminMode]);
+  }, [adminMode, adminLevel]);
 
   // Fetch admins when switching to event tab or admin level changes
   useEffect(() => {
@@ -644,12 +675,58 @@ const AdminPanel = ({
                           )}
                           {/* Payment status badges */}
                           {status === 'paid' && (
-                            <Badge color="green" size="1" style={{ marginTop: '4px' }}>
-                              {artwork.payment_statuses?.code === 'admin_paid' 
-                                ? `✓ MARKED PAID BY ${artwork.payment_logs?.find(log => log.payment_type === 'admin_marked')?.admin_phone || 'ADMIN'}`
-                                : artwork.payment_statuses?.code === 'stripe_paid' 
-                                ? '✓ PAID via STRIPE' 
-                                : '✓ PAID'}
+                            <Badge 
+                              color={(() => {
+                                // Stripe payments get green
+                                if (artwork.payment_statuses?.code === 'stripe_paid' || 
+                                    (artwork.status === 'paid' && !artwork.buyer_pay_recent_status_id)) {
+                                  return 'green';
+                                }
+                                // Admin payments get blue
+                                else {
+                                  return 'blue';
+                                }
+                              })()} 
+                              size="1" 
+                              style={{ marginTop: '4px' }}
+                            >
+                              {(() => {
+                                // Debug logging
+                                if (artwork.art_code === 'AB3019-2-5') {
+                                  console.log('Badge logic for AB3019-2-5:', {
+                                    status: artwork.status,
+                                    buyer_pay_recent_status_id: artwork.buyer_pay_recent_status_id,
+                                    payment_statuses_code: artwork.payment_statuses?.code,
+                                    payment_logs_length: artwork.payment_logs?.length
+                                  });
+                                }
+                                
+                                // Check if this is a Stripe payment first
+                                if (artwork.payment_statuses?.code === 'stripe_paid') {
+                                  return '✓ PAID - STRIPE';
+                                } 
+                                // For Stripe payments where status='paid' but no payment_statuses data
+                                else if (artwork.status === 'paid' && !artwork.buyer_pay_recent_status_id) {
+                                  return '✓ PAID - STRIPE';
+                                }
+                                // Then check for admin payments with payment logs
+                                else if (artwork.payment_statuses?.code === 'admin_paid') {
+                                  const adminPayment = artwork.payment_logs?.find(log => log.payment_type === 'admin_marked');
+                                  if (adminPayment) {
+                                    const paymentMethod = adminPayment.payment_method?.toUpperCase() || 'CASH';
+                                    const adminPhone = adminPayment.admin_phone || 'ADMIN';
+                                    const amountText = adminPayment.actual_amount_collected ? 
+                                      ` $${adminPayment.actual_amount_collected}` : '';
+                                    return `✓ PAID - ${paymentMethod} by ${adminPhone}${amountText}`;
+                                  } else {
+                                    // Admin payment but no log entry (legacy data)
+                                    return '✓ PAID - ADMIN MARKED';
+                                  }
+                                } 
+                                else {
+                                  return '✓ PAID';
+                                }
+                              })()}
                             </Badge>
                           )}
                           {status === 'sold' && !artwork.buyer_pay_recent_status_id && (
@@ -677,6 +754,45 @@ const AdminPanel = ({
 
   const fetchAuctionData = async () => {
     try {
+      console.log('fetchAuctionData called - adminLevel:', adminLevel, 'user phone:', user?.phone);
+      
+      // Use admin function for producer+ users to get full bidder info
+      if (adminLevel === 'producer' || adminLevel === 'super') {
+        console.log('Using admin auction details function for producer+ user');
+        
+        const { data: adminData, error: adminError } = await supabase
+          .rpc('get_admin_auction_details', {
+            p_event_id: eventId,
+            p_admin_phone: user?.phone
+          });
+
+        if (adminError) {
+          console.error('Admin auction details error:', adminError);
+          // Fall back to regular method if admin function fails
+          throw adminError;
+        }
+
+        if (adminData?.success) {
+          console.log('Admin auction data received:', adminData);
+          console.log('Sample bid data:', Object.values(adminData.bids || {})[0]);
+          // Debug bidder info
+          const sampleBid = Object.values(adminData.bids || {})[0];
+          if (sampleBid && sampleBid.history && sampleBid.history.length > 0) {
+            console.log('Sample bidder data:', sampleBid.history[0].bidder);
+            console.log('Bidder fields available:', Object.keys(sampleBid.history[0].bidder || {}));
+          }
+          setAuctionArtworks(adminData.artworks || []);
+          setAuctionBids(adminData.bids || {});
+          return;
+        } else {
+          console.warn('Admin function returned error:', adminData?.error);
+          // Fall through to regular method
+        }
+      }
+
+      // Regular method for non-producer admins or fallback
+      console.log('Using regular auction data fetch');
+      
       // Fetch all artworks for this event with artist info
       const { data: artworksData, error: artworksError } = await supabase
         .from('art')
@@ -713,21 +829,18 @@ const AdminPanel = ({
       const artIds = artworksData?.map(a => a.id) || [];
       const paymentStatusIds = artworksData?.map(a => a.buyer_pay_recent_status_id).filter(Boolean) || [];
 
-      // Fetch payment statuses
-      let paymentStatusesData = [];
-      if (paymentStatusIds.length > 0) {
-        const { data: statusData } = await supabase
-          .from('payment_statuses')
-          .select('id, code, description')
-          .in('id', paymentStatusIds);
-        paymentStatusesData = statusData || [];
-      }
-
-      // Fetch payment logs
+      // Use simple admin functions to bypass RLS for payment data
       const { data: paymentLogsData } = await supabase
-        .from('payment_logs')
-        .select('art_id, admin_phone, metadata, created_at, payment_type')
-        .in('art_id', artIds);
+        .rpc('get_payment_logs_admin', {
+          p_event_id: eventId
+        });
+
+      const { data: paymentStatusesData } = await supabase
+        .rpc('get_payment_statuses_admin', {
+          p_event_id: eventId
+        });
+
+      console.log('Payment data result:', { paymentLogsData, paymentStatusesData });
 
       // Create maps for payment data
       const paymentStatusMap = {};
@@ -778,7 +891,7 @@ const AdminPanel = ({
         });
       }
 
-      // Fetch all bids with bidder info
+      // Fetch all bids with bidder info (limited by RLS for non-producer users)
       const { data: bidsData } = await supabase
         .from('bids')
         .select(`
@@ -792,7 +905,8 @@ const AdminPanel = ({
             last_name,
             nickname,
             email,
-            phone
+            phone_number,
+            auth_phone
           )
         `)
         .in('art_id', artIds)
@@ -832,6 +946,20 @@ const AdminPanel = ({
         payment_logs: paymentLogsMap[artwork.id] || []
       }));
 
+
+      // Debug payment data - look for AB3019-2-5 specifically
+      const targetArtwork = artworksWithAllData.find(a => a.art_code === 'AB3019-2-5');
+      if (targetArtwork) {
+        console.log('AB3019-2-5 artwork data:', {
+          art_code: targetArtwork.art_code,
+          status: targetArtwork.status,
+          buyer_pay_recent_status_id: targetArtwork.buyer_pay_recent_status_id,
+          payment_statuses: targetArtwork.payment_statuses,
+          payment_logs: targetArtwork.payment_logs
+        });
+      }
+      console.log('All payment statuses found:', paymentStatusesData);
+
       setAuctionArtworks(artworksWithAllData);
       setAuctionBids(bidsByArt);
     } catch (error) {
@@ -857,6 +985,51 @@ const AdminPanel = ({
       console.error('Error fetching auction timer status:', error);
     }
   };
+
+  const handleCSVExport = async () => {
+    try {
+      // Get event EID from database using eventId
+      const { data: eventData, error: eventError } = await supabase
+        .from('events')
+        .select('eid')
+        .eq('id', eventId)
+        .single()
+      
+      if (eventError || !eventData?.eid) {
+        throw new Error('Failed to get event EID for CSV export')
+      }
+
+      // Use direct fetch to the CSV export URL with EID in path
+      const functionsUrl = 'https://xsqdkubgyqwpyvfltnrf.supabase.co/functions/v1'
+      const response = await fetch(`${functionsUrl}/auction-csv-export/${eventData.eid}`, {
+        method: 'GET',
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`Export failed: ${errorText}`)
+      }
+
+      // Get CSV data
+      const csvData = await response.text()
+      
+      // Create blob and download
+      const blob = new Blob([csvData], { type: 'text/csv' })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${eventData.eid}_auction_export_${new Date().toISOString().slice(0,19).replace(/[:.]/g, '-')}.csv`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+      
+      showAdminMessage('success', 'CSV exported successfully!')
+    } catch (error) {
+      console.error('CSV export error:', error)
+      showAdminMessage('error', 'Failed to export CSV: ' + error.message)
+    }
+  }
 
   const handleTimerAction = async (action, duration = 12) => {
     setTimerActionLoading(true);
@@ -1360,6 +1533,31 @@ const AdminPanel = ({
                 <Text size="2" color="gray" style={{ display: 'block', marginTop: '0.5rem' }}>
                   Processing...
                 </Text>
+              )}
+            </Card>
+
+            {/* CSV Export */}
+            <Card size="2">
+              <Heading size="3" mb="3">Export Data</Heading>
+              {eventData?.eid ? (
+                <input
+                  type="text"
+                  value={`https://xsqdkubgyqwpyvfltnrf.supabase.co/functions/v1/auction-csv-export/${eventData.eid}`}
+                  readOnly
+                  style={{
+                    width: '100%',
+                    fontFamily: 'monospace',
+                    fontSize: '12px',
+                    padding: '8px',
+                    border: '1px solid var(--gray-6)',
+                    borderRadius: '4px',
+                    background: 'var(--gray-2)',
+                    color: 'var(--gray-12)'
+                  }}
+                  onClick={(e) => e.target.select()}
+                />
+              ) : (
+                <Text size="2" color="gray">Loading export URL...</Text>
               )}
             </Card>
             
@@ -2778,15 +2976,24 @@ const AdminPanel = ({
                       </Text>
                     </Box>
                     <Badge size="2" color={
-                      selectedAuctionItem.buyer_pay_recent_status_id ? 'blue' :
+                      (selectedAuctionItem.status === 'paid' || selectedAuctionItem.buyer_pay_recent_status_id) ? 
+                        // Stripe payments get green, admin payments get blue
+                        (selectedAuctionItem.payment_statuses?.code === 'stripe_paid' || 
+                         (selectedAuctionItem.status === 'paid' && !selectedAuctionItem.buyer_pay_recent_status_id)) ? 'green' : 'blue' :
                       selectedAuctionItem.status === 'sold' ? 'orange' :
                       selectedAuctionItem.status === 'active' ? 'green' :
                       'gray'
                     }>
-                      {selectedAuctionItem.buyer_pay_recent_status_id ? 
-                        (selectedAuctionItem.payment_statuses?.code === 'admin_paid' ? 
-                          `MARKED PAID BY ${selectedAuctionItem.payment_logs?.find(log => log.payment_type === 'admin_marked')?.admin_phone || 'ADMIN'}` :
-                         selectedAuctionItem.payment_statuses?.code === 'stripe_paid' ? 'PAID via STRIPE' : 'PAID') : 
+                      {(selectedAuctionItem.status === 'paid' || selectedAuctionItem.buyer_pay_recent_status_id) ? 
+                        (selectedAuctionItem.payment_statuses?.code === 'admin_paid' ? (() => {
+                          const adminPayment = selectedAuctionItem.payment_logs?.find(log => log.payment_type === 'admin_marked');
+                          const adminPhone = adminPayment?.admin_phone || 'ADMIN';
+                          const amountText = adminPayment?.actual_amount_collected ? ` - $${adminPayment.actual_amount_collected}` : '';
+                          return `MARKED PAID BY ${adminPhone}${amountText}`;
+                         })() :
+                         selectedAuctionItem.payment_statuses?.code === 'stripe_paid' ? 'PAID via STRIPE' : 
+                         (selectedAuctionItem.status === 'paid' && !selectedAuctionItem.buyer_pay_recent_status_id) ? 'PAID via STRIPE' :
+                         'PAID') : 
                        (selectedAuctionItem.status || 'UNKNOWN').toUpperCase()}
                     </Badge>
                   </Flex>
@@ -2823,21 +3030,34 @@ const AdminPanel = ({
                     <Heading size="3" mb="3">Highest Bidder</Heading>
                     <Flex direction="column" gap="2">
                       <Text size="3" weight="medium" style={{ display: 'block' }}>
-                        {auctionBids[selectedAuctionItem.id].highestBidder.first_name && 
-                         auctionBids[selectedAuctionItem.id].highestBidder.last_name ? 
-                          `${auctionBids[selectedAuctionItem.id].highestBidder.first_name} ${auctionBids[selectedAuctionItem.id].highestBidder.last_name}` : 
-                          auctionBids[selectedAuctionItem.id].highestBidder.name || 
-                          auctionBids[selectedAuctionItem.id].highestBidder.nickname || 
-                          'Anonymous'}
+                        {adminLevel === 'producer' || adminLevel === 'super' ? (
+                          // Producer+ users see full names
+                          auctionBids[selectedAuctionItem.id].highestBidder.first_name && 
+                          auctionBids[selectedAuctionItem.id].highestBidder.last_name ? 
+                            `${auctionBids[selectedAuctionItem.id].highestBidder.first_name} ${auctionBids[selectedAuctionItem.id].highestBidder.last_name}` : 
+                            auctionBids[selectedAuctionItem.id].highestBidder.name || 
+                            auctionBids[selectedAuctionItem.id].highestBidder.nickname || 
+                            auctionBids[selectedAuctionItem.id].highestBidder.email || 
+                            'Unknown Bidder'
+                        ) : (
+                          // Other admin levels see abbreviated names
+                          auctionBids[selectedAuctionItem.id].highestBidder.first_name ? 
+                            `${auctionBids[selectedAuctionItem.id].highestBidder.first_name} ${auctionBids[selectedAuctionItem.id].highestBidder.last_name ? auctionBids[selectedAuctionItem.id].highestBidder.last_name.charAt(0) + '.' : ''}` : 
+                            auctionBids[selectedAuctionItem.id].highestBidder.nickname || 
+                            'Anonymous'
+                        )}
                       </Text>
-                      {auctionBids[selectedAuctionItem.id].highestBidder.email && (
+                      {(adminLevel === 'producer' || adminLevel === 'super') && auctionBids[selectedAuctionItem.id].highestBidder.email && (
                         <Text size="2" color="gray" style={{ display: 'block', marginTop: '4px' }}>
-                          {auctionBids[selectedAuctionItem.id].highestBidder.email}
+                          📧 {auctionBids[selectedAuctionItem.id].highestBidder.email}
                         </Text>
                       )}
-                      {auctionBids[selectedAuctionItem.id].highestBidder.phone && (
+                      {(adminLevel === 'producer' || adminLevel === 'super') && (
+                        auctionBids[selectedAuctionItem.id].highestBidder.phone_number || 
+                        auctionBids[selectedAuctionItem.id].highestBidder.auth_phone
+                      ) && (
                         <Text size="2" color="gray" style={{ display: 'block', marginTop: '4px' }}>
-                          {auctionBids[selectedAuctionItem.id].highestBidder.phone}
+                          📱 {auctionBids[selectedAuctionItem.id].highestBidder.phone_number || auctionBids[selectedAuctionItem.id].highestBidder.auth_phone}
                         </Text>
                       )}
                     </Flex>
@@ -2848,12 +3068,50 @@ const AdminPanel = ({
                 <Card size="2">
                   <Heading size="3" mb="3">Payment Status</Heading>
                   <Flex direction="column" gap="3">
-                    {selectedAuctionItem.buyer_pay_recent_status_id ? (
+                    {selectedAuctionItem.status === 'paid' || selectedAuctionItem.buyer_pay_recent_status_id ? (
                       <Box>
-                        <Badge size="2" color="blue" mb="2">
-                          {selectedAuctionItem.payment_statuses?.code === 'admin_paid' ? 
-                            `MARKED PAID BY ${selectedAuctionItem.payment_logs?.find(log => log.payment_type === 'admin_marked')?.admin_phone || 'ADMIN'}` :
-                           selectedAuctionItem.payment_statuses?.code === 'stripe_paid' ? 'PAID via STRIPE' : 'PAID'}
+                        <Badge 
+                          size="2" 
+                          color={(() => {
+                            // Stripe payments get green
+                            if (selectedAuctionItem.payment_statuses?.code === 'stripe_paid' || 
+                                (selectedAuctionItem.status === 'paid' && !selectedAuctionItem.buyer_pay_recent_status_id)) {
+                              return 'green';
+                            }
+                            // Admin payments get blue
+                            else {
+                              return 'blue';
+                            }
+                          })()} 
+                          mb="2"
+                        >
+                          {(() => {
+                            // Check if this is a Stripe payment first  
+                            if (selectedAuctionItem.payment_statuses?.code === 'stripe_paid') {
+                              return 'PAID - STRIPE';
+                            }
+                            // For Stripe payments where status='paid' but no payment_statuses data
+                            else if (selectedAuctionItem.status === 'paid' && !selectedAuctionItem.buyer_pay_recent_status_id) {
+                              return 'PAID - STRIPE';
+                            }
+                            // Then check for admin payments with payment logs
+                            else if (selectedAuctionItem.payment_statuses?.code === 'admin_paid') {
+                              const adminPayment = selectedAuctionItem.payment_logs?.find(log => log.payment_type === 'admin_marked');
+                              if (adminPayment) {
+                                const paymentMethod = adminPayment.payment_method?.toUpperCase() || 'CASH';
+                                const adminPhone = adminPayment.admin_phone || 'ADMIN';
+                                const amountText = adminPayment.actual_amount_collected ? 
+                                  ` - $${adminPayment.actual_amount_collected}` : '';
+                                return `PAID - ${paymentMethod} by ${adminPhone}${amountText}`;
+                              } else {
+                                // Admin payment but no log entry (legacy data)
+                                return 'PAID - ADMIN MARKED';
+                              }
+                            } 
+                            else {
+                              return 'PAID';
+                            }
+                          })()}
                         </Badge>
                         <Flex direction="column" gap="2">
                           <Text size="2" color="gray">
@@ -2866,14 +3124,30 @@ const AdminPanel = ({
                           )}
                           {selectedAuctionItem.payment_logs?.find(log => log.payment_type === 'admin_marked') && (
                             <Box>
-                              <Text size="2" color="gray">
-                                Admin Phone: {selectedAuctionItem.payment_logs.find(log => log.payment_type === 'admin_marked').admin_phone}
-                              </Text>
-                              {selectedAuctionItem.payment_logs.find(log => log.payment_type === 'admin_marked').metadata && (
-                                <Text size="1" color="gray" style={{ fontFamily: 'monospace', marginTop: '4px' }}>
-                                  {JSON.stringify(selectedAuctionItem.payment_logs.find(log => log.payment_type === 'admin_marked').metadata, null, 2)}
-                                </Text>
-                              )}
+                              {(() => {
+                                const adminPayment = selectedAuctionItem.payment_logs.find(log => log.payment_type === 'admin_marked');
+                                return (
+                                  <>
+                                    <Text size="2" color="gray">
+                                      Payment Method: {adminPayment.payment_method?.toUpperCase() || 'Unknown'}
+                                    </Text>
+                                    {adminPayment.actual_amount_collected && (
+                                      <Text size="2" color="gray">
+                                        Amount Collected: ${adminPayment.actual_amount_collected}
+                                        {adminPayment.actual_tax_collected && ` (Tax: $${adminPayment.actual_tax_collected})`}
+                                      </Text>
+                                    )}
+                                    {adminPayment.collection_notes && (
+                                      <Text size="2" color="gray" style={{ fontStyle: 'italic' }}>
+                                        Notes: {adminPayment.collection_notes}
+                                      </Text>
+                                    )}
+                                    <Text size="2" color="gray">
+                                      Collected by: {adminPayment.admin_phone}
+                                    </Text>
+                                  </>
+                                );
+                              })()}
                             </Box>
                           )}
                         </Flex>
@@ -2885,29 +3159,30 @@ const AdminPanel = ({
                           <Button 
                             size="2" 
                             variant="solid"
-                            onClick={async () => {
+                            onClick={() => {
                               try {
-                                // Mark as paid using admin function
-                                const { data, error } = await supabase
-                                  .rpc('admin_update_art_status', {
-                                    p_art_code: selectedAuctionItem.art_code,
-                                    p_new_status: 'paid',
-                                    p_admin_phone: user?.phone
-                                  });
+                                console.log('Mark as Paid clicked, selectedAuctionItem:', selectedAuctionItem);
+                                
+                                // Calculate suggested values
+                                const winningBid = auctionBids[selectedAuctionItem.id]?.highestBid || selectedAuctionItem.current_bid || 0;
+                                const taxRate = selectedAuctionItem.tax || 0;
+                                const suggestedTax = Math.round((winningBid * taxRate / 100) * 100) / 100;
+                                const suggestedTotal = winningBid + suggestedTax;
 
-                                if (error) throw error;
+                                console.log('Payment calculation:', { winningBid, taxRate, suggestedTax, suggestedTotal });
 
-                                if (data?.success) {
-                                  // Refresh auction data
-                                  fetchAuctionData();
-                                  setSelectedAuctionItem(null);
-                                  alert(`Marked as paid successfully by ${user?.phone || 'admin'}`);
-                                } else {
-                                  throw new Error(data?.error || 'Failed to mark as paid');
-                                }
+                                setPaymentFormData({
+                                  actualAmount: suggestedTotal.toString(),
+                                  actualTax: suggestedTax.toString(),
+                                  paymentMethod: 'cash',
+                                  collectionNotes: ''
+                                });
+                                
+                                console.log('Setting showPaymentModal to true');
+                                setShowPaymentModal(true);
                               } catch (error) {
-                                console.error('Error marking as paid:', error);
-                                alert('Failed to mark as paid: ' + error.message);
+                                console.error('Error opening payment modal:', error);
+                                alert('Error opening payment modal: ' + error.message);
                               }
                             }}
                           >
@@ -2937,9 +3212,17 @@ const AdminPanel = ({
                         <Flex key={index} justify="between" align="center">
                           <Box>
                             <Text size="2" style={{ display: 'block' }}>
-                              {bid.bidder?.first_name ? 
-                                `${bid.bidder.first_name} ${bid.bidder.last_name ? bid.bidder.last_name.charAt(0) : ''}` : 
-                                'Anonymous'}
+                              {(adminLevel === 'producer' || adminLevel === 'super') ? (
+                                // Producer+ sees full names from any available field
+                                bid.bidder?.first_name ? 
+                                  `${bid.bidder.first_name} ${bid.bidder.last_name || ''}` : 
+                                  bid.bidder?.name || bid.bidder?.nickname || bid.bidder?.email?.split('@')[0] || bid.bidder?.phone_number || bid.bidder?.auth_phone || 'Unknown Bidder'
+                              ) : (
+                                // Other admin levels see abbreviated names
+                                bid.bidder?.first_name ? 
+                                  `${bid.bidder.first_name} ${bid.bidder.last_name ? bid.bidder.last_name.charAt(0) + '.' : ''}` : 
+                                  bid.bidder?.nickname || 'Anonymous'
+                              )}
                             </Text>
                             {bid.bidder?.email && (
                               <Text size="1" color="gray" style={{ display: 'block', marginTop: '2px' }}>
@@ -2973,6 +3256,191 @@ const AdminPanel = ({
                 </Dialog.Close>
               </Flex>
             </Box>
+          )}
+        </Dialog.Content>
+      </Dialog.Root>
+
+      {/* Payment Collection Modal */}
+      <Dialog.Root open={showPaymentModal} onOpenChange={(open) => {
+        console.log('Payment modal onOpenChange called with:', open);
+        setShowPaymentModal(open);
+      }}>
+        <Dialog.Content style={{ maxWidth: '90vw', width: 500 }}>
+          <Dialog.Title>
+            <Flex justify="between" align="center">
+              <Text>Collect Payment</Text>
+              <Dialog.Close>
+                <IconButton size="2" variant="ghost">
+                  <Cross2Icon />
+                </IconButton>
+              </Dialog.Close>
+            </Flex>
+          </Dialog.Title>
+          
+          {selectedAuctionItem && (
+            <Flex direction="column" gap="4" mt="3">
+              {/* Artwork Summary */}
+              <Card size="2" style={{ backgroundColor: 'var(--gray-2)' }}>
+                <Flex direction="column" gap="2">
+                  <Text size="3" weight="bold">
+                    {selectedAuctionItem.artist_profiles?.name || 'Unknown Artist'}
+                  </Text>
+                  <Text size="2" color="gray">
+                    Art Code: {selectedAuctionItem.art_code} • Round {selectedAuctionItem.round}, Easel {selectedAuctionItem.easel}
+                  </Text>
+                  <Text size="2" weight="medium">
+                    Winning Bid: ${auctionBids[selectedAuctionItem.id]?.highestBid || selectedAuctionItem.current_bid || 0}
+                  </Text>
+                  {(adminLevel === 'producer' || adminLevel === 'super') && auctionBids[selectedAuctionItem.id]?.highestBidder && (
+                    <Text size="2" color="gray">
+                      Winner: {auctionBids[selectedAuctionItem.id].highestBidder.first_name && auctionBids[selectedAuctionItem.id].highestBidder.last_name ? 
+                        `${auctionBids[selectedAuctionItem.id].highestBidder.first_name} ${auctionBids[selectedAuctionItem.id].highestBidder.last_name}` : 
+                        auctionBids[selectedAuctionItem.id].highestBidder.name || 'Unknown'}
+                    </Text>
+                  )}
+                </Flex>
+              </Card>
+
+              {/* Payment Form */}
+              <Flex direction="column" gap="3">
+                <Box>
+                  <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>
+                    Actual Amount Collected *
+                  </Text>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={paymentFormData.actualAmount}
+                    onChange={(e) => setPaymentFormData(prev => ({ ...prev, actualAmount: e.target.value }))}
+                    placeholder="Enter total amount collected"
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      border: '1px solid var(--gray-6)',
+                      backgroundColor: 'var(--gray-1)',
+                      color: 'var(--gray-12)'
+                    }}
+                  />
+                </Box>
+
+                <Box>
+                  <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>
+                    Tax Amount Collected
+                  </Text>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={paymentFormData.actualTax}
+                    onChange={(e) => setPaymentFormData(prev => ({ ...prev, actualTax: e.target.value }))}
+                    placeholder="Enter tax amount collected"
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      border: '1px solid var(--gray-6)',
+                      backgroundColor: 'var(--gray-1)',
+                      color: 'var(--gray-12)'
+                    }}
+                  />
+                </Box>
+
+                <Box>
+                  <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>
+                    Payment Method
+                  </Text>
+                  <Select.Root 
+                    value={paymentFormData.paymentMethod} 
+                    onValueChange={(value) => setPaymentFormData(prev => ({ ...prev, paymentMethod: value }))}
+                  >
+                    <Select.Trigger style={{ width: '100%' }} />
+                    <Select.Content>
+                      <Select.Item value="cash">💵 Cash</Select.Item>
+                      <Select.Item value="card">💳 Credit/Debit Card</Select.Item>
+                      <Select.Item value="check">🏦 Check</Select.Item>
+                      <Select.Item value="other">🔄 Other</Select.Item>
+                    </Select.Content>
+                  </Select.Root>
+                </Box>
+
+                <Box>
+                  <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>
+                    Collection Notes (Optional)
+                  </Text>
+                  <textarea
+                    value={paymentFormData.collectionNotes}
+                    onChange={(e) => setPaymentFormData(prev => ({ ...prev, collectionNotes: e.target.value }))}
+                    placeholder="Any notes about the payment collection..."
+                    rows="3"
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      border: '1px solid var(--gray-6)',
+                      backgroundColor: 'var(--gray-1)',
+                      color: 'var(--gray-12)',
+                      resize: 'vertical',
+                      fontFamily: 'inherit'
+                    }}
+                  />
+                </Box>
+              </Flex>
+
+              {/* Action Buttons */}
+              <Flex gap="3" justify="end" mt="4">
+                <Dialog.Close>
+                  <Button variant="soft" color="gray">
+                    Cancel
+                  </Button>
+                </Dialog.Close>
+                <Button 
+                  variant="solid"
+                  disabled={!paymentFormData.actualAmount}
+                  onClick={async () => {
+                    try {
+                      const actualAmount = parseFloat(paymentFormData.actualAmount);
+                      const actualTax = parseFloat(paymentFormData.actualTax) || 0;
+
+                      if (isNaN(actualAmount) || actualAmount <= 0) {
+                        alert('Please enter a valid amount collected');
+                        return;
+                      }
+
+                      // Call the enhanced admin function with actual payment data
+                      const { data, error } = await supabase
+                        .rpc('admin_update_art_status', {
+                          p_art_code: selectedAuctionItem.art_code,
+                          p_new_status: 'paid',
+                          p_admin_phone: user?.phone,
+                          p_actual_amount_collected: actualAmount,
+                          p_actual_tax_collected: actualTax || null,
+                          p_payment_method: paymentFormData.paymentMethod,
+                          p_collection_notes: paymentFormData.collectionNotes || null
+                        });
+
+                      if (error) throw error;
+
+                      if (data?.success) {
+                        // Refresh auction data
+                        fetchAuctionData();
+                        setSelectedAuctionItem(null);
+                        setShowPaymentModal(false);
+                        showAdminMessage('success', 
+                          `Payment recorded: $${actualAmount} via ${paymentFormData.paymentMethod} by ${user?.phone || 'admin'}`
+                        );
+                      } else {
+                        throw new Error(data?.error || 'Failed to record payment');
+                      }
+                    } catch (error) {
+                      console.error('Error recording payment:', error);
+                      alert('Failed to record payment: ' + error.message);
+                    }
+                  }}
+                >
+                  Record Payment
+                </Button>
+              </Flex>
+            </Flex>
           )}
         </Dialog.Content>
       </Dialog.Root>

@@ -83,6 +83,9 @@ serve(async (req)=>{
       console.log('Successfully linked QR user to person:', personId);
     } else {
       // Direct OTP user: Find or create person
+      // TODO: Fix hardcoded North America assumption - this breaks international users
+      // Current logic strips ALL country codes then forces +1, corrupting international numbers
+      // Should preserve original E.164 format and only add +1 for US/Canada numbers without prefix
       let normalizedPhone = authPhone;
       if (normalizedPhone?.startsWith('+1')) {
         normalizedPhone = normalizedPhone.substring(2);
@@ -119,7 +122,7 @@ serve(async (req)=>{
         // Create new person
         console.log('Creating new person for OTP user');
         const { data: newPerson, error: createError } = await supabase.from('people').insert({
-          phone: `+1${normalizedPhone}`,
+          phone: `+1${normalizedPhone}`, // CRITICAL BUG: Forces +1 on ALL numbers including international
           name: 'User',
           nickname: 'User',
           auth_user_id: newRecord.id,

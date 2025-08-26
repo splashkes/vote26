@@ -1,0 +1,264 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Art Battle - QR Scan Funnel Analytics",
+    "tags": ["art-battle", "qr", "funnel", "conversion"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "QR Scan Success Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "postgresql_query{query=\"SELECT ROUND(100.0 * SUM(CASE WHEN success THEN 1 ELSE 0 END) / COUNT(*), 2) as success_rate FROM event_auth_logs WHERE event_type = 'qr_validation' AND created_at >= NOW() - INTERVAL '24 hours'\"}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 70},
+                {"color": "green", "value": 85}
+              ]
+            },
+            "unit": "percent"
+          }
+        },
+        "gridPos": {"h": 6, "w": 8, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "QR to Vote Conversion",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "postgresql_query{query=\"SELECT ROUND(100.0 * COUNT(DISTINCT v.person_id) / COUNT(DISTINCT e.person_id), 2) as conversion_rate FROM event_auth_logs e LEFT JOIN votes v ON e.person_id = v.person_id AND v.created_at >= e.created_at WHERE e.event_type = 'qr_validation' AND e.success = true AND e.created_at >= NOW() - INTERVAL '24 hours'\"}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 30},
+                {"color": "green", "value": 50}
+              ]
+            },
+            "unit": "percent"
+          }
+        },
+        "gridPos": {"h": 6, "w": 8, "x": 8, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "QR to Bid Conversion",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "postgresql_query{query=\"SELECT ROUND(100.0 * COUNT(DISTINCT b.person_id) / COUNT(DISTINCT e.person_id), 2) as conversion_rate FROM event_auth_logs e LEFT JOIN bids b ON e.person_id = b.person_id AND b.created_at >= e.created_at WHERE e.event_type = 'qr_validation' AND e.success = true AND e.created_at >= NOW() - INTERVAL '24 hours'\"}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 10},
+                {"color": "green", "value": 20}
+              ]
+            },
+            "unit": "percent"
+          }
+        },
+        "gridPos": {"h": 6, "w": 8, "x": 16, "y": 0}
+      },
+      {
+        "id": 4,
+        "title": "QR Scan Errors by Type",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "postgresql_query{query=\"SELECT COALESCE(error_type, 'Success') as error_type, COUNT(*) as count FROM event_auth_logs WHERE event_type = 'qr_validation' AND created_at >= NOW() - INTERVAL '24 hours' GROUP BY error_type ORDER BY count DESC\"}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {"hideFrom": {"legend": false, "tooltip": false, "vis": false}},
+            "mappings": []
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "Success"},
+              "properties": [{"id": "color", "value": {"fixedColor": "green", "mode": "fixed"}}]
+            }
+          ]
+        },
+        "options": {
+          "reduceOptions": {"values": false, "calcs": ["lastNotNull"], "fields": ""},
+          "pieType": "pie",
+          "tooltip": {"mode": "single", "sort": "none"},
+          "legend": {"displayMode": "list", "placement": "right"}
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6}
+      },
+      {
+        "id": 5,
+        "title": "QR Scans Over Time",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "postgresql_query{query=\"SELECT DATE_TRUNC('hour', created_at) as time, COUNT(*) as total_scans, SUM(CASE WHEN success THEN 1 ELSE 0 END) as successful_scans FROM event_auth_logs WHERE event_type = 'qr_validation' AND created_at >= NOW() - INTERVAL '7 days' GROUP BY DATE_TRUNC('hour', created_at) ORDER BY time\"}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "barAlignment": 0,
+              "drawStyle": "line",
+              "fillOpacity": 10,
+              "gradientMode": "none",
+              "hideFrom": {"legend": false, "tooltip": false, "vis": false},
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {"type": "linear"},
+              "showPoints": "never",
+              "spanNulls": false,
+              "stacking": {"group": "A", "mode": "none"},
+              "thresholdsStyle": {"mode": "off"}
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [{"color": "green", "value": null}]
+            },
+            "unit": "short"
+          }
+        },
+        "options": {
+          "tooltip": {"mode": "single", "sort": "none"},
+          "legend": {"calcs": [], "displayMode": "list", "placement": "bottom"}
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6}
+      },
+      {
+        "id": 6,
+        "title": "User Drop-off Points",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "postgresql_query{query=\"WITH funnel_data AS (SELECT e.event_id, COUNT(DISTINCT e.person_id) as qr_users, COUNT(DISTINCT v.person_id) as voting_users, COUNT(DISTINCT b.person_id) as bidding_users FROM event_auth_logs e LEFT JOIN votes v ON e.person_id = v.person_id AND v.created_at >= e.created_at LEFT JOIN bids b ON e.person_id = b.person_id AND b.created_at >= e.created_at WHERE e.event_type = 'qr_validation' AND e.success = true AND e.created_at >= NOW() - INTERVAL '7 days' GROUP BY e.event_id) SELECT ev.eid as event_id, ev.name as event_name, f.qr_users, f.voting_users, f.bidding_users, ROUND(100.0 * f.voting_users / f.qr_users, 2) as qr_to_vote_rate, ROUND(100.0 * f.bidding_users / f.qr_users, 2) as qr_to_bid_rate FROM funnel_data f JOIN events ev ON f.event_id = ev.id ORDER BY f.qr_users DESC\"}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "custom": {
+              "align": "auto",
+              "displayMode": "auto",
+              "inspect": false
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [{"color": "green", "value": null}]
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "qr_to_vote_rate"},
+              "properties": [
+                {
+                  "id": "custom.displayMode",
+                  "value": "gradient-gauge"
+                },
+                {
+                  "id": "thresholds",
+                  "value": {
+                    "steps": [
+                      {"color": "red", "value": 0},
+                      {"color": "yellow", "value": 30},
+                      {"color": "green", "value": 50}
+                    ]
+                  }
+                },
+                {"id": "unit", "value": "percent"}
+              ]
+            },
+            {
+              "matcher": {"id": "byName", "options": "qr_to_bid_rate"},
+              "properties": [
+                {
+                  "id": "custom.displayMode",
+                  "value": "gradient-gauge"
+                },
+                {
+                  "id": "thresholds",
+                  "value": {
+                    "steps": [
+                      {"color": "red", "value": 0},
+                      {"color": "yellow", "value": 10},
+                      {"color": "green", "value": 20}
+                    ]
+                  }
+                },
+                {"id": "unit", "value": "percent"}
+              ]
+            }
+          ]
+        },
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "renameByName": {
+                "event_id": "Event ID",
+                "event_name": "Event Name",
+                "qr_users": "QR Scans",
+                "voting_users": "Voters",
+                "bidding_users": "Bidders",
+                "qr_to_vote_rate": "QR → Vote %",
+                "qr_to_bid_rate": "QR → Bid %"
+              }
+            }
+          }
+        ],
+        "gridPos": {"h": 10, "w": 24, "x": 0, "y": 14}
+      },
+      {
+        "id": 7,
+        "title": "QR Scan Performance by Device",
+        "type": "barchart",
+        "targets": [
+          {
+            "expr": "postgresql_query{query=\"SELECT CASE WHEN user_agent LIKE '%Mobile%' THEN 'Mobile' WHEN user_agent LIKE '%Tablet%' THEN 'Tablet' ELSE 'Desktop' END as device_type, COUNT(*) as total_scans, SUM(CASE WHEN success THEN 1 ELSE 0 END) as successful_scans, ROUND(100.0 * SUM(CASE WHEN success THEN 1 ELSE 0 END) / COUNT(*), 2) as success_rate FROM event_auth_logs WHERE event_type = 'qr_validation' AND created_at >= NOW() - INTERVAL '24 hours' GROUP BY device_type ORDER BY total_scans DESC\"}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "barAlignment": 0,
+              "displayMode": "list",
+              "orientation": "horizontal"
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24}
+      }
+    ],
+    "time": {"from": "now-24h", "to": "now"},
+    "refresh": "5m"
+  }
+}

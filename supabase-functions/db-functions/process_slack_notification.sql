@@ -10,8 +10,21 @@
    v_response RECORD;                                                                                             +
    v_success BOOLEAN := FALSE;                                                                                    +
    v_slack_payload TEXT;                                                                                          +
-   v_slack_token TEXT := 'REDACTED_SLACK_BOT_TOKEN';                                +
+   v_slack_token TEXT;                                                                                            +
  BEGIN                                                                                                            +
+   -- Get Slack token from vault instead of hardcoded                                                             +
+   SELECT decrypted_secret INTO v_slack_token                                                                     +
+   FROM vault.decrypted_secrets                                                                                   +
+   WHERE name = 'slack_token';                                                                                    +
+                                                                                                                  +
+   IF v_slack_token IS NULL THEN                                                                                  +
+     UPDATE slack_notifications                                                                                   +
+     SET status = 'failed',                                                                                       +
+         error = 'Slack token not found in vault'                                                                 +
+     WHERE id = p_notification_id;                                                                                +
+     RETURN FALSE;                                                                                                +
+   END IF;                                                                                                        +
+                                                                                                                  +
    -- Get and lock the notification                                                                               +
    SELECT * INTO v_notification                                                                                   +
    FROM slack_notifications                                                                                       +
@@ -28,17 +41,26 @@
    WHERE id = p_notification_id;                                                                                  +
                                                                                                                   +
    BEGIN                                                                                                          +
-     -- Get channel name from payload                                                                             +
+     -- Handle null channel_id case - mark as failed immediately                                                  +
+     IF v_notification.channel_id IS NULL THEN                                                                    +
+       UPDATE slack_notifications                                                                                 +
+       SET status = 'failed',                                                                                     +
+           error = 'No channel_id specified - cannot deliver message'                                             +
+       WHERE id = p_notification_id;                                                                              +
+       RETURN FALSE;                                                                                              +
+     END IF;                                                                                                      +
+                                                                                                                  +
+     -- Get channel name from payload or use channel_id                                                           +
      v_channel_name := v_notification.payload->>'channel_name';                                                   +
      IF v_channel_name IS NULL THEN                                                                               +
-       v_channel_name := COALESCE(v_notification.channel_id, 'general');                                          +
+       v_channel_name := v_notification.channel_id;                                                               +
      END IF;                                                                                                      +
                                                                                                                   +
      -- Prepare Slack API payload with blocks if available                                                        +
      IF v_notification.payload ? 'blocks' THEN                                                                    +
        -- Use blocks for rich formatting                                                                          +
        v_slack_payload := json_build_object(                                                                      +
-         'channel', v_channel_name,                                                                               +
+         'channel', v_notification.channel_id, -- Use channel_id directly                                         +
          'blocks', v_notification.payload->'blocks',                                                              +
          'text', v_notification.payload->>'text',  -- Fallback text                                               +
          'unfurl_links', false,                                                                                   +
@@ -47,8 +69,8 @@
      ELSE                                                                                                         +
        -- Fallback to plain text                                                                                  +
        v_slack_payload := json_build_object(                                                                      +
-         'channel', v_channel_name,                                                                               +
-         'text', v_notification.payload->>'text',                                                                 +
+         'channel', v_notification.channel_id, -- Use channel_id directly                                         +
+         'text', COALESCE(v_notification.payload->>'text', 'Art Battle Notification'),                            +
          'unfurl_links', false,                                                                                   +
          'unfurl_media', false                                                                                    +
        )::text;                                                                                                   +
@@ -66,10 +88,30 @@
                                                                                                                   +
      -- Check if the response indicates success (status 2xx)                                                      +
      IF v_response.status >= 200 AND v_response.status < 300 THEN                                                 +
-       UPDATE slack_notifications                                                                                 +
-       SET status = 'sent', sent_at = NOW()                                                                       +
-       WHERE id = p_notification_id;                                                                              +
-       v_success := TRUE;                                                                                         +
+       -- Also check Slack API response for "ok": true                                                            +
+       DECLARE                                                                                                    +
+         v_slack_response JSONB;                                                                                  +
+       BEGIN                                                                                                      +
+         v_slack_response := v_response.content::jsonb;                                                           +
+         IF v_slack_response->>'ok' = 'true' THEN                                                                 +
+           UPDATE slack_notifications                                                                             +
+           SET status = 'sent', sent_at = NOW()                                                                   +
+           WHERE id = p_notification_id;                                                                          +
+           v_success := TRUE;                                                                                     +
+         ELSE                                                                                                     +
+           UPDATE slack_notifications                                                                             +
+           SET status = 'failed',                                                                                 +
+               error = 'Slack API error: ' || COALESCE(v_slack_response->>'error', 'Unknown Slack error')         +
+           WHERE id = p_notification_id;                                                                          +
+           v_success := FALSE;                                                                                    +
+         END IF;                                                                                                  +
+       EXCEPTION WHEN OTHERS THEN                                                                                 +
+         -- JSON parsing failed, treat as success if HTTP was 200                                                 +
+         UPDATE slack_notifications                                                                               +
+         SET status = 'sent', sent_at = NOW()                                                                     +
+         WHERE id = p_notification_id;                                                                            +
+         v_success := TRUE;                                                                                       +
+       END;                                                                                                       +
      ELSE                                                                                                         +
        UPDATE slack_notifications                                                                                 +
        SET status = 'failed',                                                                                     +

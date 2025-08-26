@@ -1,0 +1,1 @@
+{"verify_jwt":true,"id":"68e16976-7e7c-4923-b67a-7c22d855a238","slug":"send-sms","version":21,"name":"send-sms","status":"ACTIVE","entrypoint_path":"file:///tmp/user_fn_xsqdkubgyqwpyvfltnrf_68e16976-7e7c-4923-b67a-7c22d855a238_8/source/supabase/functions/send-sms/index.ts","import_map_path":null,"import_map":false,"created_at":1753626468177,"updated_at":1754320309917}
