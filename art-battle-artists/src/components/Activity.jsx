@@ -38,138 +38,125 @@ const Activity = () => {
 
   const loadActivity = async () => {
     try {
-      // Use the new primary profile system
-      const { data: primaryCheck, error: primaryError } = await supabase
-        .rpc('has_primary_profile', { target_person_id: person.id });
+      // Get ALL artist profiles for this person
+      const { data: allProfiles, error: profilesError } = await supabase
+        .from('artist_profiles')
+        .select('id')
+        .eq('person_id', person.id);
 
-      if (primaryError) {
-        throw primaryError;
+      if (profilesError) {
+        throw profilesError;
       }
 
-      if (!primaryCheck || primaryCheck.length === 0) {
-        setError('No primary profile found. Please set up your profile first.');
+      if (!allProfiles || allProfiles.length === 0) {
+        setError('No artist profiles found. Please set up your profile first.');
         setLoading(false);
         return;
       }
 
-      const result = primaryCheck[0];
-      if (!result.has_primary || !result.profile_id) {
-        setError('No primary profile found. Please set up your profile first.');
-        setLoading(false);
-        return;
-      }
+      const artistProfileIds = allProfiles.map(p => p.id);
 
-      const artistProfileId = result.profile_id;
-
-      // Get activity data using the new view
-      const { data: activityData, error: activityError } = await supabase
-        .from('artist_activity_with_payments')
-        .select('*')
-        .eq('artist_profile_id', artistProfileId)
-        .order('art_created_at', { ascending: false });
-
-      if (activityError) {
-        // Fallback to direct query if view doesn't exist yet
-        // First try to find art by artist_profile_id (if column exists), then by artist_id
-        let fallbackData, fallbackError;
-        
-        // Try with artist_profile_id first (new schema)
-        const { data: newSchemaData, error: newSchemaError } = await supabase
-          .from('art')
-          .select(`
-            id,
-            art_code,
-            description,
-            status,
-            current_bid,
-            created_at,
-            event:events(
-              eid,
-              name,
-              event_start_datetime
-            ),
-            art_media(
-              media_files!art_media_media_id_fkey(
-                id,
-                cloudflare_id,
-                thumbnail_url,
-                compressed_url
-              )
-            )
-          `)
-          .eq('artist_profile_id', artistProfileId)
-          .order('created_at', { ascending: false });
-
-        if (newSchemaError) {
-          // Fallback to artist_id (old schema)
-          const { data: oldSchemaData, error: oldSchemaError } = await supabase
-            .from('art')
-            .select(`
+      // Get artwork data with actual payment status
+      const { data: artworkData, error: artworkError } = await supabase
+        .from('art')
+        .select(`
+          id,
+          art_code,
+          description,
+          status,
+          current_bid,
+          created_at,
+          artist_id,
+          event:events(
+            eid,
+            name,
+            event_start_datetime
+          ),
+          art_media(
+            media_files!art_media_media_id_fkey(
               id,
-              art_code,
-              description,
-              status,
-              current_bid,
-              created_at,
-              event:events(
-                eid,
-                name,
-                event_start_datetime
-              ),
-              art_media(
-                media_files!art_media_media_id_fkey(
-                  id,
-                  cloudflare_id,
-                  thumbnail_url,
-                  compressed_url
-                )
-              )
-            `)
-            .eq('artist_id', artistProfileId)
-            .order('created_at', { ascending: false });
-            
-          fallbackData = oldSchemaData;
-          fallbackError = oldSchemaError;
-        } else {
-          fallbackData = newSchemaData;
-          fallbackError = newSchemaError;
-        }
+              cloudflare_id,
+              thumbnail_url,
+              compressed_url
+            )
+          )
+        `)
+        .in('artist_id', artistProfileIds)
+        .order('created_at', { ascending: false });
 
-        if (fallbackError) throw fallbackError;
+      if (artworkError) throw artworkError;
 
-        console.log('Fallback data found:', fallbackData?.length || 0, 'artworks');
-        if (fallbackData?.length > 0) {
-          console.log('Sample artwork:', fallbackData[0]);
-        }
+      // Get actual payment data for these artworks
+      const artIds = artworkData.map(art => art.id);
+      
+      const { data: paymentData, error: paymentError } = await supabase
+        .from('payment_processing')
+        .select('art_id, amount, currency, status, completed_at')
+        .in('art_id', artIds);
 
-        // Transform fallback data to match expected format
-        const transformedData = fallbackData.map(art => {
-          // Extract event code from art_code (e.g., "AB3009" from "AB3009-1-2")
-          const eventCodeFromArt = art.art_code ? art.art_code.split('-')[0] : null;
-          
-          return {
-            art_id: art.id,
-            art_code: art.art_code,
-            title: art.description || art.art_code,
-            art_status: art.status,
-            current_bid: art.current_bid,
-            art_created_at: art.created_at,
-            event_title: art.event?.eid || art.event?.name || eventCodeFromArt || 'Unknown Event',
-            event_date: art.event?.event_start_datetime || art.created_at,
-            payment_status: art.current_bid && art.current_bid > 0 
-              ? (art.status === 'paid' ? 'buyer_paid' : 'closed_unpaid')
-              : 'no_bids',
-            buyer_paid_amount: null,
-            artist_net_amount: null,
-            currency: 'USD',
-            art_media: art.art_media
-          };
+      const { data: artistPaymentData, error: artistPaymentError } = await supabase
+        .from('artist_payments')
+        .select('art_id, net_amount, currency, status, paid_at')
+        .in('artist_profile_id', artistProfileIds);
+
+      // Create lookup maps for payments
+      const paymentMap = {};
+      const artistPaymentMap = {};
+
+      if (paymentData) {
+        paymentData.forEach(payment => {
+          paymentMap[payment.art_id] = payment;
         });
-
-        setActivities(transformedData);
-      } else {
-        setActivities(activityData);
       }
+
+      if (artistPaymentData) {
+        artistPaymentData.forEach(payment => {
+          artistPaymentMap[payment.art_id] = payment;
+        });
+      }
+
+      // Transform data with actual payment status
+      const transformedData = artworkData.map(art => {
+        const payment = paymentMap[art.id];
+        const artistPayment = artistPaymentMap[art.id];
+        const eventCodeFromArt = art.art_code ? art.art_code.split('-')[0] : null;
+
+        // Determine payment status based on actual payment records
+        let paymentStatus = 'no_bids';
+        let buyerPaidAmount = null;
+        let artistNetAmount = null;
+
+        if (payment && payment.status === 'completed') {
+          paymentStatus = 'buyer_paid';
+          buyerPaidAmount = payment.amount;
+          
+          if (artistPayment && artistPayment.status === 'paid' && artistPayment.paid_at) {
+            paymentStatus = 'artist_paid';
+            artistNetAmount = artistPayment.net_amount;
+          }
+        } else if (art.current_bid > 0) {
+          paymentStatus = 'awaiting_buyer_payment';
+        }
+
+        return {
+          art_id: art.id,
+          art_code: art.art_code,
+          title: art.description || art.art_code,
+          art_status: art.status,
+          current_bid: art.current_bid,
+          art_created_at: art.created_at,
+          event_title: art.event?.eid || art.event?.name || eventCodeFromArt || 'Unknown Event',
+          event_date: art.event?.event_start_datetime || art.created_at,
+          payment_status: paymentStatus,
+          buyer_paid_amount: buyerPaidAmount,
+          artist_net_amount: artistNetAmount,
+          artist_paid_at: artistPayment?.paid_at,
+          currency: payment?.currency || artistPayment?.currency || 'USD',
+          art_media: art.art_media
+        };
+      });
+
+      setActivities(transformedData);
     } catch (err) {
       setError('Failed to load activity: ' + err.message);
     } finally {
@@ -205,8 +192,7 @@ const Activity = () => {
   const getPaymentStatusBadge = (status) => {
     const statusConfig = {
       no_bids: { color: 'gray', text: 'No Bids' },
-      available: { color: 'blue', text: 'Available' },
-      closed_unpaid: { color: 'orange', text: 'Closed, Unpaid' },
+      awaiting_buyer_payment: { color: 'orange', text: 'Awaiting Buyer Payment' },
       buyer_paid: { color: 'green', text: 'Buyer Paid' },
       artist_paid: { color: 'jade', text: 'Artist Paid' },
       unknown: { color: 'gray', text: 'Unknown' }
@@ -379,12 +365,19 @@ const Activity = () => {
                         <Text size="2" weight="medium" color="green">
                           {activity.artist_net_amount 
                             ? formatAmount(activity.artist_net_amount, activity.currency)
+                            : activity.buyer_paid_amount
+                            ? formatAmount(activity.buyer_paid_amount * 0.5, activity.currency) + ' (pending)'
                             : '--'
                           }
                         </Text>
                         {activity.artist_paid_at && (
                           <Text size="1" color="gray">
                             Paid {formatDate(activity.artist_paid_at)}
+                          </Text>
+                        )}
+                        {activity.buyer_paid_amount && !activity.artist_net_amount && (
+                          <Text size="1" color="orange">
+                            50% of {formatAmount(activity.buyer_paid_amount, activity.currency)}
                           </Text>
                         )}
                       </Flex>

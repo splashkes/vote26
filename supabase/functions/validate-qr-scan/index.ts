@@ -144,19 +144,64 @@ serve(async (req)=>{
           console.log('Successfully linked QR user to person:', personId);
         } else {
           // Direct OTP user: Find or create person
-          // TODO: Fix hardcoded North America assumption - this breaks international users
-          // Current logic strips ALL country codes then forces +1, corrupting international numbers
-          // Should preserve original E.164 format and only add +1 for US/Canada numbers without prefix
-          let normalizedPhone = authPhone;
-          if (normalizedPhone?.startsWith('+1')) {
-            normalizedPhone = normalizedPhone.substring(2);
-          } else if (normalizedPhone?.startsWith('+')) {
-            normalizedPhone = normalizedPhone.substring(1);
+          // Use the phone number exactly as validated by Supabase Auth (already E.164 format)
+          console.log('Using validated phone from Auth:', authPhone)
+
+          // Generate phone variations to handle corrupted numbers in database
+          const phoneVariations = generatePhoneVariations(authPhone)
+          console.log('Generated phone variations:', phoneVariations)
+
+          // Try to find existing person with matching phone (including corrupted versions)
+          let existingPersonByPhone = null
+          
+          for (const variation of phoneVariations) {
+            const { data: foundPerson } = await supabase
+              .from('people')
+              .select('id, name, phone')
+              .is('auth_user_id', null)
+              .eq('phone', variation)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .single()
+            
+            if (foundPerson) {
+              console.log(`Found person with phone variation: ${variation} (original in DB: ${foundPerson.phone})`)
+              existingPersonByPhone = foundPerson
+              break
+            }
           }
-          // Try to find existing person with matching phone
-          const { data: existingPersonByPhone } = await supabase.from('people').select('id, name').is('auth_user_id', null).or(`phone.eq.+1${normalizedPhone},phone.eq.+${normalizedPhone},phone.eq.${normalizedPhone},phone.eq.${authPhone}`).order('created_at', {
-            ascending: false
-          }).limit(1).single();
+
+          // If we found a person with corrupted phone, validate and fix it with Twilio
+          if (existingPersonByPhone && existingPersonByPhone.phone !== authPhone) {
+            console.log('Found person with corrupted phone, validating with Twilio...')
+            const twilioResult = await validateWithTwilio(authPhone)
+            
+            if (twilioResult.valid) {
+              console.log('Twilio confirmed valid phone, updating person record')
+              // Update the corrupted phone number in the database
+              const { error: phoneUpdateError } = await supabase
+                .from('people')
+                .update({ phone: twilioResult.phoneNumber })
+                .eq('id', existingPersonByPhone.id)
+              
+              if (phoneUpdateError) {
+                console.error('Failed to update corrupted phone:', phoneUpdateError)
+              } else {
+                console.log(`Successfully updated phone from ${existingPersonByPhone.phone} to ${twilioResult.phoneNumber}`)
+                // Send Slack notification about the fix
+                try {
+                  await supabase.rpc('queue_slack_notification', {
+                    channel: 'profile-debug',
+                    notification_type: 'phone_corruption_fixed',
+                    message: `📞 Phone Corruption Fixed!\nUser: ${user.id}\nCorrected: ${existingPersonByPhone.phone} → ${twilioResult.phoneNumber}\nMethod: Twilio validation during QR scan`
+                  })
+                } catch (slackError) {
+                  console.warn('Slack notification failed:', slackError)
+                }
+              }
+            }
+          }
+
           if (existingPersonByPhone) {
             // Link existing person
             console.log('Linking OTP user to existing person by phone:', existingPersonByPhone.id);
@@ -174,7 +219,7 @@ serve(async (req)=>{
             // Create new person
             console.log('Creating new person for OTP user');
             const { data: newPerson, error: createError } = await supabase.from('people').insert({
-              phone: `+1${normalizedPhone}`, // CRITICAL BUG: Forces +1 on ALL numbers including international
+              phone: authPhone, // Use phone exactly as validated by Supabase Auth
               name: 'User',
               nickname: 'User',
               auth_user_id: user.id,
@@ -309,3 +354,88 @@ serve(async (req)=>{
     });
   }
 });
+
+// Generate phone variations to match corrupted numbers in database
+function generatePhoneVariations(phone: string): string[] {
+  const variations = [phone]
+  
+  // Handle corruption patterns we found in database
+  if (phone.startsWith('+31')) {
+    // Netherlands: +31610654546 was corrupted to +131610654546
+    variations.push('+1' + phone.substring(1)) // +131610654546
+  }
+  
+  if (phone.startsWith('+61')) {
+    // Australia: +61407290480 was corrupted to +161407290480
+    variations.push('+1' + phone.substring(1)) // +161407290480
+  }
+  
+  if (phone.startsWith('+64')) {
+    // New Zealand: +64211674847 was corrupted to +164211674847
+    variations.push('+1' + phone.substring(1)) // +164211674847
+  }
+  
+  if (phone.startsWith('+44')) {
+    // UK: +447466118852 was corrupted to +1447466118852
+    variations.push('+1' + phone.substring(1)) // +1447466118852
+  }
+  
+  // Handle other common country codes that might be corrupted
+  if (phone.startsWith('+33')) { // France
+    variations.push('+1' + phone.substring(1))
+  }
+  if (phone.startsWith('+49')) { // Germany
+    variations.push('+1' + phone.substring(1))
+  }
+  if (phone.startsWith('+81')) { // Japan
+    variations.push('+1' + phone.substring(1))
+  }
+  if (phone.startsWith('+52')) { // Mexico
+    variations.push('+1' + phone.substring(1))
+  }
+  if (phone.startsWith('+55')) { // Brazil
+    variations.push('+1' + phone.substring(1))
+  }
+  
+  return [...new Set(variations)]
+}
+
+// Validate phone number with Twilio
+async function validateWithTwilio(phoneNumber: string) {
+  try {
+    const twilioAccountSid = Deno.env.get('TWILIO_ACCOUNT_SID')
+    const twilioAuthToken = Deno.env.get('TWILIO_AUTH_TOKEN')
+    
+    if (!twilioAccountSid || !twilioAuthToken) {
+      console.warn('Twilio credentials not available for validation')
+      return { valid: false }
+    }
+
+    const url = `https://lookups.twilio.com/v2/PhoneNumbers/${encodeURIComponent(phoneNumber)}`
+    const params = new URLSearchParams({ Fields: 'line_type_intelligence' })
+
+    const response = await fetch(`${url}?${params}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Basic ${btoa(`${twilioAccountSid}:${twilioAuthToken}`)}`,
+        'Accept': 'application/json'
+      }
+    })
+
+    if (!response.ok) {
+      console.log('Twilio validation failed:', response.status, response.statusText)
+      return { valid: false }
+    }
+
+    const data = await response.json()
+    return {
+      valid: data.valid || false,
+      phoneNumber: data.phone_number,
+      nationalFormat: data.national_format,
+      countryCode: data.country_code
+    }
+  } catch (error) {
+    console.warn('Twilio validation error:', error)
+    return { valid: false }
+  }
+}

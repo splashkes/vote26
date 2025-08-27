@@ -33,6 +33,7 @@ const PaymentDashboard = () => {
     pendingPayments: 0,
     paidAmount: 0,
     artworksSold: 0,
+    awaitingPayment: 0,
     recentPayments: []
   });
   const [stripeAccount, setStripeAccount] = useState(null);
@@ -50,90 +51,138 @@ const PaymentDashboard = () => {
 
   const loadPaymentData = async () => {
     try {
-      // Use the new primary profile system
-      const { data: primaryCheck, error: primaryError } = await supabase
-        .rpc('has_primary_profile', { target_person_id: person.id });
+      // Get ALL artist profiles for this person
+      const { data: allProfiles, error: profilesError } = await supabase
+        .from('artist_profiles')
+        .select('id')
+        .eq('person_id', person.id);
 
-      if (primaryError) {
-        throw primaryError;
+      if (profilesError) {
+        throw profilesError;
       }
 
-      if (!primaryCheck || primaryCheck.length === 0) {
-        setError('No primary profile found. Please set up your profile first.');
+      if (!allProfiles || allProfiles.length === 0) {
+        setError('No artist profiles found. Please set up your profile first.');
         setLoading(false);
         return;
       }
 
-      const result = primaryCheck[0];
-      if (!result.has_primary || !result.profile_id) {
-        setError('No primary profile found. Please set up your profile first.');
+      const artistProfileIds = allProfiles.map(p => p.id);
+
+      // Get artworks for ALL artist profiles
+      const { data: artworks, error: artworkError } = await supabase
+        .from('art')
+        .select('id')
+        .in('artist_id', artistProfileIds);
+      
+      if (artworkError) {
+        console.error('Artwork query error:', artworkError);
+        setError('Failed to load artwork data: ' + artworkError.message);
         setLoading(false);
         return;
       }
-
-      const artistProfileId = result.profile_id;
-
-      // Get payment summary
-      const { data: activityData, error: activityError } = await supabase
-        .from('artist_activity_with_payments')
-        .select('*')
-        .eq('artist_profile_id', artistProfileId);
-
-      if (activityError) {
-        // Fallback query if view doesn't exist
-        const { data: fallbackData, error: fallbackError } = await supabase
-          .from('art')
-          .select(`
+      
+      const artworkIds = artworks?.map(art => art.id) || [];
+      
+      // Get ACTUAL payment data - only from completed payments for this artist's artworks
+      const { data: paymentProcessingData, error: paymentError } = await supabase
+        .from('payment_processing')
+        .select(`
+          id,
+          art_id,
+          amount,
+          currency,
+          status,
+          completed_at,
+          art:art!payment_processing_art_id_fkey(
             id,
-            current_bid,
-            status,
-            created_at,
+            art_code,
+            artist_id,
             event:events(eid, name)
-          `)
-          .eq('artist_id', artistProfileId);
+          )
+        `)
+        .in('art_id', artworkIds)
+        .eq('status', 'completed');
 
-        if (fallbackError) throw fallbackError;
-
-        // Calculate summary from fallback data
-        const soldArtworks = fallbackData.filter(art => art.current_bid > 0);
-        const totalEarnings = soldArtworks.reduce((sum, art) => sum + (art.current_bid * 0.85), 0); // Assuming 15% platform fee
-
-        setPaymentData({
-          totalEarnings: totalEarnings,
-          pendingPayments: totalEarnings,
-          paidAmount: 0,
-          artworksSold: soldArtworks.length,
-          recentPayments: []
-        });
-      } else {
-        // Calculate summary from activity data
-        const soldArtworks = activityData.filter(activity => 
-          activity.payment_status === 'buyer_paid' || activity.payment_status === 'artist_paid'
-        );
-        
-        const totalEarnings = soldArtworks.reduce((sum, activity) => 
-          sum + (activity.buyer_paid_amount || activity.current_bid || 0) * 0.85, 0
-        );
-        
-        const paidAmount = activityData
-          .filter(activity => activity.payment_status === 'artist_paid')
-          .reduce((sum, activity) => sum + (activity.artist_net_amount || 0), 0);
-
-        const pendingAmount = activityData
-          .filter(activity => activity.payment_status === 'buyer_paid')
-          .reduce((sum, activity) => sum + (activity.buyer_paid_amount || 0) * 0.85, 0);
-
-        setPaymentData({
-          totalEarnings: totalEarnings,
-          pendingPayments: pendingAmount,
-          paidAmount: paidAmount,
-          artworksSold: soldArtworks.length,
-          recentPayments: activityData
-            .filter(activity => activity.artist_paid_at)
-            .sort((a, b) => new Date(b.artist_paid_at) - new Date(a.artist_paid_at))
-            .slice(0, 5)
-        });
+      if (paymentError) {
+        console.error('Payment query error:', paymentError);
+        setError('Failed to load payment data: ' + paymentError.message);
+        setLoading(false);
+        return;
       }
+
+      // Get artist payment records
+      const { data: artistPaymentsData, error: artistPaymentError } = await supabase
+        .from('artist_payments')
+        .select(`
+          id,
+          art_id,
+          gross_amount,
+          net_amount,
+          currency,
+          status,
+          paid_at,
+          art:art!artist_payments_art_id_fkey(
+            id,
+            art_code,
+            event:events(eid, name)
+          )
+        `)
+        .in('artist_profile_id', artistProfileIds);
+
+      if (artistPaymentError) {
+        console.warn('Artist payments query failed:', artistPaymentError);
+      }
+
+      // Get all artworks to check for ones awaiting payment
+      const { data: allArtworkData, error: allArtworkError } = await supabase
+        .from('art')
+        .select('id, current_bid')
+        .in('artist_id', artistProfileIds);
+
+      // Calculate earnings from ACTUAL completed payments only
+      const completedPayments = paymentProcessingData || [];
+      const artistPayments = artistPaymentsData || [];
+      const allArtworks = allArtworkData || [];
+
+      // Count artworks with bids but no completed payment
+      const artworksWithPayments = new Set(completedPayments.map(p => p.art_id));
+      const awaitingPayment = allArtworks.filter(art => 
+        art.current_bid > 0 && !artworksWithPayments.has(art.id)
+      ).length;
+
+      // Total earnings = 50% of actually collected payments
+      const totalEarnings = completedPayments.reduce((sum, payment) => 
+        sum + (payment.amount * 0.5), 0
+      );
+
+      // Paid amount = sum of artist payments that are actually paid
+      const paidAmount = artistPayments
+        .filter(payment => payment.status === 'paid' && payment.paid_at)
+        .reduce((sum, payment) => sum + (payment.net_amount || 0), 0);
+
+      // Pending = earnings from completed buyer payments minus what's already paid to artist
+      const pendingAmount = totalEarnings - paidAmount;
+
+      setPaymentData({
+        totalEarnings: totalEarnings,
+        pendingPayments: Math.max(0, pendingAmount), // Never negative
+        paidAmount: paidAmount,
+        artworksSold: completedPayments.length,
+        awaitingPayment: awaitingPayment, // New field
+        recentPayments: artistPayments
+          .filter(payment => payment.paid_at)
+          .sort((a, b) => new Date(b.paid_at) - new Date(a.paid_at))
+          .slice(0, 5)
+          .map(payment => ({
+            art_code: payment.art?.art_code,
+            title: payment.art?.art_code,
+            event_title: payment.art?.event?.name || payment.art?.event?.eid,
+            artist_paid_at: payment.paid_at,
+            artist_net_amount: payment.net_amount,
+            currency: payment.currency
+          }))
+      });
     } catch (err) {
       setError('Failed to load payment data: ' + err.message);
     } finally {
@@ -143,29 +192,28 @@ const PaymentDashboard = () => {
 
   const loadStripeAccount = async () => {
     try {
-      // Use the new primary profile system
-      const { data: primaryCheck, error: primaryError } = await supabase
-        .rpc('has_primary_profile', { target_person_id: person.id });
+      // Get ALL artist profiles for this person
+      const { data: allProfiles, error: profilesError } = await supabase
+        .from('artist_profiles')
+        .select('id')
+        .eq('person_id', person.id);
 
-      if (primaryError || !primaryCheck || primaryCheck.length === 0) return;
+      if (profilesError || !allProfiles || allProfiles.length === 0) return;
 
-      const result = primaryCheck[0];
-      if (!result.has_primary || !result.profile_id) return;
-
-      const artistProfileId = result.profile_id;
+      const artistProfileIds = allProfiles.map(p => p.id);
 
       const { data: stripeData, error: stripeError } = await supabase
         .from('artist_stripe_accounts')
         .select('*')
-        .eq('artist_profile_id', artistProfileId)
-        .single();
+        .in('artist_profile_id', artistProfileIds);
 
       if (stripeError && stripeError.code !== 'PGRST116') {
         console.error('Stripe account error:', stripeError);
         return;
       }
 
-      setStripeAccount(stripeData);
+      // Use the first Stripe account found, or null if none
+      setStripeAccount(stripeData && stripeData.length > 0 ? stripeData[0] : null);
     } catch (err) {
       console.error('Error loading Stripe account:', err);
     }
@@ -287,7 +335,7 @@ const PaymentDashboard = () => {
       )}
 
       {/* Payment Summary Cards */}
-      <Grid columns="3" gap="4">
+      <Grid columns="4" gap="4">
         <Card size="3">
           <Flex direction="column" gap="2">
             <Flex align="center" gap="2">
@@ -329,6 +377,21 @@ const PaymentDashboard = () => {
             </Text>
             <Text size="1" color="gray">
               Transferred to your account
+            </Text>
+          </Flex>
+        </Card>
+
+        <Card size="3">
+          <Flex direction="column" gap="2">
+            <Flex align="center" gap="2">
+              <ExclamationTriangleIcon width="16" height="16" />
+              <Text size="2" color="gray">Awaiting Buyer Payment</Text>
+            </Flex>
+            <Text size="6" weight="bold" color="orange">
+              {paymentData.awaitingPayment || 0}
+            </Text>
+            <Text size="1" color="gray">
+              Artwork{(paymentData.awaitingPayment || 0) !== 1 ? 's' : ''} sold but not paid
             </Text>
           </Flex>
         </Card>

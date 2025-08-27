@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Outlet, Navigate, useLocation, useParams } from 'react-router-dom';
-import { Flex, Box } from '@radix-ui/themes';
+import { Outlet, Navigate, useLocation, useParams, useNavigate } from 'react-router-dom';
+import { Flex, Box, Button, Text } from '@radix-ui/themes';
+import { HamburgerMenuIcon, ExitIcon, ChevronRightIcon } from '@radix-ui/react-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import AdminSidebar from './AdminSidebar';
@@ -8,15 +9,16 @@ import EventContextPanel from './EventContextPanel';
 import BreadcrumbNavigation from './BreadcrumbNavigation';
 
 const AdminLayout = () => {
-  const { user, loading, adminEvents } = useAuth();
+  const { user, loading, adminEvents, signOut } = useAuth();
   const location = useLocation();
   const params = useParams();
+  const navigate = useNavigate();
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [adminUser, setAdminUser] = useState(null);
   const [adminLoading, setAdminLoading] = useState(true);
   const [adminError, setAdminError] = useState(null);
   const [showContextPanel, setShowContextPanel] = useState(true);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
 
   console.log('AdminLayout render:', { user: user?.email, loading, location: location.pathname });
 
@@ -84,6 +86,11 @@ const AdminLayout = () => {
     }
   }, [params.eventId, adminEvents, location.pathname]);
 
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/login');
+  };
+
   // Show loading state
   if (loading || adminLoading) {
     return (
@@ -119,12 +126,18 @@ const AdminLayout = () => {
         <AdminSidebar 
           collapsed={sidebarCollapsed} 
           onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+          hideToggleAndSignOut={true}
         />
       </div>
       
       <div className="admin-main">
-        {/* Breadcrumb Navigation */}
-        <BreadcrumbNavigation selectedEvent={selectedEvent} />
+        {/* Breadcrumb Navigation with Logout */}
+        <BreadcrumbNavigation 
+          selectedEvent={selectedEvent} 
+          onSignOut={handleSignOut}
+          onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
+          sidebarCollapsed={sidebarCollapsed}
+        />
         
         {/* Main Content */}
         <div style={{ flex: 1, overflow: 'auto' }}>

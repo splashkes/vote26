@@ -1,0 +1,6 @@
+{
+  "name": "Art Battle Event Invitation",
+  "description": "Standard invitation template for Art Battle events",
+  "message_template": "Hi {{name}}! You are invited to Art Battle {{city}} on {{date}}. Join us for live painting! RSVP: {{link}}",
+  "category": "invitation"
+}

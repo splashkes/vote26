@@ -32,12 +32,14 @@
   overflow-y: auto;
 }
 
+
 .admin-main {
   background: var(--gray-1);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
 }
+
 
 .admin-context {
   background: var(--gray-2);
@@ -150,26 +152,225 @@
   }
 }
 
+/* Mobile styles - horizontal navigation */
 @media (max-width: 768px) {
+  /* Enable touch scrolling */
+  * {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Improve touch targets */
+  button, .nav-item, .rt-TabsTrigger {
+    min-height: 44px;
+  }
+  
   .admin-layout {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
   }
   
   .admin-sidebar {
     order: 1;
     height: auto;
-    max-height: 200px;
-    overflow-y: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--gray-6);
+    background: var(--gray-2);
+    flex-shrink: 0;
+    overflow-x: auto;
+    overflow-y: visible;
   }
   
   .admin-main {
     order: 2;
-    height: calc(100vh - 200px);
+    flex: 1;
+    overflow-y: auto;
+    background: var(--gray-1);
   }
   
   .admin-context {
     display: none;
+  }
+  
+  /* Force horizontal layout on mobile */
+  .admin-sidebar {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: flex-start !important;
+    padding: 0 !important;
+  }
+  
+  .admin-sidebar .nav-section {
+    display: flex !important;
+    flex-direction: row !important;
+    border-bottom: none !important;
+    border-right: 1px solid var(--gray-5);
+    padding: 0.5rem !important;
+    flex-shrink: 0;
+  }
+  
+  .admin-sidebar .nav-section:last-child {
+    border-right: none;
+  }
+  
+  /* Make navigation items horizontal within sections */
+  .admin-sidebar .nav-section > div {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 0.5rem !important;
+  }
+  
+  .admin-sidebar .nav-section .rt-Flex {
+    flex-direction: row !important;
+    gap: 0.5rem !important;
+  }
+  
+  /* Compact nav items for mobile */
+  .admin-sidebar .nav-item {
+    margin: 0 0.125rem;
+    padding: 0.375rem 0.5rem;
+    white-space: nowrap;
+  }
+  
+  /* Hide separators between nav sections on mobile */
+  .admin-sidebar .rt-Separator {
+    display: none;
+  }
+  
+  /* Hide navigation section titles on mobile */
+  .admin-sidebar .nav-section .rt-Text[data-mobile-hide] {
+    display: none !important;
+  }
+  
+  /* Hide descriptions on mobile */
+  .admin-sidebar .nav-item .rt-Box .rt-Text:nth-child(2) {
+    display: none !important;
+  }
+  
+  /* Mobile breadcrumbs: smaller and more compact */
+  .breadcrumb-container {
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--gray-6);
+    background: var(--gray-1);
+  }
+  
+  .breadcrumb-container .rt-Flex {
+    gap: 0.5rem;
+  }
+  
+  .breadcrumb-container .rt-Text {
+    font-size: 0.875rem;
+  }
+  
+  .breadcrumb-container .rt-Button {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+  }
+  
+  /* Artist Management Workflow - Mobile Single Column */
+  .rt-TabsContent[value="artists"] .rt-Grid {
+    grid-template-columns: 1fr !important;
+    gap: 1rem !important;
+  }
+  
+  /* Force single column for all grids in artist workflow */
+  .rt-TabsContent .rt-Grid[columns="3"] {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Mobile tabs - stack vertically */
+@media (max-width: 768px) {
+  /* Event detail tabs styling - target Radix UI tabs */
+  .rt-TabsList {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0 !important;
+    background: var(--gray-2) !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    border-bottom: 1px solid var(--gray-6);
+    width: 100% !important;
+  }
+  
+  .rt-TabsTrigger {
+    flex: none !important;
+    justify-content: flex-start !important;
+    padding: 0.75rem 1rem !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    border-bottom: 1px solid var(--gray-5);
+    background: var(--gray-1) !important;
+    font-size: 0.875rem !important;
+    width: 100% !important;
+    text-align: left !important;
+  }
+  
+  .rt-TabsTrigger:last-child {
+    border-bottom: none;
+  }
+  
+  .rt-TabsTrigger[data-state="active"] {
+    background: var(--accent-3) !important;
+    color: var(--accent-11) !important;
+    border-left: 3px solid var(--accent-9) !important;
+  }
+  
+  .rt-TabsTrigger:hover:not([data-state="active"]) {
+    background: var(--gray-3) !important;
+  }
+  
+  .rt-TabsTrigger[data-state="active"]:hover {
+    background: var(--accent-4) !important;
+  }
+  
+  /* Ensure tab content has proper spacing */
+  .rt-TabsContent {
+    padding-top: 1rem !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .nav-item {
+    padding: 0.375rem 0.5rem;
+    font-size: 0.75rem;
+  }
+  
+  .nav-section {
+    padding: 0.5rem;
+  }
+  
+  .nav-section:first-child {
+    padding: 0.375rem 0.5rem;
+  }
+  
+  .nav-section:nth-child(3) {
+    padding: 0.5rem;
+  }
+  
+  .nav-section:last-child {
+    padding: 0.375rem 0.5rem;
+  }
+  
+  .breadcrumb-container {
+    padding: 0.375rem 0.75rem;
+  }
+  
+  /* Smaller tabs on small screens */
+  .rt-TabsTrigger {
+    padding: 0.625rem 0.75rem !important;
+    font-size: 0.8rem !important;
+  }
+  
+  /* Compact user info */
+  .nav-section:first-child .rt-Text {
+    font-size: 0.8rem !important;
+  }
+  
+  /* More compact badge */
+  .nav-section:first-child .rt-Badge {
+    font-size: 0.7rem !important;
   }
 }
 

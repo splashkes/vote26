@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+import { emailTemplates } from '../_shared/emailTemplates.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -164,6 +165,73 @@ serve(async (req) => {
     }
 
     const duration = Date.now() - startTime
+
+    // Send email notification to artist
+    try {
+      // Get artist profile with email
+      const { data: profileData } = await supabase
+        .from('artist_profiles')
+        .select('name, person:people(email)')
+        .eq('id', confirmationWithEvent.artist_profile_id)
+        .single()
+
+      if (profileData?.person?.email && confirmationWithEvent.events) {
+        const eventDate = confirmationWithEvent.events.event_start_datetime 
+          ? new Date(confirmationWithEvent.events.event_start_datetime).toLocaleDateString('en-US', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            })
+          : 'TBD'
+
+        const cancellationDate = new Date().toLocaleDateString('en-US', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        })
+
+        const emailData = emailTemplates.artistCancelled({
+          artistName: profileData.name || 'Artist',
+          eventEid: confirmationWithEvent.event_eid,
+          eventName: confirmationWithEvent.events.name || confirmationWithEvent.event_eid,
+          eventDate: eventDate,
+          eventVenue: confirmationWithEvent.events.venue || 'TBD',
+          cityName: confirmationWithEvent.events.cities?.name || 'Unknown',
+          cancellationDate: cancellationDate
+        })
+
+        // Call send-custom-email function
+        const emailResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-custom-email`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            to: profileData.person.email,
+            subject: emailData.subject,
+            html: emailData.html,
+            text: emailData.text,
+            from: 'hello@artbattle.com'
+          })
+        })
+
+        const emailResult = await emailResponse.json()
+        
+        if (emailResult.success) {
+          console.log('Cancellation email sent successfully to:', profileData.person.email)
+        } else {
+          console.error('Failed to send cancellation email:', emailResult.error)
+        }
+      }
+    } catch (emailError) {
+      console.error('Email sending error:', emailError)
+      // Don't fail the cancellation if email fails
+    }
 
     // Send Slack notification about the cancellation
     const eventDate = confirmationWithEvent.events?.event_start_datetime 

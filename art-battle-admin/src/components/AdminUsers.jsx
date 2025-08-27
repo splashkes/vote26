@@ -15,7 +15,9 @@ import {
   Spinner,
   Callout,
   Switch,
-  Grid
+  Grid,
+  AlertDialog,
+  Separator
 } from '@radix-ui/themes';
 import { 
   PlusIcon, 
@@ -25,7 +27,9 @@ import {
   CheckIcon,
   Cross2Icon,
   ReloadIcon,
-  PaperPlaneIcon
+  PaperPlaneIcon,
+  TrashIcon,
+  LockClosedIcon
 } from '@radix-ui/react-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -41,14 +45,20 @@ const AdminUsers = () => {
   // Modal states
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   
   // Form states
   const [inviteLoading, setInviteLoading] = useState(false);
   const [updateLoading, setUpdateLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [passwordLoading, setPasswordLoading] = useState(false);
   const [resendingUserId, setResendingUserId] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   
   const [inviteForm, setInviteForm] = useState({
     email: '',
@@ -385,6 +395,178 @@ const AdminUsers = () => {
     setForm(prev => ({ ...prev, cities_access: newCities }));
   };
 
+  const handleDeleteUser = async () => {
+    if (!selectedUser) return;
+    
+    setDeleteLoading(true);
+    setError('');
+    setSuccess('');
+    
+    try {
+      // First, delete the user from auth
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Not authenticated');
+      }
+
+      console.log('Deleting user with ID:', selectedUser.id, 'and email:', selectedUser.email);
+      
+      const { data, error } = await supabase.functions.invoke('admin-delete-user', {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        },
+        body: {
+          userId: selectedUser.id,
+          email: selectedUser.email
+        }
+      });
+
+      if (error) {
+        console.error('Raw delete error object:', error);
+        console.error('Error context:', error.context);
+        
+        // Try to get the response text immediately and parse it
+        if (error.context && error.context.text) {
+          try {
+            const responseText = await error.context.text();
+            console.log('Raw delete 404 response:', responseText);
+            const parsed = JSON.parse(responseText);
+            
+            // Throw a more specific error with the server message
+            throw new Error(parsed.error || 'Failed to delete user');
+          } catch (parseError) {
+            // If parseError is already an Error with our message, re-throw it
+            if (parseError instanceof Error && parseError.message !== 'Failed to delete user') {
+              throw parseError;
+            }
+            console.error('Failed to read/parse delete error context:', parseError);
+            throw error; // Fall back to original error
+          }
+        }
+        
+        throw error;
+      }
+      if (!data.success) throw new Error(data.error || 'Failed to delete user');
+
+      setSuccess(`User ${selectedUser.email} has been deleted successfully`);
+      
+      // Refresh the users list
+      await fetchAdminUsers(true);
+      setDeleteConfirmOpen(false);
+      setSelectedUser(null);
+      
+      // Clear success message after a delay
+      setTimeout(() => {
+        setSuccess('');
+      }, 3000);
+
+    } catch (err) {
+      console.error('Error deleting user:', err);
+      setError(err.message || 'Failed to delete user');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const handleSetPassword = async (e) => {
+    e.preventDefault();
+    
+    if (!selectedUser) return;
+    
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+    
+    if (newPassword.length < 8) {
+      setError('Password must be at least 8 characters long');
+      return;
+    }
+    
+    setPasswordLoading(true);
+    setError('');
+    setSuccess('');
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Not authenticated');
+      }
+
+      console.log('Session token for password setting:', session.access_token ? 'Present' : 'Missing');
+      console.log('Setting password for user with ID:', selectedUser.id, 'and email:', selectedUser.email);
+
+      const { data, error } = await supabase.functions.invoke('admin-set-password', {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        },
+        body: {
+          userId: selectedUser.id,
+          email: selectedUser.email,
+          newPassword: newPassword
+        }
+      });
+
+      console.log('Function call result:', { data, error });
+
+      if (error) {
+        console.error('Raw password error object:', error);
+        console.error('Error context:', error.context);
+        
+        // Try to get the response text immediately and parse it
+        if (error.context && error.context.text) {
+          try {
+            const responseText = await error.context.text();
+            console.log('Raw password 404 response:', responseText);
+            const parsed = JSON.parse(responseText);
+            
+            // Throw a more specific error with the server message
+            throw new Error(parsed.error || 'Failed to set password');
+          } catch (e) {
+            console.error('Failed to read/parse password error context:', e);
+            throw error; // Fall back to original error
+          }
+        }
+        
+        throw error;
+      }
+      if (!data.success) throw new Error(data.error || 'Failed to set password');
+
+      setSuccess(`Password has been set successfully for ${selectedUser.email}`);
+      
+      setPasswordModalOpen(false);
+      setNewPassword('');
+      setConfirmPassword('');
+      
+      // Clear success message after a delay
+      setTimeout(() => {
+        setSuccess('');
+      }, 3000);
+
+    } catch (err) {
+      console.error('Error setting password:', err);
+      setError(err.message || 'Failed to set password');
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
+  const openDeleteConfirmation = (adminUser) => {
+    setSelectedUser(adminUser);
+    setDeleteConfirmOpen(true);
+    setError('');
+    setSuccess('');
+  };
+
+  const openPasswordModal = (adminUser) => {
+    setSelectedUser(adminUser);
+    setPasswordModalOpen(true);
+    setNewPassword('');
+    setConfirmPassword('');
+    setError('');
+    setSuccess('');
+  };
+
   // Only show to super admins
   if (userLevel !== 'super') {
     return (
@@ -527,7 +709,7 @@ const AdminUsers = () => {
                     )}
                   </Table.Cell>
                   <Table.Cell>
-                    <Flex gap="2">
+                    <Flex gap="2" wrap="wrap">
                       <Button 
                         size="1" 
                         variant="soft"
@@ -535,11 +717,20 @@ const AdminUsers = () => {
                       >
                         Edit
                       </Button>
+                      <Button 
+                        size="1" 
+                        variant="soft"
+                        color="blue"
+                        onClick={() => openPasswordModal(adminUser)}
+                      >
+                        <LockClosedIcon />
+                        Set Password
+                      </Button>
                       {!adminUser.active && (
                         <Button 
                           size="1" 
                           variant="soft"
-                          color="blue"
+                          color="green"
                           onClick={() => handleResendInvite(adminUser)}
                           loading={resendingUserId === adminUser.id}
                           disabled={resendingUserId === adminUser.id}
@@ -548,6 +739,15 @@ const AdminUsers = () => {
                           {resendingUserId === adminUser.id ? 'Sending...' : 'Resend Invite'}
                         </Button>
                       )}
+                      <Button 
+                        size="1" 
+                        variant="soft"
+                        color="red"
+                        onClick={() => openDeleteConfirmation(adminUser)}
+                      >
+                        <TrashIcon />
+                        Delete
+                      </Button>
                     </Flex>
                   </Table.Cell>
                 </Table.Row>
@@ -761,6 +961,127 @@ const AdminUsers = () => {
                   </Dialog.Close>
                   <Button type="submit" loading={updateLoading}>
                     Update User
+                  </Button>
+                </Flex>
+              </Flex>
+            </form>
+          )}
+        </Dialog.Content>
+      </Dialog.Root>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog.Root open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialog.Content style={{ maxWidth: '450px' }}>
+          <AlertDialog.Title>
+            <Flex align="center" gap="2">
+              <TrashIcon />
+              Delete Admin User
+            </Flex>
+          </AlertDialog.Title>
+          <AlertDialog.Description>
+            {selectedUser && (
+              <>
+                Are you sure you want to delete <strong>{selectedUser.email}</strong>?
+                <br /><br />
+                This action cannot be undone. The user will be permanently removed from the system and will lose access to all admin functions.
+              </>
+            )}
+          </AlertDialog.Description>
+          
+          <Flex gap="3" mt="4" justify="end">
+            <AlertDialog.Cancel>
+              <Button variant="soft" disabled={deleteLoading}>
+                Cancel
+              </Button>
+            </AlertDialog.Cancel>
+            <AlertDialog.Action>
+              <Button
+                color="red"
+                onClick={handleDeleteUser}
+                loading={deleteLoading}
+              >
+                <TrashIcon />
+                Delete User
+              </Button>
+            </AlertDialog.Action>
+          </Flex>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
+
+      {/* Set Password Modal */}
+      <Dialog.Root open={passwordModalOpen} onOpenChange={setPasswordModalOpen}>
+        <Dialog.Content style={{ maxWidth: '500px' }}>
+          <Dialog.Title>
+            <Flex align="center" gap="2" justify="between">
+              <Flex align="center" gap="2">
+                <LockClosedIcon />
+                Set Password
+              </Flex>
+              <Dialog.Close>
+                <Button variant="ghost" size="1">
+                  <Cross2Icon />
+                </Button>
+              </Dialog.Close>
+            </Flex>
+          </Dialog.Title>
+          
+          {selectedUser && (
+            <form onSubmit={handleSetPassword}>
+              <Flex direction="column" gap="4" mt="4">
+                <Box>
+                  <Text size="2" color="gray" mb="3" style={{ display: 'block' }}>
+                    Setting new password for: <strong>{selectedUser.email}</strong>
+                  </Text>
+                </Box>
+
+                <Box>
+                  <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>
+                    New Password *
+                  </Text>
+                  <TextField.Root
+                    type="password"
+                    placeholder="Enter new password (min 8 characters)"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    disabled={passwordLoading}
+                  />
+                </Box>
+
+                <Box>
+                  <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>
+                    Confirm Password *
+                  </Text>
+                  <TextField.Root
+                    type="password"
+                    placeholder="Confirm new password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    disabled={passwordLoading}
+                  />
+                </Box>
+
+                <Separator />
+
+                <Box>
+                  <Text size="1" color="gray">
+                    <strong>Note:</strong> The user will be able to log in immediately using this new password. 
+                    Consider informing them of the password change through a secure channel.
+                  </Text>
+                </Box>
+
+                <Flex justify="end" gap="3" mt="4">
+                  <Dialog.Close>
+                    <Button variant="soft" disabled={passwordLoading}>
+                      Cancel
+                    </Button>
+                  </Dialog.Close>
+                  <Button 
+                    type="submit" 
+                    loading={passwordLoading}
+                    disabled={!newPassword || !confirmPassword}
+                  >
+                    <LockClosedIcon />
+                    Set Password
                   </Button>
                 </Flex>
               </Flex>

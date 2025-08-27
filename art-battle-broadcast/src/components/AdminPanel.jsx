@@ -22,11 +22,14 @@ import { Cross2Icon, PlusIcon, InfoCircledIcon, ExclamationTriangleIcon } from '
 import { supabase } from '../lib/supabase';
 import EventEditor from './EventEditor';
 import QRAdminPanel from './QRAdminPanel';
+import VoteDataTimestamp from './VoteDataTimestamp';
 import { getArtworkImageUrls } from '../lib/imageHelpers';
 import { injectFlashStyles, applyFlashClass } from '../utils/realtimeFlash';
+import { useVoteAnalytics } from '../hooks/useVoteAnalytics';
 
 const AdminPanel = ({ 
   eventId,
+  eid,
   artworksByRound = {}, 
   roundWinners = {}, 
   setRoundWinners = () => {}, 
@@ -46,6 +49,9 @@ const AdminPanel = ({
   const [localTime, setLocalTime] = useState(Date.now());
   const [rounds, setRounds] = useState([]);
   const [artists, setArtists] = useState([]);
+  // Real-time vote data - merges with static artworksByRound
+  const [liveArtworksByRound, setLiveArtworksByRound] = useState({});
+  const [voteDataTimestamp, setVoteDataTimestamp] = useState(null);
   // Removed allArtists state - now using server-side search
   const [auctionTimerStatus, setAuctionTimerStatus] = useState(null);
   const [timerActionLoading, setTimerActionLoading] = useState(false);
@@ -152,6 +158,23 @@ const AdminPanel = ({
     
     checkAdminLevel();
   }, [eventId, user]);
+
+  // Real-time vote analytics polling (admin only)
+  const handleArtworksUpdate = (updatedArtworksByRound) => {
+    setLiveArtworksByRound(updatedArtworksByRound);
+  };
+
+  const handleTimestampUpdate = (timestampData) => {
+    setVoteDataTimestamp(timestampData);
+  };
+
+  useVoteAnalytics(
+    eid, 
+    adminLevel, 
+    adminMode === 'voting', 
+    handleArtworksUpdate,
+    handleTimestampUpdate
+  );
 
   // Fetch event data when eventId changes
   useEffect(() => {
@@ -1576,9 +1599,12 @@ const AdminPanel = ({
         {/* Voting Analytics Tab */}
         <Tabs.Content value="voting">
           <Box>
-            <Heading size="4" mb="4">Voting Analytics</Heading>
+            <Flex justify="between" align="center" mb="4">
+              <Heading size="4">Voting Analytics</Heading>
+              {voteDataTimestamp && <VoteDataTimestamp timestampData={voteDataTimestamp} />}
+            </Flex>
             <Flex direction="column" gap="4">
-              {Object.entries(artworksByRound).map(([round, artworks]) => {
+              {Object.entries(liveArtworksByRound.length || Object.keys(liveArtworksByRound).length > 0 ? liveArtworksByRound : artworksByRound).map(([round, artworks]) => {
                 // Calculate max vote weight for this round for scaling
                 const maxVoteWeight = Math.max(...artworks.map(a => a.totalVoteWeight || 0), 1);
                 
@@ -1780,10 +1806,10 @@ const AdminPanel = ({
                   <Text size="3" weight="bold">Event Total</Text>
                   <Box style={{ textAlign: 'right' }}>
                     <Text size="4" weight="bold">
-                      {Object.values(artworksByRound).flat().reduce((sum, a) => sum + (a.totalVoteWeight || 0), 0).toFixed(2)}
+                      {Object.values(Object.keys(liveArtworksByRound).length > 0 ? liveArtworksByRound : artworksByRound).flat().reduce((sum, a) => sum + (a.totalVoteWeight || 0), 0).toFixed(2)}
                     </Text>
                     <Text size="2" color="gray">
-                      {Object.values(artworksByRound).flat().reduce((sum, a) => sum + (a.vote_count || 0), 0)} total votes
+                      {Object.values(Object.keys(liveArtworksByRound).length > 0 ? liveArtworksByRound : artworksByRound).flat().reduce((sum, a) => sum + (a.vote_count || 0), 0)} total votes
                     </Text>
                   </Box>
                 </Flex>

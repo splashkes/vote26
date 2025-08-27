@@ -8,10 +8,9 @@ import {
   Button,
   Callout,
   Heading,
-  Box,
-  Dialog
+  Box
 } from '@radix-ui/themes';
-import { ExclamationTriangleIcon, CheckIcon } from '@radix-ui/react-icons';
+import { ExclamationTriangleIcon } from '@radix-ui/react-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 
@@ -21,20 +20,9 @@ const LoginPage = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  
-  // Password reset state
-  const [resetModalOpen, setResetModalOpen] = useState(false);
-  const [resetEmail, setResetEmail] = useState('');
-  const [resetLoading, setResetLoading] = useState(false);
-  const [resetError, setResetError] = useState('');
-  const [resetSuccess, setResetSuccess] = useState('');
-  const [passwordResetRequested, setPasswordResetRequested] = useState(false);
 
-  // Redirect if already logged in, but pass password reset flag
+  // Redirect if already logged in
   if (!loading && user) {
-    if (passwordResetRequested) {
-      return <Navigate to="/welcome?force_password_change=true" replace />;
-    }
     return <Navigate to="/events" replace />;
   }
 
@@ -56,39 +44,6 @@ const LoginPage = () => {
     }
   };
 
-  const handlePasswordReset = async (e) => {
-    e.preventDefault();
-    
-    if (!resetEmail.trim()) {
-      setResetError('Email address is required');
-      return;
-    }
-    
-    setResetLoading(true);
-    setResetError('');
-    setResetSuccess('');
-    
-    try {
-      // Set flag to redirect to password change after login
-      setPasswordResetRequested(true);
-      setResetModalOpen(false);
-      setEmail(resetEmail.trim());
-      setResetSuccess('Please try logging in with your current password. If successful, you\'ll be prompted to change your password.');
-      
-    } catch (err) {
-      console.error('Password reset error:', err);
-      setResetError('An unexpected error occurred. Please try again.');
-    } finally {
-      setResetLoading(false);
-    }
-  };
-
-  const openResetModal = () => {
-    setResetModalOpen(true);
-    setResetEmail(email); // Pre-fill with current email if available
-    setResetError('');
-    setResetSuccess('');
-  };
 
   if (loading) {
     return (
@@ -150,15 +105,6 @@ const LoginPage = () => {
           </form>
 
           <Flex direction="column" align="center" gap="2" style={{ marginTop: '1rem' }}>
-            <Button 
-              variant="ghost" 
-              size="1" 
-              onClick={openResetModal}
-              disabled={isLoading}
-            >
-              Forgot your password?
-            </Button>
-            
             <Text size="1" color="gray" style={{ textAlign: 'center' }}>
               Admin access only. Contact support if you need access.
             </Text>
@@ -166,57 +112,6 @@ const LoginPage = () => {
         </Flex>
       </Card>
 
-      {/* Password Reset Modal */}
-      <Dialog.Root open={resetModalOpen} onOpenChange={setResetModalOpen}>
-        <Dialog.Content style={{ maxWidth: '450px' }}>
-          <Dialog.Title>Reset Your Password</Dialog.Title>
-          <Dialog.Description size="2" mb="4">
-            Enter your admin email address and we'll send you a password reset link.
-          </Dialog.Description>
-
-          <form onSubmit={handlePasswordReset}>
-            <Flex direction="column" gap="4">
-              {resetError && (
-                <Callout.Root color="red">
-                  <Callout.Icon><ExclamationTriangleIcon /></Callout.Icon>
-                  <Callout.Text>{resetError}</Callout.Text>
-                </Callout.Root>
-              )}
-
-              {resetSuccess && (
-                <Callout.Root color="green">
-                  <Callout.Icon><CheckIcon /></Callout.Icon>
-                  <Callout.Text>{resetSuccess}</Callout.Text>
-                </Callout.Root>
-              )}
-
-              <label>
-                <Text size="2" weight="medium">Email Address</Text>
-                <TextField.Root
-                  type="email"
-                  placeholder="your.admin.email@example.com"
-                  value={resetEmail}
-                  onChange={(e) => setResetEmail(e.target.value)}
-                  disabled={resetLoading}
-                  mt="1"
-                  required
-                />
-              </label>
-
-              <Flex gap="3" mt="2" justify="end">
-                <Dialog.Close>
-                  <Button variant="soft" color="gray" disabled={resetLoading}>
-                    Cancel
-                  </Button>
-                </Dialog.Close>
-                <Button type="submit" loading={resetLoading} disabled={resetLoading}>
-                  {resetLoading ? 'Sending...' : 'Send Reset Link'}
-                </Button>
-              </Flex>
-            </Flex>
-          </form>
-        </Dialog.Content>
-      </Dialog.Root>
     </div>
   );
 };

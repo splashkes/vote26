@@ -1,0 +1,9 @@
+{
+  "to": "+1234567890",
+  "message": "Test SMS from Telnyx marketing system!",
+  "template_id": "1bc457e8-ed48-417a-9270-03cc0a65a807",
+  "metadata": {
+    "test": true,
+    "source": "api_test"
+  }
+}

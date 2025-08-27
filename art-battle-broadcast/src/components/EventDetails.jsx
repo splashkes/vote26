@@ -2304,6 +2304,7 @@ const EventDetails = () => {
             {isAdmin && adminTabLoaded && (
               <AdminPanel 
                 eventId={eventId}
+                eid={event?.eid}
                 artworksByRound={artworksByRound}
                 roundWinners={roundWinners}
                 setRoundWinners={setRoundWinners}

@@ -122,7 +122,7 @@ Deno.serve(async (req)=>{
     const { data: existingInvitation } = await supabase.from('artist_invitations').select('id').eq('artist_number', invitationData.artist_number).eq('event_eid', invitationData.event_eid).maybeSingle();
     if (existingInvitation) {
       return new Response(JSON.stringify({
-        error: `Invitation already exists for artist ${invitationData.artist_number} to event ${invitationData.event_eid}`
+        error: `Artist ${invitationData.artist_number} has already been invited to ${invitationData.event_eid}. You cannot send duplicate invitations.`
       }), {
         headers: {
           ...corsHeaders,

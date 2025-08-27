@@ -16,6 +16,8 @@ import PeopleManagement from './components/PeopleManagement';
 import HealthRecommendations from './components/HealthRecommendations';
 import AdminUsers from './components/AdminUsers';
 import InvitationManagement from './components/InvitationManagement';
+import EmailQueueDashboard from './components/EmailQueueDashboard';
+import EmailQueueManager from './components/EmailQueueManager';
 import Welcome from './components/Welcome';
 import './App.css';
 
@@ -49,6 +51,8 @@ function App() {
                 <Route path="health" element={<HealthRecommendations />} />
                 <Route path="admin-users" element={<AdminUsers />} />
                 <Route path="invitations" element={<InvitationManagement />} />
+                <Route path="email-queue" element={<EmailQueueDashboard />} />
+                <Route path="email-queue/:eventEid" element={<EmailQueueManager />} />
                 <Route path="*" element={<Navigate to="/events" replace />} />
               </Route>
             </Routes>

@@ -20,14 +20,15 @@ import {
   LockClosedIcon,
   HamburgerMenuIcon,
   ChevronRightIcon,
-  EnvelopeClosedIcon
+  EnvelopeClosedIcon,
+  PaperPlaneIcon
 } from '@radix-ui/react-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { DebugField } from './DebugComponents';
 import EventSearch from './EventSearch';
 
-const AdminSidebar = ({ collapsed = false, onToggleCollapse }) => {
+const AdminSidebar = ({ collapsed = false, onToggleCollapse, hideToggleAndSignOut = false }) => {
   const { user, adminEvents, signOut } = useAuth();
   const [selectedEventId, setSelectedEventId] = useState('');
   const [userLevel, setUserLevel] = useState(null);
@@ -100,7 +101,7 @@ const AdminSidebar = ({ collapsed = false, onToggleCollapse }) => {
     }
   ];
 
-  // Add Admin Users and Invitations for super admins only
+  // Add Admin Users, Invitations, and Email Queue for super admins only
   const navItems = userLevel === 'super' 
     ? [
         ...baseNavItems.slice(0, -1), // All items except Settings
@@ -118,6 +119,13 @@ const AdminSidebar = ({ collapsed = false, onToggleCollapse }) => {
           description: 'Manage admin invitations',
           color: 'blue'
         },
+        {
+          to: '/email-queue',
+          icon: PaperPlaneIcon,
+          label: 'Email Queue',
+          description: 'Manage artist payment email notifications',
+          color: 'purple'
+        },
         baseNavItems[baseNavItems.length - 1] // Settings at the end
       ]
     : baseNavItems;
@@ -125,40 +133,53 @@ const AdminSidebar = ({ collapsed = false, onToggleCollapse }) => {
   return (
     <ScrollArea style={{ height: '100%' }}>
       <Box>
-        {/* Collapse Toggle */}
-        <div className="nav-section" style={{ padding: collapsed ? '0.5rem' : '1rem' }}>
-          <Flex justify={collapsed ? 'center' : 'between'} align="center">
-            {!collapsed && (
-              <Text size="2" weight="medium">
-                <DebugField 
-                  value={user?.email} 
-                  fieldName="user.email" 
-                  fallback="Unknown user" 
-                />
-              </Text>
-            )}
-            <Button
-              variant="ghost"
-              size="1"
-              onClick={onToggleCollapse}
-              style={{ minHeight: '24px', minWidth: '24px', padding: '2px' }}
-            >
-              {collapsed ? <ChevronRightIcon /> : <HamburgerMenuIcon />}
-            </Button>
-          </Flex>
-          {!collapsed && (
-            <Badge color="green" size="1" style={{ marginTop: '0.5rem' }}>
+        {!hideToggleAndSignOut && (
+          <>
+            {/* Collapse Toggle */}
+            <div className="nav-section" style={{ padding: collapsed ? '0.5rem' : '1rem' }}>
+              <Flex justify={collapsed ? 'center' : 'between'} align="center">
+                {!collapsed && (
+                  <Text size="2" weight="medium">
+                    <DebugField 
+                      value={user?.email} 
+                      fieldName="user.email" 
+                      fallback="Unknown user" 
+                    />
+                  </Text>
+                )}
+                <Button
+                  variant="ghost"
+                  size="1"
+                  onClick={onToggleCollapse}
+                  style={{ minHeight: '24px', minWidth: '24px', padding: '2px' }}
+                >
+                  {collapsed ? <ChevronRightIcon /> : <HamburgerMenuIcon />}
+                </Button>
+              </Flex>
+              {!collapsed && (
+                <Badge color="green" size="1" style={{ marginTop: '0.5rem' }}>
+                  {adminEvents.length} event{adminEvents.length !== 1 ? 's' : ''}
+                </Badge>
+              )}
+            </div>
+
+            <Separator />
+          </>
+        )}
+
+        {/* Event count when top nav is used */}
+        {hideToggleAndSignOut && !collapsed && (
+          <div className="nav-section" style={{ padding: '0.75rem' }}>
+            <Badge color="green" size="1">
               {adminEvents.length} event{adminEvents.length !== 1 ? 's' : ''}
             </Badge>
-          )}
-        </div>
-
-        <Separator />
+          </div>
+        )}
 
         {/* Navigation */}
         <div className="nav-section" style={{ padding: collapsed ? '0.5rem' : '1rem' }}>
           {!collapsed && (
-            <Text size="2" weight="medium" mb="3" style={{ display: 'block' }}>
+            <Text size="2" weight="medium" mb="3" style={{ display: 'block' }} data-mobile-hide>
               Navigation
             </Text>
           )}
@@ -203,31 +224,35 @@ const AdminSidebar = ({ collapsed = false, onToggleCollapse }) => {
           </Flex>
         </div>
 
-        <Separator />
+        {!hideToggleAndSignOut && (
+          <>
+            <Separator />
 
-        {/* Admin Actions */}
-        <div className="nav-section" style={{ padding: collapsed ? '0.5rem' : '1rem' }}>
-          {!collapsed && (
-            <Text size="2" weight="medium" mb="3" style={{ display: 'block' }}>
-              Admin
-            </Text>
-          )}
-          <Flex direction="column" gap="2">
-            <Button 
-              variant="ghost" 
-              size="2" 
-              onClick={handleSignOut}
-              style={{ 
-                justifyContent: collapsed ? 'center' : 'flex-start',
-                padding: collapsed ? '0.5rem' : undefined
-              }}
-              title={collapsed ? 'Sign Out' : ''}
-            >
-              <ExitIcon />
-              {!collapsed && 'Sign Out'}
-            </Button>
-          </Flex>
-        </div>
+            {/* Admin Actions */}
+            <div className="nav-section" style={{ padding: collapsed ? '0.5rem' : '1rem' }}>
+              {!collapsed && (
+                <Text size="2" weight="medium" mb="3" style={{ display: 'block' }} data-mobile-hide>
+                  Admin
+                </Text>
+              )}
+              <Flex direction="column" gap="2">
+                <Button 
+                  variant="ghost" 
+                  size="2" 
+                  onClick={handleSignOut}
+                  style={{ 
+                    justifyContent: collapsed ? 'center' : 'flex-start',
+                    padding: collapsed ? '0.5rem' : undefined
+                  }}
+                  title={collapsed ? 'Sign Out' : ''}
+                >
+                  <ExitIcon />
+                  {!collapsed && 'Sign Out'}
+                </Button>
+              </Flex>
+            </div>
+          </>
+        )}
       </Box>
     </ScrollArea>
   );

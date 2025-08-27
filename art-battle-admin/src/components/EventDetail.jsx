@@ -868,7 +868,28 @@ The Art Battle Team`);
 
     } catch (error) {
       console.error('Error sending invitation:', error);
-      showAdminMessage('error', 'Failed to send invitation. Please try again.');
+      
+      // Handle FunctionsHttpError and extract meaningful error message
+      let errorMessage = 'Failed to send invitation. Please try again.';
+      
+      if (error && error.message) {
+        errorMessage = error.message;
+      }
+      
+      // Try to extract error from the context if it's a FunctionsHttpError
+      if (error && error.context) {
+        try {
+          const errorText = await error.context.text();
+          const errorData = JSON.parse(errorText);
+          if (errorData.error) {
+            errorMessage = errorData.error;
+          }
+        } catch (parseError) {
+          console.log('Could not parse error context:', parseError);
+        }
+      }
+      
+      showAdminMessage('error', errorMessage);
     } finally {
       setSendingInvitation(false);
     }
@@ -877,6 +898,67 @@ The Art Battle Team`);
   const cancelInvitation = () => {
     setShowInvitationForm(false);
     setInvitationMessage('');
+  };
+
+  const handleWithdrawInvitation = async (artist) => {
+    if (!artist?.artist_invitations?.[0]?.id) {
+      showAdminMessage('error', 'No invitation found to withdraw');
+      return;
+    }
+
+    const invitationId = artist.artist_invitations[0].id;
+    
+    try {
+      const { error } = await supabase
+        .from('artist_invitations')
+        .delete()
+        .eq('id', invitationId);
+
+      if (error) {
+        console.error('Error withdrawing invitation:', error);
+        showAdminMessage('error', 'Failed to withdraw invitation');
+      } else {
+        showAdminMessage('success', 'Invitation withdrawn successfully');
+        // Refresh the applications to update the UI
+        await fetchEventApplications();
+        // Close the modal
+        setSelectedArtist(null);
+      }
+    } catch (err) {
+      console.error('Error withdrawing invitation:', err);
+      showAdminMessage('error', 'Failed to withdraw invitation');
+    }
+  };
+
+  const handleSendReminder = async (artist) => {
+    if (!artist?.artist_profiles?.name || !artist?.artist_profiles?.phone_number) {
+      showAdminMessage('error', 'Artist name or phone number missing');
+      return;
+    }
+
+    const message = `${artist.artist_profiles.name} - you have been invited to compete at ${event?.event_code || 'AB'} please log in at https://artb.art to accept or decline`;
+    
+    try {
+      const { error } = await supabase.rpc('send_sms_instantly', {
+        p_destination: artist.artist_profiles.phone_number,
+        p_message_body: message,
+        p_metadata: {
+          type: 'invitation_reminder',
+          artist_id: artist.artist_profiles.id,
+          event_id: eventId
+        }
+      });
+
+      if (error) {
+        console.error('Error sending reminder:', error);
+        showAdminMessage('error', 'Failed to send reminder SMS');
+      } else {
+        showAdminMessage('success', 'Reminder SMS sent successfully');
+      }
+    } catch (err) {
+      console.error('Error sending reminder:', err);
+      showAdminMessage('error', 'Failed to send reminder SMS');
+    }
   };
 
   const fetchEventAdmins = async () => {
@@ -1561,8 +1643,8 @@ The Art Battle Team`);
                       </Flex>
                     </Flex>
 
-                    {/* 3-Column Kanban Board */}
-                    <Grid columns="3" gap="4">
+                    {/* 3-Column Kanban Board - Responsive: 1 column on mobile, 3 on desktop */}
+                    <Grid columns={{ initial: "1", md: "3" }} gap="4">
                       {/* APPLIED Column */}
                       <Card>
                         <Box p="4">
@@ -2482,30 +2564,18 @@ The Art Battle Team`);
       }}>
         <Dialog.Content style={{ maxWidth: 800, maxHeight: '90vh' }}>
           <Dialog.Title>
-            <Flex align="center" gap="3">
-              <PersonIcon size={24} />
-              <Box>
-                <Text size="5" weight="bold">
-                  {selectedArtist?.artist_profiles?.name || 'Unknown Artist'}
-                </Text>
-                <Flex align="center" gap="2" mt="1">
-                  <Text size="2" color="gray">
+            <Flex align="center" justify="between" gap="3">
+              <Flex align="center" gap="3">
+                <PersonIcon size={24} />
+                <Box>
+                  <Text size="5" weight="bold">
+                    {selectedArtist?.artist_profiles?.name || 'Unknown Artist'}
+                  </Text>
+                  <Text size="2" color="gray" mt="1">
                     {artistModalType.charAt(0).toUpperCase() + artistModalType.slice(1)} Details
                   </Text>
-                  {selectedArtist?.artist_profiles?.experience_level && (
-                    <Badge 
-                      color={
-                        selectedArtist.artist_profiles.experience_level === 'beginner' ? 'green' :
-                        selectedArtist.artist_profiles.experience_level === 'intermediate' ? 'orange' :
-                        'red'
-                      }
-                      size="2"
-                    >
-                      {selectedArtist.artist_profiles.experience_level}
-                    </Badge>
-                  )}
-                </Flex>
-              </Box>
+                </Box>
+              </Flex>
               <Dialog.Close>
                 <Button variant="ghost" size="1">
                   <Cross2Icon />
@@ -2737,9 +2807,6 @@ The Art Battle Team`);
                           >
                             Send Invitation
                           </Button>
-                          <Button size="3" variant="outline" color="red">
-                            Decline Application
-                          </Button>
                         </Flex>
                       </Flex>
                     </Box>
@@ -2756,7 +2823,8 @@ The Art Battle Team`);
                           <strong>Invited:</strong> {new Date(selectedArtist.created_at).toLocaleString()}
                         </Text>
                         
-                        {selectedArtist.first_viewed_at ? (
+{/* View tracking feature temporarily hidden - to be added later */}
+                        {false && selectedArtist.first_viewed_at ? (
                           <Box>
                             <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>
                               View Tracking:
@@ -2773,7 +2841,7 @@ The Art Battle Team`);
                               </Text>
                             </Flex>
                           </Box>
-                        ) : (
+                        ) : false && (
                           <Box p="3" style={{ backgroundColor: 'var(--orange-2)', borderRadius: '6px' }}>
                             <Flex align="center" gap="2">
                               <EyeNoneIcon size={16} />
@@ -2796,17 +2864,37 @@ The Art Battle Team`);
                             </Box>
                           </Box>
                         )}
+
+                        {selectedArtist.producer_message && (
+                          <Box>
+                            <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>
+                              Producer Message:
+                            </Text>
+                            <Box p="3" style={{ backgroundColor: 'var(--blue-2)', borderRadius: '6px' }}>
+                              <Text size="2" style={{ lineHeight: '1.5' }}>
+                                {selectedArtist.producer_message}
+                              </Text>
+                            </Box>
+                          </Box>
+                        )}
                         
                         <Separator />
                         
                         <Flex gap="3">
-                          <Button size="3" variant="outline" style={{ flex: 1 }}>
+                          <Button 
+                            size="3" 
+                            variant="outline" 
+                            style={{ flex: 1 }}
+                            onClick={() => handleSendReminder(selectedArtist)}
+                          >
                             Send Reminder
                           </Button>
-                          <Button size="3" variant="outline" color="orange">
-                            Modify Invitation
-                          </Button>
-                          <Button size="3" variant="outline" color="red">
+                          <Button 
+                            size="3" 
+                            variant="outline" 
+                            color="red"
+                            onClick={() => handleWithdrawInvitation(selectedArtist)}
+                          >
                             Withdraw Invitation
                           </Button>
                         </Flex>

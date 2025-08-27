@@ -89,48 +89,23 @@ export const AuthProvider = ({ children }) => {
       // Update last attempt time
       setMetadataSyncAttempts(prev => ({ ...prev, [userId]: now }));
       
-      // Try to get metadata via RPC instead of infinite refresh loop
-      console.log('No person metadata found, attempting to sync via RPC...');
+      // Auth-webhook now handles all person linking automatically
+      console.log('No person metadata found - auth-webhook will handle linking on next login');
       
       try {
-        const { data, error } = await supabase.rpc('refresh_auth_metadata');
-        
-        if (!error && data && data.person_id) {
-          // Update local state with person data
+        // Just refresh the session to get updated JWT with person data
+        const { data: { session } } = await supabase.auth.refreshSession();
+        if (session && session.user?.user_metadata?.person_id) {
+          // Update local state with person data from JWT
           setPerson({
-            id: data.person_id,
-            hash: data.person_hash,
-            name: data.person_name,
+            id: session.user.user_metadata.person_id,
+            hash: session.user.user_metadata.person_hash,
+            name: session.user.user_metadata.person_name,
             phone: authUser.phone
           });
-          
-          // Refresh session once to get updated JWT
-          const { data: { session } } = await supabase.auth.refreshSession();
-          if (session) {
-            console.log('Session refreshed with metadata');
-          }
-        } else if (data?.error === 'Person not found' && authUser.phone) {
-          // Person doesn't exist, create one
-          console.log('Person not found, creating new person record...');
-          const { data: personId } = await supabase.rpc('ensure_person_exists', {
-            p_phone: authUser.phone
-          });
-          
-          if (personId) {
-            // Try to refresh metadata again
-            const { data: refreshData } = await supabase.rpc('refresh_auth_metadata');
-            if (refreshData && refreshData.person_id) {
-              setPerson({
-                id: refreshData.person_id,
-                hash: refreshData.person_hash,
-                name: refreshData.person_name,
-                phone: authUser.phone
-              });
-            }
-          }
+          console.log('Session refreshed with person metadata');
         } else {
-          console.error('Could not sync person metadata:', error || data?.error);
-          setPerson(null);
+          console.log('No person metadata found in session - auth-webhook will handle on next login');
         }
       } catch (err) {
         console.error('Error syncing metadata:', err);

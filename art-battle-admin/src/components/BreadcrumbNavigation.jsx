@@ -12,11 +12,13 @@ import {
   ImageIcon,
   GearIcon,
   ChevronRightIcon,
-  HomeIcon
+  HomeIcon,
+  ExitIcon,
+  HamburgerMenuIcon
 } from '@radix-ui/react-icons';
 import { useAuth } from '../contexts/AuthContext';
 
-const BreadcrumbNavigation = ({ selectedEvent }) => {
+const BreadcrumbNavigation = ({ selectedEvent, onSignOut, onToggleSidebar, sidebarCollapsed }) => {
   const location = useLocation();
   const params = useParams();
   const { adminEvents } = useAuth();
@@ -133,63 +135,87 @@ const BreadcrumbNavigation = ({ selectedEvent }) => {
     return items;
   }, [location.pathname, params, selectedEvent, adminEvents]);
 
-  // Don't render if only one item (just dashboard)
-  if (breadcrumbs.length <= 1) {
-    return null;
-  }
+  // Always render for toggle and logout, even with minimal breadcrumbs
+  const showFullBreadcrumbs = breadcrumbs.length > 1;
 
   return (
-    <Box py="2" px="4" style={{ borderBottom: '1px solid var(--gray-6)' }}>
-      <Flex align="center" gap="2" wrap="wrap">
-        {breadcrumbs.map((item, index) => {
-          const Icon = item.icon;
-          const isLast = index === breadcrumbs.length - 1;
-          
-          return (
-            <Flex key={item.path} align="center" gap="2">
-              {/* Breadcrumb Item */}
-              {isLast ? (
-                // Current page - not clickable
-                <Flex align="center" gap="2">
-                  <Icon size={14} color="var(--accent-9)" />
-                  <Box>
-                    <Text size="2" weight="medium" color="accent">
+    <Box py="2" px="4" className="breadcrumb-container" style={{ borderBottom: '1px solid var(--gray-6)' }}>
+      <Flex align="center" justify="between" gap="2" wrap="wrap">
+        {/* Left side - Toggle and Breadcrumbs */}
+        <Flex align="center" gap="2" wrap="wrap" style={{ flex: 1 }}>
+          {/* Toggle button */}
+          <Button
+            variant="ghost"
+            size="1"
+            onClick={onToggleSidebar}
+            style={{ minHeight: '28px', minWidth: '28px' }}
+            title={sidebarCollapsed ? 'Expand menu' : 'Collapse menu'}
+          >
+            {sidebarCollapsed ? <ChevronRightIcon size={14} /> : <HamburgerMenuIcon size={14} />}
+          </Button>
+
+          {/* Breadcrumbs */}
+          {showFullBreadcrumbs && breadcrumbs.map((item, index) => {
+            const Icon = item.icon;
+            const isLast = index === breadcrumbs.length - 1;
+            
+            return (
+              <Flex key={item.path} align="center" gap="2">
+                {/* Breadcrumb Item */}
+                {isLast ? (
+                  // Current page - not clickable
+                  <Flex align="center" gap="2">
+                    <Icon size={14} color="var(--accent-9)" />
+                    <Box>
+                      <Text size="2" weight="medium" color="accent">
+                        {item.label}
+                      </Text>
+                      {item.subtitle && (
+                        <Text size="1" color="gray" style={{ display: 'block' }}>
+                          {item.subtitle}
+                        </Text>
+                      )}
+                      {item.description && (
+                        <Text size="1" color="gray" style={{ display: 'block' }}>
+                          {item.description}
+                        </Text>
+                      )}
+                    </Box>
+                  </Flex>
+                ) : (
+                  // Clickable breadcrumb
+                  <Link to={item.path} style={{ textDecoration: 'none' }}>
+                    <Button variant="ghost" size="1" color="gray">
+                      <Icon size={14} />
                       {item.label}
-                    </Text>
-                    {item.subtitle && (
-                      <Text size="1" color="gray" style={{ display: 'block' }}>
-                        {item.subtitle}
-                      </Text>
-                    )}
-                    {item.description && (
-                      <Text size="1" color="gray" style={{ display: 'block' }}>
-                        {item.description}
-                      </Text>
-                    )}
-                  </Box>
-                </Flex>
-              ) : (
-                // Clickable breadcrumb
-                <Link to={item.path} style={{ textDecoration: 'none' }}>
-                  <Button variant="ghost" size="1" color="gray">
-                    <Icon size={14} />
-                    {item.label}
-                    {item.subtitle && (
-                      <Text size="1" color="gray" ml="1">
-                        ({item.subtitle})
-                      </Text>
-                    )}
-                  </Button>
-                </Link>
-              )}
-              
-              {/* Separator */}
-              {!isLast && (
-                <ChevronRightIcon size={12} color="var(--gray-8)" />
-              )}
-            </Flex>
-          );
-        })}
+                      {item.subtitle && (
+                        <Text size="1" color="gray" ml="1">
+                          ({item.subtitle})
+                        </Text>
+                      )}
+                    </Button>
+                  </Link>
+                )}
+                
+                {/* Separator */}
+                {!isLast && (
+                  <ChevronRightIcon size={12} color="var(--gray-8)" />
+                )}
+              </Flex>
+            );
+          })}
+        </Flex>
+
+        {/* Right side - Sign out */}
+        <Button
+          variant="ghost"
+          size="1"
+          onClick={onSignOut}
+          style={{ minHeight: '28px', minWidth: '28px' }}
+          title="Sign Out"
+        >
+          <ExitIcon size={14} />
+        </Button>
       </Flex>
     </Box>
   );

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+import { emailTemplates } from '../_shared/emailTemplates.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -286,6 +287,70 @@ serve(async (req) => {
     }
 
     const duration = Date.now() - startTime
+
+    // Send email notification to artist
+    try {
+      // Get artist profile and event data for email
+      const { data: profileData } = await supabase
+        .from('artist_profiles')
+        .select('name, entry_id, person:people(email)')
+        .eq('id', submissionData.artistProfileId)
+        .single()
+
+      const { data: eventData } = await supabase
+        .from('events')
+        .select('eid, name, event_start_datetime, venue, cities(name)')
+        .eq('eid', submissionData.eventEid)
+        .single()
+
+      if (profileData?.person?.email && eventData) {
+        const eventDate = eventData.event_start_datetime 
+          ? new Date(eventData.event_start_datetime).toLocaleDateString('en-US', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            })
+          : 'TBD'
+
+        const emailData = emailTemplates.artistConfirmed({
+          artistName: profileData.name || submissionData.confirmationData.legalName || 'Artist',
+          eventEid: eventData.eid,
+          eventName: eventData.name || eventData.eid,
+          eventDate: eventDate,
+          eventVenue: eventData.venue || 'TBD',
+          cityName: eventData.cities?.name || 'Unknown',
+          artistNumber: profileData.entry_id?.toString() || submissionData.artistNumber || 'TBD'
+        })
+
+        // Call send-custom-email function
+        const emailResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-custom-email`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            to: profileData.person.email,
+            subject: emailData.subject,
+            html: emailData.html,
+            text: emailData.text,
+            from: 'hello@artbattle.com'
+          })
+        })
+
+        const emailResult = await emailResponse.json()
+        
+        if (emailResult.success) {
+          console.log('Confirmation email sent successfully to:', profileData.person.email)
+        } else {
+          console.error('Failed to send confirmation email:', emailResult.error)
+        }
+      }
+    } catch (emailError) {
+      console.error('Email sending error:', emailError)
+      // Don't fail the confirmation if email fails
+    }
 
     // Send Slack notification about the acceptance
     await sendSlackNotification(
