@@ -339,11 +339,11 @@ const ArtworkManagement = () => {
         {/* Artwork Detail Dialog */}
         <Dialog.Root open={dialogOpen} onOpenChange={setDialogOpen}>
           <Dialog.Content style={{ maxWidth: '800px' }}>
+            <Dialog.Title size="5" mb="4">
+              {selectedArtwork ? selectedArtwork.title : 'Artwork Details'}
+            </Dialog.Title>
             {selectedArtwork && (
               <Box>
-                <Dialog.Title size="5" mb="4">
-                  {selectedArtwork.title}
-                </Dialog.Title>
                 
                 <Grid columns="2" gap="6">
                   {/* Main Image */}

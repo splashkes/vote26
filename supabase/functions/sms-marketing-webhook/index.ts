@@ -16,12 +16,21 @@ serve(async (req) => {
   }
 
   try {
-    // Initialize Supabase client
+    // Initialize Supabase client - using service key for webhook (no user auth required)
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
+      auth: { 
+        autoRefreshToken: false, 
+        persistSession: false,
+        detectSessionInUrl: false 
+      },
+      global: {
+        headers: { 
+          Authorization: `Bearer ${supabaseServiceKey}` 
+        }
+      }
     });
 
     // Get webhook signature for validation (optional but recommended)

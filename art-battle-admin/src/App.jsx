@@ -18,6 +18,7 @@ import AdminUsers from './components/AdminUsers';
 import InvitationManagement from './components/InvitationManagement';
 import EmailQueueDashboard from './components/EmailQueueDashboard';
 import EmailQueueManager from './components/EmailQueueManager';
+import PromotionSystem from './components/PromotionSystem';
 import Welcome from './components/Welcome';
 import './App.css';
 
@@ -53,6 +54,7 @@ function App() {
                 <Route path="invitations" element={<InvitationManagement />} />
                 <Route path="email-queue" element={<EmailQueueDashboard />} />
                 <Route path="email-queue/:eventEid" element={<EmailQueueManager />} />
+                <Route path="sms-marketing" element={<PromotionSystem />} />
                 <Route path="*" element={<Navigate to="/events" replace />} />
               </Route>
             </Routes>

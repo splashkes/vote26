@@ -106,6 +106,9 @@ const EventDetail = () => {
   const [showInvitationForm, setShowInvitationForm] = useState(false);
   const [invitationMessage, setInvitationMessage] = useState('');
   const [sendingInvitation, setSendingInvitation] = useState(false);
+  const [sendingReminder, setSendingReminder] = useState(false);
+  const [reminderSent, setReminderSent] = useState(false);
+  const [showAllArtists, setShowAllArtists] = useState(false);
 
   useEffect(() => {
     if (eventId) {
@@ -318,25 +321,33 @@ const EventDetail = () => {
         throw new Error('Not authenticated');
       }
 
-      // Call the admin artist workflow edge function
-      const response = await fetch(`https://xsqdkubgyqwpyvfltnrf.supabase.co/functions/v1/admin-artist-workflow`, {
+      // First, get the basic workflow data quickly and show it immediately
+      const workflowResponse = await fetch(`https://xsqdkubgyqwpyvfltnrf.supabase.co/functions/v1/admin-artist-workflow`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
           'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcWRrdWJneXF3cHl2Zmx0bnJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM0MjE2OTYsImV4cCI6MjA2ODk5NzY5Nn0.hY8v8IDZQTcdAFa_OvQNFd1CyvabGcOZZMn_J6c4c2U'
         },
-        body: JSON.stringify({ 
-          eventEid: event.eid
-        })
+        body: JSON.stringify({ eventEid: event.eid })
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      if (!workflowResponse.ok) {
+        const errorData = await workflowResponse.json();
+        throw new Error(errorData.error || `HTTP error! status: ${workflowResponse.status}`);
       }
 
-      const { data: artistWorkflowData } = await response.json();
+      const { data: artistWorkflowData } = await workflowResponse.json();
+      
+      // Show basic workflow data immediately (artist numbers visible, but no profile details yet)
+      const basicMerge = (dataArray) => dataArray?.map(item => ({ 
+        ...item, 
+        artist_profiles: { name: `Artist #${item.artist_number}` } // Temporary placeholder
+      })) || [];
+      
+      setArtistApplications(basicMerge(artistWorkflowData.applications));
+      setArtistInvites(basicMerge(artistWorkflowData.invitations));
+      setArtistConfirmations(basicMerge(artistWorkflowData.confirmations));
       
       // Get all unique artist numbers for profile lookup
       const allArtistNumbers = new Set();
@@ -348,62 +359,81 @@ const EventDetail = () => {
         });
       });
 
-      // Fetch artist profile data if we have artist numbers
-      let artistProfiles = {};
+      // Now fetch profiles and performance data in parallel (don't block the UI)
       if (allArtistNumbers.size > 0) {
-        try {
-          const profileResponse = await fetch(`https://xsqdkubgyqwpyvfltnrf.supabase.co/functions/v1/admin-artist-profiles`, {
+        const [profilesResult, performanceResult] = await Promise.allSettled([
+          // Fetch artist profiles
+          fetch(`https://xsqdkubgyqwpyvfltnrf.supabase.co/functions/v1/admin-artist-profiles`, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${session.access_token}`,
               'Content-Type': 'application/json',
               'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcWRrdWJneXF3cHl2Zmx0bnJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM0MjE2OTYsImV4cCI6MjA2ODk5NzY5Nn0.hY8v8IDZQTcdAFa_OvQNFd1CyvabGcOZZMn_J6c4c2U'
             },
-            body: JSON.stringify({ 
-              artistNumbers: Array.from(allArtistNumbers)
-            })
-          });
+            body: JSON.stringify({ artistNumbers: Array.from(allArtistNumbers) })
+          }).then(async (res) => {
+            if (res.ok) {
+              const { data } = await res.json();
+              return data.profiles || {};
+            }
+            return {};
+          }),
+          
+          // Get performance data (we need profiles first, so this runs after profiles resolve)
+          fetch(`https://xsqdkubgyqwpyvfltnrf.supabase.co/functions/v1/admin-artist-profiles`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+              'Content-Type': 'application/json',  
+              'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcWRrdWJneXF3cHl2Zmx0bnJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM0MjE2OTYsImV4cCI6MjA2ODk5NzY5Nn0.hY8v8IDZQTcdAFa_OvQNFd1CyvabGcOZZMn_J6c4c2U'
+            },
+            body: JSON.stringify({ artistNumbers: Array.from(allArtistNumbers) })
+          }).then(async (res) => {
+            if (res.ok) {
+              const { data } = await res.json();
+              const profiles = data.profiles || {};
+              const artistIds = Object.values(profiles)
+                .map(profile => profile.entry_id)
+                .filter(Boolean);
+              
+              if (artistIds.length > 0) {
+                return getArtistPerformanceData(artistIds);
+              }
+            }
+            return {};
+          })
+        ]);
 
-          if (profileResponse.ok) {
-            const { data: profileData } = await profileResponse.json();
-            artistProfiles = profileData.profiles || {};
-          }
-        } catch (err) {
-          console.error('Error fetching artist profiles:', err);
+        // Process results when they complete
+        let artistProfiles = {};
+        if (profilesResult.status === 'fulfilled') {
+          artistProfiles = profilesResult.value;
+        } else {
+          console.error('Error fetching artist profiles:', profilesResult.reason);
         }
-      }
 
-      // Merge profile data into workflow data
-      const mergeProfileData = (items) => {
-        return items?.map(item => ({
-          ...item,
-          artist_profiles: artistProfiles[item.artist_number] || {}
-        })) || [];
-      };
-
-      setArtistApplications(mergeProfileData(artistWorkflowData.applications));
-      setArtistInvites(mergeProfileData(artistWorkflowData.invitations));
-      setArtistConfirmations(mergeProfileData(artistWorkflowData.confirmations));
-      
-      // Load performance data for all artists
-      const allArtistIds = new Set();
-      Object.values(artistProfiles).forEach(profile => {
-        if (profile.entry_id) {
-          allArtistIds.add(profile.entry_id);
-        }
-      });
-
-      if (allArtistIds.size > 0) {
-        try {
-          const performanceData = await getArtistPerformanceData(Array.from(allArtistIds));
+        if (performanceResult.status === 'fulfilled') {
+          const performanceData = performanceResult.value;
           const performanceMap = new Map();
           Object.entries(performanceData).forEach(([artistId, data]) => {
             performanceMap.set(artistId, data);
           });
           setArtistPerformanceData(performanceMap);
-        } catch (err) {
-          console.error('Error loading artist performance data:', err);
+        } else {
+          console.error('Error loading artist performance data:', performanceResult.reason);
         }
+
+        // Update workflow data with full profile information
+        const mergeProfileData = (items) => {
+          return items?.map(item => ({
+            ...item,
+            artist_profiles: artistProfiles[item.artist_number] || {}
+          })) || [];
+        };
+        
+        setArtistApplications(mergeProfileData(artistWorkflowData.applications));
+        setArtistInvites(mergeProfileData(artistWorkflowData.invitations));
+        setArtistConfirmations(mergeProfileData(artistWorkflowData.confirmations));
       }
       
     } catch (err) {
@@ -503,6 +533,87 @@ const EventDetail = () => {
   const handleImageClick = (work) => {
     setSelectedImage(work);
     setImageModalOpen(true);
+  };
+
+  // Deduplication logic for artist workflow
+  const getConfirmedArtistNumbers = () => {
+    return new Set(artistConfirmations.map(confirmation => confirmation.artist_number).filter(Boolean));
+  };
+
+  const getInvitedArtistNumbers = () => {
+    return new Set(artistInvites.map(invite => invite.artist_number).filter(Boolean));
+  };
+
+  const getFilteredApplications = () => {
+    // First deduplicate within applications by artist_number (keep most recent)
+    const deduplicatedApps = artistApplications.reduce((acc, app) => {
+      if (!app.artist_number) return [...acc, app];
+      const existingIndex = acc.findIndex(existing => existing.artist_number === app.artist_number);
+      if (existingIndex === -1) {
+        return [...acc, app];
+      } else {
+        const existing = acc[existingIndex];
+        const isMoreRecent = app.created_at > existing.created_at || (!app.created_at && !existing.created_at && app.id > existing.id);
+        if (isMoreRecent) {
+          acc[existingIndex] = app;
+        }
+        return acc;
+      }
+    }, []);
+
+    if (showAllArtists) return deduplicatedApps;
+    
+    const confirmedNumbers = getConfirmedArtistNumbers();
+    const invitedNumbers = getInvitedArtistNumbers();
+    
+    return deduplicatedApps.filter(app => 
+      !confirmedNumbers.has(app.artist_number) && 
+      !invitedNumbers.has(app.artist_number)
+    );
+  };
+
+  const getFilteredInvitations = () => {
+    // First deduplicate within invitations by artist_number (keep most recent)
+    const deduplicatedInvites = artistInvites.reduce((acc, invite) => {
+      if (!invite.artist_number) return [...acc, invite];
+      const existingIndex = acc.findIndex(existing => existing.artist_number === invite.artist_number);
+      if (existingIndex === -1) {
+        return [...acc, invite];
+      } else {
+        const existing = acc[existingIndex];
+        const isMoreRecent = invite.created_at > existing.created_at || (!invite.created_at && !existing.created_at && invite.id > existing.id);
+        if (isMoreRecent) {
+          acc[existingIndex] = invite;
+        }
+        return acc;
+      }
+    }, []);
+
+    if (showAllArtists) return deduplicatedInvites;
+    
+    const confirmedNumbers = getConfirmedArtistNumbers();
+    
+    return deduplicatedInvites.filter(invite => 
+      !confirmedNumbers.has(invite.artist_number)
+    );
+  };
+
+  const getFilteredConfirmations = () => {
+    // Simple deduplicate confirmations by artist_number (keep most recent)
+    return artistConfirmations.reduce((acc, confirmation) => {
+      if (!confirmation.artist_number) return [...acc, confirmation];
+      const existingIndex = acc.findIndex(existing => existing.artist_number === confirmation.artist_number);
+      if (existingIndex === -1) {
+        return [...acc, confirmation];
+      } else {
+        const existing = acc[existingIndex];
+        const isMoreRecent = confirmation.created_at > existing.created_at || (!confirmation.created_at && !existing.created_at && confirmation.id > existing.id);
+        if (isMoreRecent) {
+          acc[existingIndex] = confirmation;
+        }
+        return acc;
+      }
+    }, []);
   };
 
   const saveBio = async () => {
@@ -610,6 +721,10 @@ const EventDetail = () => {
     setBioText(artist.artist_profiles?.abhq_bio || '');
     setEditingBio(false);
     setBioSaving(false);
+    
+    // Reset reminder states
+    setSendingReminder(false);
+    setReminderSent(false);
     
     // Fetch sample works using artist number
     const artistNumber = artist?.artist_number;
@@ -931,16 +1046,40 @@ The Art Battle Team`);
   };
 
   const handleSendReminder = async (artist) => {
-    if (!artist?.artist_profiles?.name || !artist?.artist_profiles?.phone_number) {
+    console.log('handleSendReminder clicked! Artist full object:', artist);
+    console.log('Artist profiles:', artist?.artist_profiles);
+    console.log('Available phone fields:', {
+      phone_number: artist?.artist_profiles?.phone_number,
+      phone: artist?.artist_profiles?.phone,
+      mobile_phone: artist?.artist_profiles?.mobile_phone,
+      artist_phone: artist?.phone_number,
+      artist_mobile: artist?.mobile_phone
+    });
+    
+    const name = artist?.artist_profiles?.name;
+    const phone = artist?.artist_profiles?.phone_number || artist?.artist_profiles?.phone || artist?.phone_number;
+    
+    if (!name || !phone) {
+      console.error('Missing artist data:', { 
+        name: name, 
+        phone: phone 
+      });
       showAdminMessage('error', 'Artist name or phone number missing');
       return;
     }
 
-    const message = `${artist.artist_profiles.name} - you have been invited to compete at ${event?.event_code || 'AB'} please log in at https://artb.art to accept or decline`;
+    console.log('Setting sending reminder to true');
+    setSendingReminder(true);
+    setReminderSent(false);
+
+    const message = `${name} - you have been invited to compete at ${event?.eid || event?.event_code || 'AB'} please log in at https://artb.art/profile to accept or decline`;
+    
+    console.log('Sending SMS reminder to:', phone);
+    console.log('Message:', message);
     
     try {
-      const { error } = await supabase.rpc('send_sms_instantly', {
-        p_destination: artist.artist_profiles.phone_number,
+      const { data, error } = await supabase.rpc('send_sms_instantly', {
+        p_destination: phone,
         p_message_body: message,
         p_metadata: {
           type: 'invitation_reminder',
@@ -949,15 +1088,21 @@ The Art Battle Team`);
         }
       });
 
+      console.log('SMS RPC result:', { data, error });
+
       if (error) {
         console.error('Error sending reminder:', error);
-        showAdminMessage('error', 'Failed to send reminder SMS');
+        showAdminMessage('error', `Failed to send reminder SMS: ${error.message}`);
       } else {
-        showAdminMessage('success', 'Reminder SMS sent successfully');
+        console.log('SMS sent successfully, message ID:', data);
+        showAdminMessage('success', `Reminder SMS sent to ${phone}`);
+        setReminderSent(true);
       }
     } catch (err) {
       console.error('Error sending reminder:', err);
-      showAdminMessage('error', 'Failed to send reminder SMS');
+      showAdminMessage('error', `Failed to send reminder SMS: ${err.message}`);
+    } finally {
+      setSendingReminder(false);
     }
   };
 
@@ -1632,14 +1777,22 @@ The Art Battle Team`);
                       </Box>
                       <Flex align="center" gap="4">
                         <Badge color="blue" size="2">
-                          {artistApplications.length} Applied
+                          {getFilteredApplications().length} Applied
                         </Badge>
                         <Badge color="orange" size="2">
-                          {artistInvites.length} Invited
+                          {getFilteredInvitations().length} Invited
                         </Badge>
                         <Badge color="green" size="2">
-                          {artistConfirmations.length} Confirmed
+                          {getFilteredConfirmations().length} Confirmed
                         </Badge>
+                        <Button 
+                          variant={showAllArtists ? "solid" : "outline"}
+                          color="gray"
+                          size="1"
+                          onClick={() => setShowAllArtists(!showAllArtists)}
+                        >
+                          {showAllArtists ? "Hide Duplicates" : "Show All"}
+                        </Button>
                       </Flex>
                     </Flex>
 
@@ -1650,11 +1803,11 @@ The Art Battle Team`);
                         <Box p="4">
                           <Flex justify="between" align="center" mb="3">
                             <Text size="3" weight="bold">Applied</Text>
-                            <Badge color="blue">{artistApplications.length}</Badge>
+                            <Badge color="blue">{getFilteredApplications().length}</Badge>
                           </Flex>
                           
                           <Flex direction="column" gap="3">
-                            {artistApplications.map((application) => (
+                            {getFilteredApplications().map((application) => (
                               <Card 
                                 key={application.id}
                                 style={{ 
@@ -1677,9 +1830,9 @@ The Art Battle Team`);
                               </Card>
                             ))}
                             
-                            {artistApplications.length === 0 && (
+                            {getFilteredApplications().length === 0 && (
                               <Text size="2" color="gray" style={{ textAlign: 'center', padding: '2rem' }}>
-                                No applications received yet
+                                {showAllArtists ? 'No applications received yet' : 'No new applications (all artists are invited or confirmed)'}
                               </Text>
                             )}
                           </Flex>
@@ -1691,11 +1844,11 @@ The Art Battle Team`);
                         <Box p="4">
                           <Flex justify="between" align="center" mb="3">
                             <Text size="3" weight="bold">Invited</Text>
-                            <Badge color="orange">{artistInvites.length}</Badge>
+                            <Badge color="orange">{getFilteredInvitations().length}</Badge>
                           </Flex>
                           
                           <Flex direction="column" gap="3">
-                            {artistInvites.map((invite) => {
+                            {getFilteredInvitations().map((invite) => {
                               const status = getInvitationStatus(invite);
                               return (
                                 <Card 
@@ -1721,9 +1874,9 @@ The Art Battle Team`);
                               );
                             })}
                             
-                            {artistInvites.length === 0 && (
+                            {getFilteredInvitations().length === 0 && (
                               <Text size="2" color="gray" style={{ textAlign: 'center', padding: '2rem' }}>
-                                No invitations sent yet
+                                {showAllArtists ? 'No invitations sent yet' : 'No pending invitations (all are confirmed)'}
                               </Text>
                             )}
                           </Flex>
@@ -1735,11 +1888,11 @@ The Art Battle Team`);
                         <Box p="4">
                           <Flex justify="between" align="center" mb="3">
                             <Text size="3" weight="bold">Confirmed</Text>
-                            <Badge color="green">{artistConfirmations.length}</Badge>
+                            <Badge color="green">{getFilteredConfirmations().length}</Badge>
                           </Flex>
                           
                           <Flex direction="column" gap="3">
-                            {artistConfirmations.map((confirmation) => (
+                            {getFilteredConfirmations().map((confirmation) => (
                               <Card 
                                 key={confirmation.id}
                                 style={{ 
@@ -1762,7 +1915,7 @@ The Art Battle Team`);
                               </Card>
                             ))}
                             
-                            {artistConfirmations.length === 0 && (
+                            {getFilteredConfirmations().length === 0 && (
                               <Text size="2" color="gray" style={{ textAlign: 'center', padding: '2rem' }}>
                                 No confirmations received yet
                               </Text>
@@ -2883,11 +3036,22 @@ The Art Battle Team`);
                         <Flex gap="3">
                           <Button 
                             size="3" 
-                            variant="outline" 
+                            variant={reminderSent ? "solid" : "outline"}
+                            color={reminderSent ? "green" : undefined}
                             style={{ flex: 1 }}
+                            disabled={sendingReminder || reminderSent}
                             onClick={() => handleSendReminder(selectedArtist)}
                           >
-                            Send Reminder
+                            {sendingReminder ? (
+                              <Flex align="center" gap="2">
+                                <Spinner loading size="1" />
+                                Sending SMS...
+                              </Flex>
+                            ) : reminderSent ? (
+                              `SMS sent to ${selectedArtist?.artist_profiles?.phone_number || selectedArtist?.artist_profiles?.phone || selectedArtist?.phone_number}`
+                            ) : (
+                              'Send Reminder'
+                            )}
                           </Button>
                           <Button 
                             size="3" 

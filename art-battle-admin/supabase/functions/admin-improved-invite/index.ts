@@ -110,72 +110,41 @@ Deno.serve(async (req) => {
       console.log('User not found in auth, will create:', err.message)
     }
 
-    let invitationResult
+    let userId = authUser?.id
     
-    if (authUser?.id) {
-      // User exists, resend invitation
-      console.log(`Resending invitation to existing auth user: ${email}`)
-      const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(
-        email,
-        {
-          redirectTo: 'https://artb.art/admin/welcome',
-          data: {
-            admin_level: level,
-            cities_access: cities_access || [],
-            notes: notes || `Invited by ${user.email} on ${new Date().toISOString()}`,
-            invitation_expires_at: new Date(Date.now() + (INVITATION_VALIDITY_HOURS * 60 * 60 * 1000)).toISOString()
-          }
+    if (!userId) {
+      // Create new auth user without sending email (we'll handle credentials manually)
+      console.log(`Creating new auth user for: ${email}`)
+      const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
+        email: email,
+        email_confirm: false, // Don't require email confirmation
+        user_metadata: {
+          admin_level: level,
+          cities_access: cities_access || [],
+          notes: notes || `Created by ${user.email} on ${new Date().toISOString()}`,
         }
-      )
+      })
 
-      if (inviteError) {
-        console.error('Invite error:', inviteError)
+      if (createError) {
+        console.error('Create user error:', createError)
         return new Response(
           JSON.stringify({ 
-            error: 'Failed to send invite', 
-            details: inviteError.message 
+            error: 'Failed to create user', 
+            details: createError.message 
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
         )
       }
 
-      invitationResult = inviteData
-    } else {
-      // Create new user and send invitation
-      console.log(`Creating new invitation for: ${email}`)
-      const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(
-        email,
-        {
-          redirectTo: 'https://artb.art/admin/welcome',
-          data: {
-            admin_level: level,
-            cities_access: cities_access || [],
-            notes: notes || `Invited by ${user.email} on ${new Date().toISOString()}`,
-            invitation_expires_at: new Date(Date.now() + (INVITATION_VALIDITY_HOURS * 60 * 60 * 1000)).toISOString()
-          }
-        }
-      )
-
-      if (inviteError) {
-        console.error('Invite error:', inviteError)
-        return new Response(
-          JSON.stringify({ 
-            error: 'Failed to send invite', 
-            details: inviteError.message 
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-        )
-      }
-
-      invitationResult = inviteData
+      userId = newUser.user?.id
+      console.log(`Created new auth user with ID: ${userId}`)
     }
 
-    if (!invitationResult?.user?.id) {
-      console.error('No user ID returned from invitation')
+    if (!userId) {
+      console.error('No user ID available')
       return new Response(
         JSON.stringify({ 
-          error: 'Invitation sent but no user ID returned',
-          warning: 'Admin record not created - please contact support'
+          error: 'Failed to get or create user ID'
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       )
@@ -183,13 +152,13 @@ Deno.serve(async (req) => {
 
     // Create or update admin record
     const adminRecordData = {
-      user_id: invitationResult.user.id,
+      user_id: userId,
       email: email,
       level: level,
       cities_access: cities_access || [],
-      active: false, // Will be activated when user completes setup
+      active: true, // Activate immediately since no email verification needed
       created_by: user.email,
-      notes: notes || `Invited by ${user.email} on ${new Date().toISOString()}`,
+      notes: notes || `Created by ${user.email} on ${new Date().toISOString()}`,
       invitation_sent_at: new Date().toISOString(),
       invitation_expires_at: new Date(Date.now() + (INVITATION_VALIDITY_HOURS * 60 * 60 * 1000)).toISOString()
     }
@@ -268,14 +237,13 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: `Invitation ${action} to ${email} successfully`,
-        invitation: {
+        message: `Admin user ${action === 'resent' ? 'updated' : 'created'} for ${email} successfully`,
+        user: {
           email: email,
           level: level,
-          expires_at: expiresAt.toISOString(),
-          expires_in_hours: INVITATION_VALIDITY_HOURS,
-          user_id: invitationResult.user.id,
-          admin_record: adminResult
+          user_id: userId,
+          admin_record: adminResult,
+          note: "User created without email verification. They can log in immediately using the 'Set Password' function."
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

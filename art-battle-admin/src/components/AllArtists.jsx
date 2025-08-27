@@ -358,11 +358,11 @@ const AllArtists = () => {
         {/* Artist Detail Dialog */}
         <Dialog.Root open={dialogOpen} onOpenChange={setDialogOpen}>
           <Dialog.Content style={{ maxWidth: '800px' }}>
+            <Dialog.Title size="5" mb="4">
+              {selectedArtist ? selectedArtist.name : 'Artist Details'}
+            </Dialog.Title>
             {selectedArtist && (
               <Box>
-                <Dialog.Title size="5" mb="4">
-                  {selectedArtist.name}
-                </Dialog.Title>
                 
                 <Grid columns="2" gap="6">
                   {/* Profile Info */}

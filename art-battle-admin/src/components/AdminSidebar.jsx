@@ -21,7 +21,8 @@ import {
   HamburgerMenuIcon,
   ChevronRightIcon,
   EnvelopeClosedIcon,
-  PaperPlaneIcon
+  PaperPlaneIcon,
+  ChatBubbleIcon
 } from '@radix-ui/react-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -125,6 +126,13 @@ const AdminSidebar = ({ collapsed = false, onToggleCollapse, hideToggleAndSignOu
           label: 'Email Queue',
           description: 'Manage artist payment email notifications',
           color: 'purple'
+        },
+        {
+          to: '/sms-marketing',
+          icon: ChatBubbleIcon,
+          label: 'SMS Marketing',
+          description: 'Create and send promotional SMS campaigns',
+          color: 'green'
         },
         baseNavItems[baseNavItems.length - 1] // Settings at the end
       ]

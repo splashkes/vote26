@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabase';
 import AdminSidebar from './AdminSidebar';
 import EventContextPanel from './EventContextPanel';
 import BreadcrumbNavigation from './BreadcrumbNavigation';
+import ReleaseNotesModal, { useReleaseNotes } from './ReleaseNotesModal';
 
 const AdminLayout = () => {
   const { user, loading, adminEvents, signOut } = useAuth();
@@ -19,6 +20,9 @@ const AdminLayout = () => {
   const [adminError, setAdminError] = useState(null);
   const [showContextPanel, setShowContextPanel] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  
+  // Release notes modal
+  const { showReleaseNotes, closeReleaseNotes } = useReleaseNotes();
 
   console.log('AdminLayout render:', { user: user?.email, loading, location: location.pathname });
 
@@ -34,25 +38,21 @@ const AdminLayout = () => {
         setAdminLoading(true);
         setAdminError(null);
 
-        // Check if user exists in abhq_admin_users table
+        // Check if user exists in admin users using RPC function
         const { data: adminData, error } = await supabase
-          .from('abhq_admin_users')
-          .select('*')
-          .eq('email', user.email)
-          .eq('active', true)
-          .maybeSingle();
+          .rpc('get_current_user_admin_info');
 
         if (error) {
           console.error('Error checking admin status:', error);
           setAdminError('Failed to verify admin permissions');
           setAdminUser(null);
-        } else if (!adminData) {
+        } else if (!adminData || adminData.length === 0) {
           console.log('User is not an admin:', user.email);
           setAdminError('Access denied: User is not an admin');
           setAdminUser(null);
         } else {
-          console.log('User is admin:', adminData);
-          setAdminUser(adminData);
+          console.log('User is admin:', adminData[0]);
+          setAdminUser(adminData[0]);
         }
       } catch (err) {
         console.error('Exception checking admin status:', err);
@@ -153,6 +153,12 @@ const AdminLayout = () => {
           />
         </div>
       )}
+
+      {/* Release Notes Modal */}
+      <ReleaseNotesModal 
+        isOpen={showReleaseNotes} 
+        onClose={closeReleaseNotes} 
+      />
     </div>
   );
 };
