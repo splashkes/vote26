@@ -1,0 +1,13 @@
+{
+  "name": "admin-auth-tester",
+  "version": "1.0.0",
+  "description": "Puppeteer-based admin authentication tester",
+  "main": "auth-tester.js",
+  "scripts": {
+    "test-auth": "node auth-tester.js"
+  },
+  "dependencies": {
+    "puppeteer": "^21.0.0",
+    "@supabase/supabase-js": "^2.39.3"
+  }
+}

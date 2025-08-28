@@ -1,0 +1,19 @@
+{
+  "name": "vote26",
+  "version": "1.0.0",
+  "description": "A beautiful, mobile-optimized web application for Art Battle voting and bidding, built with React, Radix UI Themes, and Supabase.",
+  "main": "auth-tester.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.56.0",
+    "puppeteer": "^24.17.1"
+  }
+}
