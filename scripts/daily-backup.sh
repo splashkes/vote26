@@ -23,7 +23,7 @@ set -e  # Exit on any error
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-BACKUP_BASE_DIR="$PROJECT_DIR/backups"
+BACKUP_BASE_DIR="/nfs/store/vote26/backups"
 LOG_FILE="/var/log/artbattle-backup.log"
 RETENTION_DAYS=30  # Keep backups for 30 days
 
@@ -223,28 +223,26 @@ export_schema() {
 export_data() {
     log_info "Exporting table data..."
     
-    # Define critical tables to backup
-    local tables=(
-        "events"
-        "art" 
-        "people"
-        "artist_profiles"
-        "bids"
-        "votes"
-        "payment_processing"
-        "media_files"
-        "art_media"
-        "event_admins"
-        "event_artists"
-        "round_contestants"
-        "message_queue"
-        "qr_secrets"
-        "qr_scans"
-        "vote_weights"
-        "countries"
-        "cities"
-        "sms_config"
-    )
+    # Dynamically fetch all public tables from the database
+    log_info "Fetching current table list from database..."
+    local tables_query_result=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -d "$DB_NAME" -U "$DB_USER" -t -c "
+    SELECT table_name 
+    FROM information_schema.tables 
+    WHERE table_schema = 'public' 
+    AND table_type = 'BASE TABLE' 
+    ORDER BY table_name;
+    " | tr -d ' ' | grep -v '^$')
+    
+    # Convert query result to array
+    local tables=()
+    while IFS= read -r table; do
+        if [ -n "$table" ]; then
+            tables+=("$table")
+        fi
+    done <<< "$tables_query_result"
+    
+    local table_count=${#tables[@]}
+    log_info "Found $table_count tables to backup"
     
     local total_rows=0
     
@@ -294,8 +292,8 @@ backup_config() {
             log_info "  └── Local edge functions backed up: $function_count functions"
             
             # List all backed up functions
-            find "$BACKUP_DIR/config/supabase/functions" -maxdepth 1 -type d -not -name "functions" | while read -r func_dir; do
-                if [ -f "$func_dir/index.ts" ]; then
+            for func_dir in "$BACKUP_DIR/config/supabase/functions"/*; do
+                if [ -d "$func_dir" ] && [ "$(basename "$func_dir")" != "functions" ] && [ -f "$func_dir/index.ts" ]; then
                     local func_name=$(basename "$func_dir")
                     log_info "      ✓ $func_name"
                 fi
@@ -309,24 +307,23 @@ backup_config() {
     log_info "Downloading deployed edge functions..."
     local deployed_functions_dir="$BACKUP_DIR/deployed-functions"
     
-    # Source the download function script
-    source "$SCRIPT_DIR/download-deployed-functions.sh"
-    
-    # Download all deployed functions
-    if download_all_functions "$deployed_functions_dir"; then
-        local deployed_count=$(find "$deployed_functions_dir" -maxdepth 1 -type d | wc -l)
+    # Source the download function script with timeout
+    if timeout 120 bash -c "source '$SCRIPT_DIR/download-deployed-functions.sh' && download_all_functions '$deployed_functions_dir'"; then
+        local deployed_count=$(find "$deployed_functions_dir" -maxdepth 1 -type d 2>/dev/null | wc -l || echo "0")
         deployed_count=$((deployed_count - 1)) # Subtract the parent directory
         log_info "  └── Deployed functions downloaded: $deployed_count functions"
         
         # List downloaded deployed functions
-        find "$deployed_functions_dir" -maxdepth 1 -type d -not -name "deployed-functions" | while read -r func_dir; do
-            if [ -f "$func_dir/metadata.json" ]; then
-                local func_name=$(basename "$func_dir")
-                log_info "      ✓ $func_name (deployed)"
-            fi
-        done
+        if [ -d "$deployed_functions_dir" ]; then
+            for func_dir in "$deployed_functions_dir"/*; do
+                if [ -d "$func_dir" ] && [ "$(basename "$func_dir")" != "deployed-functions" ] && [ -f "$func_dir/metadata.json" ]; then
+                    local func_name=$(basename "$func_dir")
+                    log_info "      ✓ $func_name (deployed)"
+                fi
+            done
+        fi
     else
-        log_warn "Failed to download deployed functions - backup will continue with local functions only"
+        log_warn "Failed to download deployed functions (timeout or error) - backup will continue with local functions only"
     fi
     
     # Backup migrations
@@ -354,7 +351,12 @@ backup_config() {
     
     # Backup package.json files from all sub-projects
     mkdir -p "$BACKUP_DIR/config/package-configs"
-    find "$PROJECT_DIR" -maxdepth 2 -name "package.json" -not -path "*/node_modules/*" | while read -r package_file; do
+    local package_files=()
+    while IFS= read -r -d '' package_file; do
+        package_files+=("$package_file")
+    done < <(find "$PROJECT_DIR" -maxdepth 2 -name "package.json" -not -path "*/node_modules/*" -print0)
+    
+    for package_file in "${package_files[@]}"; do
         if [ -f "$package_file" ]; then
             local project_name=$(basename "$(dirname "$package_file")")
             cp "$package_file" "$BACKUP_DIR/config/package-configs/${project_name}-package.json" 2>/dev/null
@@ -380,7 +382,12 @@ backup_config() {
     )
     
     for config in "${config_files[@]}"; do
-        find "$PROJECT_DIR" -maxdepth 2 -name "$config" -not -path "*/node_modules/*" | while read -r config_file; do
+        local config_files_array=()
+        while IFS= read -r -d '' config_file; do
+            config_files_array+=("$config_file")
+        done < <(find "$PROJECT_DIR" -maxdepth 2 -name "$config" -not -path "*/node_modules/*" -print0)
+        
+        for config_file in "${config_files_array[@]}"; do
             if [ -f "$config_file" ]; then
                 local project_dir=$(basename "$(dirname "$config_file")")
                 local dest_name="${project_dir}-${config}"
@@ -412,30 +419,48 @@ backup_config() {
 # Verify edge functions backup
 verify_edge_functions() {
     log_info "Verifying edge functions backup..."
+    log_info "DEBUG: Started verify_edge_functions function"
+    log_info "DEBUG: BACKUP_DIR is: $BACKUP_DIR"
     
     local main_functions_dir="$BACKUP_DIR/config/supabase/functions"
     local vote_functions_dir="$BACKUP_DIR/config/art-battle-vote-functions"
     local deployed_functions_dir="$BACKUP_DIR/deployed-functions"
     
+    log_info "DEBUG: Set directory paths - main: $main_functions_dir"
+    
+    log_info "DEBUG: About to initialize local variables"
     local local_found=0
     local deployed_found=0
+    log_info "DEBUG: Initialized local variables"
     
     # Check local functions
+    log_info "DEBUG: About to check if directory exists: $main_functions_dir"
     if [ -d "$main_functions_dir" ]; then
+        log_info "DEBUG: Directory exists, proceeding with find command"
         log_success "✓ Local Supabase functions directory backed up"
-        local_found=$(find "$main_functions_dir" -name "index.ts" | wc -l)
+        log_info "DEBUG: About to run find command"
+        local_found=$(find "$main_functions_dir" -name "index.ts" 2>/dev/null | wc -l || echo "0")
+        log_info "DEBUG: Find command completed, local_found: $local_found"
         log_info "  └── Local functions: $local_found"
     else
+        log_info "DEBUG: Directory does not exist"
         log_warn "Local edge functions directory not found in backup"
+        local_found=0
     fi
+    log_info "DEBUG: Completed local functions check"
     
     # Check deployed functions
+    log_info "DEBUG: About to check deployed functions directory: $deployed_functions_dir"
     if [ -d "$deployed_functions_dir" ]; then
+        log_info "DEBUG: Deployed functions directory exists"
         log_success "✓ Deployed functions directory backed up"
-        deployed_found=$(find "$deployed_functions_dir" -name "metadata.json" | wc -l)
+        log_info "DEBUG: About to run find command for deployed functions"
+        deployed_found=$(find "$deployed_functions_dir" -name "metadata.json" 2>/dev/null | wc -l || echo "0")
+        log_info "DEBUG: Deployed find command completed, deployed_found: $deployed_found"
         log_info "  └── Deployed functions: $deployed_found"
         
         # Check for critical deployed functions
+        log_info "DEBUG: About to check critical functions"
         local critical_functions=(
             "stripe-create-checkout"
             "stripe-payment-status" 
@@ -451,6 +476,7 @@ verify_edge_functions() {
         )
         
         local found_critical=0
+        log_info "DEBUG: Starting critical functions loop"
         for func in "${critical_functions[@]}"; do
             if [ -f "$deployed_functions_dir/$func/metadata.json" ]; then
                 log_info "  ✓ $func - OK (deployed)"
@@ -464,9 +490,13 @@ verify_edge_functions() {
         done
         
         log_info "Critical functions verification: $found_critical/${#critical_functions[@]} critical functions found"
+        log_info "DEBUG: Finished critical functions loop"
     else
         log_warn "Deployed functions directory not found in backup"
+        deployed_found=0
     fi
+    
+    log_info "DEBUG: About to update backup_info.txt"
     
     # Update backup info with edge functions details
     echo "" >> "$BACKUP_DIR/backup_info.txt"
@@ -475,12 +505,14 @@ verify_edge_functions() {
     echo "Deployed functions: $deployed_found" >> "$BACKUP_DIR/backup_info.txt"
     echo "Total functions backed up: $((local_found + deployed_found))" >> "$BACKUP_DIR/backup_info.txt"
     
+    log_info "DEBUG: Finished updating backup_info.txt"
+    
     # List all functions in backup
     echo "" >> "$BACKUP_DIR/backup_info.txt"
     echo "Local functions backed up:" >> "$BACKUP_DIR/backup_info.txt"
     if [ -d "$main_functions_dir" ]; then
-        find "$main_functions_dir" -maxdepth 1 -type d -not -name "functions" | while read -r func_dir; do
-            if [ -f "$func_dir/index.ts" ]; then
+        for func_dir in "$main_functions_dir"/*; do
+            if [ -d "$func_dir" ] && [ "$(basename "$func_dir")" != "functions" ] && [ -f "$func_dir/index.ts" ]; then
                 echo "- $(basename "$func_dir") (local)" >> "$BACKUP_DIR/backup_info.txt"
             fi
         done
@@ -489,14 +521,15 @@ verify_edge_functions() {
     echo "" >> "$BACKUP_DIR/backup_info.txt"
     echo "Deployed functions backed up:" >> "$BACKUP_DIR/backup_info.txt"
     if [ -d "$deployed_functions_dir" ]; then
-        find "$deployed_functions_dir" -maxdepth 1 -type d -not -name "deployed-functions" | while read -r func_dir; do
-            if [ -f "$func_dir/metadata.json" ]; then
+        for func_dir in "$deployed_functions_dir"/*; do
+            if [ -d "$func_dir" ] && [ "$(basename "$func_dir")" != "deployed-functions" ] && [ -f "$func_dir/metadata.json" ]; then
                 echo "- $(basename "$func_dir") (deployed)" >> "$BACKUP_DIR/backup_info.txt"
             fi
         done
     fi
     
     log_success "Edge functions verification completed - Total: $((local_found + deployed_found)) functions"
+    log_info "DEBUG: About to exit verify_edge_functions function"
 }
 
 # Export Supabase project settings
@@ -767,7 +800,12 @@ export_infrastructure_config() {
     fi
     
     # Copy any docker or deployment configurations
-    find "$PROJECT_DIR" -name "Dockerfile" -o -name "docker-compose.*" -o -name "*.yml" -o -name "*.yaml" | head -5 | while read -r config_file; do
+    local docker_files=()
+    while IFS= read -r -d '' config_file; do
+        docker_files+=("$config_file")
+    done < <(find "$PROJECT_DIR" -name "Dockerfile" -o -name "docker-compose.*" -o -name "*.yml" -o -name "*.yaml" | head -5 | tr '\n' '\0')
+    
+    for config_file in "${docker_files[@]}"; do
         if [ -f "$config_file" ]; then
             cp "$config_file" "$BACKUP_DIR/infrastructure/$(basename "$config_file")"
             log_info "  ✓ $(basename "$config_file") backed up"
@@ -853,19 +891,49 @@ cleanup_old_backups() {
     local deleted_count=0
     
     # Find and delete old compressed backups
-    find "$BACKUP_BASE_DIR" -name "daily_*.tar.gz" -type f -mtime +$RETENTION_DAYS | while read -r old_backup; do
+    local old_archives=()
+    while IFS= read -r -d '' old_backup; do
+        old_archives+=("$old_backup")
+    done < <(find "$BACKUP_BASE_DIR" -name "daily_*.tar.gz" -type f -mtime +$RETENTION_DAYS -print0)
+    
+    for old_backup in "${old_archives[@]}"; do
         log_info "Deleting old backup: $(basename "$old_backup")"
         rm -f "$old_backup"
         ((deleted_count++))
     done
     
     # Also clean up any uncompressed directories (from failed runs)
-    find "$BACKUP_BASE_DIR" -name "daily_*" -type d -mtime +1 | while read -r old_dir; do
+    local old_dirs=()
+    while IFS= read -r -d '' old_dir; do
+        old_dirs+=("$old_dir")
+    done < <(find "$BACKUP_BASE_DIR" -name "daily_*" -type d -mtime +1 -print0)
+    
+    for old_dir in "${old_dirs[@]}"; do
         log_warn "Cleaning up old uncompressed directory: $(basename "$old_dir")"
         rm -rf "$old_dir"
     done
     
     log_success "Cleanup completed"
+}
+
+# Run smart cleanup script
+run_cleanup_script() {
+    log_info "Running smart backup cleanup script..."
+    
+    local cleanup_script="$BACKUP_BASE_DIR/cleanup_backups.sh"
+    
+    if [ -f "$cleanup_script" ] && [ -x "$cleanup_script" ]; then
+        log_info "Executing: $cleanup_script --execute"
+        
+        # Run the cleanup script in execute mode
+        if "$cleanup_script" --execute; then
+            log_success "Smart cleanup completed successfully"
+        else
+            log_warn "Smart cleanup script returned with warnings or errors"
+        fi
+    else
+        log_warn "Smart cleanup script not found or not executable at: $cleanup_script"
+    fi
 }
 
 # Update backup status
@@ -920,24 +988,42 @@ main() {
     
     # Verify edge functions were backed up properly
     verify_edge_functions
+    log_info "✓ Edge functions verification completed - proceeding to next step"
     
     # Export Supabase project settings and RLS policies
+    log_info "Starting Supabase settings export..."
     export_supabase_settings
+    log_info "✓ Supabase settings export completed - proceeding to next step"
     
     # Document external dependencies and recovery information
+    log_info "Starting external dependencies documentation..."
     document_external_dependencies
+    log_info "✓ External dependencies documentation completed - proceeding to next step"
     
     # Export infrastructure configurations
+    log_info "Starting infrastructure config export..."
     export_infrastructure_config
+    log_info "✓ Infrastructure config export completed - proceeding to next step"
     
     # Compress backup
+    log_info "Starting backup compression..."
     compress_backup
+    log_info "✓ Backup compression completed - proceeding to next step"
     
     # Cleanup old backups
+    log_info "Starting old backup cleanup..."
     cleanup_old_backups
+    log_info "✓ Old backup cleanup completed - proceeding to next step"
+    
+    # Run additional cleanup script
+    log_info "Starting smart cleanup script..."
+    run_cleanup_script
+    log_info "✓ Smart cleanup script completed - proceeding to next step"
     
     # Finalize backup
+    log_info "Starting backup finalization..."
     finalize_backup
+    log_info "✓ Backup finalization completed"
     
     local end_time=$(date +%s)
     local duration=$((end_time - start_time))

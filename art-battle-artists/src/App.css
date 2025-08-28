@@ -37,24 +37,33 @@ html, body {
     max-width: 100% !important;
     padding: 0.75rem !important;
     margin: 0 !important;
+    /* Increase top padding to push content down from notch/status bar */
+    padding-top: max(1.5rem, calc(env(safe-area-inset-top) + 1rem)) !important;
   }
   
-  /* Fix header on mobile */
+  /* Fix header on mobile - ensure it's in the safe area */
   .rt-Container > div:first-child {
-    margin-bottom: 1rem !important;
+    margin-bottom: 1.5rem !important;
+    padding-top: 0.5rem !important;
   }
   
   /* Better responsive flex headers */
   .rt-Flex[data-mobile-header] {
     flex-wrap: nowrap !important;
     align-items: center !important;
-    gap: 0.5rem !important;
+    gap: 0.75rem !important;
+    min-height: 48px !important;
   }
   
-  /* Optimize touch targets */
-  button, a, .clickable {
-    min-height: 44px;
-    min-width: 44px;
+  /* Ensure all interactive elements meet Apple's 44px minimum */
+  button, a, .clickable, .rt-Button {
+    min-height: 44px !important;
+    min-width: 44px !important;
+  }
+  
+  /* Special handling for logout button */
+  .rt-Button[data-radix-collection-item] {
+    padding: 0.5rem !important;
   }
   
   /* Improve readability */
@@ -62,11 +71,26 @@ html, body {
     line-height: 1.5;
   }
   
-  /* Ensure heading doesn't overflow */
+  /* Ensure heading doesn't overflow but has better sizing */
   .rt-Heading {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-size: clamp(1.25rem, 4vw, 1.75rem) !important;
+  }
+  
+  /* Better tab navigation for mobile */
+  .rt-TabsList {
+    padding: 0.5rem !important;
+    margin-bottom: 1.5rem !important;
+    border-radius: 8px !important;
+    background-color: var(--gray-2) !important;
+  }
+  
+  .rt-TabsTrigger {
+    min-height: 44px !important;
+    padding: 0.5rem 0.75rem !important;
+    font-size: 0.875rem !important;
   }
 }
 

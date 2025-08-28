@@ -1,0 +1,379 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Art Battle Authentication Monitoring",
+    "tags": ["auth", "monitoring", "sms", "otp"],
+    "style": "dark",
+    "timezone": "browser",
+    "refresh": "1m",
+    "time": {
+      "from": "now-24h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Auth Success Rate Overview",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(auth_successful_logins_total{period=\"5min\"}) / (sum(auth_successful_logins_total{period=\"5min\"}) + sum(auth_failed_attempts_total{period=\"5min\"})) * 100",
+            "legendFormat": "Success Rate %"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "red",
+                  "value": 0
+                },
+                {
+                  "color": "yellow", 
+                  "value": 60
+                },
+                {
+                  "color": "green",
+                  "value": 80
+                }
+              ]
+            }
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 2,
+        "title": "Auth Activity Timeline",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "auth_successful_logins_total{period=\"5min\"}",
+            "legendFormat": "Successful Logins"
+          },
+          {
+            "expr": "auth_failed_attempts_total{period=\"5min\"}",
+            "legendFormat": "Failed Attempts"
+          },
+          {
+            "expr": "auth_otp_requests_total{period=\"5min\"}",
+            "legendFormat": "OTP Requests"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "linear",
+              "lineWidth": 2,
+              "fillOpacity": 10
+            },
+            "unit": "short"
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "successful_logins"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "green",
+                    "mode": "fixed"
+                  }
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName", 
+                "options": "failed_attempts"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "red",
+                    "mode": "fixed"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 18,
+          "x": 6,
+          "y": 0
+        }
+      },
+      {
+        "id": 3,
+        "title": "OTP Success Rate by Country",
+        "type": "barchart", 
+        "targets": [
+          {
+            "expr": "auth_successful_logins_total{period=\"24hour\"} / (auth_successful_logins_total{period=\"24hour\"} + auth_failed_attempts_total{period=\"24hour\"}) * 100",
+            "legendFormat": "{{country}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "color": {
+              "mode": "palette-classic"
+            }
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 8
+        }
+      },
+      {
+        "id": 4,
+        "title": "Failed Attempts by Country (Last 24h)",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "auth_failed_attempts_total{period=\"24hour\"}",
+            "legendFormat": "{{country}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              }
+            }
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 8
+        }
+      },
+      {
+        "id": 5,
+        "title": "Auth Events Rate (per minute)",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "auth_hourly_successful_logins{method=\"phone\"}",
+            "legendFormat": "Phone Logins"
+          },
+          {
+            "expr": "auth_hourly_successful_logins{method=\"email\"}",
+            "legendFormat": "Email Logins"
+          },
+          {
+            "expr": "auth_hourly_failed_attempts{method=\"otp_timeout\"}",
+            "legendFormat": "Failed Attempts"
+          },
+          {
+            "expr": "auth_hourly_otp_requests{method=\"sms\"}",
+            "legendFormat": "OTP Requests"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "unit": "short",
+            "min": 0
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 16
+        }
+      },
+      {
+        "id": 6,
+        "title": "Top Failed Phone Numbers (Last 24h)",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "topk(10, auth_failed_attempts_total{period=\"24hour\"})",
+            "format": "table"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "displayMode": "list",
+              "filterable": true
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "phone_masked"
+              },
+              "properties": [
+                {
+                  "id": "displayName",
+                  "value": "Phone Number"
+                }
+              ]
+            }
+          ]
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 24
+        }
+      },
+      {
+        "id": 7,
+        "title": "Auth Error Types Distribution",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "auth_failed_attempts_total{period=\"24hour\"}",
+            "legendFormat": "{{method}} - {{country}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 24
+        }
+      },
+      {
+        "id": 8,
+        "title": "SMS vs Email Authentication",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(auth_successful_logins_total{method=\"phone\",period=\"24hour\"})",
+            "legendFormat": "Phone Logins"
+          },
+          {
+            "expr": "auth_email_logins_total{period=\"24hour\"}",
+            "legendFormat": "Email Logins"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            }
+          }
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 12,
+          "x": 0,
+          "y": 32
+        }
+      },
+      {
+        "id": 9,
+        "title": "Phone Format Issues",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "auth_failed_attempts_total{method=\"otp_timeout\",period=\"5min\"}",
+            "legendFormat": "OTP Timeout Issues"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "unit": "short"
+          }
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 12,
+          "x": 12,
+          "y": 32
+        }
+      },
+      {
+        "id": 10,
+        "title": "Critical Auth Alerts",
+        "type": "logs",
+        "targets": [
+          {
+            "expr": "auth_failed_attempts_total{period=\"1hour\"} > 10",
+            "legendFormat": "High Failure Rate Alert"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 36
+        }
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "country",
+          "type": "query",
+          "query": "label_values(auth_successful_logins_total, country)",
+          "refresh": 1,
+          "includeAll": true,
+          "allValue": ".*"
+        },
+        {
+          "name": "time_range",
+          "type": "interval",
+          "query": "1m,5m,15m,1h,6h,24h",
+          "current": {
+            "value": "5m"
+          }
+        }
+      ]
+    },
+    "annotations": {
+      "list": [
+        {
+          "name": "Auth Issues",
+          "datasource": "prometheus",
+          "expr": "auth_successful_logins_total{period=\"5min\"} / auth_otp_requests_total{period=\"5min\"} < 0.5",
+          "titleFormat": "Auth Success Rate Drop",
+          "textFormat": "Success rate dropped significantly"
+        }
+      ]
+    }
+  }
+}

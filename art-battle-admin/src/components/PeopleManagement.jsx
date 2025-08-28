@@ -305,6 +305,9 @@ const PeopleManagement = () => {
                 </Box>
               </Flex>
             </Dialog.Title>
+            <Dialog.Description size="2" color="gray" mb="4">
+              View detailed information about this person including event history, bids, votes, and contact details.
+            </Dialog.Description>
 
             <ScrollArea style={{ height: '70vh' }}>
               <Box p="4">

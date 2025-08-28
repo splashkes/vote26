@@ -52,7 +52,7 @@ const MainNavigation = () => {
   return (
     <Container size="4" style={{ 
       padding: '1rem', 
-      paddingTop: 'max(1rem, env(safe-area-inset-top))',
+      paddingTop: 'max(2rem, calc(env(safe-area-inset-top) + 1.5rem))',
       minHeight: '100vh' 
     }}>
       <Box mb="3">
@@ -80,13 +80,15 @@ const MainNavigation = () => {
             <Button 
               variant="soft" 
               color="gray" 
-              size={{ initial: '1', sm: '2' }}
+              size={{ initial: '2', sm: '2' }}
               onClick={handleLogout}
               disabled={loggingOut}
               loading={loggingOut}
               style={{
                 flexShrink: 0,
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                minHeight: '44px',
+                minWidth: '44px'
               }}
             >
               <ExitIcon width="16" height="16" />

@@ -226,13 +226,19 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
         setProfiles([]);
         setSelectedProfile(null);
       } else {
-        // No candidates found, show option to create new profile
-        console.log('Home: No candidate profiles found for phone:', userPhone);
+        // No candidates found, automatically redirect to create new profile
+        console.log('Home: No candidate profiles found for phone:', userPhone, '- automatically creating new profile');
         setProfiles([]);
         setSelectedProfile(null);
         setCandidateProfiles([]);
-        setShowProfilePicker(true); // Show picker with create new option
-        setShowCreateNewProfile(true); // Flag to show create new profile option
+        setShowProfilePicker(false);
+        setShowCreateNewProfile(false);
+        
+        // Notify parent that profile picker is hidden
+        onProfilePickerChange(false);
+        
+        // Navigate directly to profile tab where ProfileForm will handle creation
+        onNavigateToTab('profile');
       }
     } catch (err) {
       console.error('Home: Error in multi-profile lookup:', err);

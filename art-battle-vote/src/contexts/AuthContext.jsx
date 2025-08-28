@@ -182,16 +182,11 @@ export const AuthProvider = ({ children }) => {
       setMetadataSyncAttempts(prev => ({ ...prev, [userId]: now }));
       
       // Try to get metadata via RPC instead of infinite refresh loop
-      console.log('No person metadata found, attempting to sync via RPC...');
+      console.log('No person metadata found, auth-webhook will handle person linking automatically during phone confirmation');
       
-      try {
-        const { data, error } = await supabase.rpc('refresh_auth_metadata');
-        
-        if (!error && data && data.person_id) {
-          // Update local state with person data
-          setPerson({
-            id: data.person_id,
-            hash: data.person_hash,
+      // Note: auth-webhook automatically handles person linking when phone is confirmed
+      // No manual RPC call needed - the webhook updates user_metadata directly
+      console.log('Waiting for auth-webhook to complete person linking...');
             name: data.person_name,
             phone: authUser.phone
           });
@@ -209,13 +204,12 @@ export const AuthProvider = ({ children }) => {
           });
           
           if (personId) {
-            // Try to refresh metadata again
-            const { data: refreshData } = await supabase.rpc('refresh_auth_metadata');
-            if (refreshData && refreshData.person_id) {
+            // Auth-webhook automatically handles person linking - check user_metadata
+            if (authUser.user_metadata?.person_id) {
               setPerson({
-                id: refreshData.person_id,
-                hash: refreshData.person_hash,
-                name: refreshData.person_name,
+                id: authUser.user_metadata.person_id,
+                hash: authUser.user_metadata.person_hash,
+                name: authUser.user_metadata.person_name,
                 phone: authUser.phone
               });
             }

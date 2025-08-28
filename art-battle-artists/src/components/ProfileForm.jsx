@@ -85,7 +85,26 @@ const ProfileForm = ({ existingProfile = null, onSuccess }) => {
     }
   };
 
+  const autoFixWebsiteUrl = (url) => {
+    if (!url || !url.trim()) return url;
+    
+    const trimmed = url.trim();
+    
+    // If it already starts with http:// or https://, leave it as is
+    if (/^https?:\/\//.test(trimmed)) {
+      return trimmed;
+    }
+    
+    // Auto-add https:// to common domains or any URL without protocol
+    return `https://${trimmed}`;
+  };
+
   const handleChange = (field, value) => {
+    // Auto-fix website URLs when user enters them
+    if (field === 'website' && value) {
+      value = autoFixWebsiteUrl(value);
+    }
+    
     setFormData(prev => ({ ...prev, [field]: value }));
     
     // Clear validation error when user starts typing
@@ -114,11 +133,13 @@ const ProfileForm = ({ existingProfile = null, onSuccess }) => {
       }
     }
 
-    // Website validation (if provided)
+    // Website validation (if provided) - now more lenient since we auto-fix URLs
     if (formData.website && formData.website.trim()) {
-      const websiteRegex = /^https?:\/\/.+/;
-      if (!websiteRegex.test(formData.website.trim())) {
-        errors.website = 'Website must start with http:// or https://';
+      const websiteValue = formData.website.trim();
+      // Basic validation to ensure it's a reasonable URL format
+      const validUrlRegex = /^https?:\/\/[^\s/$.?#].[^\s]*$/;
+      if (!validUrlRegex.test(websiteValue)) {
+        errors.website = 'Please enter a valid website URL';
       }
     }
 

@@ -96,10 +96,13 @@ export const AuthProvider = ({ children }) => {
   };
 
   const signInWithOtp = async (phone) => {
+    // Always use recovery flow since it works reliably
+    // This will create new users if they don't exist, but via the working SMS path
     const { data, error } = await supabase.auth.signInWithOtp({
       phone: phone,
       options: {
         channel: 'sms',
+        shouldCreateUser: true  // Allow user creation via recovery flow
       }
     });
     return { data, error };

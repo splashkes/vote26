@@ -11,7 +11,7 @@ cd /root/vote_app/vote26
 ./scripts/daily-backup.sh
 
 # Check if backup was created successfully
-ls -la backups/daily_*.tar.gz | tail -1
+ls -la /nfs/store/vote26/backups/daily_*.tar.gz | tail -1
 ```
 
 ### 2. Set Up Cron Job
@@ -55,7 +55,7 @@ tail -f /var/log/artbattle-backup.log
 tail -20 /var/log/artbattle-backup.log | grep -E "(STARTED|COMPLETED|ERROR)"
 
 # Check backup file sizes
-ls -lah backups/daily_*.tar.gz | tail -5
+ls -lah /nfs/store/vote26/backups/daily_*.tar.gz | tail -5
 ```
 
 #### Check cron is running:
@@ -97,7 +97,7 @@ RETENTION_DAYS=30  # Change to desired days
 SLACK_WEBHOOK_URL="https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
 
 # Change backup location (line ~26)
-BACKUP_BASE_DIR="$PROJECT_DIR/backups"  # Change path if needed
+BACKUP_BASE_DIR="/nfs/store/vote26/backups"  # Now stored on NFS
 ```
 
 ## Backup Storage Management
@@ -109,13 +109,13 @@ BACKUP_BASE_DIR="$PROJECT_DIR/backups"  # Change path if needed
 ### Manual Cleanup
 ```bash
 # Remove backups older than 7 days
-find /root/vote_app/vote26/backups -name "daily_*.tar.gz" -mtime +7 -delete
+find /nfs/store/vote26/backups -name "daily_*.tar.gz" -mtime +7 -delete
 
 # Check total backup size
-du -sh /root/vote_app/vote26/backups
+du -sh /nfs/store/vote26/backups
 
 # Keep only last 10 backups
-cd /root/vote_app/vote26/backups && ls -1t daily_*.tar.gz | tail -n +11 | xargs -r rm
+cd /nfs/store/vote26/backups && ls -1t daily_*.tar.gz | tail -n +11 | xargs -r rm
 ```
 
 ## Backup Verification
@@ -130,13 +130,13 @@ The script automatically:
 ### Manual Verification
 ```bash
 # Test backup integrity
-tar -tzf backups/daily_YYYYMMDD_HHMMSS.tar.gz > /dev/null && echo "Archive OK"
+tar -tzf /nfs/store/vote26/backups/daily_YYYYMMDD_HHMMSS.tar.gz > /dev/null && echo "Archive OK"
 
 # Check backup contents
-tar -tzf backups/daily_YYYYMMDD_HHMMSS.tar.gz | head -10
+tar -tzf /nfs/store/vote26/backups/daily_YYYYMMDD_HHMMSS.tar.gz | head -10
 
 # Extract specific file to check
-tar -xzf backups/daily_YYYYMMDD_HHMMSS.tar.gz daily_YYYYMMDD_HHMMSS/backup_info.txt -O
+tar -xzf /nfs/store/vote26/backups/daily_YYYYMMDD_HHMMSS.tar.gz daily_YYYYMMDD_HHMMSS/backup_info.txt -O
 ```
 
 ## Troubleshooting
@@ -182,10 +182,10 @@ ping db.xsqdkubgyqwpyvfltnrf.supabase.co
 df -h
 
 # Check backup directory size
-du -sh /root/vote_app/vote26/backups
+du -sh /nfs/store/vote26/backups
 
 # Clean up old backups manually
-find /root/vote_app/vote26/backups -name "daily_*.tar.gz" -mtime +7 -delete
+find /nfs/store/vote26/backups -name "daily_*.tar.gz" -mtime +7 -delete
 ```
 
 ## Emergency Procedures
@@ -206,7 +206,7 @@ find /root/vote_app/vote26/backups -name "daily_*.tar.gz" -mtime +7 -delete
 echo $?  # Should return 0 for success
 
 # Check backup file was created
-ls -la /root/vote_app/vote26/backups/daily_*.tar.gz | tail -1
+ls -la /nfs/store/vote26/backups/daily_*.tar.gz | tail -1
 ```
 
 ## Notification Setup (Optional)

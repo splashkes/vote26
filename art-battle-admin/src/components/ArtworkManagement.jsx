@@ -342,6 +342,9 @@ const ArtworkManagement = () => {
             <Dialog.Title size="5" mb="4">
               {selectedArtwork ? selectedArtwork.title : 'Artwork Details'}
             </Dialog.Title>
+            <Dialog.Description size="2" color="gray" mb="4">
+              View detailed information about this artwork including bids, votes, and metadata.
+            </Dialog.Description>
             {selectedArtwork && (
               <Box>
                 

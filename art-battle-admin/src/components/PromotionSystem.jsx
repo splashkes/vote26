@@ -169,9 +169,16 @@ const PromotionSystem = () => {
         } : null
       };
 
-      const { data, error } = await supabase.functions.invoke('admin-sms-promotion-audience', {
+      // Add timeout to prevent hanging requests
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Request timed out after 30 seconds')), 30000)
+      );
+      
+      const apiPromise = supabase.functions.invoke('admin-sms-promotion-audience', {
         body: requestBody
       });
+      
+      const { data, error } = await Promise.race([apiPromise, timeoutPromise]);
 
       if (error) {
         // Get detailed error response from the Response object
@@ -207,29 +214,44 @@ const PromotionSystem = () => {
     if (rfmProcessing) return;
 
     setRfmProcessing(true);
-    setRfmProgress({ processed: 0, total: audienceData.available_count, progress_percent: 0 });
+    setRfmProgress({ processed: 0, total: 0, progress_percent: 0 }); // Will be updated with actual total
 
     try {
-      // Get current audience person IDs
-      const audienceResponse = await supabase.functions.invoke('admin-sms-promotion-audience', {
+      // Get ALL person IDs efficiently for RFM processing (not limited to UI sample)
+      const idsResponse = await supabase.functions.invoke('admin-sms-get-all-person-ids', {
         body: {
           city_ids: selectedCities,
           event_ids: selectedEvents,
-          rfm_filters: null // Get all people first
+          recent_message_hours: recentMessageHours
         }
       });
 
-      if (!audienceResponse.data.success) {
-        throw new Error(audienceResponse.data.error);
+      if (idsResponse.error) {
+        console.error('Person IDs API error:', idsResponse.error);
+        throw new Error(`Failed to fetch person IDs: ${idsResponse.error.message}`);
       }
 
-      const personIds = audienceResponse.data.people.map(p => p.id);
+      if (!idsResponse.data || !idsResponse.data.success) {
+        throw new Error(idsResponse.data?.error || 'Unknown error from person IDs API');
+      }
+
+      const personIds = idsResponse.data.person_ids;
+      
+      // Update progress with actual total from person IDs response
+      setRfmProgress({ processed: 0, total: personIds.length, progress_percent: 0 });
       
       if (personIds.length === 0) {
         throw new Error('No people found in audience to process RFM scores');
       }
       
       console.log(`Starting RFM processing for ${personIds.length} people`);
+      console.log(`Person IDs response details:`, {
+        total_from_api: idsResponse.data.total_count,
+        person_ids_length: personIds.length,
+        selected_cities: selectedCities,
+        selected_events: selectedEvents,
+        first_few_ids: personIds.slice(0, 5)
+      });
       
       // Setup streaming RFM processing
       const token = (await supabase.auth.getSession()).data.session?.access_token;
@@ -268,48 +290,57 @@ const PromotionSystem = () => {
         throw new Error(errorMessage);
       }
 
-      // Process Server-Sent Events
+      // Process Server-Sent Events with better error handling
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
+      let buffer = '';
 
       while (reader) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n');
+        // Append new chunk to buffer
+        buffer += decoder.decode(value, { stream: true });
+        
+        // Process complete lines from buffer
+        const lines = buffer.split('\n');
+        // Keep incomplete line in buffer
+        buffer = lines.pop() || '';
         
         for (const line of lines) {
           if (line.startsWith('data: ')) {
             try {
-              const data = JSON.parse(line.slice(6));
-              
-              if (data.type === 'progress') {
-                setRfmProgress({
-                  processed: data.processed,
-                  total: data.needed_updates,
-                  progress_percent: data.progress_percent,
-                  errors: data.errors,
-                  status: data.status
-                });
-              } else if (data.type === 'complete') {
-                setRfmProgress({
-                  processed: data.processed,
-                  total: data.needed_updates,
-                  completion_rate: data.completion_rate,
-                  progress_percent: 100,
-                  errors: data.errors,
-                  status: 'completed'
-                });
+              const jsonStr = line.slice(6).trim();
+              if (jsonStr) {
+                const data = JSON.parse(jsonStr);
                 
-                // Refresh audience calculation with RFM filters after completion
-                await calculateAudience();
-                break;
-              } else if (data.type === 'error') {
-                throw new Error(data.error);
+                if (data.type === 'progress') {
+                  setRfmProgress({
+                    processed: data.processed,
+                    total: data.needed_updates,
+                    progress_percent: data.progress_percent,
+                    errors: data.errors,
+                    status: data.status
+                  });
+                } else if (data.type === 'complete') {
+                  setRfmProgress({
+                    processed: data.processed,
+                    total: data.needed_updates,
+                    completion_rate: data.completion_rate,
+                    progress_percent: 100,
+                    errors: data.errors,
+                    status: 'completed'
+                  });
+                  
+                  // Refresh audience calculation with RFM filters after completion
+                  await calculateAudience();
+                  break;
+                } else if (data.type === 'error') {
+                  throw new Error(data.error);
+                }
               }
             } catch (parseError) {
-              console.error('Error parsing SSE data:', parseError);
+              console.error('Error parsing SSE data:', parseError, 'Line:', line);
             }
           }
         }
