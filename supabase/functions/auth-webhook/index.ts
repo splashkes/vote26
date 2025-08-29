@@ -94,8 +94,8 @@ serve(async (req)=>{
       }
       // Update auth user metadata with person info (fire-and-forget)
       updateAuthUserMetadata(newRecord.id, personId, qrPersonHash, qrPersonData?.name || personName || 'User').catch((err)=>console.warn('Auth metadata update failed (non-critical):', err));
-      // Send success notification (fire-and-forget)
-      sendPersonLinkNotification(newRecord.id, personId, qrPersonData?.name || personName || 'User', authPhone, 'linked_qr').catch((err)=>console.warn('Slack notification failed (non-critical):', err));
+      // Send success notification (truly fire-and-forget - removed to fix token refresh delays)
+      // sendPersonLinkNotification(newRecord.id, personId, qrPersonData?.name || personName || 'User', authPhone, 'linked_qr').catch((err)=>console.warn('Slack notification failed (non-critical):', err));
       console.log('Successfully linked QR user to person:', personId);
     } else {
       // Direct OTP user: Find or create person
@@ -128,16 +128,16 @@ serve(async (req)=>{
           console.error('Failed to update corrupted phone:', phoneUpdateError);
         } else {
           console.log(`Successfully updated phone from ${existingPersonByPhone.phone} to ${authPhone}`);
-          // Send Slack notification about the fix
-          try {
-            await supabase.rpc('queue_slack_notification', {
-              channel: 'profile-debug',
-              notification_type: 'phone_corruption_fixed',
-              message: `📞 Phone Corruption Fixed!\nUser: ${newRecord.id}\nCorrected: ${existingPersonByPhone.phone} → ${authPhone}\nMethod: Using validated auth phone (eliminated redundant Twilio call)`
-            });
-          } catch (slackError) {
-            console.warn('Slack notification failed:', slackError);
-          }
+          // Send Slack notification about the fix (removed to prevent auth delays)
+          // try {
+          //   await supabase.rpc('queue_slack_notification', {
+          //     channel: 'profile-debug',
+          //     notification_type: 'phone_corruption_fixed',
+          //     message: `📞 Phone Corruption Fixed!\nUser: ${newRecord.id}\nCorrected: ${existingPersonByPhone.phone} → ${authPhone}\nMethod: Using validated auth phone (eliminated redundant Twilio call)`
+          //   });
+          // } catch (slackError) {
+          //   console.warn('Slack notification failed:', slackError);
+          // }
         }
       }
       if (existingPersonByPhone) {
@@ -170,8 +170,8 @@ serve(async (req)=>{
         personId = existingPersonByPhone.id;
         // Update auth user metadata with person info (fire-and-forget)
         updateAuthUserMetadata(newRecord.id, personId, personHash, existingPersonByPhone.name || 'User').catch((err)=>console.warn('Auth metadata update failed (non-critical):', err));
-        // Send success notification (fire-and-forget)
-        sendPersonLinkNotification(newRecord.id, personId, existingPersonByPhone.name || 'User', authPhone, 'linked_existing').catch((err)=>console.warn('Slack notification failed (non-critical):', err));
+        // Send success notification (removed to fix token refresh delays)
+        // sendPersonLinkNotification(newRecord.id, personId, existingPersonByPhone.name || 'User', authPhone, 'linked_existing').catch((err)=>console.warn('Slack notification failed (non-critical):', err));
         console.log('Successfully linked OTP user to existing person:', personId);
       } else {
         // Create new person with complete metadata
@@ -197,8 +197,8 @@ serve(async (req)=>{
         personId = newPerson.id;
         // Update auth user metadata with person info (fire-and-forget)
         updateAuthUserMetadata(newRecord.id, personId, personHash, 'User').catch((err)=>console.warn('Auth metadata update failed (non-critical):', err));
-        // Send success notification (fire-and-forget)
-        sendPersonLinkNotification(newRecord.id, personId, 'User', authPhone, 'created_new').catch((err)=>console.warn('Slack notification failed (non-critical):', err));
+        // Send success notification (removed to fix token refresh delays)
+        // sendPersonLinkNotification(newRecord.id, personId, 'User', authPhone, 'created_new').catch((err)=>console.warn('Slack notification failed (non-critical):', err));
         console.log('Successfully created new person:', personId);
       }
     }

@@ -188,16 +188,16 @@ serve(async (req)=>{
                 console.error('Failed to update corrupted phone:', phoneUpdateError)
               } else {
                 console.log(`Successfully updated phone from ${existingPersonByPhone.phone} to ${twilioResult.phoneNumber}`)
-                // Send Slack notification about the fix
-                try {
-                  await supabase.rpc('queue_slack_notification', {
-                    channel: 'profile-debug',
-                    notification_type: 'phone_corruption_fixed',
-                    message: `📞 Phone Corruption Fixed!\nUser: ${user.id}\nCorrected: ${existingPersonByPhone.phone} → ${twilioResult.phoneNumber}\nMethod: Twilio validation during QR scan`
-                  })
-                } catch (slackError) {
-                  console.warn('Slack notification failed:', slackError)
-                }
+                // Send Slack notification about the fix (removed to prevent QR scan delays)
+                // try {
+                //   await supabase.rpc('queue_slack_notification', {
+                //     channel: 'profile-debug',
+                //     notification_type: 'phone_corruption_fixed',
+                //     message: `📞 Phone Corruption Fixed!\nUser: ${user.id}\nCorrected: ${existingPersonByPhone.phone} → ${twilioResult.phoneNumber}\nMethod: Twilio validation during QR scan`
+                //   })
+                // } catch (slackError) {
+                //   console.warn('Slack notification failed:', slackError)
+                // }
               }
             }
           }
