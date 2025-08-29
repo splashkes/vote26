@@ -12,7 +12,7 @@
    5457dcc3-222b-478c-81ec-e4389db42aa9 | stripe-payment-status                | stripe-payment-status                | ACTIVE | 20      | 2025-08-20 02:09:06 
    04f714a0-8f9b-4b91-88f6-79c0da5d2270 | stripe-payment-success               | stripe-payment-success               | ACTIVE | 8       | 2025-08-07 15:12:59 
    9f46f40d-c8a2-41e1-9be9-28907854cac6 | generate-qr-code                     | generate-qr-code                     | ACTIVE | 17      | 2025-08-17 02:52:07 
-   67c32bde-f086-4e96-b93a-bf36f206ce6d | validate-qr-scan                     | validate-qr-scan                     | ACTIVE | 22      | 2025-08-26 21:50:40 
+   67c32bde-f086-4e96-b93a-bf36f206ce6d | validate-qr-scan                     | validate-qr-scan                     | ACTIVE | 23      | 2025-08-29 02:58:13 
    ac213821-da19-4780-8187-affbc3537625 | phone-validation                     | phone-validation                     | ACTIVE | 8       | 2025-08-09 06:20:36 
    9dd34012-e1bd-4866-8e05-76c245692f9c | stripe-connect-onboard               | stripe-connect-onboard               | ACTIVE | 8       | 2025-08-10 16:27:57 
    e8b2f697-7117-4f57-9479-4011cc3663d0 | stripe-connect-debug                 | stripe-connect-debug                 | ACTIVE | 6       | 2025-08-10 17:36:48 
@@ -39,7 +39,7 @@
    a67e2f52-ad71-4db9-84fe-ec054284aeba | admin-update-event                   | admin-update-event                   | ACTIVE | 6       | 2025-08-18 22:00:21 
    bf33567b-28c3-49cb-a41a-3e69b0be956a | create-profile-clean                 | create-profile-clean                 | ACTIVE | 4       | 2025-08-18 15:06:42 
    5b52601b-f626-478a-93ed-0d0571ac906d | update-profile-clean                 | update-profile-clean                 | ACTIVE | 6       | 2025-08-25 20:09:54 
-   2009943e-a0d8-403f-beec-83a97554cb99 | auth-webhook                         | auth-webhook                         | ACTIVE | 16      | 2025-08-28 14:02:26 
+   2009943e-a0d8-403f-beec-83a97554cb99 | auth-webhook                         | auth-webhook                         | ACTIVE | 18      | 2025-08-29 02:58:11 
    db0cc42a-d685-4e79-bc8e-9397141f9ebb | v2-public-event                      | v2-public-event                      | ACTIVE | 32      | 2025-08-21 09:13:04 
    578099a2-53fd-4f82-8a47-1e53d5ddf493 | v2-public-events                     | v2-public-events                     | ACTIVE | 4       | 2025-08-18 00:55:49 
    6ca1cb6e-e1c3-456f-8f6e-f52f28a39a1f | v2-public-bids                       | v2-public-bids                       | ACTIVE | 4       | 2025-08-18 14:23:24 
@@ -58,7 +58,7 @@
    2fbe7ba9-3617-4208-894f-0ac34eb825a4 | test-smtp                            | test-smtp                            | ACTIVE | 3       | 2025-08-25 18:55:49 
    20c5f9e0-315b-490f-8fcb-7781eee96ec1 | process-slack-queue                  | process-slack-queue                  | ACTIVE | 3       | 2025-08-25 19:50:18 
    42de2f81-4120-4344-9362-472cb67d5b82 | cancel-confirmation                  | cancel-confirmation                  | ACTIVE | 12      | 2025-08-26 15:32:51 
-   c651f478-86e2-4718-ba98-032e11c7727e | get-event-details-for-artist-profile | get-event-details-for-artist-profile | ACTIVE | 3       | 2025-08-26 02:06:50 
+   c651f478-86e2-4718-ba98-032e11c7727e | get-event-details-for-artist-profile | get-event-details-for-artist-profile | ACTIVE | 4       | 2025-08-29 03:41:10 
    9c8a3f07-39e4-4183-83ea-532919a25a30 | accept-invitation                    | accept-invitation                    | ACTIVE | 5       | 2025-08-26 16:27:49 
    f7da6757-7229-4808-b4a3-4ca490c0a6a1 | auction-csv-export                   | auction-csv-export                   | ACTIVE | 13      | 2025-08-26 03:47:10 
    eef9e9ea-2979-4fd4-80a1-d0c8061f336c | admin-bid-history                    | admin-bid-history                    | ACTIVE | 3       | 2025-08-26 03:22:39 
