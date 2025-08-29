@@ -18,7 +18,6 @@
    v_duration_ms INTEGER;                                                                                              +
    v_log_metadata JSONB;                                                                                               +
    v_operation_result TEXT;                                                                                            +
-   v_slack_message TEXT;                                                                                               +
  BEGIN                                                                                                                 +
    v_start_time := clock_timestamp();                                                                                  +
                                                                                                                        +
@@ -30,13 +29,6 @@
        NULL, NULL, NULL,                                                                                               +
        'metadata_refresh', 'refresh_auth_metadata',                                                                    +
        false, 'not_authenticated', 'No authenticated user found'                                                       +
-     );                                                                                                                +
-                                                                                                                       +
-     -- Slack notification for unauthenticated access                                                                  +
-     PERFORM queue_slack_notification(                                                                                 +
-       'profile-debug',                                                                                                +
-       'auth_refresh_failed',                                                                                          +
-       '🚫 Auth Refresh Failed: No authenticated user found'                                                            +
      );                                                                                                                +
                                                                                                                        +
      RETURN jsonb_build_object(                                                                                        +
@@ -55,13 +47,6 @@
        v_auth_user_id, NULL, NULL,                                                                                     +
        'metadata_refresh', 'refresh_auth_metadata',                                                                    +
        false, 'phone_missing', 'No phone number found in auth record'                                                  +
-     );                                                                                                                +
-                                                                                                                       +
-     -- Slack notification for missing phone                                                                           +
-     PERFORM queue_slack_notification(                                                                                 +
-       'profile-debug',                                                                                                +
-       'auth_refresh_failed',                                                                                          +
-       '📞 Auth Refresh Failed: No phone number found' || E'\nUser: ' || v_auth_user_id::text                           +
      );                                                                                                                +
                                                                                                                        +
      RETURN jsonb_build_object(                                                                                        +
@@ -140,19 +125,6 @@
        'person_name', v_person_name                                                                                    +
      );                                                                                                                +
                                                                                                                        +
-     -- Slack notification for successful person linking                                                               +
-     v_slack_message := '🔗 Auth Refresh Success: Linked Existing Person' || E'\n' ||                                   +
-                        'User: ' || v_auth_user_id::text || E'\n' ||                                                   +
-                        'Person: ' || v_person_id::text || E'\n' ||                                                    +
-                        'Name: ' || COALESCE(v_person_name, 'User') || E'\n' ||                                        +
-                        'Phone: ' || v_auth_phone;                                                                     +
-                                                                                                                       +
-     PERFORM queue_slack_notification(                                                                                 +
-       'profile-debug',                                                                                                +
-       'auth_refresh_success',                                                                                         +
-       v_slack_message                                                                                                 +
-     );                                                                                                                +
-                                                                                                                       +
    ELSE                                                                                                                +
      -- Create new person for direct OTP signup                                                                        +
      v_operation_result := 'person_created_new';                                                                       +
@@ -191,19 +163,6 @@
        'person_found', false,                                                                                          +
        'person_created', true,                                                                                         +
        'new_person_phone', '+1' || v_normalized_phone                                                                  +
-     );                                                                                                                +
-                                                                                                                       +
-     -- Slack notification for new person creation                                                                     +
-     v_slack_message := '🆕 Auth Refresh Success: Created New Person' || E'\n' ||                                       +
-                        'User: ' || v_auth_user_id::text || E'\n' ||                                                   +
-                        'Person: ' || v_person_id::text || E'\n' ||                                                    +
-                        'Phone (Normalized): +1' || v_normalized_phone || E'\n' ||                                     +
-                        'Phone (Auth): ' || v_auth_phone;                                                              +
-                                                                                                                       +
-     PERFORM queue_slack_notification(                                                                                 +
-       'profile-debug',                                                                                                +
-       'auth_refresh_success',                                                                                         +
-       v_slack_message                                                                                                 +
      );                                                                                                                +
    END IF;                                                                                                             +
                                                                                                                        +
@@ -255,19 +214,6 @@
        'metadata_refresh', 'refresh_auth_metadata',                                                                    +
        false, 'database_error', SQLERRM, v_duration_ms,                                                                +
        jsonb_build_object('sql_error', SQLERRM, 'sql_state', SQLSTATE)                                                 +
-     );                                                                                                                +
-                                                                                                                       +
-     -- Slack notification for database errors                                                                         +
-     v_slack_message := '💥 Auth Refresh Database Error' || E'\n' ||                                                    +
-                        'User: ' || COALESCE(v_auth_user_id::text, 'unknown') || E'\n' ||                              +
-                        'Phone: ' || COALESCE(v_auth_phone, 'unknown') || E'\n' ||                                     +
-                        'Error: ' || SQLERRM || E'\n' ||                                                               +
-                        'Duration: ' || COALESCE(v_duration_ms::text, '0') || 'ms';                                    +
-                                                                                                                       +
-     PERFORM queue_slack_notification(                                                                                 +
-       'profile-debug',                                                                                                +
-       'auth_refresh_error',                                                                                           +
-       v_slack_message                                                                                                 +
      );                                                                                                                +
                                                                                                                        +
      RETURN jsonb_build_object(                                                                                        +

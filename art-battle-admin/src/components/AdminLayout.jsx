@@ -24,7 +24,7 @@ const AdminLayout = () => {
   // Release notes modal
   const { showReleaseNotes, closeReleaseNotes } = useReleaseNotes();
 
-  console.log('AdminLayout render:', { user: user?.email, loading, location: location.pathname });
+  // Removed excessive console logging to reduce render noise
 
   // Check if user is actually an admin
   useEffect(() => {
@@ -47,11 +47,11 @@ const AdminLayout = () => {
           setAdminError('Failed to verify admin permissions');
           setAdminUser(null);
         } else if (!adminData || adminData.length === 0) {
-          console.log('User is not an admin:', user.email);
+          // User is not an admin
           setAdminError('Access denied: User is not an admin');
           setAdminUser(null);
         } else {
-          console.log('User is admin:', adminData[0]);
+          // User is admin
           setAdminUser(adminData[0]);
         }
       } catch (err) {
@@ -102,7 +102,7 @@ const AdminLayout = () => {
 
   // Redirect to login if not authenticated
   if (!user) {
-    console.log('No user, redirecting to login');
+    // No user, redirecting to login
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 

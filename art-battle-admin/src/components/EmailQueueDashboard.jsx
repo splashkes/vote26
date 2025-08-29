@@ -92,8 +92,7 @@ const EmailQueueDashboard = () => {
     
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      console.log('Session:', session);
-      console.log('Access token:', session?.access_token?.substring(0, 50) + '...');
+      // Session debugging removed to reduce console noise
       
       if (!session) throw new Error('Not authenticated');
 
@@ -133,11 +132,15 @@ const EmailQueueDashboard = () => {
 
       if (statsResponse.ok) {
         const statsData = await statsResponse.json();
-        // Convert array of stats to object
+        // Convert array of stats to object - handle response safely
         const statsObj = {};
-        (statsData.data || []).forEach(stat => {
-          statsObj[stat.status] = stat.count;
-        });
+        if (Array.isArray(statsData.data)) {
+          statsData.data.forEach(stat => {
+            statsObj[stat.status] = stat.count;
+          });
+        } else {
+          console.error('Stats API returned non-array data:', statsData);
+        }
         setStats(statsObj);
       }
 
