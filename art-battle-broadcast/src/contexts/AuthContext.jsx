@@ -92,25 +92,12 @@ export const AuthProvider = ({ children }) => {
       // Auth-webhook now handles all person linking automatically
       console.log('No person metadata found - auth-webhook will handle linking on next login');
       
-      try {
-        // Just refresh the session to get updated JWT with person data
-        const { data: { session } } = await supabase.auth.refreshSession();
-        if (session && session.user?.user_metadata?.person_id) {
-          // Update local state with person data from JWT
-          setPerson({
-            id: session.user.user_metadata.person_id,
-            hash: session.user.user_metadata.person_hash,
-            name: session.user.user_metadata.person_name,
-            phone: authUser.phone
-          });
-          console.log('Session refreshed with person metadata');
-        } else {
-          console.log('No person metadata found in session - auth-webhook will handle on next login');
-        }
-      } catch (err) {
-        console.error('Error syncing metadata:', err);
-        setPerson(null);
-      }
+      // REMOVED: Manual refreshSession() call that caused infinite refresh loops
+      // The auth-webhook now handles person linking automatically during phone confirmation
+      // Manual refresh calls trigger constant token refresh requests causing 15+ second delays
+      // Trust the auth state change handler to receive updated metadata when ready
+      console.log('No person metadata found - auth-webhook will handle linking automatically');
+      setPerson(null);
     }
   };
 
@@ -131,16 +118,10 @@ export const AuthProvider = ({ children }) => {
       type: 'sms'
     });
     
-    // If verification successful, refresh session to get updated metadata
-    if (data?.user && !error) {
-      // Give the trigger a moment to update metadata
-      setTimeout(async () => {
-        const { data: { session } } = await supabase.auth.refreshSession();
-        if (session?.user) {
-          await extractPersonFromMetadata(session.user);
-        }
-      }, 500);
-    }
+    // REMOVED: Manual refreshSession() call that caused infinite refresh loops
+    // The auth-webhook handles metadata updates automatically during phone confirmation
+    // Auth state change listener will receive updated user data when webhook completes
+    // Manual refresh calls were causing 15+ second delays and constant refresh spam
     
     return { data, error };
   };
