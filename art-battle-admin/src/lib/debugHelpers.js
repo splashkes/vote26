@@ -2,8 +2,8 @@
  * Debug helpers for displaying missing data in development
  */
 
-// Global debug mode flag - can be toggled via console or environment
-window.ADMIN_DEBUG_MODE = true;
+// Global debug mode flag - disabled in production
+window.ADMIN_DEBUG_MODE = false;
 
 export const setDebugMode = (enabled) => {
   window.ADMIN_DEBUG_MODE = enabled;

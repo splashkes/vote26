@@ -170,7 +170,7 @@ const EventDashboard = () => {
         return;
       }
 
-      console.log('EventDashboard: Fetched', data?.length, 'events from database');
+      // Event fetching logged for monitoring
       debugObject(data?.[0], 'Sample Event Data');
       setEvents(data || []);
 

@@ -144,7 +144,7 @@ const ArtistsManagement = () => {
       if (allArtistNumbers.size > 0) {
         const artistNumbersArray = Array.from(allArtistNumbers);
         const batchSize = 50; // Larger batches for faster loading
-        console.log(`Loading ${artistNumbersArray.length} unique artist profiles in batches of ${batchSize}`);
+        // Loading artist profiles in batches
         const totalBatches = Math.ceil(artistNumbersArray.length / batchSize);
         let allProfiles = {};
         let completedBatches = 0;
