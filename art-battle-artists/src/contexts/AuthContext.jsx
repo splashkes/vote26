@@ -69,29 +69,9 @@ export const AuthProvider = ({ children }) => {
       // Update last attempt time
       setMetadataSyncAttempts(prev => ({ ...prev, [userId]: now }));
       
-      // Auth-webhook now handles all person linking automatically
-      console.log('No person metadata found - auth-webhook will handle linking on next login');
-      
-      try {
-        // Just refresh the session to get updated JWT with person data
-        const { data: { session } } = await supabase.auth.refreshSession();
-        
-        if (session && session.user?.user_metadata?.person_id) {
-          // Update local state with person data from JWT
-          setPerson({
-            id: session.user.user_metadata.person_id,
-            hash: session.user.user_metadata.person_hash,
-            name: session.user.user_metadata.person_name,
-            phone: authUser.phone
-          });
-          console.log('Session refreshed with person metadata');
-        } else {
-          console.log('No person metadata found in session - auth-webhook will handle on next login');
-        }
-      } catch (err) {
-        console.error('Error syncing metadata:', err);
-        setPerson(null);
-      }
+      // Auth-webhook handles all person linking automatically during phone confirmation
+      console.log('No person metadata found - will be available after auth-webhook processing');
+      setPerson(null);
     }
   };
 
@@ -115,16 +95,8 @@ export const AuthProvider = ({ children }) => {
       type: 'sms'
     });
     
-    // If verification successful, refresh session to get updated metadata
-    if (data?.user && !error) {
-      // Give the trigger a moment to update metadata
-      setTimeout(async () => {
-        const { data: { session } } = await supabase.auth.refreshSession();
-        if (session?.user) {
-          await extractPersonFromMetadata(session.user);
-        }
-      }, 500);
-    }
+    // Auth-webhook handles metadata updates automatically during phone confirmation
+    // No need to manually refresh - next auth state change will have updated metadata
     
     return { data, error };
   };
