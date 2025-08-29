@@ -48,7 +48,8 @@ import {
   EyeNoneIcon,
   EyeOpenIcon as ViewedIcon,
   DotFilledIcon,
-  BadgeIcon
+  BadgeIcon,
+  ReloadIcon
 } from '@radix-ui/react-icons';
 import { getRFMScore, getBatchRFMScores, getSegmentColor, getSegmentTier } from '../lib/rfmScoring';
 import PersonTile from './PersonTile';
@@ -108,12 +109,30 @@ const EventDetail = () => {
   const [sendingInvitation, setSendingInvitation] = useState(false);
   const [sendingReminder, setSendingReminder] = useState(false);
   const [reminderSent, setReminderSent] = useState(false);
+  const [reminderPhoneUsed, setReminderPhoneUsed] = useState(null);
   const [showAllArtists, setShowAllArtists] = useState(false);
 
   useEffect(() => {
     if (eventId) {
-      fetchEventDetail();
-      fetchHealthData();
+      // Preload all data for fast tab switching - fetch event details first, then others
+      const loadAllData = async () => {
+        try {
+          // Load event details first (required for artist data)
+          const eventData = await fetchEventDetail();
+          
+          // Then load all other data in parallel, passing event data to artist fetch
+          await Promise.all([
+            fetchHealthData(),
+            fetchArtistData(0, eventData),
+            fetchEventPeople(),
+            fetchEventAdmins()
+          ]);
+        } catch (err) {
+          console.error('Error preloading event data:', err);
+        }
+      };
+      
+      loadAllData();
     }
   }, [eventId]);
 
@@ -144,14 +163,16 @@ const EventDetail = () => {
       if (fetchError) {
         console.error('Error fetching event detail:', fetchError);
         setError(fetchError.message);
-        return;
+        throw fetchError;
       }
 
       debugObject(data, 'Event Detail Data');
       setEvent(data);
+      return data; // Return the event data
     } catch (err) {
       console.error('Error in fetchEventDetail:', err);
       setError('Failed to load event details');
+      throw err;
     } finally {
       setLoading(false);
     }
@@ -309,11 +330,24 @@ const EventDetail = () => {
     }
   };
 
-  const fetchArtistData = async () => {
+  const fetchArtistData = async (retryCount = 0, eventData = null) => {
     if (!eventId) return;
     
     try {
       setArtistsLoading(true);
+      
+      // Use passed event data or fall back to state
+      const currentEvent = eventData || event;
+      
+      // Wait for event data to be available if this is a retry
+      if (retryCount > 0 && !currentEvent?.eid) {
+        console.log('Waiting for event data before fetching artists...');
+        await new Promise(resolve => setTimeout(resolve, 500 * retryCount));
+      }
+      
+      if (!currentEvent?.eid) {
+        throw new Error('Event EID not available');
+      }
       
       // Get the current session for authentication
       const { data: { session } } = await supabase.auth.getSession();
@@ -329,7 +363,7 @@ const EventDetail = () => {
           'Content-Type': 'application/json',
           'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcWRrdWJneXF3cHl2Zmx0bnJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM0MjE2OTYsImV4cCI6MjA2ODk5NzY5Nn0.hY8v8IDZQTcdAFa_OvQNFd1CyvabGcOZZMn_J6c4c2U'
         },
-        body: JSON.stringify({ eventEid: event.eid })
+        body: JSON.stringify({ eventEid: currentEvent.eid })
       });
 
       if (!workflowResponse.ok) {
@@ -438,6 +472,19 @@ const EventDetail = () => {
       
     } catch (err) {
       console.error('Error fetching artist data:', err);
+      
+      // Auto-retry up to 3 times with increasing delays
+      if (retryCount < 3) {
+        console.log(`Retrying artist data fetch (attempt ${retryCount + 1}/3)...`);
+        setArtistsLoading(false);
+        setTimeout(() => fetchArtistData(retryCount + 1, eventData), 1000 * (retryCount + 1));
+        return;
+      }
+      
+      // If all retries failed, show empty state
+      setArtistApplications([]);
+      setArtistInvites([]);
+      setArtistConfirmations([]);
     } finally {
       setArtistsLoading(false);
     }
@@ -723,6 +770,7 @@ const EventDetail = () => {
     setBioSaving(false);
     
     // Reset reminder states
+    setReminderPhoneUsed(null);
     setSendingReminder(false);
     setReminderSent(false);
     
@@ -1048,16 +1096,34 @@ The Art Battle Team`);
   const handleSendReminder = async (artist) => {
     console.log('handleSendReminder clicked! Artist full object:', artist);
     console.log('Artist profiles:', artist?.artist_profiles);
-    console.log('Available phone fields:', {
-      phone_number: artist?.artist_profiles?.phone_number,
-      phone: artist?.artist_profiles?.phone,
-      mobile_phone: artist?.artist_profiles?.mobile_phone,
-      artist_phone: artist?.phone_number,
-      artist_mobile: artist?.mobile_phone
-    });
     
     const name = artist?.artist_profiles?.name;
-    const phone = artist?.artist_profiles?.phone_number || artist?.artist_profiles?.phone || artist?.phone_number;
+    
+    // First try to get auth phone from people table via artist_number
+    let phone = null;
+    
+    try {
+      // Query people table to get auth_phone for this artist
+      const { data: personData, error: personError } = await supabase
+        .from('people')
+        .select('auth_phone, phone')
+        .eq('artist_number', artist.artist_number)
+        .single();
+        
+      if (!personError && personData) {
+        // Use auth_phone from user account (preferred)
+        phone = personData.auth_phone || personData.phone;
+        console.log('Using auth phone from user account:', phone);
+      } else {
+        console.log('No person record found, falling back to artist profile phone');
+        // Fallback to artist profile phone
+        phone = artist?.artist_profiles?.phone_number || artist?.artist_profiles?.phone || artist?.phone_number;
+      }
+    } catch (err) {
+      console.error('Error fetching person auth_phone:', err);
+      // Fallback to artist profile phone
+      phone = artist?.artist_profiles?.phone_number || artist?.artist_profiles?.phone || artist?.phone_number;
+    }
     
     if (!name || !phone) {
       console.error('Missing artist data:', { 
@@ -1097,6 +1163,7 @@ The Art Battle Team`);
         console.log('SMS sent successfully, message ID:', data);
         showAdminMessage('success', `Reminder SMS sent to ${phone}`);
         setReminderSent(true);
+        setReminderPhoneUsed(phone);
       }
     } catch (err) {
       console.error('Error sending reminder:', err);
@@ -1485,17 +1552,19 @@ The Art Battle Team`);
         <Card>
           <Tabs.Root defaultValue="health">
             <Tabs.List>
-              <Tabs.Trigger value="health" onClick={fetchHealthData}>
+              <Tabs.Trigger value="health">
                 Health
               </Tabs.Trigger>
-              <Tabs.Trigger value="recommendations" onClick={fetchHealthData}>
+              <Tabs.Trigger value="recommendations">
                 Recommendations
               </Tabs.Trigger>
-              <Tabs.Trigger value="artists" onClick={fetchArtistData}>Artists</Tabs.Trigger>
-              <Tabs.Trigger value="people" onClick={fetchEventPeople}>
+              <Tabs.Trigger value="artists">
+                Artists ({artistApplications.length + artistInvites.length + artistConfirmations.length})
+              </Tabs.Trigger>
+              <Tabs.Trigger value="people">
                 People ({eventPeople.length})
               </Tabs.Trigger>
-              <Tabs.Trigger value="admins" onClick={fetchEventAdmins}>
+              <Tabs.Trigger value="admins">
                 Admins ({eventAdmins.length})
               </Tabs.Trigger>
             </Tabs.List>
@@ -1765,7 +1834,7 @@ The Art Battle Team`);
                   </Box>
                 ) : (
                   <Flex direction="column" gap="4">
-                    {/* Header with Progress */}
+                    {/* Header with Progress and Refresh */}
                     <Flex justify="between" align="center">
                       <Box>
                         <Text size="4" weight="bold" mb="1" style={{ display: 'block' }}>
@@ -1776,6 +1845,15 @@ The Art Battle Team`);
                         </Text>
                       </Box>
                       <Flex align="center" gap="4">
+                        <Button 
+                          variant="outline" 
+                          size="2" 
+                          onClick={() => fetchArtistData(0)}
+                          disabled={artistsLoading}
+                        >
+                          <ReloadIcon />
+                          {artistsLoading ? 'Refreshing...' : 'Refresh'}
+                        </Button>
                         <Badge color="blue" size="2">
                           {getFilteredApplications().length} Applied
                         </Badge>
@@ -3048,7 +3126,7 @@ The Art Battle Team`);
                                 Sending SMS...
                               </Flex>
                             ) : reminderSent ? (
-                              `SMS sent to ${selectedArtist?.artist_profiles?.phone_number || selectedArtist?.artist_profiles?.phone || selectedArtist?.phone_number}`
+                              `SMS sent to ${reminderPhoneUsed || 'phone'}`
                             ) : (
                               'Send Reminder'
                             )}
