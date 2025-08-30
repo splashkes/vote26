@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 
 const AuthContext = createContext({});
@@ -13,6 +13,12 @@ export const AuthProvider = ({ children }) => {
   const [metadataSyncAttempts, setMetadataSyncAttempts] = useState({});
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [sessionWarning, setSessionWarning] = useState(null);
+  const personRef = useRef(null);
+
+  // Keep ref in sync with person state
+  useEffect(() => {
+    personRef.current = person;
+  }, [person]);
 
   useEffect(() => {
     console.log('AuthContext: Initializing...');
@@ -33,7 +39,7 @@ export const AuthProvider = ({ children }) => {
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          await extractPersonFromMetadata(session.user);
+          await extractPersonFromMetadata(session.user, null); // Initial load, no current person
         }
       } catch (error) {
         console.error('AuthContext: Failed to initialize:', error);
@@ -55,27 +61,50 @@ export const AuthProvider = ({ children }) => {
       setUser(session?.user ?? null);
       
       if (session?.user) {
-        await extractPersonFromMetadata(session.user);
+        // Pass current person state to prevent unnecessary updates
+        await extractPersonFromMetadata(session.user, personRef.current);
       } else {
         setPerson(null);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, []); // Empty dependency array is safe now with personRef
 
-  const extractPersonFromMetadata = async (authUser) => {
+  const extractPersonFromMetadata = async (authUser, currentPerson = null) => {
     // Extract person data from auth metadata (no database query needed!)
-    const metadata = authUser.user_metadata || {};
+    let metadata = authUser.user_metadata || {};
+    
+    // Handle JSONB storage issue - metadata might be stored as string in localStorage
+    if (typeof metadata === 'string') {
+      try {
+        metadata = JSON.parse(metadata);
+      } catch (e) {
+        console.warn('AuthContext: Could not parse user_metadata as JSON, using as-is');
+        metadata = {};
+      }
+    }
     
     if (metadata.person_id) {
-      setPerson({
+      // Check if person data has actually changed to prevent unnecessary re-renders
+      const newPersonData = {
         id: metadata.person_id,
         hash: metadata.person_hash,
         name: metadata.person_name,
         phone: authUser.phone
-      });
+      };
+      
+      // Only update if data has actually changed
+      if (!currentPerson || 
+          currentPerson.id !== newPersonData.id ||
+          currentPerson.hash !== newPersonData.hash ||
+          currentPerson.name !== newPersonData.name ||
+          currentPerson.phone !== newPersonData.phone) {
+        console.log('AuthContext: ✅ Found person_id, setting person');
+        setPerson(newPersonData);
+      }
     } else {
+      console.log('AuthContext: ❌ No person_id found in metadata');
       // Check if we've already tried to sync metadata for this user recently
       const userId = authUser.id;
       const lastAttempt = metadataSyncAttempts[userId];
@@ -86,7 +115,7 @@ export const AuthProvider = ({ children }) => {
         return;
       }
       
-      // Update last attempt time
+      // Only update last attempt time for users without metadata to avoid unnecessary re-renders
       setMetadataSyncAttempts(prev => ({ ...prev, [userId]: now }));
       
       // Auth-webhook now handles all person linking automatically
@@ -126,87 +155,30 @@ export const AuthProvider = ({ children }) => {
     return { data, error };
   };
 
-  // Function to refresh session when it expires
+  // DISABLED: Manual token refresh to prevent conflicts causing loading loops
+  // Token refresh is now handled automatically by Supabase or user can re-login if needed
   const refreshSessionIfNeeded = async () => {
-    if (isRefreshing) {
-      // Wait for current refresh to complete
-      return new Promise((resolve) => {
-        const checkRefresh = () => {
-          if (!isRefreshing) {
-            resolve(session);
-          } else {
-            setTimeout(checkRefresh, 100);
-          }
-        };
-        checkRefresh();
-      });
-    }
+    console.log('AuthContext: Manual token refresh disabled to prevent loading loops');
     
     if (!session) return null;
     
-    // Check if token is close to expiring (within 5 minutes)
+    // Check if token is close to expiring and show warning
     const expiresAt = session.expires_at;
     const now = Math.floor(Date.now() / 1000);
     const timeUntilExpiry = expiresAt - now;
     
-    // Show warning only if session expires in less than 3 minutes (for 4-hour events)
-    if (timeUntilExpiry <= 180 && timeUntilExpiry > 60) {
+    // Show warning if session expires soon, but don't refresh automatically
+    if (timeUntilExpiry <= 300 && timeUntilExpiry > 60) {
       const minutesLeft = Math.floor(timeUntilExpiry / 60);
-      setSessionWarning(`Session expires in ${minutesLeft} minute${minutesLeft !== 1 ? 's' : ''}`);
+      setSessionWarning(`Session expires in ${minutesLeft} minute${minutesLeft !== 1 ? 's' : ''} - please refresh the page if needed`);
+    } else if (timeUntilExpiry <= 60) {
+      setSessionWarning('Session expired - please refresh the page to re-login');
     } else {
       setSessionWarning(null);
     }
     
-    // If token is still valid for more than 2 minutes, no refresh needed  
-    if (timeUntilExpiry > 120) return session;
-    
-    console.log('AuthContext: Refreshing session (expires in', timeUntilExpiry, 'seconds)');
-    setIsRefreshing(true);
-    
-    try {
-      const { data: { session: newSession }, error } = await supabase.auth.refreshSession();
-      
-      if (error) {
-        console.error('AuthContext: Session refresh failed:', error);
-        
-        // Only sign out if the error is definitely auth-related
-        if (error.message?.includes('refresh_token') || 
-            error.message?.includes('invalid_grant') ||
-            error.message?.includes('expired')) {
-          console.log('AuthContext: Refresh token expired, signing out');
-          await signOut();
-          return null;
-        }
-        
-        // For other errors, return the current session and try again later
-        console.log('AuthContext: Refresh failed with recoverable error, keeping current session');
-        return session;
-      }
-      
-      console.log('AuthContext: Session refreshed successfully, new expiry:', new Date(newSession.expires_at * 1000));
-      setSession(newSession);
-      setUser(newSession?.user ?? null);
-      setSessionWarning(null); // Clear any warnings
-      
-      if (newSession?.user) {
-        await extractPersonFromMetadata(newSession.user);
-      }
-      
-      return newSession;
-    } catch (error) {
-      console.error('AuthContext: Session refresh error:', error);
-      
-      // Only sign out for critical errors
-      if (error.message?.includes('network') || error.message?.includes('fetch')) {
-        console.log('AuthContext: Network error during refresh, keeping current session');
-        return session;
-      }
-      
-      await signOut();
-      return null;
-    } finally {
-      setIsRefreshing(false);
-    }
+    // Return current session without attempting refresh
+    return session;
   };
 
   const signOut = async () => {
@@ -217,38 +189,36 @@ export const AuthProvider = ({ children }) => {
     return { error };
   };
 
-  // Set up periodic session refresh and visibility change handler
+  // DISABLED: Automatic session refresh to prevent conflicts causing loading loops
   useEffect(() => {
     if (!session) return;
     
-    // Refresh session every 45 minutes proactively
-    const refreshInterval = setInterval(async () => {
-      console.log('AuthContext: Periodic session refresh check');
-      await refreshSessionIfNeeded();
-    }, 45 * 60 * 1000); // 45 minutes
+    console.log('AuthContext: Automatic token refresh disabled - sessions will naturally expire');
     
-    // Only check session on visibility change if session expires in < 5 minutes (reduce excessive calls)
-    const handleVisibilityChange = async () => {
-      if (!document.hidden && session) {
-        const expiresAt = session.expires_at;
-        const now = Math.floor(Date.now() / 1000);
-        const timeUntilExpiry = expiresAt - now;
-        
-        // Only check if session expires soon to reduce spam
-        if (timeUntilExpiry <= 300) {
-          console.log('AuthContext: Page visible, checking session (expires soon)');
-          await refreshSessionIfNeeded();
-        }
+    // Still check expiry status for warnings without refreshing
+    const checkExpiry = () => {
+      if (session) {
+        refreshSessionIfNeeded(); // This now only shows warnings, doesn't refresh
       }
     };
     
-    // Reduced frequency visibility checking
+    // Check expiry every 5 minutes just for warnings
+    const expiryCheckInterval = setInterval(checkExpiry, 5 * 60 * 1000);
+    
+    // Still listen for visibility changes to update warnings
+    const handleVisibilityChange = () => {
+      if (!document.hidden && session) {
+        console.log('AuthContext: Page visible, checking session status (warnings only)');
+        refreshSessionIfNeeded(); // This now only shows warnings, doesn't refresh
+      }
+    };
+    
     document.addEventListener('visibilitychange', handleVisibilityChange);
     
     // Remove focus listener to reduce excessive session checks
     
     return () => {
-      clearInterval(refreshInterval);
+      clearInterval(expiryCheckInterval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [session]);

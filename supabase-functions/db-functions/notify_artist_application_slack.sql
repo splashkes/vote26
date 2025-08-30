@@ -105,8 +105,9 @@
          notification_text := COALESCE(TRIM(artist_info.name), 'Unknown Artist') || ' applied to ' || NEW.event_eid;+
                                                                                                                     +
          -- Clean main text format with application message                                                         +
-         main_text := '*' || COALESCE(TRIM(artist_info.name), 'Unknown') || '* - Artist #' ||                       +
-                      COALESCE(NEW.artist_number::TEXT, 'N/A') || E'\n' ||                                          +
+         main_text := '*' || COALESCE(TRIM(artist_info.name), 'Unknown') || '* - <https://artb.art/admin/artist/' || +
+                      COALESCE(NEW.artist_number::TEXT, 'N/A') || '|Artist #' ||                                     +
+                      COALESCE(NEW.artist_number::TEXT, 'N/A') || '>' || E'\n' ||                                    +
                       COALESCE(TRIM(artist_info.city), 'Unknown') || ', ' ||                                        +
                       COALESCE(TRIM(artist_info.country), 'Unknown') || E'\n\n' ||                                  +
                       message_preview;                                                                              +

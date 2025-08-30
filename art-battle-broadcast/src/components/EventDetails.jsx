@@ -383,14 +383,11 @@ const EventDetails = () => {
         }
       });
       
-      // If we have newly expired timers, refresh data after a short delay
+      // If we have newly expired timers, log them (V2 broadcast will handle updates automatically)
       const newlyExpired = [...currentlyExpired].filter(id => !lastExpiredCheck.has(id));
       if (newlyExpired.length > 0) {
-        console.log('Detected newly expired auctions:', newlyExpired);
-        // Small delay to allow backend processing
-        setTimeout(() => {
-          refreshEventDataSilently();
-        }, 2000);
+        console.log('Detected newly expired auctions (V2 broadcast will handle updates):', newlyExpired);
+        // V2 BROADCAST: No manual refresh needed - broadcast system handles all real-time updates
       }
       
       lastExpiredCheck = currentlyExpired;
@@ -405,12 +402,12 @@ const EventDetails = () => {
 
   // Check for auto payment modal when all dependencies are ready
   useEffect(() => {
-    if (person && artworks.length > 0 && bidHistory && Object.keys(bidHistory).length > 0 && !paymentModalChecked) {
-      // Auto payment modal check (production-ready)
+    if (person && artworks.length > 0 && currentBids && Object.keys(currentBids).length > 0 && !paymentModalChecked) {
+      // Auto payment modal check (production-ready) - uses event-level data now
       checkForAutoPaymentModal();
       setPaymentModalChecked(true);
     }
-  }, [person, artworks, bidHistory, paymentModalChecked]);
+  }, [person, artworks, currentBids, paymentModalChecked]);
 
   const fetchEventDetails = async () => {
     try {
@@ -491,7 +488,9 @@ const EventDetails = () => {
               bidsByArt[bid.art_id] = {
                 amount: bid.current_bid,
                 count: bid.bid_count || 0,
-                time: bid.bid_time
+                time: bid.bid_time,
+                buyer_person_id: bid.buyer_person_id, // Include buyer info for payment modal
+                closing_time: bid.closing_time
               };
             });
             setCurrentBids(bidsByArt);
@@ -517,6 +516,9 @@ const EventDetails = () => {
           }
           
           console.log('✅ [V2-BROADCAST] EventDetails: Enhanced with cached data - bid history loads on demand');
+          
+          // No longer need to auto-load bid history - using event-level data now
+          
           return; // Exit early with cached data - NO FALLBACKS
         }
       } catch (cachedError) {
@@ -749,214 +751,7 @@ const EventDetails = () => {
     }
   };
 
-  // Background refresh for realtime updates without loading screen
-  const refreshEventDataSilently = async () => {
-    try {
-      console.log('Background refresh triggered by realtime update');
-      
-      // Fetch event details (usually doesn't change, but just in case)
-      const { data: eventData, error: eventError } = await supabase
-        .from('events')
-        .select('*')
-        .eq('id', eventId)
-        .single();
-
-      if (eventError) {
-        console.error('Error fetching event data in background:', eventError);
-        return;
-      }
-      setEvent(eventData);
-
-      // Fetch artworks with artist profiles and media files
-      const { data: artworks, error: artError } = await supabase
-        .from('art')
-        .select(`
-          *,
-          artist_profiles!art_artist_id_fkey (
-            id,
-            name,
-            bio,
-            instagram,
-            city_text
-          ),
-          art_media (
-            id,
-            media_type,
-            is_primary,
-            display_order,
-            media_files (
-              id,
-              original_url,
-              thumbnail_url,
-              compressed_url,
-              cloudflare_id,
-              file_type,
-              width,
-              height
-            )
-          )
-        `)
-        .eq('event_id', eventId)
-        .not('artist_id', 'is', null)  // Only show artworks with artists assigned
-        .order('round')
-        .order('easel');
-
-      if (artError) {
-        console.error('Error fetching artworks in background:', artError);
-        return;
-      }
-
-      // Fetch media files with created_at for sorting
-      const artIds = artworks.map(a => a.id);
-      const { data: mediaData, error: mediaError } = await supabase
-        .from('art_media')
-        .select(`
-          art_id,
-          media_id,
-          display_order,
-          media_files!art_media_media_id_fkey (
-            id,
-            original_url,
-            thumbnail_url,
-            compressed_url,
-            file_type,
-            created_at
-          )
-        `)
-        .in('art_id', artIds)
-        .eq('media_files.file_type', 'image');
-        
-      if (mediaError) {
-        console.error('Error fetching media in background:', mediaError);
-      }
-
-      // Group media by art_id and sort by created_at (latest first)
-      const mediaByArt = {};
-      if (mediaData) {
-        mediaData.forEach(media => {
-          if (!mediaByArt[media.art_id]) {
-            mediaByArt[media.art_id] = [];
-          }
-          if (media.media_files) {
-            mediaByArt[media.art_id].push(media);
-          }
-        });
-        
-        Object.keys(mediaByArt).forEach(artId => {
-          mediaByArt[artId].sort((a, b) => {
-            const dateA = new Date(a.media_files.created_at);
-            const dateB = new Date(b.media_files.created_at);
-            return dateB - dateA;
-          });
-        });
-      }
-
-      // Fetch all bids with person info using RPC (bypasses RLS)
-      const { data: bidsData, error: bidsError } = await supabase.rpc('get_bid_history_with_names', {
-        p_art_ids: artIds
-      });
-
-      if (bidsError) {
-        console.error('Error fetching bids in background:', bidsError);
-      }
-
-      // Process bids data
-      const bidsByArt = {};
-      const historyByArt = {};
-      if (bidsData) {
-        bidsData.forEach(bid => {
-          if (!bidsByArt[bid.art_id] || bid.amount > bidsByArt[bid.art_id].amount) {
-            bidsByArt[bid.art_id] = {
-              amount: bid.amount,
-              count: bidsData.filter(b => b.art_id === bid.art_id).length,
-              time: bid.created_at
-            };
-          }
-          if (!historyByArt[bid.art_id]) {
-            historyByArt[bid.art_id] = [];
-          }
-          
-          // Use display_name from RPC function (already formatted)
-          historyByArt[bid.art_id].push({
-            amount: bid.amount,
-            created_at: bid.created_at,
-            bidder_name: bid.display_name || 'Anonymous',
-            display_name: bid.display_name || 'Anonymous',
-            person_id: bid.person_id
-          });
-        });
-      }
-      
-      setCurrentBids(bidsByArt);
-      setBidHistory(historyByArt);
-
-      // Fetch vote weights and ranges for each artwork
-      const { data: voteData, error: voteError } = await supabase
-        .rpc('get_event_weighted_votes', { p_event_id: eventId });
-      
-      const { data: rangeData, error: rangeError } = await supabase
-        .rpc('get_event_vote_ranges', { p_event_id: eventId });
-      
-      const voteWeightMap = {};
-      if (voteData) {
-        voteData.forEach(vote => {
-          voteWeightMap[vote.art_id] = {
-            totalWeight: vote.weighted_vote_total || 0,
-            voteCount: vote.raw_vote_count || 0
-          };
-        });
-      }
-      
-      if (rangeData) {
-        rangeData.forEach(range => {
-          if (voteWeightMap[range.art_id]) {
-            voteWeightMap[range.art_id].ranges = {
-              range_0_22: range.range_0_22 || 0,
-              range_0_95: range.range_0_95 || 0,
-              range_1_01: range.range_1_01 || 0,
-              range_1_90: range.range_1_90 || 0,
-              range_2_50: range.range_2_50 || 0,
-              range_5_01: range.range_5_01 || 0,
-              range_10_00: range.range_10_00 || 0,
-              range_above_10: range.range_above_10 || 0
-            };
-          }
-        });
-      }
-      
-      // Add vote weight data and media to artworks
-      const artworksWithWeights = artworks.map(artwork => ({
-        ...artwork,
-        media: mediaByArt[artwork.id] || [],
-        totalVoteWeight: voteWeightMap[artwork.id]?.totalWeight || 0,
-        vote_count: voteWeightMap[artwork.id]?.voteCount || 0,
-        voteRanges: voteWeightMap[artwork.id]?.ranges || null
-      }));
-      
-      // Update grouped by round with weights
-      const groupedWithWeights = artworksWithWeights.reduce((acc, artwork) => {
-        const round = artwork.round || 1;
-        if (!acc[round]) {
-          acc[round] = [];
-        }
-        acc[round].push(artwork);
-        return acc;
-      }, {});
-      
-      // Update all state without loading screen
-      setArtworksByRound(groupedWithWeights);
-      setArtworks(artworksWithWeights);
-      setVoteWeights(voteWeightMap);
-      
-      // Winners loaded from cached endpoint in V2-BROADCAST
-      // await fetchRoundWinners(eventId, artworks);
-      
-      console.log('Background refresh completed successfully');
-    } catch (error) {
-      console.error('Error in background refresh:', error);
-      // Don't show error to user for background updates
-    }
-  };
+  // V2 BROADCAST: Background refresh function removed - V2 broadcast system handles all real-time updates automatically
 
   // Check if user needs to see automatic payment modal
   const checkForAutoPaymentModal = () => {
@@ -968,43 +763,28 @@ const EventDetails = () => {
       return;
     }
     
-    if (!person || !artworks.length || !bidHistory || Object.keys(bidHistory).length === 0) {
+    if (!person || !artworks.length || !currentBids || Object.keys(currentBids).length === 0) {
       return;
     }
     
     // Find artwork where current user is winning bidder and needs to pay
-    
     const winningArtwork = artworks.find(artwork => {
-      // Check if artwork needs payment (sold or closed with bids)
-      if (artwork.status !== 'sold' && artwork.status !== 'closed') {
+      // Only check sold artworks (paid artworks are already handled)
+      if (artwork.status !== 'sold') {
         return false;
       }
       
-      // If status is closed, only show payment modal if there are actual bids
-      if (artwork.status === 'closed') {
-        const bidData = currentBids[artwork.id];
-        if (!bidData || bidData.count === 0) {
-          return false;
-        }
-      }
-      
-      // Check if there are bids for this artwork
+      // Get bid data from event-level currentBids data
       const bidData = currentBids[artwork.id];
       if (!bidData || bidData.count === 0) {
         return false;
       }
       
-      // Check if current user is the top bidder
-      const history = bidHistory[artwork.id] || [];
-      const topBid = history[0]; // Assuming sorted by amount DESC
-      if (!history.length || !topBid || topBid.person_id !== person.id) {
+      // Check if current user is the buyer using buyer_person_id from event data
+      if (bidData.buyer_person_id !== person.id) {
         return false;
       }
       
-      // Check if payment is not already completed
-      if (artwork.status === 'paid') {
-        return false;
-      }
       return true;
     });
     

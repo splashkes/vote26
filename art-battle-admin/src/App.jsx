@@ -55,6 +55,7 @@ function App() {
                 <Route path="email-queue" element={<EmailQueueDashboard />} />
                 <Route path="email-queue/:eventEid" element={<EmailQueueManager />} />
                 <Route path="sms-marketing" element={<PromotionSystem />} />
+                <Route path="artist/:entryId" element={<ArtistsManagement />} />
                 <Route path="*" element={<Navigate to="/events" replace />} />
               </Route>
             </Routes>

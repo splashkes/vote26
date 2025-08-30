@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import { 
   Box, 
   Card, 
@@ -21,6 +22,7 @@ import { supabase } from '../lib/supabase';
 import { getArtistProfilesWithAliases, getAliasBadgeText } from '../utils/aliasLookup';
 
 const ArtistsManagement = () => {
+  const { entryId } = useParams();
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
@@ -49,6 +51,7 @@ const ArtistsManagement = () => {
   const [artistModalType, setArtistModalType] = useState('');
   const [sampleWorks, setSampleWorks] = useState([]);
   const [sampleWorksLoading, setSampleWorksLoading] = useState(false);
+  const [urlArtistProcessed, setUrlArtistProcessed] = useState(false);
   const [imageModalOpen, setImageModalOpen] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
   
@@ -89,6 +92,32 @@ const ArtistsManagement = () => {
 
     return () => clearTimeout(timeoutId);
   }, [searchTerm]);
+
+  // Handle direct URL navigation to specific artist
+  useEffect(() => {
+    if (entryId && !urlArtistProcessed) {
+      if (!loading && artistProfiles.length > 0) {
+        // Find artist by entry_id
+        const artist = artistProfiles.find(profile => profile.entry_id === parseInt(entryId));
+        
+        if (artist) {
+          // Format the data to match expected structure
+          const formattedArtist = {
+            artist_number: artist.entry_id,
+            artist_profiles: artist
+          };
+          
+          setSelectedArtist(formattedArtist);
+          setArtistModalType('profile');
+          setArtistModalOpen(true);
+          setUrlArtistProcessed(true);
+        } else if (!loading) {
+          // Try searching for the artist specifically, but only once
+          searchForSpecificArtist(entryId);
+        }
+      }
+    }
+  }, [entryId, loading, artistProfiles, urlArtistProcessed]);
 
   const fetchAllArtistsData = async (searchQuery = '', searchLimit = 1000) => {
     try {
@@ -261,6 +290,45 @@ const ArtistsManagement = () => {
     } catch (err) {
       console.error('Error fetching artists data:', err);
       setLoading(false);
+    }
+  };
+
+  const searchForSpecificArtist = async (entryId) => {
+    try {
+      const { data: artistData, error } = await supabase
+        .from('artist_profiles')
+        .select('*')
+        .eq('entry_id', parseInt(entryId))
+        .single();
+        
+      if (error) {
+        console.error('Error finding specific artist:', error);
+        setUrlArtistProcessed(true);
+        return;
+      }
+      
+      if (artistData) {
+        // Format the data to match expected structure
+        const formattedArtist = {
+          artist_number: artistData.entry_id,
+          artist_profiles: artistData
+        };
+        
+        // Add to artistProfiles if not already there
+        setArtistProfiles(prev => {
+          const exists = prev.find(p => p.entry_id === artistData.entry_id);
+          return exists ? prev : [...prev, artistData];
+        });
+        
+        // Open the modal with correctly formatted data
+        setSelectedArtist(formattedArtist);
+        setArtistModalType('profile');
+        setArtistModalOpen(true);
+        setUrlArtistProcessed(true);
+      }
+    } catch (err) {
+      console.error('Error searching for specific artist:', err);
+      setUrlArtistProcessed(true);
     }
   };
 

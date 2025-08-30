@@ -191,13 +191,31 @@ Deno.serve(async (req) => {
     console.log('Attempting to update event with ID:', eventData.id, 'EID:', eid)
     
     // Convert datetime-local format to proper ISO timestamp
-    const startDateTime = eventData.event_start_datetime.includes('T') 
-      ? new Date(eventData.event_start_datetime).toISOString()
-      : new Date(eventData.event_start_datetime + 'T00:00:00').toISOString()
+    // HTML datetime-local format is YYYY-MM-DDTHH:MM (no seconds, no timezone)
+    const formatDateTimeLocal = (dateTimeStr: string): string => {
+      if (!dateTimeStr) throw new Error('DateTime string is required')
       
-    const endDateTime = eventData.event_end_datetime.includes('T')
-      ? new Date(eventData.event_end_datetime).toISOString() 
-      : new Date(eventData.event_end_datetime + 'T23:59:59').toISOString()
+      // If already includes T but missing seconds, add :00
+      if (dateTimeStr.includes('T') && !dateTimeStr.includes(':00', dateTimeStr.indexOf('T'))) {
+        // Add seconds if missing (e.g. 2024-01-01T10:30 -> 2024-01-01T10:30:00)
+        if (dateTimeStr.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)) {
+          dateTimeStr += ':00'
+        }
+      } else if (!dateTimeStr.includes('T')) {
+        // If no T, assume it's just a date and add default time
+        dateTimeStr += 'T00:00:00'
+      }
+      
+      const date = new Date(dateTimeStr)
+      if (isNaN(date.getTime())) {
+        throw new Error(`Invalid date format: ${dateTimeStr}`)
+      }
+      
+      return date.toISOString()
+    }
+    
+    const startDateTime = formatDateTimeLocal(eventData.event_start_datetime)
+    const endDateTime = formatDateTimeLocal(eventData.event_end_datetime)
 
     const updateData = {
       eid,

@@ -135,11 +135,9 @@ const EventList = () => {
       console.log('🚀 [V2-BROADCAST] Starting to fetch events using cached endpoints...');
       console.log('Network status:', navigator.onLine ? 'online' : 'offline');
       
-      // Check and refresh session if needed before making API calls
-      if (user && refreshSessionIfNeeded) {
-        console.log('Checking session before API call...');
-        await refreshSessionIfNeeded();
-      }
+      // REMOVED: Manual session refresh to prevent loading loops
+      // Session will be handled automatically or user can refresh page if needed
+      console.log('Skipping manual token refresh to prevent loading loops');
       
       // Use PublicDataManager for cached endpoint data
       const data = await publicDataManager.getEvents();

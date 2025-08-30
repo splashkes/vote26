@@ -154,11 +154,13 @@ const AdminLayout = () => {
         </div>
       )}
 
-      {/* Release Notes Modal */}
-      <ReleaseNotesModal 
-        isOpen={showReleaseNotes} 
-        onClose={closeReleaseNotes} 
-      />
+      {/* Release Notes Modal - only show on events page */}
+      {location.pathname === '/events' && (
+        <ReleaseNotesModal 
+          isOpen={showReleaseNotes} 
+          onClose={closeReleaseNotes} 
+        />
+      )}
     </div>
   );
 };

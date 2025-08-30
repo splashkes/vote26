@@ -220,31 +220,7 @@
      SET vote_count = vote_count + 1                                                                          +
      WHERE id = v_art_uuid;                                                                                   +
                                                                                                               +
-     -- Queue Slack notification (non-blocking)                                                               +
-     BEGIN                                                                                                    +
-       INSERT INTO slack_notifications (                                                                      +
-         message_type,     -- FIXED: Use message_type instead of event_type                                   +
-         event_id,                                                                                            +
-         payload                                                                                              +
-       ) VALUES (                                                                                             +
-         'vote_cast',                                                                                         +
-         v_event_id,                                                                                          +
-         jsonb_build_object(                                                                                  +
-           'person_id', v_person_id,                                                                          +
-           'art_id', v_art_uuid,                                                                              +
-           'round', p_round,                                                                                  +
-           'easel', p_easel,                                                                                  +
-           'nickname', v_nickname,                                                                            +
-           'phone_last4', RIGHT(v_auth_phone, 4),                                                             +
-           'vote_weight', v_final_weight,                                                                     +
-           'weight_info', v_weight_info                                                                       +
-         )                                                                                                    +
-       );                                                                                                     +
-     EXCEPTION                                                                                                +
-       WHEN OTHERS THEN                                                                                       +
-         -- Log but don't fail the vote                                                                       +
-         RAISE WARNING 'Failed to queue Slack notification: %', SQLERRM;                                      +
-     END;                                                                                                     +
+     -- Slack notifications removed for vote_cast events                                                                                                     +
                                                                                                               +
      RETURN jsonb_build_object(                                                                               +
        'success', true,                                                                                       +

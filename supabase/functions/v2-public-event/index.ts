@@ -163,6 +163,7 @@ const generatePublicEventData = async (eventId)=>{
       easel,
       round,
       created_at,
+      closing_time,
       artist_id,
       artist_profiles!inner (
         id,
@@ -186,6 +187,7 @@ const generatePublicEventData = async (eventId)=>{
       art_id, 
       amount, 
       created_at,
+      person_id,
       art!inner(event_id)
     `).eq('art.event_id', eventInfo.id).order('created_at', {
     ascending: false
@@ -199,7 +201,7 @@ const generatePublicEventData = async (eventId)=>{
     throw new Error(`Bids query failed: ${bidsError.message}`);
   }
   console.log(`[generatePublicEventData] Processing bids data`);
-  const processedBids = processBidsForPublic(currentBids || []);
+  const processedBids = processBidsForPublic(currentBids || [], artworks || []);
   console.log(`[generatePublicEventData] Skipping vote summary (not used by frontend)`);
   console.log(`[generatePublicEventData] Querying round winners for UUID: ${eventInfo.id}`);
   // Get round winners data
@@ -255,17 +257,24 @@ const processRoundWinners = (winners, artworks)=>{
   });
   return roundWinners;
 };
-const processBidsForPublic = (bids)=>{
+const processBidsForPublic = (bids, artworks)=>{
   const bidMap = new Map();
   for (const bid of bids){
     const artId = bid.art_id;
     const existing = bidMap.get(artId);
     if (!existing || bid.amount > existing.amount) {
+      // Find the corresponding artwork to get status and closing_time
+      const artwork = artworks.find(a => a.id === artId);
+      
       bidMap.set(artId, {
         art_id: artId,
         current_bid: bid.amount,
         bid_time: bid.created_at,
-        bid_count: bids.filter((b)=>b.art_id === artId).length
+        bid_count: bids.filter((b)=>b.art_id === artId).length,
+        // Add buyer_person_id only if artwork is sold
+        ...(artwork?.status === 'sold' ? { buyer_person_id: bid.person_id } : {}),
+        // Add closing_time if available
+        ...(artwork?.closing_time ? { closing_time: artwork.closing_time } : {})
       });
     }
   }
@@ -463,6 +472,7 @@ const generateArtworkBidsData = async (eventId, round, easel)=>{
       id,
       amount,
       created_at,
+      person_id,
       people (
         name,
         email,
@@ -507,6 +517,7 @@ const generateArtworkBidsData = async (eventId, round, easel)=>{
       id: bid.id,
       amount: bid.amount,
       created_at: bid.created_at,
+      person_id: bid.person_id, // Add person_id for payment modal functionality
       display_name: formatBidderDisplayName(bid.people),
       bidder_name: formatBidderDisplayName(bid.people) // Legacy field name
     }));
