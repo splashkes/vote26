@@ -580,9 +580,33 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
       // Show success message
       setError(''); // Clear any previous errors
       console.log('Invitation successfully accepted');
+      
+      // Reload data to refresh invitations and confirmations
+      await loadData();
 
     } catch (err) {
-      setError('Failed to accept invitation: ' + err.message);
+      // Handle specific "already confirmed" error more gracefully
+      // Check for the error in multiple possible locations/formats
+      const errorText = err.message || err.error || JSON.stringify(err);
+      const isAlreadyConfirmedError = errorText.includes('already accepted an invitation for this event') || 
+                                      errorText.includes('already confirmed') ||
+                                      errorText.includes('already accepted');
+      
+      if (isAlreadyConfirmedError) {
+        // Get event name for positive message
+        const eventName = selectedInvitation?.event?.name || selectedInvitation?.event?.eid || 'this event';
+        setError(`✅ Great news! You're already confirmed for ${eventName}! Check your confirmed events below to see all the details.`);
+        
+        // Close modal and reload data to show proper state
+        setTimeout(async () => {
+          setShowInvitationModal(false);
+          setSelectedInvitation(null);
+          setError(''); // Clear the message after showing it briefly
+          await loadData(); // Reload to ensure UI shows correct confirmed events
+        }, 3000); // Show positive message for 3 seconds
+      } else {
+        setError('Failed to accept invitation: ' + err.message);
+      }
     } finally {
       setAccepting(prev => ({ ...prev, [selectedInvitation.id]: false }));
     }

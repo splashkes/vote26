@@ -1,0 +1,430 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Art Battle Artist Activity Dashboard",
+    "tags": ["art-battle", "artist-activity", "time-series"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Artist Profiles - New Registrations",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth",
+              "fillOpacity": 20,
+              "gradientMode": "opacity",
+              "showPoints": "auto"
+            },
+            "unit": "short",
+            "min": 0
+          }
+        },
+        "options": {
+          "tooltip": {"mode": "multi", "sort": "none"},
+          "legend": {"calcs": [], "displayMode": "list", "placement": "bottom"}
+        },
+        "targets": [
+          {
+            "datasource": {"type": "postgres"},
+            "refId": "A",
+            "rawSql": "SELECT\n  date_trunc('hour', created_at) as time,\n  COUNT(*) as \"New Profiles\"\nFROM artist_profiles \nWHERE $__timeFilter(created_at)\nGROUP BY date_trunc('hour', created_at)\nORDER BY time"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Artist Profiles - Updates",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth",
+              "fillOpacity": 20,
+              "gradientMode": "opacity",
+              "showPoints": "auto"
+            },
+            "unit": "short",
+            "min": 0
+          }
+        },
+        "targets": [
+          {
+            "datasource": {"type": "postgres"},
+            "refId": "A",
+            "rawSql": "SELECT\n  date_trunc('hour', updated_at) as time,\n  COUNT(*) as \"Profile Updates\"\nFROM artist_profiles \nWHERE $__timeFilter(updated_at)\n  AND updated_at != created_at\nGROUP BY date_trunc('hour', updated_at)\nORDER BY time"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Artist Applications - New & Updates",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth",
+              "fillOpacity": 20,
+              "gradientMode": "opacity",
+              "showPoints": "auto"
+            },
+            "unit": "short",
+            "min": 0
+          }
+        },
+        "targets": [
+          {
+            "datasource": {"type": "postgres"},
+            "refId": "A",
+            "rawSql": "SELECT\n  date_trunc('hour', applied_at) as time,\n  COUNT(*) as \"New Applications\"\nFROM artist_applications \nWHERE $__timeFilter(applied_at)\nGROUP BY date_trunc('hour', applied_at)\nORDER BY time"
+          },
+          {
+            "datasource": {"type": "postgres"},
+            "refId": "B",
+            "rawSql": "SELECT\n  date_trunc('hour', updated_at) as time,\n  COUNT(*) as \"Application Updates\"\nFROM artist_applications \nWHERE $__timeFilter(updated_at)\n  AND updated_at != applied_at\nGROUP BY date_trunc('hour', updated_at)\nORDER BY time"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Artist Invitations - New & Updates",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth",
+              "fillOpacity": 20,
+              "gradientMode": "opacity",
+              "showPoints": "auto"
+            },
+            "unit": "short",
+            "min": 0
+          }
+        },
+        "targets": [
+          {
+            "datasource": {"type": "postgres"},
+            "refId": "A",
+            "rawSql": "SELECT\n  date_trunc('hour', created_at) as time,\n  COUNT(*) as \"New Invitations\"\nFROM artist_invitations \nWHERE $__timeFilter(created_at)\nGROUP BY date_trunc('hour', created_at)\nORDER BY time"
+          },
+          {
+            "datasource": {"type": "postgres"},
+            "refId": "B",
+            "rawSql": "SELECT\n  date_trunc('hour', updated_at) as time,\n  COUNT(*) as \"Invitation Updates\"\nFROM artist_invitations \nWHERE $__timeFilter(updated_at)\n  AND updated_at != created_at\nGROUP BY date_trunc('hour', updated_at)\nORDER BY time"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Artist Confirmations - New & Updates",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth",
+              "fillOpacity": 20,
+              "gradientMode": "opacity",
+              "showPoints": "auto"
+            },
+            "unit": "short",
+            "min": 0
+          }
+        },
+        "targets": [
+          {
+            "datasource": {"type": "postgres"},
+            "refId": "A",
+            "rawSql": "SELECT\n  date_trunc('hour', created_at) as time,\n  COUNT(*) as \"New Confirmations\"\nFROM artist_confirmations \nWHERE $__timeFilter(created_at)\nGROUP BY date_trunc('hour', created_at)\nORDER BY time"
+          },
+          {
+            "datasource": {"type": "postgres"},
+            "refId": "B",
+            "rawSql": "SELECT\n  date_trunc('hour', updated_at) as time,\n  COUNT(*) as \"Confirmation Updates\"\nFROM artist_confirmations \nWHERE $__timeFilter(updated_at)\n  AND updated_at != created_at\nGROUP BY date_trunc('hour', updated_at)\nORDER BY time"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Combined Activity Overview",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth",
+              "fillOpacity": 10,
+              "gradientMode": "none",
+              "showPoints": "auto",
+              "stacking": {"mode": "none"}
+            },
+            "unit": "short",
+            "min": 0
+          }
+        },
+        "targets": [
+          {
+            "datasource": {"type": "postgres"},
+            "refId": "A",
+            "rawSql": "SELECT\n  date_trunc('hour', created_at) as time,\n  COUNT(*) as \"New Profiles\"\nFROM artist_profiles \nWHERE $__timeFilter(created_at)\nGROUP BY date_trunc('hour', created_at)\nORDER BY time"
+          },
+          {
+            "datasource": {"type": "postgres"},
+            "refId": "B",
+            "rawSql": "SELECT\n  date_trunc('hour', applied_at) as time,\n  COUNT(*) as \"New Applications\"\nFROM artist_applications \nWHERE $__timeFilter(applied_at)\nGROUP BY date_trunc('hour', applied_at)\nORDER BY time"
+          },
+          {
+            "datasource": {"type": "postgres"},
+            "refId": "C",
+            "rawSql": "SELECT\n  date_trunc('hour', created_at) as time,\n  COUNT(*) as \"New Invitations\"\nFROM artist_invitations \nWHERE $__timeFilter(created_at)\nGROUP BY date_trunc('hour', created_at)\nORDER BY time"
+          },
+          {
+            "datasource": {"type": "postgres"},
+            "refId": "D",
+            "rawSql": "SELECT\n  date_trunc('hour', created_at) as time,\n  COUNT(*) as \"New Confirmations\"\nFROM artist_confirmations \nWHERE $__timeFilter(created_at)\nGROUP BY date_trunc('hour', created_at)\nORDER BY time"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "High-Resolution Activity (15-minute intervals)",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24},
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "drawStyle": "bars",
+              "barAlignment": 0,
+              "fillOpacity": 80,
+              "gradientMode": "none",
+              "showPoints": "never",
+              "stacking": {"mode": "none"}
+            },
+            "unit": "short",
+            "min": 0
+          }
+        },
+        "options": {
+          "tooltip": {"mode": "multi", "sort": "desc"},
+          "legend": {"calcs": [], "displayMode": "table", "placement": "right"}
+        },
+        "targets": [
+          {
+            "datasource": {"type": "postgres"},
+            "refId": "A",
+            "rawSql": "SELECT\n  date_trunc('minute', created_at - (EXTRACT(minute FROM created_at)::int % 15) * interval '1 minute') as time,\n  COUNT(*) as \"New Profiles\"\nFROM artist_profiles \nWHERE $__timeFilter(created_at)\nGROUP BY date_trunc('minute', created_at - (EXTRACT(minute FROM created_at)::int % 15) * interval '1 minute')\nORDER BY time"
+          },
+          {
+            "datasource": {"type": "postgres"},
+            "refId": "B",
+            "rawSql": "SELECT\n  date_trunc('minute', applied_at - (EXTRACT(minute FROM applied_at)::int % 15) * interval '1 minute') as time,\n  COUNT(*) as \"New Applications\"\nFROM artist_applications \nWHERE $__timeFilter(applied_at)\nGROUP BY date_trunc('minute', applied_at - (EXTRACT(minute FROM applied_at)::int % 15) * interval '1 minute')\nORDER BY time"
+          },
+          {
+            "datasource": {"type": "postgres"},
+            "refId": "C",
+            "rawSql": "SELECT\n  date_trunc('minute', created_at - (EXTRACT(minute FROM created_at)::int % 15) * interval '1 minute') as time,\n  COUNT(*) as \"New Invitations\"\nFROM artist_invitations \nWHERE $__timeFilter(created_at)\nGROUP BY date_trunc('minute', created_at - (EXTRACT(minute FROM created_at)::int % 15) * interval '1 minute')\nORDER BY time"
+          },
+          {
+            "datasource": {"type": "postgres"},
+            "refId": "D",
+            "rawSql": "SELECT\n  date_trunc('minute', created_at - (EXTRACT(minute FROM created_at)::int % 15) * interval '1 minute') as time,\n  COUNT(*) as \"New Confirmations\"\nFROM artist_confirmations \nWHERE $__timeFilter(created_at)\nGROUP BY date_trunc('minute', created_at - (EXTRACT(minute FROM created_at)::int % 15) * interval '1 minute')\nORDER BY time"
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Activity by Event (Top Events)",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 32},
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth",
+              "fillOpacity": 15,
+              "gradientMode": "opacity",
+              "showPoints": "auto",
+              "stacking": {"mode": "none"}
+            },
+            "unit": "short",
+            "min": 0
+          }
+        },
+        "options": {
+          "tooltip": {"mode": "multi", "sort": "desc"},
+          "legend": {"calcs": ["last", "max"], "displayMode": "table", "placement": "right"}
+        },
+        "targets": [
+          {
+            "datasource": {"type": "postgres"},
+            "refId": "A",
+            "rawSql": "SELECT\n  date_trunc('hour', aa.applied_at) as time,\n  e.name as metric,\n  COUNT(*) as value\nFROM artist_applications aa\nJOIN events e ON aa.event_id = e.id\nWHERE $__timeFilter(aa.applied_at)\nGROUP BY date_trunc('hour', aa.applied_at), e.name\nHAVING COUNT(*) > 0\nORDER BY time, e.name"
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "title": "Real-time Stats (Current Hour)",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 40},
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {"orientation": "auto"},
+            "mappings": [],
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 5},
+                {"color": "red", "value": 10}
+              ]
+            },
+            "unit": "short"
+          }
+        },
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          },
+          "textMode": "auto"
+        },
+        "targets": [
+          {
+            "datasource": {"type": "postgres"},
+            "refId": "A",
+            "rawSql": "SELECT\n  'New Profiles' as metric,\n  COUNT(*) as value\nFROM artist_profiles \nWHERE created_at >= date_trunc('hour', NOW())\nUNION ALL\nSELECT\n  'New Applications' as metric,\n  COUNT(*) as value\nFROM artist_applications \nWHERE applied_at >= date_trunc('hour', NOW())\nUNION ALL\nSELECT\n  'New Invitations' as metric,\n  COUNT(*) as value\nFROM artist_invitations \nWHERE created_at >= date_trunc('hour', NOW())\nUNION ALL\nSELECT\n  'New Confirmations' as metric,\n  COUNT(*) as value\nFROM artist_confirmations \nWHERE created_at >= date_trunc('hour', NOW())"
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "Daily Totals (Last 7 Days)",
+        "type": "stat", 
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 40},
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {"orientation": "auto"},
+            "mappings": [],
+            "unit": "short"
+          }
+        },
+        "options": {
+          "colorMode": "none",
+          "graphMode": "none",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          },
+          "textMode": "auto"
+        },
+        "targets": [
+          {
+            "datasource": {"type": "postgres"},
+            "refId": "A",
+            "rawSql": "SELECT\n  'Profiles (7d)' as metric,\n  COUNT(*) as value\nFROM artist_profiles \nWHERE created_at >= NOW() - INTERVAL '7 days'\nUNION ALL\nSELECT\n  'Applications (7d)' as metric,\n  COUNT(*) as value\nFROM artist_applications \nWHERE applied_at >= NOW() - INTERVAL '7 days'\nUNION ALL\nSELECT\n  'Invitations (7d)' as metric,\n  COUNT(*) as value\nFROM artist_invitations \nWHERE created_at >= NOW() - INTERVAL '7 days'\nUNION ALL\nSELECT\n  'Confirmations (7d)' as metric,\n  COUNT(*) as value\nFROM artist_confirmations \nWHERE created_at >= NOW() - INTERVAL '7 days'"
+          }
+        ]
+      },
+      {
+        "id": 11,
+        "title": "Application Status Breakdown",
+        "type": "piechart",
+        "gridPos": {"h": 8, "w": 6, "x": 12, "y": 40},
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {"hideFrom": {"legend": false, "tooltip": false, "vis": false}},
+            "mappings": [],
+            "unit": "short"
+          }
+        },
+        "options": {
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          },
+          "pieType": "pie",
+          "tooltip": {"mode": "single", "sort": "none"},
+          "legend": {"displayMode": "table", "placement": "right", "values": ["percent"]},
+          "displayLabels": ["name", "value"]
+        },
+        "targets": [
+          {
+            "datasource": {"type": "postgres"},
+            "refId": "A",
+            "rawSql": "SELECT\n  application_status as metric,\n  COUNT(*) as value\nFROM artist_applications\nWHERE applied_at >= NOW() - INTERVAL '30 days'\nGROUP BY application_status\nORDER BY COUNT(*) DESC"
+          }
+        ]
+      },
+      {
+        "id": 12,
+        "title": "Invitation Status Breakdown",
+        "type": "piechart",
+        "gridPos": {"h": 8, "w": 6, "x": 18, "y": 40},
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {"hideFrom": {"legend": false, "tooltip": false, "vis": false}},
+            "mappings": [],
+            "unit": "short"
+          }
+        },
+        "options": {
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          },
+          "pieType": "pie",
+          "tooltip": {"mode": "single", "sort": "none"},
+          "legend": {"displayMode": "table", "placement": "right", "values": ["percent"]},
+          "displayLabels": ["name", "value"]
+        },
+        "targets": [
+          {
+            "datasource": {"type": "postgres"},
+            "refId": "A",
+            "rawSql": "SELECT\n  status as metric,\n  COUNT(*) as value\nFROM artist_invitations\nWHERE created_at >= NOW() - INTERVAL '30 days'\nGROUP BY status\nORDER BY COUNT(*) DESC"
+          }
+        ]
+      }
+    ],
+    "time": {"from": "now-7d", "to": "now"},
+    "timepicker": {},
+    "timezone": "",
+    "refresh": "30s",
+    "schemaVersion": 37,
+    "version": 0,
+    "weekStart": ""
+  }
+}

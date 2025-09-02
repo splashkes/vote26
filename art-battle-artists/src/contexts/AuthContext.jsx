@@ -43,12 +43,21 @@ export const AuthProvider = ({ children }) => {
 
   const extractPersonFromMetadata = async (authUser) => {
     console.log('AuthContext: Extracting person metadata from user:', authUser.id);
-    // Extract person data from auth metadata (no database query needed!)
-    const metadata = authUser.user_metadata || {};
-    console.log('AuthContext: User metadata:', metadata);
+    
+    // Extract person data from auth metadata - check both possible sources
+    // user_metadata (Supabase API) and raw_user_meta_data (database direct)
+    const userMetadata = authUser.user_metadata || {};
+    const rawMetadata = authUser.raw_user_meta_data || {};
+    
+    console.log('AuthContext: User metadata:', userMetadata);
+    console.log('AuthContext: Raw metadata:', rawMetadata);
+    
+    // Prefer user_metadata (most recent) but fallback to raw_user_meta_data
+    const metadata = userMetadata.person_id ? userMetadata : rawMetadata;
     
     if (metadata.person_id) {
-      console.log('AuthContext: Setting person from metadata:', metadata.person_id);
+      console.log('AuthContext: Setting person from metadata:', metadata.person_id, 
+                  'Source:', userMetadata.person_id ? 'user_metadata' : 'raw_user_meta_data');
       setPerson({
         id: metadata.person_id,
         hash: metadata.person_hash,

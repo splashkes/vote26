@@ -92,8 +92,8 @@ serve(async (req)=>{
           hash: qrPersonHash
         }).eq('id', personId);
       }
-      // Update auth user metadata with person info (fire-and-forget)
-      updateAuthUserMetadata(newRecord.id, personId, qrPersonHash, qrPersonData?.name || personName || 'User').catch((err)=>console.warn('Auth metadata update failed (non-critical):', err));
+      // Update auth user metadata with person info (CRITICAL - must succeed)
+      await updateAuthUserMetadata(newRecord.id, personId, qrPersonHash, qrPersonData?.name || personName || 'User');
       // Send success notification (truly fire-and-forget - removed to fix token refresh delays)
       // sendPersonLinkNotification(newRecord.id, personId, qrPersonData?.name || personName || 'User', authPhone, 'linked_qr').catch((err)=>console.warn('Slack notification failed (non-critical):', err));
       console.log('Successfully linked QR user to person:', personId);
@@ -128,16 +128,16 @@ serve(async (req)=>{
           console.error('Failed to update corrupted phone:', phoneUpdateError);
         } else {
           console.log(`Successfully updated phone from ${existingPersonByPhone.phone} to ${authPhone}`);
-          // Send Slack notification about the fix (removed to prevent auth delays)
-          // try {
-          //   await supabase.rpc('queue_slack_notification', {
-          //     channel: 'profile-debug',
-          //     notification_type: 'phone_corruption_fixed',
-          //     message: `📞 Phone Corruption Fixed!\nUser: ${newRecord.id}\nCorrected: ${existingPersonByPhone.phone} → ${authPhone}\nMethod: Using validated auth phone (eliminated redundant Twilio call)`
-          //   });
-          // } catch (slackError) {
-          //   console.warn('Slack notification failed:', slackError);
-          // }
+        // Send Slack notification about the fix (removed to prevent auth delays)
+        // try {
+        //   await supabase.rpc('queue_slack_notification', {
+        //     channel: 'profile-debug',
+        //     notification_type: 'phone_corruption_fixed',
+        //     message: `📞 Phone Corruption Fixed!\nUser: ${newRecord.id}\nCorrected: ${existingPersonByPhone.phone} → ${authPhone}\nMethod: Using validated auth phone (eliminated redundant Twilio call)`
+        //   });
+        // } catch (slackError) {
+        //   console.warn('Slack notification failed:', slackError);
+        // }
         }
       }
       if (existingPersonByPhone) {
@@ -168,8 +168,8 @@ serve(async (req)=>{
           throw new Error(`Person linking failed: ${updateError.message}`);
         }
         personId = existingPersonByPhone.id;
-        // Update auth user metadata with person info (fire-and-forget)
-        updateAuthUserMetadata(newRecord.id, personId, personHash, existingPersonByPhone.name || 'User').catch((err)=>console.warn('Auth metadata update failed (non-critical):', err));
+        // Update auth user metadata with person info (CRITICAL - must succeed)
+        await updateAuthUserMetadata(newRecord.id, personId, personHash, existingPersonByPhone.name || 'User');
         // Send success notification (removed to fix token refresh delays)
         // sendPersonLinkNotification(newRecord.id, personId, existingPersonByPhone.name || 'User', authPhone, 'linked_existing').catch((err)=>console.warn('Slack notification failed (non-critical):', err));
         console.log('Successfully linked OTP user to existing person:', personId);
@@ -195,8 +195,8 @@ serve(async (req)=>{
           throw new Error(`Person creation failed: ${createError.message}`);
         }
         personId = newPerson.id;
-        // Update auth user metadata with person info (fire-and-forget)
-        updateAuthUserMetadata(newRecord.id, personId, personHash, 'User').catch((err)=>console.warn('Auth metadata update failed (non-critical):', err));
+        // Update auth user metadata with person info (CRITICAL - must succeed)
+        await updateAuthUserMetadata(newRecord.id, personId, personHash, 'User');
         // Send success notification (removed to fix token refresh delays)
         // sendPersonLinkNotification(newRecord.id, personId, 'User', authPhone, 'created_new').catch((err)=>console.warn('Slack notification failed (non-critical):', err));
         console.log('Successfully created new person:', personId);
@@ -290,17 +290,48 @@ async function generatePersonHash(personId, phone) {
 async function updateAuthUserMetadata(userId, personId, personHash, personName) {
   try {
     const supabase = createClient(Deno.env.get('SUPABASE_URL'), Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'));
+    
+    const metadataPayload = {
+      person_id: personId,
+      person_hash: personHash,
+      person_name: personName
+    };
+    
+    // Update both user_metadata (Supabase API) and raw_user_meta_data (database direct)
+    // This ensures compatibility with all systems that might expect either field
+    
+    // Method 1: Update via Supabase Auth API (sets user_metadata)
     await supabase.auth.admin.updateUserById(userId, {
-      user_metadata: {
+      user_metadata: metadataPayload
+    });
+    
+    // Method 2: Update raw_user_meta_data directly via SQL
+    // Merge with existing raw_user_meta_data to preserve other fields
+    const { error: sqlError } = await supabase.rpc('sql', {
+      query: `
+        UPDATE auth.users 
+        SET raw_user_meta_data = COALESCE(raw_user_meta_data, '{}'::jsonb) || $2::jsonb
+        WHERE id = $1
+      `,
+      params: [userId, JSON.stringify(metadataPayload)]
+    });
+    
+    if (sqlError) {
+      console.error('SQL update failed, trying direct query:', sqlError);
+      // Final fallback - use the emergency function pattern
+      await supabase.rpc('emergency_fix_single_user_metadata', {
+        user_id: userId,
         person_id: personId,
         person_hash: personHash,
         person_name: personName
-      }
-    });
-    console.log('Auth metadata updated successfully for user:', userId);
+      });
+    }
+    
+    console.log('Auth metadata updated successfully in both fields for user:', userId);
   } catch (error) {
-    console.warn('Failed to update auth metadata:', error);
-  // Don't throw - this is fire-and-forget
+    console.error('CRITICAL: Failed to update auth metadata for user:', userId, error);
+    // Make this mandatory now - throw instead of silent fail
+    throw error;
   }
 }
 // Send person link notification (fire-and-forget)
