@@ -19,6 +19,7 @@ import InvitationManagement from './components/InvitationManagement';
 import EmailQueueDashboard from './components/EmailQueueDashboard';
 import EmailQueueManager from './components/EmailQueueManager';
 import PromotionSystem from './components/PromotionSystem';
+import BulkArtistView from './components/BulkArtistView';
 import Welcome from './components/Welcome';
 import './App.css';
 
@@ -48,6 +49,7 @@ function App() {
                 <Route path="events/:eventId/health" element={<HealthMonitor />} />
                 <Route path="events/:eventId/live" element={<LiveMonitor />} />
                 <Route path="artists" element={<ArtistsManagement />} />
+                <Route path="artists/bulk-management" element={<BulkArtistView />} />
                 <Route path="people" element={<PeopleManagement />} />
                 <Route path="health" element={<HealthRecommendations />} />
                 <Route path="admin-users" element={<AdminUsers />} />

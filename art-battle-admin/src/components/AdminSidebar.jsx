@@ -82,6 +82,13 @@ const AdminSidebar = ({ collapsed = false, onToggleCollapse, hideToggleAndSignOu
       description: 'Manage profiles, applications, invitations'
     },
     {
+      to: '/artists/bulk-management',
+      icon: BarChartIcon,
+      label: 'Bulk Artist View',
+      description: 'Bulk management of artist bios and promo images',
+      color: 'purple'
+    },
+    {
       to: '/people',
       icon: PersonIcon,
       label: 'People',

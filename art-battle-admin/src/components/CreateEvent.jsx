@@ -152,15 +152,30 @@ const CreateEvent = () => {
 
       if (eventData) {
         // Format datetime for inputs (HTML datetime-local requires YYYY-MM-DDTHH:MM format)
-        const formatDateTimeForInput = (datetime) => {
+        // Convert UTC database time to event's timezone for editing
+        const formatDateTimeForInput = (datetime, timezone) => {
           if (!datetime) return '';
+          
+          // Parse the UTC datetime and convert to event's timezone
           const date = new Date(datetime);
-          const year = date.getFullYear();
-          const month = String(date.getMonth() + 1).padStart(2, '0');
-          const day = String(date.getDate()).padStart(2, '0');
-          const hours = String(date.getHours()).padStart(2, '0');
-          const minutes = String(date.getMinutes()).padStart(2, '0');
-          return `${year}-${month}-${day}T${hours}:${minutes}`;
+          const formatter = new Intl.DateTimeFormat('sv-SE', {
+            timeZone: timezone || 'UTC',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+          });
+          
+          const parts = formatter.formatToParts(date);
+          const year = parts.find(p => p.type === 'year').value;
+          const month = parts.find(p => p.type === 'month').value;
+          const day = parts.find(p => p.type === 'day').value;
+          const hour = parts.find(p => p.type === 'hour').value;
+          const minute = parts.find(p => p.type === 'minute').value;
+          
+          return `${year}-${month}-${day}T${hour}:${minute}`;
         };
 
         setFormData({
@@ -169,8 +184,8 @@ const CreateEvent = () => {
           venue: eventData.venue || '',
           city_id: eventData.city_id || 'none',
           country_id: eventData.cities?.country_id || 'none',
-          event_start_datetime: formatDateTimeForInput(eventData.event_start_datetime),
-          event_end_datetime: formatDateTimeForInput(eventData.event_end_datetime),
+          event_start_datetime: formatDateTimeForInput(eventData.event_start_datetime, eventData.timezone_icann),
+          event_end_datetime: formatDateTimeForInput(eventData.event_end_datetime, eventData.timezone_icann),
           timezone_icann: eventData.timezone_icann || 'America/Toronto',
           enabled: eventData.enabled || false,
           show_in_app: eventData.show_in_app || false,
@@ -252,6 +267,24 @@ const CreateEvent = () => {
 
       if (response.error) {
         console.error('Supabase function error:', response.error);
+        
+        // Try to get detailed debug info from response body (Edge Function Debugging Secret technique)
+        try {
+          if (response.error.context && typeof response.error.context.text === 'function') {
+            const responseText = await response.error.context.text();
+            console.log('Raw edge function response:', responseText);
+            const parsed = JSON.parse(responseText);
+            
+            if (parsed.debug) {
+              console.log('Edge function debug info:', parsed.debug);
+              setError(`Function error: ${parsed.error}\n\nDebug: ${JSON.stringify(parsed.debug, null, 2)}`);
+              return;
+            }
+          }
+        } catch (e) {
+          console.log('Could not parse error response:', e);
+        }
+        
         setError(`Function error: ${response.error.message || 'Unknown error'}`);
         return;
       }

@@ -1488,14 +1488,32 @@ The Art Battle Team`);
                 <Text size="2">
                   <strong>Start:</strong>{' '}
                   <DebugField 
-                    value={event.event_start_datetime ? new Date(event.event_start_datetime).toLocaleString() : null} 
+                    value={event.event_start_datetime ? 
+                      new Date(event.event_start_datetime).toLocaleString('en-US', {
+                        timeZone: event.timezone_icann || 'UTC',
+                        year: 'numeric',
+                        month: 'short', 
+                        day: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        timeZoneName: 'short'
+                      }) : null} 
                     fieldName="event.event_start_datetime" 
                   />
                 </Text>
                 <Text size="2">
                   <strong>End:</strong>{' '}
                   <DebugField 
-                    value={event.event_end_datetime ? new Date(event.event_end_datetime).toLocaleString() : null} 
+                    value={event.event_end_datetime ? 
+                      new Date(event.event_end_datetime).toLocaleString('en-US', {
+                        timeZone: event.timezone_icann || 'UTC',
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric', 
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        timeZoneName: 'short'
+                      }) : null} 
                     fieldName="event.event_end_datetime" 
                   />
                 </Text>

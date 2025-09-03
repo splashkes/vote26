@@ -116,6 +116,71 @@ This approach finally revealed that our cancel-confirmation function was failing
 
 Without this technique, we were flying blind with edge functions.
 
+## Recent Success: Timezone Bug (Sept 2, 2025)
+
+**Problem**: Event datetime updates returning "Edge Function returned a non-2xx status code" with no details.
+
+**Debug Strategy Used:**
+```typescript
+// Added comprehensive debug logging to admin-update-event function
+return new Response(JSON.stringify({
+  error: 'Failed to update event',
+  success: false,
+  debug: {
+    timestamp: new Date().toISOString(),
+    function_name: 'admin-update-event', 
+    update_error: updateError.message,
+    update_error_details: updateError.details,
+    update_error_hint: updateError.hint,
+    update_error_code: updateError.code,
+    received_data: eventData,
+    processed_timestamps: {
+      start_datetime: startDateTime,
+      end_datetime: endDateTime,
+      timezone: eventData.timezone_icann
+    },
+    update_data_sent: updateData
+  }
+}), {
+  headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  status: 500
+});
+```
+
+**Result**: Immediately revealed the exact error: `Invalid datetime/timezone combination: 2025-09-06T18:00:00 America/Los_Angeles`
+
+**Key Learning**: Added timezone-specific debug info showing:
+- Raw received datetime strings
+- Processed timestamp conversions  
+- Timezone names vs numeric offsets
+- Complete update payload being sent to database
+
+This debug pattern helped identify that JavaScript Date() constructor doesn't accept timezone name format, leading to the proper `Intl.DateTimeFormat` solution.
+
+## Fast Debug Pattern for Complex Functions
+
+For functions with multiple failure points, add debug info at each stage:
+
+```typescript
+const debugInfo = {
+  timestamp: new Date().toISOString(),
+  function_name: 'your-function-name',
+  auth_check: { user_id: user?.id, has_permissions: !!adminUser },
+  validation_results: { missing_fields: missingFields, format_checks: validationStatus },
+  data_processing: { input_data: eventData, processed_data: updateData },
+  database_operation: { query_type: 'UPDATE', affected_table: 'events' }
+};
+
+// Return debug info in ALL error responses
+if (updateError) {
+  return new Response(JSON.stringify({
+    error: 'Operation failed',
+    success: false,
+    debug: { ...debugInfo, error_details: updateError }
+  }), { headers: corsHeaders, status: 500 });
+}
+```
+
 ## Remember: Console.log() is Unreliable in Edge Functions!
 
 Always use response body debugging for edge functions. Save yourself hours of frustration.
