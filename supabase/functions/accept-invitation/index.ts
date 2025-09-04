@@ -264,7 +264,7 @@ serve(async (req)=>{
             'Wilmington': 'America/New_York',
             'Lancaster': 'America/New_York'
           };
-          return timezoneMap[cityName] || 'America/New_York'; // Default to Eastern
+          return timezoneMap[cityName] || 'UTC'; // Default to UTC to make unmapped cities obvious
         };
         
         const venueTimezone = getVenueTimezone(eventData.cities?.name);
