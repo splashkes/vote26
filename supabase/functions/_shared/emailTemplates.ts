@@ -32,13 +32,12 @@ export const emailTemplates = {
         <p><strong>What's Next:</strong></p>
         <ul>
           <li>Our team will review your application</li>
-          <li>You'll receive an email with next steps within 2-3 business days</li>
           <li>Check your artist dashboard for updates</li>
         </ul>
         
         <p><a href="https://artb.art/profile" style="background: #e74c3c; color: white; padding: 12px 24px; text-decoration: none; display: inline-block; margin: 20px 0;">View Your Dashboard</a></p>
         
-        <p style="color: #666; font-size: 14px; margin-top: 30px;">Questions? Reply to this email or contact us at hello@artbattle.com</p>
+        <p style="color: #666; font-size: 14px; margin-top: 30px;">Questions? Reply to this email or contact us at artists@artbattle.com</p>
         
         <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
         
@@ -63,12 +62,11 @@ Event Details:
 
 What's Next:
 - Our team will review your application
-- You'll receive an email with next steps within 2-3 business days
 - Check your artist dashboard for updates
 
 View your dashboard: https://artb.art/profile
 
-Questions? Reply to this email or contact us at hello@artbattle.com
+Questions? Reply to this email or contact us at artists@artbattle.com
 
 Art Battle - Live Competitive Painting Events
 artbattle.com
@@ -110,7 +108,7 @@ artbattle.com
         
         <p><a href="https://artb.art/profile" style="background: #e74c3c; color: white; padding: 12px 24px; text-decoration: none; display: inline-block; margin: 20px 0;">Accept Invitation</a></p>
         
-        <p style="color: #666; font-size: 14px; margin-top: 30px;">Questions? Reply to this email or contact us at hello@artbattle.com</p>
+        <p style="color: #666; font-size: 14px; margin-top: 30px;">Questions? Reply to this email or contact us at artists@artbattle.com</p>
         
         <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
         
@@ -139,7 +137,7 @@ Please log in to your artist dashboard to accept or decline.
 
 Accept your invitation: https://artb.art/profile
 
-Questions? Reply to this email or contact us at hello@artbattle.com
+Questions? Reply to this email or contact us at artists@artbattle.com
 
 Art Battle - Live Competitive Painting Events
 artbattle.com
@@ -192,7 +190,7 @@ artbattle.com
         
         <p><a href="https://artb.art/profile" style="background: #e74c3c; color: white; padding: 12px 24px; text-decoration: none; display: inline-block; margin: 20px 0;">View Event Details</a></p>
         
-        <p style="color: #666; font-size: 14px; margin-top: 30px;">Questions? Reply to this email or contact us at hello@artbattle.com</p>
+        <p style="color: #666; font-size: 14px; margin-top: 30px;">Questions? Reply to this email or contact us at artists@artbattle.com</p>
         
         <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
         
@@ -227,7 +225,7 @@ Get Ready to Paint:
 
 View event details: https://artb.art/profile
 
-Questions? Reply to this email or contact us at hello@artbattle.com
+Questions? Reply to this email or contact us at artists@artbattle.com
 
 Art Battle - Live Competitive Painting Events
 artbattle.com
@@ -269,7 +267,7 @@ artbattle.com
         
         <p><a href="https://artb.art/profile" style="background: #e74c3c; color: white; padding: 12px 24px; text-decoration: none; display: inline-block; margin: 20px 0;">View Your Dashboard</a></p>
         
-        <p style="color: #666; font-size: 14px; margin-top: 30px;">Questions? Reply to this email or contact us at hello@artbattle.com</p>
+        <p style="color: #666; font-size: 14px; margin-top: 30px;">Questions? Reply to this email or contact us at artists@artbattle.com</p>
         
         <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
         
@@ -300,7 +298,7 @@ Keep an eye on your dashboard for upcoming events in your area.
 
 View your dashboard: https://artb.art/profile
 
-Questions? Reply to this email or contact us at hello@artbattle.com
+Questions? Reply to this email or contact us at artists@artbattle.com
 
 Art Battle - Live Competitive Painting Events
 artbattle.com
@@ -384,7 +382,7 @@ artbattle.com
         
         <p><strong>Best regards,</strong><br>Art Battle HQ<br>Art Battle Artist Payments</p>
         
-        <p style="color: #666; font-size: 14px; margin-top: 30px;">Questions? Reply to this email or contact us at hello@artbattle.com</p>
+        <p style="color: #666; font-size: 14px; margin-top: 30px;">Questions? Reply to this email or contact us at artists@artbattle.com</p>
         
         <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
         
@@ -437,7 +435,7 @@ Best regards,
 Art Battle HQ
 Art Battle Artist Payments
 
-Questions? Reply to this email or contact us at hello@artbattle.com
+Questions? Reply to this email or contact us at artists@artbattle.com
 
 Art Battle - Live Competitive Painting Events
 artbattle.com

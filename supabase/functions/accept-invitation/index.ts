@@ -248,11 +248,35 @@ serve(async (req)=>{
       const { data: profileData } = await supabase.from('artist_profiles').select('name, entry_id, person:people(email)').eq('id', submissionData.artistProfileId).single();
       const { data: eventData } = await supabase.from('events').select('eid, name, event_start_datetime, venue, cities(name)').eq('eid', submissionData.eventEid).single();
       if (profileData?.person?.email && eventData) {
-        const eventDate = eventData.event_start_datetime ? new Date(eventData.event_start_datetime).toLocaleDateString('en-US', {
+        // Convert UTC time to local venue time
+        const getVenueTimezone = (cityName) => {
+          const timezoneMap = {
+            'Toronto': 'America/Toronto',
+            'Amsterdam': 'Europe/Amsterdam', 
+            'Bangkok': 'Asia/Bangkok',
+            'San Francisco': 'America/Los_Angeles',
+            'Oakland': 'America/Los_Angeles',
+            'Boston': 'America/New_York',
+            'Seattle': 'America/Los_Angeles',
+            'Sydney': 'Australia/Sydney',
+            'Auckland': 'Pacific/Auckland',
+            'Ottawa': 'America/Toronto',
+            'Wilmington': 'America/New_York',
+            'Lancaster': 'America/New_York'
+          };
+          return timezoneMap[cityName] || 'America/New_York'; // Default to Eastern
+        };
+        
+        const venueTimezone = getVenueTimezone(eventData.cities?.name);
+        const eventDate = eventData.event_start_datetime ? new Date(eventData.event_start_datetime).toLocaleString('en-US', {
           weekday: 'long',
           year: 'numeric',
           month: 'long',
-          day: 'numeric'
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+          timeZone: venueTimezone
         }) : 'TBD';
         const emailData = emailTemplates.artistConfirmed({
           artistName: profileData.name || submissionData.confirmationData.legalName || 'Artist',
