@@ -66,38 +66,7 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
   const loadData = async () => {
     console.log('Home: Starting loadData, person:', person);
     try {
-
-      // Step 1: Check if user has set a primary profile using the new system
-      console.log('Home: Checking for primary profile with person.id:', person.id);
-      const { data: primaryCheck, error: primaryError } = await supabase
-        .rpc('has_primary_profile', { target_person_id: person.id });
-
-      console.log('Home: Primary profile check result:', { primaryCheck, primaryError });
-
-      if (!primaryError && primaryCheck && primaryCheck.length > 0) {
-        const result = primaryCheck[0];
-        if (result.has_primary && result.profile_id) {
-          // Found primary profile, load it
-          const { data: primaryProfile, error: profileError } = await supabase
-            .from('artist_profiles')
-            .select('*')
-            .eq('id', result.profile_id)
-            .single();
-
-          if (!profileError && primaryProfile) {
-            console.log('Home: Found primary profile, loading dashboard for:', primaryProfile.name);
-            setProfiles([primaryProfile]);
-            setSelectedProfile(primaryProfile);
-            setCandidateProfiles([]); // Clear any candidate profiles
-            setShowProfilePicker(false); // Ensure picker is hidden
-            await loadProfileData(primaryProfile);
-            return;
-          }
-        }
-      }
-
-      // Step 2: No primary profile set, run profile lookup to show picker
-      console.log('Home: No primary profile found, running profile lookup...');
+      // Use secure profile lookup that handles all cases server-side
       await handleProfileLookup();
     } catch (err) {
       console.error('Home: Error in loadData:', err);
@@ -109,78 +78,36 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
 
   const handleProfileLookup = async () => {
     try {
-      let userPhone = user.phone;
-      if (!userPhone) {
-        setError('Phone number not available for profile lookup');
-        return;
-      }
+      console.log('Home: Getting authoritative profile for authenticated user');
+      
+      // Call the secure edge function that handles all the logic server-side
+      const { data, error } = await supabase.functions.invoke('artist-get-my-profile');
 
-      // Normalize phone number format for lookup
-      if (userPhone && !userPhone.startsWith('+')) {
-        if (userPhone.startsWith('1') && userPhone.length === 11) {
-          userPhone = `+${userPhone}`;
-        } else if (userPhone.length === 10) {
-          userPhone = `+1${userPhone}`;
-        } else {
-          userPhone = `+1${userPhone}`;
-        }
-      }
+      console.log('Home: Secure profile lookup result:', { data, error });
 
-      console.log('Home: Running profile lookup for phone:', userPhone);
-
-      // Use the new simplified profile lookup
-      const { data: candidateProfiles, error: lookupError } = await supabase
-        .rpc('lookup_profiles_by_contact', { 
-          target_phone: userPhone,
-          target_email: user.email || null
-        });
-
-      console.log('Home: Profile lookup result:', { candidateProfiles, lookupError });
-
-      if (lookupError) {
-        console.error('Profile lookup failed:', lookupError);
-        setError(`Failed to lookup profiles: ${lookupError.message || lookupError}`);
+      if (error) {
+        console.error('Secure profile lookup failed:', error);
+        setError(`Failed to get your profile: ${error.message || error}`);
         setProfiles([]);
         setSelectedProfile(null);
         return;
       }
 
-      if (candidateProfiles && candidateProfiles.length > 0) {
-        // Load sample works for each profile
-        const detailedCandidates = await Promise.all(
-          candidateProfiles.map(async (candidate) => {
-            // Get sample works using unified function
-            const { data: sampleWorks } = await supabase
-              .rpc('get_unified_sample_works', { profile_id: candidate.id });
-            
-            console.log('Sample works for', candidate.name, ':', sampleWorks);
-            if (sampleWorks && sampleWorks.length > 0) {
-              sampleWorks.forEach((work, idx) => {
-                console.log(`  Work ${idx}:`, {
-                  id: work.id,
-                  title: work.title,
-                  image_url: work.image_url,
-                  source_type: work.source_type,
-                  original_url: work.original_url
-                });
-              });
-            }
-
-            // Get artwork count from art table
-            const { count: artworkCount } = await supabase
-              .from('art')
-              .select('*', { count: 'exact', head: true })
-              .eq('artist_id', candidate.id);
-
-            return {
-              ...candidate,
-              sampleWorks: sampleWorks || [],
-              artworkCount: artworkCount || 0,
-            };
-          })
-        );
-
-        console.log('Home: Found candidate profiles with details:', detailedCandidates);
+      if (data.profile) {
+        // Authoritative profile found - set it directly (no user selection needed)
+        console.log('Home: Authoritative profile found:', data.profile.name, 'ID:', data.profile.id);
+        setProfiles([data.profile]);
+        setSelectedProfile(data.profile);
+        setCandidateProfiles([]);
+        setShowProfilePicker(false);
+        setShowCreateNewProfile(false);
+        onProfilePickerChange(false);
+        
+        await loadProfileData(data.profile);
+      } else if (data.needsSelection && data.candidateProfiles?.length > 0) {
+        // Multiple candidate profiles found - user needs to select
+        console.log('Home: Multiple candidate profiles found - showing picker');
+        const detailedCandidates = data.candidateProfiles;
         
         // Debug: log profile candidates
         detailedCandidates.forEach((candidate, index) => {
@@ -197,7 +124,7 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
           });
         });
 
-        // Auto-selection logic
+        // Auto-selection logic (same as before but now with server-provided data)
         let autoSelectedProfile = null;
         
         // Rule 1: If only one profile, auto-select it
@@ -220,14 +147,15 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
           return; // Skip showing the picker
         }
 
-        // Show picker if no auto-selection
+        // Show picker for user selection
         setCandidateProfiles(detailedCandidates);
         setShowProfilePicker(true);
         setProfiles([]);
         setSelectedProfile(null);
-      } else {
-        // No candidates found, automatically redirect to create new profile
-        console.log('Home: No candidate profiles found for phone:', userPhone, '- automatically creating new profile');
+        onProfilePickerChange(true);
+      } else if (data.needsSetup) {
+        // No profile exists - redirect to create new profile
+        console.log('Home: No profile found for user - redirecting to create profile');
         setProfiles([]);
         setSelectedProfile(null);
         setCandidateProfiles([]);
@@ -239,10 +167,12 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
         
         // Navigate directly to profile tab where ProfileForm will handle creation
         onNavigateToTab('profile');
+      } else {
+        setError('Unable to determine profile status');
       }
     } catch (err) {
-      console.error('Home: Error in multi-profile lookup:', err);
-      setError('Failed to lookup potential profiles: ' + err.message);
+      console.error('Home: Error in secure profile lookup:', err);
+      setError('Failed to get your profile: ' + err.message);
     }
   };
 

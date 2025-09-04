@@ -681,6 +681,7 @@ Art Battle Team`);
     // Apply status filters
     if ((activeFilter === 'all' || activeFilter === 'confirmations') && statusFilters.confirmations) {
       artistConfirmations
+        .filter(artist => artist.confirmation_status !== 'withdrawn') // Exclude withdrawn confirmations
         .sort((a, b) => new Date(b.created_at || b.confirmed_at) - new Date(a.created_at || a.confirmed_at))
         .slice(0, 25)
         .forEach(artist => 
@@ -718,7 +719,7 @@ Art Battle Team`);
     // Handle missing bio filter
     if (activeFilter === 'missing_bio') {
       artistConfirmations
-        .filter(artist => !artist.artist_profiles?.abhq_bio || artist.artist_profiles.abhq_bio.trim() === '')
+        .filter(artist => artist.confirmation_status !== 'withdrawn' && (!artist.artist_profiles?.abhq_bio || artist.artist_profiles.abhq_bio.trim() === '')) // Exclude withdrawn confirmations
         .sort((a, b) => new Date(b.created_at || b.confirmed_at) - new Date(a.created_at || a.confirmed_at))
         .slice(0, 25)
         .forEach(artist => {
@@ -798,7 +799,7 @@ Art Battle Team`);
                     style={{ cursor: 'pointer' }}
                     onClick={() => toggleStatusFilter('confirmations')}
                   >
-                    ✅ Confirmed ({artistConfirmations.length})
+                    ✅ Confirmed ({artistConfirmations.filter(artist => artist.confirmation_status !== 'withdrawn').length})
                   </Badge>
                   <Badge 
                     color={statusFilters.invitations ? 'orange' : 'gray'} 

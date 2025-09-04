@@ -480,6 +480,47 @@ const EventApplications = () => {
     );
   }
 
+  // Handle case where user is signed in but has no artist profile
+  if (user && !artistProfileId && !loading) {
+    return (
+      <Box>
+        <Flex direction="column" gap="2" mb="6">
+          <Heading size="6">Apply to Events</Heading>
+          <Text size="3" color="gray">
+            Complete your artist profile to start applying to events
+          </Text>
+        </Flex>
+
+        {error && (
+          <Callout.Root color="red" mb="4">
+            <Callout.Icon>
+              <InfoCircledIcon />
+            </Callout.Icon>
+            <Callout.Text>{error}</Callout.Text>
+          </Callout.Root>
+        )}
+
+        <Card size="3">
+          <Flex direction="column" gap="4" align="center" py="6">
+            <PersonIcon width="48" height="48" />
+            <Heading size="5">Complete Your Artist Profile</Heading>
+            <Text size="3" color="gray" align="center">
+              You need to create an artist profile before you can apply to Art Battle events
+            </Text>
+            <Button 
+              size="3" 
+              color="crimson"
+              onClick={() => window.location.hash = '#/profile'}
+            >
+              <PlusIcon width="16" height="16" />
+              Create Artist Profile
+            </Button>
+          </Flex>
+        </Card>
+      </Box>
+    );
+  }
+
   return (
     <Box>
       <Flex direction="column" gap="2" mb="6">
