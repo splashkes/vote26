@@ -39,10 +39,13 @@ export const emailTemplates = {
     artistName: string
     eventEid: string
     eventName: string
-    eventDate: string
+    eventStartDateTime: string
     eventVenue: string
     cityName: string
-  }) => ({
+  }) => {
+    const eventDate = formatEventDateTime(data.eventStartDateTime, data.cityName);
+    
+    return ({
     subject: `Application Received - ${data.eventEid} ${data.cityName}`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333; line-height: 1.6;">
@@ -104,17 +107,21 @@ Questions? Reply to this email or contact us at artists@artbattle.com
 Art Battle - Live Competitive Painting Events
 artbattle.com
     `
-  }),
+    });
+  },
 
   // Artist invitation email
   artistInvited: (data: {
     artistName: string
     eventEid: string
     eventName: string
-    eventDate: string
+    eventStartDateTime: string
     eventVenue: string
     cityName: string
-  }) => ({
+  }) => {
+    const eventDate = formatEventDateTime(data.eventStartDateTime, data.cityName);
+    
+    return ({
     subject: `You're Invited! ${data.eventEid} ${data.cityName}`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333; line-height: 1.6;">
@@ -175,7 +182,8 @@ Questions? Reply to this email or contact us at artists@artbattle.com
 Art Battle - Live Competitive Painting Events
 artbattle.com
     `
-  }),
+    });
+  },
 
   // Artist confirmation email
   artistConfirmed: (data: {

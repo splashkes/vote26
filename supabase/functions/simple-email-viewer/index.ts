@@ -21,7 +21,7 @@ serve(async (req) => {
         artistName: "Sarah Johnson",
         eventEid: "AB3010",
         eventName: "AB3010 – Vancouver",
-        eventDate: "Friday, September 29, 2025",
+        eventStartDateTime: "2025-09-30T02:30:00.000Z", // 7:30 PM Vancouver time
         eventVenue: "The Gallery Downtown",
         cityName: "Vancouver"
       },
@@ -29,7 +29,7 @@ serve(async (req) => {
         artistName: "Mike Chen",
         eventEid: "AB3011",
         eventName: "AB3011 – Calgary", 
-        eventDate: "Saturday, October 5, 2025",
+        eventStartDateTime: "2025-10-06T01:00:00.000Z", // 7:00 PM Calgary time
         eventVenue: "Arts Commons",
         cityName: "Calgary"
       },
@@ -37,7 +37,7 @@ serve(async (req) => {
         artistName: "Emma Rodriguez",
         eventEid: "AB3012",
         eventName: "AB3012 – Montreal",
-        eventDate: "Sunday, October 12, 2025",
+        eventStartDateTime: "2025-10-13T00:00:00.000Z", // 8:00 PM Montreal time
         eventVenue: "Le Studio Art Space",
         cityName: "Montreal",
         artistNumber: "88274"
