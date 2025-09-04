@@ -1,5 +1,38 @@
 // Email templates for artist notifications
 
+// Utility function to convert UTC datetime to local venue time
+const formatEventDateTime = (utcDateTime: string, cityName: string): string => {
+  if (!utcDateTime) return 'TBD';
+  
+  const timezoneMap = {
+    'Toronto': 'America/Toronto',
+    'Amsterdam': 'Europe/Amsterdam', 
+    'Bangkok': 'Asia/Bangkok',
+    'San Francisco': 'America/Los_Angeles',
+    'Oakland': 'America/Los_Angeles',
+    'Boston': 'America/New_York',
+    'Seattle': 'America/Los_Angeles',
+    'Sydney': 'Australia/Sydney',
+    'Auckland': 'Pacific/Auckland',
+    'Ottawa': 'America/Toronto',
+    'Wilmington': 'America/New_York',
+    'Lancaster': 'America/New_York'
+  };
+  
+  const venueTimezone = timezoneMap[cityName] || 'UTC';
+  
+  return new Date(utcDateTime).toLocaleString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: venueTimezone
+  });
+};
+
 export const emailTemplates = {
   // Artist application confirmation email
   applicationReceived: (data: {
@@ -149,11 +182,14 @@ artbattle.com
     artistName: string
     eventEid: string
     eventName: string
-    eventDate: string
+    eventStartDateTime: string
     eventVenue: string
     cityName: string
     artistNumber: string
-  }) => ({
+  }) => {
+    const eventDate = formatEventDateTime(data.eventStartDateTime, data.cityName);
+    
+    return ({
     subject: `Confirmed! ${data.eventEid} ${data.cityName} - Artist #${data.artistNumber}`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333; line-height: 1.6;">
@@ -230,7 +266,8 @@ Questions? Reply to this email or contact us at artists@artbattle.com
 Art Battle - Live Competitive Painting Events
 artbattle.com
     `
-  }),
+    });
+  },
 
   // Artist cancellation email
   artistCancelled: (data: {

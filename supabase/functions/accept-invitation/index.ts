@@ -248,41 +248,11 @@ serve(async (req)=>{
       const { data: profileData } = await supabase.from('artist_profiles').select('name, entry_id, person:people(email)').eq('id', submissionData.artistProfileId).single();
       const { data: eventData } = await supabase.from('events').select('eid, name, event_start_datetime, venue, cities(name)').eq('eid', submissionData.eventEid).single();
       if (profileData?.person?.email && eventData) {
-        // Convert UTC time to local venue time
-        const getVenueTimezone = (cityName) => {
-          const timezoneMap = {
-            'Toronto': 'America/Toronto',
-            'Amsterdam': 'Europe/Amsterdam', 
-            'Bangkok': 'Asia/Bangkok',
-            'San Francisco': 'America/Los_Angeles',
-            'Oakland': 'America/Los_Angeles',
-            'Boston': 'America/New_York',
-            'Seattle': 'America/Los_Angeles',
-            'Sydney': 'Australia/Sydney',
-            'Auckland': 'Pacific/Auckland',
-            'Ottawa': 'America/Toronto',
-            'Wilmington': 'America/New_York',
-            'Lancaster': 'America/New_York'
-          };
-          return timezoneMap[cityName] || 'UTC'; // Default to UTC to make unmapped cities obvious
-        };
-        
-        const venueTimezone = getVenueTimezone(eventData.cities?.name);
-        const eventDate = eventData.event_start_datetime ? new Date(eventData.event_start_datetime).toLocaleString('en-US', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-          hour: 'numeric',
-          minute: '2-digit',
-          hour12: true,
-          timeZone: venueTimezone
-        }) : 'TBD';
         const emailData = emailTemplates.artistConfirmed({
           artistName: profileData.name || submissionData.confirmationData.legalName || 'Artist',
           eventEid: eventData.eid,
           eventName: eventData.name || eventData.eid,
-          eventDate: eventDate,
+          eventStartDateTime: eventData.event_start_datetime, // Pass raw UTC datetime
           eventVenue: eventData.venue || 'TBD',
           cityName: eventData.cities?.name || 'Unknown',
           artistNumber: profileData.entry_id?.toString() || submissionData.artistNumber || 'TBD'
