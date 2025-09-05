@@ -52,9 +52,12 @@ const MainNavigation = () => {
   return (
     <Container size="4" style={{ 
       padding: '1rem', 
-      paddingTop: 'max(2rem, calc(env(safe-area-inset-top) + 1.5rem))',
+      paddingTop: '1rem',
       minHeight: '100vh' 
     }}>
+      {/* iOS app spacing */}
+      <Box style={{ height: '40px' }} />
+      
       <Box mb="3">
         {user ? (
           <Flex 

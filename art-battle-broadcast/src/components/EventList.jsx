@@ -340,22 +340,11 @@ const EventList = () => {
 
   return (
     <Box style={{ minHeight: '100vh', backgroundColor: 'var(--gray-1)' }}>
-      <Box
-        style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          backgroundColor: 'var(--gray-2)',
-          backdropFilter: 'blur(10px)',
-          zIndex: 100,
-          borderBottom: '1px solid var(--gray-6)',
-          padding: '20px',
-        }}
-      >
-        <Container size="2" style={{ maxWidth: '600px' }}>
-          <Flex direction="column" gap="2">
-            <Box style={{ textAlign: 'center' }}>
+      <Container size="2" style={{ maxWidth: '600px', paddingTop: '60px' }}>
+        <Box p="4">
+          {/* Header content now in scrollable area */}
+          <Box mb="6">
+            <Box style={{ textAlign: 'center' }} mb="4">
               <img
                 src="https://imagedelivery.net/IGZfH_Pl-6S6csykNnXNJw/0ce25113-c21e-4435-1dc0-6020d15fa300/public"
                 alt="Art Battle Vote"
@@ -370,7 +359,7 @@ const EventList = () => {
                   e.target.style.display = 'none';
                   const fallback = document.createElement('h1');
                   fallback.innerText = 'ART BATTLE VOTE';
-                  fallback.style.cssText = 'color: white; font-weight: 900; letter-spacing: -0.02em; text-transform: uppercase; margin: 0; font-size: 2rem;';
+                  fallback.style.cssText = 'color: var(--gray-12); font-weight: 900; letter-spacing: -0.02em; text-transform: uppercase; margin: 0; font-size: 2rem;';
                   e.target.parentNode.appendChild(fallback);
                 }}
               />
@@ -401,12 +390,8 @@ const EventList = () => {
                 )}
               </Flex>
             )}
-          </Flex>
-        </Container>
-      </Box>
-
-      <Container size="2" style={{ maxWidth: '600px', paddingTop: user ? '120px' : '100px' }}>
-        <Box p="4">
+          </Box>
+          
           {loading || isRefreshing ? (
             <LoadingScreen message={isRefreshing ? "Refreshing session..." : "Loading events..."} />
           ) : error ? (

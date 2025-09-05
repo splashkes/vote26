@@ -87,6 +87,7 @@ const EventDetails = () => {
   const [voteWeights, setVoteWeights] = useState({});
   const [confirmBid, setConfirmBid] = useState(null);
   const [biddingInProgress, setBiddingInProgress] = useState(false);
+  const [confirmDeleteImage, setConfirmDeleteImage] = useState(null); // For image deletion confirmation
   const [autoPaymentModal, setAutoPaymentModal] = useState(null); // For automatic payment modal
   const [paymentModalChecked, setPaymentModalChecked] = useState(false); // Prevent duplicate modals
   const [voteSummary, setVoteSummary] = useState([]); // V2 BROADCAST: Vote summary from cached data
@@ -1489,7 +1490,7 @@ const EventDetails = () => {
 
   if (loading) {
     return (
-      <Container size="3">
+      <Container size="3" style={{ paddingTop: '10rem' }}>
         <LoadingScreen message="Loading event details..." />
       </Container>
     );
@@ -1497,7 +1498,7 @@ const EventDetails = () => {
   
   if (error) {
     return (
-      <Container size="3" style={{ padding: '2rem' }}>
+      <Container size="3" style={{ padding: '2rem', paddingTop: '10rem' }}>
         <Callout.Root color="red">
           <Callout.Icon>
             <ExclamationTriangleIcon />
@@ -1510,7 +1511,7 @@ const EventDetails = () => {
   
   if (!event) {
     return (
-      <Container size="3" style={{ padding: '2rem' }}>
+      <Container size="3" style={{ padding: '2rem', paddingTop: '10rem' }}>
         <Callout.Root>
           <Callout.Icon>
             <InfoCircledIcon />
@@ -1522,7 +1523,10 @@ const EventDetails = () => {
   }
 
   return (
-    <Container size="3" style={{ padding: '2rem' }}>
+    <Container size="3" style={{ padding: '2rem', paddingTop: '2rem' }}>
+      {/* iOS app spacing */}
+      <Box style={{ height: '40px' }} />
+      
       {/* Header */}
       <Box mb="4">
         <Button 
@@ -2174,7 +2178,12 @@ const EventDetails = () => {
                             onClick={() => {
                               // Get media ID from the media_files object
                               const mediaId = currentMedia?.media_files?.id;
-                              handleDeleteMedia(mediaId);
+                              setConfirmDeleteImage({
+                                mediaId,
+                                artistName: selectedArt?.artist_profiles?.name || 'Unknown Artist',
+                                round: selectedArt?.round,
+                                easel: selectedArt?.easel
+                              });
                             }}
                             style={{
                               position: 'absolute',
@@ -2645,6 +2654,59 @@ const EventDetails = () => {
                 ) : (
                   'Confirm Bid'
                 )}
+              </Button>
+            </AlertDialog.Action>
+          </Flex>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
+
+      {/* Delete Image Confirmation Dialog */}
+      <AlertDialog.Root open={!!confirmDeleteImage} onOpenChange={(open) => !open && setConfirmDeleteImage(null)}>
+        <AlertDialog.Content style={{ maxWidth: 450 }}>
+          <AlertDialog.Title>Delete Image?</AlertDialog.Title>
+          <AlertDialog.Description size="2">
+            <Flex direction="column" gap="2">
+              <Text>
+                Are you sure you want to delete this image? This action cannot be undone.
+              </Text>
+              {confirmDeleteImage && (
+                <Box style={{ 
+                  background: 'var(--gray-3)', 
+                  padding: '12px', 
+                  borderRadius: '4px' 
+                }}>
+                  <Text size="2" weight="medium">
+                    {confirmDeleteImage.artistName}
+                  </Text>
+                  <Text size="2" color="gray">
+                    Round {confirmDeleteImage.round}, Easel {confirmDeleteImage.easel}
+                  </Text>
+                </Box>
+              )}
+            </Flex>
+          </AlertDialog.Description>
+
+          <Flex gap="3" mt="4" justify="end">
+            <AlertDialog.Cancel>
+              <Button 
+                variant="soft" 
+                color="gray"
+                onClick={() => setConfirmDeleteImage(null)}
+              >
+                Cancel
+              </Button>
+            </AlertDialog.Cancel>
+            <AlertDialog.Action>
+              <Button 
+                color="red"
+                onClick={() => {
+                  if (confirmDeleteImage?.mediaId) {
+                    handleDeleteMedia(confirmDeleteImage.mediaId);
+                  }
+                  setConfirmDeleteImage(null);
+                }}
+              >
+                Delete Image
               </Button>
             </AlertDialog.Action>
           </Flex>
