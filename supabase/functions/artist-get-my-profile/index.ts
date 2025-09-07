@@ -39,11 +39,8 @@ serve(async (req) => {
 
     console.log('Getting profile for user:', user.id)
 
-    // Get person_id from auth metadata (preferring user_metadata over raw_user_meta_data)
-    const userMetadata = user.user_metadata || {}
-    const rawMetadata = user.raw_user_meta_data || {}
-    const metadata = userMetadata.person_id ? userMetadata : rawMetadata
-    
+    // Get person_id from auth metadata - AUTH-FIRST APPROACH
+    const metadata = user.user_metadata || {}
     const personId = metadata.person_id
     
     if (!personId) {

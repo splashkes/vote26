@@ -1,3 +1,5 @@
+-- OBSOLETE ARCHIVE: This is the old cast_vote_secure with raw_user_meta_data dependencies
+-- Current live version has been updated to pure auth-first approach (Sept 2025)
                                               pg_get_functiondef                                               
 ---------------------------------------------------------------------------------------------------------------
  CREATE OR REPLACE FUNCTION public.cast_vote_secure(p_eid character varying, p_round integer, p_easel integer)+

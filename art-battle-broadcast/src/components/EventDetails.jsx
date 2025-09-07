@@ -58,7 +58,7 @@ const EventDetails = () => {
   const { eventId, tab } = useParams();
   const navigate = useNavigate();
   
-  const { user, person } = useAuth();
+  const { user, person, loading: authLoading } = useAuth();
   const [event, setEvent] = useState(null);
   const [eventEid, setEventEid] = useState(null); // EID for broadcast subscription
   const [artworks, setArtworks] = useState([]);
@@ -282,8 +282,13 @@ const EventDetails = () => {
   
 
   useEffect(() => {
-    fetchEventDetails();
-  }, [eventId]);
+    // Wait for auth to finish loading before fetching event data
+    // This prevents race conditions and loading loops
+    if (!authLoading && eventId) {
+      console.log('EventDetails: Auth ready, starting event data fetch');
+      fetchEventDetails();
+    }
+  }, [eventId, authLoading]);
 
   // Handle tab parameter from URL hash and authentication check
   useEffect(() => {

@@ -245,9 +245,9 @@ const InternationalPhoneInput = forwardRef(({
         }
         
         // Strategy 3: Use our ref if available
-        if (!inputElement && intlInputRef.current) {
+        if (!inputElement && inputRef.current) {
           try {
-            const inputFromRef = intlInputRef.current.querySelector?.('input[type="tel"]');
+            const inputFromRef = inputRef.current.querySelector?.('input[type="tel"]');
             if (inputFromRef) {
               inputElement = inputFromRef;
             }

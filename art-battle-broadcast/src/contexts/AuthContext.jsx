@@ -56,7 +56,10 @@ export const AuthProvider = ({ children }) => {
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('AuthContext: Auth state changed:', event, !!session);
+      // Only log meaningful auth events, not repeated SIGNED_IN events from tab focus
+      if (event !== 'SIGNED_IN') {
+        console.log('AuthContext: Auth state changed:', event, !!session);
+      }
       setSession(session);
       setUser(session?.user ?? null);
       
@@ -193,34 +196,9 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     if (!session) return;
     
-    console.log('AuthContext: Automatic token refresh disabled - sessions will naturally expire');
+    // No logging needed - token refresh is disabled to prevent loading loops
+    // Users can refresh the page if needed when sessions expire
     
-    // Still check expiry status for warnings without refreshing
-    const checkExpiry = () => {
-      if (session) {
-        refreshSessionIfNeeded(); // This now only shows warnings, doesn't refresh
-      }
-    };
-    
-    // Check expiry every 5 minutes just for warnings
-    const expiryCheckInterval = setInterval(checkExpiry, 5 * 60 * 1000);
-    
-    // Still listen for visibility changes to update warnings
-    const handleVisibilityChange = () => {
-      if (!document.hidden && session) {
-        console.log('AuthContext: Page visible, checking session status (warnings only)');
-        refreshSessionIfNeeded(); // This now only shows warnings, doesn't refresh
-      }
-    };
-    
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    
-    // Remove focus listener to reduce excessive session checks
-    
-    return () => {
-      clearInterval(expiryCheckInterval);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
   }, [session]);
 
   const value = {

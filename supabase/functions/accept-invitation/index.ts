@@ -90,8 +90,8 @@ serve(async (req)=>{
       });
     }
     // Verify ownership - user must own the artist profile
-    // Check both user_metadata and raw_user_meta_data for person_id (compatibility with auth crisis fix)
-    const userPersonId = user.user_metadata?.person_id || user.raw_user_meta_data?.person_id;
+    // AUTH-FIRST: Only check user_metadata (set by auth-webhook)
+    const userPersonId = user.user_metadata?.person_id;
     if (!userPersonId) {
       return new Response(JSON.stringify({
         error: 'User has no person_id in metadata',
@@ -99,7 +99,6 @@ serve(async (req)=>{
         debug: {
           user_id: user.id,
           user_metadata: user.user_metadata,
-          raw_user_meta_data: user.raw_user_meta_data,
           timestamp: new Date().toISOString()
         }
       }), {

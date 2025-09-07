@@ -1,3 +1,6 @@
+// OBSOLETE: This function checks raw_user_meta_data consistency which is no longer used
+// Since Sept 2025 auth system overhaul, raw_user_meta_data dependencies were eliminated
+// The metadata mismatch checks in this function are now obsolete but kept for historical reference
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 

@@ -1,3 +1,5 @@
+// OBSOLETE ARCHIVE: This is an archived version using raw_user_meta_data dual-checking
+// Current live version has been updated to auth-first approach (Sept 2025)
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
