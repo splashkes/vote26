@@ -150,5 +150,75 @@
  END;                                                                                                                             +
  $function$                                                                                                                       +
  
-(1 row)
+ CREATE OR REPLACE FUNCTION public.send_rich_winner_notification(p_event_id uuid, p_art_id uuid)                                  +
+  RETURNS void                                                                                                                    +
+  LANGUAGE plpgsql                                                                                                                +
+  SECURITY DEFINER                                                                                                                +
+ AS $function$                                                                                                                    +
+ DECLARE                                                                                                                          +
+   v_event RECORD;                                                                                                                +
+   v_art RECORD;                                                                                                                  +
+   v_winner RECORD;                                                                                                               +
+   v_channel VARCHAR;                                                                                                             +
+ BEGIN                                                                                                                            +
+   -- Get event info                                                                                                              +
+   SELECT                                                                                                                         +
+     e.*,                                                                                                                         +
+     es.channel_name,                                                                                                             +
+     es.winner_notifications                                                                                                      +
+   INTO v_event                                                                                                                   +
+   FROM events e                                                                                                                  +
+   LEFT JOIN event_slack_settings es ON es.event_id = e.id                                                                        +
+   WHERE e.id = p_event_id;                                                                                                       +
+                                                                                                                                  +
+   -- Only proceed if winner notifications are enabled                                                                            +
+   IF NOT COALESCE(v_event.winner_notifications, false) THEN                                                                      +
+     RETURN;                                                                                                                      +
+   END IF;                                                                                                                        +
+                                                                                                                                  +
+   -- Determine channel (use friendly names)                                                                                      +
+   v_channel := COALESCE(                                                                                                         +
+     CASE                                                                                                                         +
+       WHEN v_event.channel_name ~ '^[CGD][0-9A-Z]+$' THEN 'general'                                                              +
+       ELSE v_event.channel_name                                                                                                  +
+     END,                                                                                                                         +
+     CASE                                                                                                                         +
+       WHEN v_event.slack_channel ~ '^[CGD][0-9A-Z]+$' THEN 'general'                                                             +
+       ELSE v_event.slack_channel                                                                                                 +
+     END,                                                                                                                         +
+     'general'                                                                                                                    +
+   );                                                                                                                             +
+                                                                                                                                  +
+   -- Get art and winner info                                                                                                     +
+   SELECT                                                                                                                         +
+     a.*,                                                                                                                         +
+     ap.name as artist_name,                                                                                                      +
+     p.name as winner_name,                                                                                                       +
+     (b.amount_cents / 100.0) as winning_amount                                                                                   +
+   INTO v_art                                                                                                                     +
+   FROM art a                                                                                                                     +
+   LEFT JOIN artist_profiles ap ON a.artist_id = ap.id                                                                            +
+   LEFT JOIN bids b ON b.art_id = a.id AND b.id = a.winning_bid_id                                                                +
+   LEFT JOIN people p ON p.id = b.person_id                                                                                       +
+   WHERE a.id = p_art_id;                                                                                                         +
+                                                                                                                                  +
+   -- Queue winner notification using cache-only approach                                                                         +
+   PERFORM queue_notification_with_cache_only(                                                                                    +
+     p_event_id,                                                                                                                  +
+     v_channel,                                                                                                                   +
+     'auction_winner',                                                                                                            +
+     jsonb_build_object(                                                                                                          +
+       'art_id', p_art_id,                                                                                                        +
+       'art_title', v_art.title,                                                                                                  +
+       'artist_name', v_art.artist_name,                                                                                          +
+       'winner_name', mask_name(v_art.winner_name),                                                                               +
+       'winning_amount', v_art.winning_amount,                                                                                    +
+       'currency_symbol', v_event.currency_symbol,                                                                                +
+       'event_name', v_event.name                                                                                                 +
+     )                                                                                                                            +
+   );                                                                                                                             +
+ END;                                                                                                                             +
+ $function$                                                                                                                       +
+ 
+(2 rows)
 

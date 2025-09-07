@@ -218,7 +218,26 @@ serve(async (req)=>{
     return new Response(JSON.stringify({
       success: false,
       error: 'Auth webhook error',
-      message: error.message
+      message: error.message,
+      debug: {
+        timestamp: new Date().toISOString(),
+        function_name: 'auth-webhook',
+        error_type: error.constructor.name,
+        error_message: error.message,
+        error_stack: error.stack,
+        received_payload: payload,
+        webhook_type: payload?.type,
+        webhook_table: payload?.table,
+        user_id: payload?.record?.id,
+        phone: payload?.record?.phone,
+        phone_confirmed_at: payload?.record?.phone_confirmed_at,
+        old_phone_confirmed_at: payload?.old_record?.phone_confirmed_at,
+        raw_user_meta_data: payload?.record?.raw_user_meta_data,
+        environment: {
+          supabase_url: Deno.env.get('SUPABASE_URL'),
+          has_service_key: !!Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+        }
+      }
     }), {
       status: 500,
       headers: {
@@ -330,8 +349,30 @@ async function updateAuthUserMetadata(userId, personId, personHash, personName) 
     console.log('Auth metadata updated successfully in both fields for user:', userId);
   } catch (error) {
     console.error('CRITICAL: Failed to update auth metadata for user:', userId, error);
+    // Create detailed error with debug info
+    const metadataError = new Error(`Auth metadata update failed: ${error.message}`);
+    metadataError.debug = {
+      timestamp: new Date().toISOString(),
+      function_name: 'updateAuthUserMetadata',
+      user_id: userId,
+      person_id: personId,
+      person_hash: personHash,
+      person_name: personName,
+      error_type: error.constructor.name,
+      error_message: error.message,
+      error_stack: error.stack,
+      metadata_payload: {
+        person_id: personId,
+        person_hash: personHash,
+        person_name: personName
+      },
+      environment: {
+        supabase_url: Deno.env.get('SUPABASE_URL'),
+        has_service_key: !!Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+      }
+    };
     // Make this mandatory now - throw instead of silent fail
-    throw error;
+    throw metadataError;
   }
 }
 // Send person link notification (fire-and-forget)

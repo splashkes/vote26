@@ -102,10 +102,19 @@ serve(async (req)=>{
     } else {
       // TEMPORARY: Even if QR code doesn't exist, return success
       // Try to find any event the user might be registered for
-      const { data: userEvents } = await supabase.from('event_registrations').select('event_id').eq('person_id', (await supabase.from('people').select('id').eq('auth_user_id', user.id).single())?.data?.id).limit(1).single();
-      if (userEvents) {
-        eventId = userEvents.event_id;
+      try {
+        const { data: userPerson } = await supabase.from('people').select('id').eq('auth_user_id', user.id).single();
+        if (userPerson) {
+          const { data: userEvents } = await supabase.from('event_registrations').select('event_id').eq('person_id', userPerson.id).limit(1).single();
+          if (userEvents) {
+            eventId = userEvents.event_id;
+          }
+        }
+      } catch (eventLookupError) {
+        console.warn('Could not find user events:', eventLookupError);
+        // Continue anyway - this is just for emergency override
       }
+      
       scanResult = {
         success: true,
         message: 'QR code validated successfully (emergency override - code not found)',

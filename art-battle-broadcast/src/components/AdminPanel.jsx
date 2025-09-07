@@ -398,14 +398,22 @@ const AdminPanel = ({
               });
             });
 
-          // Only create easels for actual database records
+          // Create easels for all positions from 1 to highestEaselNumber (including gaps)
           const easels = [];
           for (let i = 1; i <= highestEaselNumber; i++) {
             if (easelMap.has(i)) {
+              // Occupied easel
               easels.push({
                 easelNumber: i,
                 artist: easelMap.get(i),
                 isEmpty: false
+              });
+            } else {
+              // Empty easel slot (gap that needs to be visible)
+              easels.push({
+                easelNumber: i,
+                artist: null,
+                isEmpty: true
               });
             }
           }

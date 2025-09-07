@@ -297,6 +297,10 @@ const EventApplications = () => {
       if (alreadyConfirmed) {
         throw new Error('You have already accepted an invitation for this event!');
       }
+      // COMMENTED OUT: Old direct database approach - replaced with Edge Function
+      // This direct database insert was causing RLS policy violations and bypassing
+      // proper email sending logic. Use accept-invitation Edge Function instead.
+      /*
       // Update artist profile with pronouns
       if (submissionData.profileUpdates) {
         const { error: profileUpdateError } = await supabase
@@ -353,6 +357,24 @@ const EventApplications = () => {
         }
       } catch (invitationError) {
         console.warn('Error updating invitation:', invitationError.message);
+      }
+      */
+
+      // Call accept-invitation Edge Function
+      // This uses service role (bypasses RLS), sends emails, and handles all validation
+      const { data, error } = await supabase.functions.invoke('accept-invitation', {
+        body: {
+          submissionData,
+          invitationId: selectedInvitation.id
+        }
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Failed to call accept-invitation function');
+      }
+
+      if (!data.success) {
+        throw new Error(data.error || 'Unknown error from accept-invitation function');
       }
       
       await Promise.all([

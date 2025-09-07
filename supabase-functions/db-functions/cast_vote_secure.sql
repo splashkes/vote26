@@ -20,6 +20,7 @@
    v_has_qr_scan BOOLEAN := false;                                                                            +
    v_final_weight NUMERIC(4,2);                                                                               +
    v_art_id VARCHAR(50);                                                                                      +
+   v_metadata_fixed BOOLEAN := false;                                                                         +
  BEGIN                                                                                                        +
    -- Get authenticated user                                                                                  +
    v_auth_user_id := auth.uid();                                                                              +
@@ -57,60 +58,42 @@
      );                                                                                                       +
    END IF;                                                                                                    +
                                                                                                               +
-   -- Construct art_id from eid-round-easel                                                                   +
-   v_art_id := p_eid || '-' || p_round || '-' || p_easel;                                                     +
-                                                                                                              +
-   -- Get user's phone from auth metadata                                                                     +
-   SELECT                                                                                                     +
-     raw_user_meta_data->>'phone' as phone,                                                                   +
-     raw_user_meta_data                                                                                       +
-   INTO v_auth_phone, v_auth_metadata                                                                         +
-   FROM auth.users                                                                                            +
-   WHERE id = v_auth_user_id;                                                                                 +
-                                                                                                              +
-   -- Extract nickname from metadata                                                                          +
-   v_nickname := COALESCE(                                                                                    +
-     v_auth_metadata->>'nickname',                                                                            +
-     v_auth_metadata->>'name',                                                                                +
-     SPLIT_PART(v_auth_metadata->>'email', '@', 1)                                                            +
-   );                                                                                                         +
-                                                                                                              +
-   -- Get or create person record                                                                             +
+   -- Get person record with AUTOMATIC METADATA FIX                                                           +
    SELECT id INTO v_person_id                                                                                 +
    FROM people                                                                                                +
    WHERE auth_user_id = v_auth_user_id;                                                                       +
                                                                                                               +
    IF v_person_id IS NULL THEN                                                                                +
-     -- Create minimal person record for voting                                                               +
-     v_person_id := gen_random_uuid();                                                                        +
+     -- EMERGENCY FIX: Try to auto-create/link person record like bidding does                                +
+     PERFORM emergency_fix_unlinked_users();                                                                  +
                                                                                                               +
-     INSERT INTO people (                                                                                     +
-       id,                                                                                                    +
-       auth_user_id,                                                                                          +
-       auth_phone,                                                                                            +
-       phone_number,                                                                                          +
-       nickname,                                                                                              +
-       created_at,                                                                                            +
-       updated_at                                                                                             +
-     ) VALUES (                                                                                               +
-       v_person_id,                                                                                           +
-       v_auth_user_id,                                                                                        +
-       v_auth_phone,                                                                                          +
-       v_auth_phone,                                                                                          +
-       v_nickname,                                                                                            +
-       NOW(),                                                                                                 +
-       NOW()                                                                                                  +
-     );                                                                                                       +
-   ELSE                                                                                                       +
-     -- Update existing person record with latest info                                                        +
-     UPDATE people                                                                                            +
-     SET                                                                                                      +
-       auth_phone = COALESCE(v_auth_phone, auth_phone),                                                       +
-       phone_number = COALESCE(phone_number, v_auth_phone),                                                   +
-       nickname = COALESCE(nickname, v_nickname),                                                             +
-       updated_at = NOW()                                                                                     +
-     WHERE id = v_person_id;                                                                                  +
+     -- Try again after emergency fix                                                                         +
+     SELECT id INTO v_person_id                                                                               +
+     FROM people                                                                                              +
+     WHERE auth_user_id = v_auth_user_id;                                                                     +
+                                                                                                              +
+     IF v_person_id IS NULL THEN                                                                              +
+       RETURN jsonb_build_object(                                                                             +
+         'success', false,                                                                                    +
+         'error', 'User registration incomplete - person record not found'                                    +
+       );                                                                                                     +
+     END IF;                                                                                                  +
+                                                                                                              +
+     v_metadata_fixed := true;                                                                                +
    END IF;                                                                                                    +
+                                                                                                              +
+   -- AUTO-FIX: Check if auth metadata is missing and fix it                                                  +
+   SELECT raw_user_meta_data INTO v_auth_metadata                                                             +
+   FROM auth.users                                                                                            +
+   WHERE id = v_auth_user_id;                                                                                 +
+                                                                                                              +
+   IF v_auth_metadata->>'person_id' IS NULL OR v_auth_metadata->>'person_id' != v_person_id::text THEN        +
+     PERFORM emergency_fix_single_user_metadata(v_auth_user_id, v_person_id);                                 +
+     v_metadata_fixed := true;                                                                                +
+   END IF;                                                                                                    +
+                                                                                                              +
+   -- Construct art_id from eid-round-easel                                                                   +
+   v_art_id := p_eid || '-' || p_round || '-' || p_easel;                                                     +
                                                                                                               +
    -- Get existing vote weight from materialized view                                                         +
    SELECT                                                                                                     +
@@ -159,17 +142,18 @@
    -- Calculate final vote weight (existing weight + QR bonus)                                                +
    v_final_weight := v_vote_weight + v_qr_bonus;                                                              +
                                                                                                               +
-   -- Add QR info to weight info                                                                              +
+   -- Add QR info and metadata fix info to weight info                                                        +
    v_weight_info := v_weight_info || jsonb_build_object(                                                      +
      'qr_bonus', v_qr_bonus,                                                                                  +
      'has_qr_scan', v_has_qr_scan,                                                                            +
-     'final_weight', v_final_weight                                                                           +
+     'final_weight', v_final_weight,                                                                          +
+     'metadata_fixed', v_metadata_fixed                                                                       +
    );                                                                                                         +
                                                                                                               +
-   -- CRITICAL FIX: Check for existing vote using art_uuid (UUID) instead of art_id (VARCHAR)                 +
+   -- Check for existing vote using art_uuid                                                                  +
    SELECT id INTO v_existing_vote_id                                                                          +
    FROM votes                                                                                                 +
-   WHERE art_uuid = v_art_uuid   -- FIXED: Use art_uuid (UUID) instead of art_id (VARCHAR)                    +
+   WHERE art_uuid = v_art_uuid                                                                                +
      AND person_id = v_person_id;                                                                             +
                                                                                                               +
    IF v_existing_vote_id IS NOT NULL THEN                                                                     +
@@ -198,9 +182,9 @@
        round,                                                                                                 +
        easel,                                                                                                 +
        art_id,                                                                                                +
-       art_uuid,    -- CRITICAL: Include both art_id (VARCHAR) and art_uuid (UUID)                            +
+       art_uuid,                                                                                              +
        person_id,                                                                                             +
-       vote_factor,  -- Store the final weight (existing + QR bonus)                                          +
+       vote_factor,                                                                                           +
        created_at                                                                                             +
      ) VALUES (                                                                                               +
        gen_random_uuid(),                                                                                     +
@@ -209,9 +193,9 @@
        p_round,                                                                                               +
        p_easel,                                                                                               +
        v_art_id,                                                                                              +
-       v_art_uuid,   -- CRITICAL: Store the UUID for proper relationships                                     +
+       v_art_uuid,                                                                                            +
        v_person_id,                                                                                           +
-       v_final_weight,  -- Use final weight including QR bonus                                                +
+       v_final_weight,                                                                                        +
        NOW()                                                                                                  +
      );                                                                                                       +
                                                                                                               +
@@ -219,8 +203,6 @@
      UPDATE art                                                                                               +
      SET vote_count = vote_count + 1                                                                          +
      WHERE id = v_art_uuid;                                                                                   +
-                                                                                                              +
-     -- Slack notifications removed for vote_cast events                                                                                                     +
                                                                                                               +
      RETURN jsonb_build_object(                                                                               +
        'success', true,                                                                                       +

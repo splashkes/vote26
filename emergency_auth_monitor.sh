@@ -26,6 +26,16 @@ while true; do
     AND raw_user_meta_data->>'person_id' IS NULL;
   ")
   
+  # Check for wrong metadata (person_id points to wrong person - causes voting errors)
+  WRONG_METADATA=$(PGPASSWORD='6kEtvU9n0KhTVr5' $PSQL_CMD -c "
+    SELECT COUNT(*) 
+    FROM auth.users au 
+    JOIN people p ON p.auth_user_id = au.id 
+    WHERE au.phone_confirmed_at IS NOT NULL 
+    AND au.raw_user_meta_data->>'person_id' IS NOT NULL
+    AND au.raw_user_meta_data->>'person_id' <> p.id::text;
+  ")
+  
   # Check for unverified users (causing loading loops)
   UNVERIFIED=$(PGPASSWORD='6kEtvU9n0KhTVr5' $PSQL_CMD -c "
     SELECT COUNT(*) 
@@ -35,8 +45,8 @@ while true; do
     AND p.verified = false;
   ")
   
-  if [[ $UNLINKED -gt 0 ]] || [[ $MISSING_METADATA -gt 0 ]] || [[ $UNVERIFIED -gt 0 ]]; then
-    echo "$(date): ALERT - Found $UNLINKED unlinked users, $MISSING_METADATA missing metadata, $UNVERIFIED unverified users"
+  if [[ $UNLINKED -gt 0 ]] || [[ $MISSING_METADATA -gt 0 ]] || [[ $WRONG_METADATA -gt 0 ]] || [[ $UNVERIFIED -gt 0 ]]; then
+    echo "$(date): ALERT - Found $UNLINKED unlinked users, $MISSING_METADATA missing metadata, $WRONG_METADATA wrong metadata, $UNVERIFIED unverified users"
     
     # Get phone numbers of unlinked users before fixing
     if [[ $UNLINKED -gt 0 ]]; then
@@ -60,6 +70,19 @@ while true; do
       echo "$(date): Missing metadata phones: $MISSING_META_PHONES"
     fi
     
+    # Get phone numbers of users with wrong metadata before fixing  
+    if [[ $WRONG_METADATA -gt 0 ]]; then
+      WRONG_META_PHONES=$(PGPASSWORD='6kEtvU9n0KhTVr5' $PSQL_CMD -c "
+        SELECT COALESCE(au.phone, 'no-phone') as phone
+        FROM auth.users au 
+        JOIN people p ON p.auth_user_id = au.id 
+        WHERE au.phone_confirmed_at IS NOT NULL 
+        AND au.raw_user_meta_data->>'person_id' IS NOT NULL
+        AND au.raw_user_meta_data->>'person_id' <> p.id::text;
+      " | tr '\n' ' ')
+      echo "$(date): Wrong metadata phones: $WRONG_META_PHONES"
+    fi
+    
     # Get phone numbers of unverified users before fixing
     if [[ $UNVERIFIED -gt 0 ]]; then
       UNVERIFIED_PHONES=$(PGPASSWORD='6kEtvU9n0KhTVr5' $PSQL_CMD -c "
@@ -75,6 +98,33 @@ while true; do
     # Run emergency fix
     FIX_RESULT=$(PGPASSWORD='6kEtvU9n0KhTVr5' $PSQL_CMD -c "SELECT * FROM emergency_fix_unlinked_users();" | tr '|' ' ')
     echo "$(date): Fixed unlinked: $FIX_RESULT"
+    
+    # Fix wrong metadata (critical for voting) - one user at a time
+    if [[ $WRONG_METADATA -gt 0 ]]; then
+      # Get each user individually and fix them
+      PGPASSWORD='6kEtvU9n0KhTVr5' $PSQL_CMD -c "
+        SELECT au.id || '|' || p.id || '|' || au.phone
+        FROM auth.users au 
+        JOIN people p ON p.auth_user_id = au.id 
+        WHERE au.phone_confirmed_at IS NOT NULL 
+        AND au.raw_user_meta_data->>'person_id' IS NOT NULL
+        AND au.raw_user_meta_data->>'person_id' <> p.id::text;
+      " | while IFS='|' read -r auth_id person_id phone; do
+        if [[ -n "$auth_id" && -n "$person_id" ]]; then
+          PGPASSWORD='6kEtvU9n0KhTVr5' $PSQL_CMD -c "
+            UPDATE auth.users 
+            SET raw_user_meta_data = COALESCE(raw_user_meta_data, '{}'::jsonb) || jsonb_build_object(
+                'person_id', '"$person_id"',
+                'person_hash', encode(sha256(('"$person_id"' || COALESCE(phone, ''))::bytea), 'hex'),
+                'person_name', 'User'
+            )
+            WHERE id = '"$auth_id"';
+          " > /dev/null
+          echo "$(date): Fixed metadata for user $phone ($auth_id -> $person_id)"
+        fi
+      done
+      echo "$(date): Fixed wrong metadata for $WRONG_METADATA users with phones: $WRONG_META_PHONES"
+    fi
     
     # Fix unverified users
     if [[ $UNVERIFIED -gt 0 ]]; then

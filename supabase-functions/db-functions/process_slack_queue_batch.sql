@@ -13,8 +13,17 @@
      v_result BOOLEAN;                                                                                               +
      v_start_time TIMESTAMP := NOW();                                                                                +
      v_delay_seconds INTEGER := 0;                                                                                   +
+     v_lookup_result RECORD;                                                                                         +
  BEGIN                                                                                                               +
-     -- Process pending notifications in batches with rate limiting                                                  +
+     -- STEP 1: Process channel lookups first (convert pending_lookup to pending)                                    +
+     -- Process up to half the batch_size for lookups to avoid overwhelming API                                      +
+     SELECT * INTO v_lookup_result                                                                                   +
+     FROM process_slack_channel_lookups(LEAST(batch_size / 2, 10)::integer);                                         +
+                                                                                                                     +
+     RAISE NOTICE 'Channel lookups: % processed, % resolved, % failed',                                              +
+                  v_lookup_result.processed, v_lookup_result.resolved, v_lookup_result.failed;                       +
+                                                                                                                     +
+     -- STEP 2: Process regular pending notifications                                                                +
      FOR v_notification IN                                                                                           +
          SELECT id                                                                                                   +
          FROM slack_notifications                                                                                    +
@@ -47,6 +56,9 @@
          'processed', v_processed,                                                                                   +
          'succeeded', v_succeeded,                                                                                   +
          'failed', v_failed,                                                                                         +
+         'lookup_processed', v_lookup_result.processed,                                                              +
+         'lookup_resolved', v_lookup_result.resolved,                                                                +
+         'lookup_failed', v_lookup_result.failed,                                                                    +
          'duration_seconds', EXTRACT(EPOCH FROM (NOW() - v_start_time))::INTEGER,                                    +
          'timestamp', NOW()                                                                                          +
      );                                                                                                              +
