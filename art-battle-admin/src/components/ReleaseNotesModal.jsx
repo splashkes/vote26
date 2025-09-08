@@ -13,25 +13,36 @@ import {
 } from '@radix-ui/themes';
 import { Cross2Icon, InfoCircledIcon } from '@radix-ui/react-icons';
 
-const RELEASE_NOTES_VERSION = '2025.08.27'; // Update this when adding new notes
+const RELEASE_NOTES_VERSION = '2025.09.04'; // Update this when adding new notes
 
 const releaseNotes = {
-  version: '2025.08.27',
-  date: 'August 27, 2025',
-  title: 'Admin System Improvements & SMS Functionality',
+  version: '2025.09.04',
+  date: 'September 4, 2025',
+  title: 'Enhanced Security & Monitoring Updates',
   sections: [
     {
-      date: 'August 27, 2025',
-      time: 'Latest Updates',
+      date: 'September 4, 2025',
+      time: 'Latest Updates - Enhanced Security & Reliability',
       items: [
-        '🔄 Artist workflow deduplication - hides duplicate entries and cross-stage duplicates with Show All toggle',
-        '✨ In vote interface, admin users can see detailed voting that updates every 10s',
+        '🛡️ Enhanced artist profile security - artists now always see their correct information',
+        '🔍 New automated monitoring system continuously watches for system health',
+        '📧 Improved email delivery tracking ensures artists receive invitations',
+        '⏰ Better timezone handling for international events and date management',
+        '🎯 Streamlined artist profile access eliminates confusion issues',
+        '📊 Real-time system monitoring with automatic alerts for any issues',
+        '✨ Enhanced authentication system for more reliable logins',
+        '🌍 Better support for international artists and producers'
+      ]
+    },
+    {
+      date: 'August 27, 2025',
+      time: 'Previous Updates - Workflow Improvements',
+      items: [
+        '🔄 Artist workflow deduplication with Show All toggle',
+        '✨ Real-time voting updates every 10 seconds for admin users',
         '📱 Working SMS reminder system for artist invitations',
-        '🔧 Fixed admin user deletion/password functions (auth_user_id → user_id)',
-        '📞 Resolved phone number field detection for SMS sending',
-        '💬 Updated SMS messages to use proper event codes and profile URLs',
         '🎨 Producer message display in artist profiles',
-        '📱 Mobile-responsive admin interface with horizontal navigation'
+        '📱 Mobile-responsive admin interface'
       ]
     },
     {
@@ -60,9 +71,9 @@ const releaseNotes = {
     }
   ],
   knownIssues: [
-    'SMS delivery may take 30-60 seconds to process through queue',
+    'Automated monitoring alerts may take a few minutes to process',
     'Some older admin accounts may need password reset',
-    'Mobile navigation optimized for landscape tablets'
+    'Email delivery improvements are still being rolled out gradually'
   ]
 };
 

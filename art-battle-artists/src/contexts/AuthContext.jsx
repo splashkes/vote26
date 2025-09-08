@@ -193,6 +193,28 @@ export const AuthProvider = ({ children }) => {
     return { error };
   };
 
+  const refreshAuth = async () => {
+    console.log('🔄 [AUTH-V2] Refreshing authentication after profile changes...');
+    try {
+      const { data, error } = await supabase.auth.refreshSession();
+      if (error) {
+        console.error('❌ [AUTH-V2] Token refresh failed:', error);
+        return { error };
+      }
+      
+      // Extract person data from the new JWT token
+      if (data?.session?.user) {
+        await extractPersonFromJWT(data.session.user);
+        console.log('✅ [AUTH-V2] Authentication refreshed successfully');
+      }
+      
+      return { error: null };
+    } catch (err) {
+      console.error('❌ [AUTH-V2] Refresh auth failed:', err);
+      return { error: err };
+    }
+  };
+
   const value = {
     user,
     person,
@@ -201,6 +223,7 @@ export const AuthProvider = ({ children }) => {
     signInWithOtp,
     verifyOtp,
     signOut,
+    refreshAuth,
   };
 
   return (

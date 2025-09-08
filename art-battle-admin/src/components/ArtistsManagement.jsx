@@ -21,6 +21,34 @@ import { PersonIcon, MagnifyingGlassIcon, Cross2Icon } from '@radix-ui/react-ico
 import { supabase } from '../lib/supabase';
 import { getArtistProfilesWithAliases, getAliasBadgeText } from '../utils/aliasLookup';
 
+// Phone number formatting utility for E.164 display
+const formatPhoneForDisplay = (phone) => {
+  if (!phone) return phone;
+  
+  // Remove any non-digit characters except +
+  const cleaned = phone.replace(/[^\d+]/g, '');
+  
+  // If already has +, it's likely properly formatted
+  if (cleaned.startsWith('+')) {
+    return cleaned;
+  }
+  
+  // If it's a long number without +, assume it needs + prefix
+  if (cleaned.length >= 10) {
+    // For numbers starting with 1 (US/Canada)
+    if (cleaned.startsWith('1') && cleaned.length === 11) {
+      return `+${cleaned}`;
+    }
+    // For other international numbers, add + prefix
+    if (cleaned.length >= 10 && cleaned.length <= 15) {
+      return `+${cleaned}`;
+    }
+  }
+  
+  // Return original if we can't format it properly
+  return phone;
+};
+
 const ArtistsManagement = () => {
   const { entryId } = useParams();
   const [loading, setLoading] = useState(true);
@@ -34,10 +62,32 @@ const ArtistsManagement = () => {
     invitations: true,
     confirmations: true
   });
-  const [bioFilters, setBioFilters] = useState({
-    hasBio: true,
-    noBio: true
+  
+  // Location filter states
+  const [locationFilters, setLocationFilters] = useState({
+    city: '',
+    country: ''
   });
+  const [locationOptionsLoaded, setLocationOptionsLoaded] = useState(false);
+  
+  // Hardcoded country options based on common Art Battle locations
+  const countryOptions = [
+    { country: 'Canada', count: 1411 },
+    { country: 'US', count: 14759 },
+    { country: 'United States', count: 0 },
+    { country: 'UK', count: 234 },
+    { country: 'United Kingdom', count: 0 },
+    { country: 'Australia', count: 156 },
+    { country: 'Germany', count: 89 },
+    { country: 'France', count: 67 },
+    { country: 'Netherlands', count: 45 },
+    { country: 'Spain', count: 34 },
+    { country: 'Italy', count: 28 },
+    { country: 'Belgium', count: 23 },
+    { country: 'Mexico', count: 19 },
+    { country: 'Switzerland', count: 15 },
+    { country: 'Sweden', count: 12 }
+  ].filter(c => c.count > 0); // Only show countries with counts
   
   // Data states
   const [artistProfiles, setArtistProfiles] = useState([]);
@@ -80,18 +130,27 @@ const ArtistsManagement = () => {
     fetchEvents();
   }, []);
 
-  // Search function with debouncing
+  // Manual search function
+  const handleSearch = () => {
+    if (searchTerm.trim()) {
+      fetchAllArtistsData(searchTerm, 500, locationFilters); // Search with term, limit results
+    } else {
+      fetchAllArtistsData('', 1000, locationFilters); // No search term, get more results
+    }
+  };
+
+  // Search function with 2-second debouncing
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       if (searchTerm.trim()) {
-        fetchAllArtistsData(searchTerm, 500); // Search with term, limit results
+        fetchAllArtistsData(searchTerm, 500, locationFilters); // Search with term, limit results
       } else {
-        fetchAllArtistsData('', 1000); // No search term, get more results
+        fetchAllArtistsData('', 1000, locationFilters); // No search term, get more results
       }
-    }, 300); // Debounce for 300ms
+    }, 2000); // 2 second delay
 
     return () => clearTimeout(timeoutId);
-  }, [searchTerm]);
+  }, [searchTerm, locationFilters]);
 
   // Handle direct URL navigation to specific artist
   useEffect(() => {
@@ -119,7 +178,7 @@ const ArtistsManagement = () => {
     }
   }, [entryId, loading, artistProfiles, urlArtistProcessed]);
 
-  const fetchAllArtistsData = async (searchQuery = '', searchLimit = 1000) => {
+  const fetchAllArtistsData = async (searchQuery = '', searchLimit = 1000, locationFilters = {}) => {
     try {
       setLoading(true);
       
@@ -139,12 +198,20 @@ const ArtistsManagement = () => {
         },
         body: JSON.stringify({
           searchTerm: searchQuery,
-          limit: searchLimit
+          limit: searchLimit,
+          city: locationFilters.city || null,
+          country: locationFilters.country || null
         })
       });
 
       if (!response.ok) {
         const errorData = await response.json();
+        
+        // Log debug information if available
+        if (errorData.debug) {
+          console.error('🐛 Edge function debug info:', errorData.debug);
+        }
+        
         throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
       }
 
@@ -554,6 +621,7 @@ const ArtistsManagement = () => {
     }
   };
 
+
   // Handle inviting artist to event
   const handleInviteArtist = () => {
     setInviteMessage(`Hi ${selectedArtist?.artist_profiles?.name || 'there'},
@@ -639,11 +707,19 @@ Art Battle Team`);
     }));
   };
 
-  const toggleBioFilter = (bioType) => {
-    setBioFilters(prev => ({
-      ...prev,
-      [bioType]: !prev[bioType]
-    }));
+
+  const handleLocationFilterChange = (type, value) => {
+    const newFilters = { ...locationFilters, [type]: value };
+    setLocationFilters(newFilters);
+    // Debounced search will handle the update via useEffect
+  };
+
+  const clearLocationFilters = () => {
+    setLocationFilters({
+      city: '',
+      country: ''
+    });
+    fetchAllArtistsData(searchTerm, 1000);
   };
 
   const clearAllFilters = () => {
@@ -653,12 +729,14 @@ Art Battle Team`);
       invitations: true,
       confirmations: true
     });
-    setBioFilters({
-      hasBio: true,
-      noBio: true
+    setLocationFilters({
+      city: '',
+      country: ''
     });
     setActiveFilter('all');
     setSearchTerm('');
+    // Refresh with no filters
+    fetchAllArtistsData('', 1000, {});
   };
 
   const getFilteredArtists = () => {
@@ -710,7 +788,7 @@ Art Battle Team`);
     if ((activeFilter === 'all' || activeFilter === 'profiles') && statusFilters.profiles) {
       artistProfiles
         .sort((a, b) => new Date(b.artist_profiles?.created_at || b.created_at) - new Date(a.artist_profiles?.created_at || a.created_at))
-        .slice(0, 25)
+        .slice(0, 1000) // Show up to 1000 profiles instead of just 25
         .forEach(artist => 
           addArtist(artist, 'profile', artist.artist_profiles?.created_at || artist.created_at)
         );
@@ -727,15 +805,6 @@ Art Battle Team`);
         });
     }
 
-    // Apply bio filters
-    allArtists = allArtists.filter(artist => {
-      const hasBio = artist.artist_profiles?.abhq_bio && artist.artist_profiles.abhq_bio.trim() !== '';
-      
-      if (hasBio && !bioFilters.hasBio) return false;
-      if (!hasBio && !bioFilters.noBio) return false;
-      
-      return true;
-    });
 
     // Search is now handled server-side via the admin-artists-search function
     // No client-side filtering needed for search terms
@@ -825,26 +894,45 @@ Art Battle Team`);
                 </Flex>
               </Box>
 
-              {/* Bio Filters */}
+              {/* Location Filters */}
               <Box>
                 <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>
-                  ABHQ Bio Status:
+                  Location:
                 </Text>
-                <Flex gap="2" wrap="wrap">
-                  <Badge 
-                    color={bioFilters.hasBio ? 'green' : 'gray'} 
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => toggleBioFilter('hasBio')}
+                <Flex gap="2" align="center" wrap="wrap">
+                  <TextField.Root 
+                    placeholder="Enter city..." 
+                    value={locationFilters.city}
+                    onChange={(e) => handleLocationFilterChange('city', e.target.value)}
+                    style={{ minWidth: '140px' }}
+                  />
+                  
+                  <Select.Root 
+                    value={locationFilters.country} 
+                    onValueChange={(value) => handleLocationFilterChange('country', value === 'all' ? '' : value)}
                   >
-                    ✅ Has Bio
-                  </Badge>
-                  <Badge 
-                    color={bioFilters.noBio ? 'red' : 'gray'} 
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => toggleBioFilter('noBio')}
-                  >
-                    ❌ No Bio
-                  </Badge>
+                    <Select.Trigger placeholder="Select country..." style={{ minWidth: '140px' }} />
+                    <Select.Content>
+                      <Select.Item value="all">All Countries</Select.Item>
+                      {countryOptions.map(country => (
+                        <Select.Item key={country.country} value={country.country}>
+                          {country.country} ({country.count})
+                        </Select.Item>
+                      ))}
+                    </Select.Content>
+                  </Select.Root>
+
+                  {/* Active Location Filter Badges */}
+                  {locationFilters.city && (
+                    <Badge color="blue" style={{ cursor: 'pointer' }} onClick={() => handleLocationFilterChange('city', '')}>
+                      📍 {locationFilters.city} ✕
+                    </Badge>
+                  )}
+                  {locationFilters.country && (
+                    <Badge color="purple" style={{ cursor: 'pointer' }} onClick={() => handleLocationFilterChange('country', '')}>
+                      🌍 {locationFilters.country} ✕
+                    </Badge>
+                  )}
                 </Flex>
               </Box>
 
@@ -873,15 +961,22 @@ Art Battle Team`);
                 <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>
                   Search Artists
                 </Text>
-                <TextField.Root 
-                  placeholder="Search by name, email, phone, or entry ID..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                >
-                  <TextField.Slot>
-                    <MagnifyingGlassIcon height="16" width="16" />
-                  </TextField.Slot>
-                </TextField.Root>
+                <Flex gap="2">
+                  <TextField.Root 
+                    placeholder="Search by name, email, phone, or entry ID..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                    style={{ flex: 1 }}
+                  >
+                    <TextField.Slot>
+                      <MagnifyingGlassIcon height="16" width="16" />
+                    </TextField.Slot>
+                  </TextField.Root>
+                  <Button onClick={handleSearch} size="2">
+                    Search
+                  </Button>
+                </Flex>
               </Box>
               
               <Box>
@@ -1054,7 +1149,7 @@ Art Battle Team`);
                       )}
                       {selectedArtist?.artist_profiles?.phone && (
                         <Text size="2">
-                          <strong>Phone:</strong> {selectedArtist.artist_profiles.phone}
+                          <strong>Phone:</strong> {formatPhoneForDisplay(selectedArtist.artist_profiles.phone)}
                         </Text>
                       )}
                       {(selectedArtist?.artist_profiles?.city_text || selectedArtist?.artist_profiles?.city || selectedArtist?.artist_profiles?.country) && (
