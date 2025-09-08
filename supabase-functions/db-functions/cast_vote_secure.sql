@@ -1,5 +1,3 @@
--- OBSOLETE ARCHIVE: This is the old cast_vote_secure with raw_user_meta_data dependencies
--- Current live version has been updated to pure auth-first approach (Sept 2025)
                                               pg_get_functiondef                                               
 ---------------------------------------------------------------------------------------------------------------
  CREATE OR REPLACE FUNCTION public.cast_vote_secure(p_eid character varying, p_round integer, p_easel integer)+
@@ -13,16 +11,12 @@
    v_event_id UUID;                                                                                           +
    v_art_uuid UUID;                                                                                           +
    v_existing_vote_id UUID;                                                                                   +
-   v_auth_phone TEXT;                                                                                         +
-   v_auth_metadata JSONB;                                                                                     +
-   v_nickname TEXT;                                                                                           +
    v_vote_weight NUMERIC(4,2);                                                                                +
    v_weight_info JSONB;                                                                                       +
    v_qr_bonus NUMERIC(4,2) := 0.0;                                                                            +
    v_has_qr_scan BOOLEAN := false;                                                                            +
    v_final_weight NUMERIC(4,2);                                                                               +
    v_art_id VARCHAR(50);                                                                                      +
-   v_metadata_fixed BOOLEAN := false;                                                                         +
  BEGIN                                                                                                        +
    -- Get authenticated user                                                                                  +
    v_auth_user_id := auth.uid();                                                                              +
@@ -60,38 +54,17 @@
      );                                                                                                       +
    END IF;                                                                                                    +
                                                                                                               +
-   -- Get person record with AUTOMATIC METADATA FIX                                                           +
+   -- Get person record - AUTH-FIRST APPROACH (no metadata needed)                                            +
    SELECT id INTO v_person_id                                                                                 +
    FROM people                                                                                                +
    WHERE auth_user_id = v_auth_user_id;                                                                       +
                                                                                                               +
    IF v_person_id IS NULL THEN                                                                                +
-     -- EMERGENCY FIX: Try to auto-create/link person record like bidding does                                +
-     PERFORM emergency_fix_unlinked_users();                                                                  +
-                                                                                                              +
-     -- Try again after emergency fix                                                                         +
-     SELECT id INTO v_person_id                                                                               +
-     FROM people                                                                                              +
-     WHERE auth_user_id = v_auth_user_id;                                                                     +
-                                                                                                              +
-     IF v_person_id IS NULL THEN                                                                              +
-       RETURN jsonb_build_object(                                                                             +
-         'success', false,                                                                                    +
-         'error', 'User registration incomplete - person record not found'                                    +
-       );                                                                                                     +
-     END IF;                                                                                                  +
-                                                                                                              +
-     v_metadata_fixed := true;                                                                                +
-   END IF;                                                                                                    +
-                                                                                                              +
-   -- AUTO-FIX: Check if auth metadata is missing and fix it                                                  +
-   SELECT raw_user_meta_data INTO v_auth_metadata                                                             +
-   FROM auth.users                                                                                            +
-   WHERE id = v_auth_user_id;                                                                                 +
-                                                                                                              +
-   IF v_auth_metadata->>'person_id' IS NULL OR v_auth_metadata->>'person_id' != v_person_id::text THEN        +
-     PERFORM emergency_fix_single_user_metadata(v_auth_user_id, v_person_id);                                 +
-     v_metadata_fixed := true;                                                                                +
+     RETURN jsonb_build_object(                                                                               +
+       'success', false,                                                                                      +
+       'error', 'User profile not found - please complete phone verification',                                +
+       'auth_user_id', v_auth_user_id                                                                         +
+     );                                                                                                       +
    END IF;                                                                                                    +
                                                                                                               +
    -- Construct art_id from eid-round-easel                                                                   +
@@ -144,12 +117,11 @@
    -- Calculate final vote weight (existing weight + QR bonus)                                                +
    v_final_weight := v_vote_weight + v_qr_bonus;                                                              +
                                                                                                               +
-   -- Add QR info and metadata fix info to weight info                                                        +
+   -- Add QR info to weight info                                                                              +
    v_weight_info := v_weight_info || jsonb_build_object(                                                      +
      'qr_bonus', v_qr_bonus,                                                                                  +
      'has_qr_scan', v_has_qr_scan,                                                                            +
-     'final_weight', v_final_weight,                                                                          +
-     'metadata_fixed', v_metadata_fixed                                                                       +
+     'final_weight', v_final_weight                                                                           +
    );                                                                                                         +
                                                                                                               +
    -- Check for existing vote using art_uuid                                                                  +

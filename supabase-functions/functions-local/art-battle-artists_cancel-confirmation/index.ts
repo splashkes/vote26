@@ -141,7 +141,32 @@ serve(async (req) => {
       .eq('id', confirmationWithEvent.artist_profile_id)
       .single()
 
-    const userPersonId = user.user_metadata?.person_id
+    // Extract person data from JWT claims instead of user_metadata
+    let userPersonId = null
+    try {
+      const parts = token.split('.')
+      if (parts.length === 3) {
+        const payload = parts[1]
+        let decodedPayload = payload.replace(/-/g, '+').replace(/_/g, '/')
+        while (decodedPayload.length % 4) {
+          decodedPayload += '='
+        }
+        const decodedData = atob(decodedPayload)
+        const claims = JSON.parse(decodedData)
+        
+        // Verify auth version
+        if (claims.auth_version === 'v2-http') {
+          userPersonId = claims.person_id || null
+        } else {
+          console.warn(`Unexpected auth_version: ${claims.auth_version}`)
+          throw new Error('Invalid authentication version')
+        }
+      }
+    } catch (jwtError) {
+      console.error('JWT parsing error:', jwtError)
+      throw new Error('Failed to extract person data from authentication')
+    }
+
     if (!userPersonId || profileOwnership?.person_id !== userPersonId) {
       throw new Error('Not authorized to cancel this confirmation')
     }

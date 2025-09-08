@@ -39,12 +39,48 @@ serve(async (req) => {
 
     console.log('Getting profile for user:', user.id)
 
-    // Get person_id from auth metadata - AUTH-FIRST APPROACH
-    const metadata = user.user_metadata || {}
-    const personId = metadata.person_id
-    
-    if (!personId) {
-      console.log('No person_id found in metadata for user:', user.id)
+    // Extract person data from JWT claims (V2 auth system)
+    let personId = null;
+    try {
+      const authHeader = req.headers.get('Authorization');
+      if (!authHeader) {
+        throw new Error('No authorization header');
+      }
+      const token = authHeader.replace('Bearer ', '');
+      const tokenParts = token.split('.');
+      if (tokenParts.length === 3) {
+        const payload = JSON.parse(atob(tokenParts[1]));
+        console.log('JWT payload extracted:', {
+          auth_version: payload.auth_version,
+          person_id: payload.person_id,
+          person_pending: payload.person_pending
+        });
+        
+        if (payload.auth_version === 'v2-http') {
+          if (payload.person_pending === true) {
+            console.log('User has pending person status - profile setup needed')
+            return new Response(
+              JSON.stringify({ 
+                error: 'User profile not fully initialized',
+                profile: null,
+                needsSetup: true
+              }),
+              { 
+                status: 200, 
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+              }
+            )
+          }
+          if (!payload.person_id) {
+            throw new Error('No person data found in authentication token.');
+          }
+          personId = payload.person_id;
+        } else {
+          throw new Error(`Unsupported auth version: ${payload.auth_version || 'unknown'}`);
+        }
+      }
+    } catch (jwtError) {
+      console.error('Failed to extract person data from JWT:', jwtError);
       return new Response(
         JSON.stringify({ 
           error: 'User profile not fully initialized',
@@ -58,7 +94,22 @@ serve(async (req) => {
       )
     }
 
-    console.log('Found person_id in metadata:', personId)
+    if (!personId) {
+      console.log('No person_id found in JWT claims for user:', user.id)
+      return new Response(
+        JSON.stringify({ 
+          error: 'User profile not fully initialized',
+          profile: null,
+          needsSetup: true
+        }),
+        { 
+          status: 200, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
+
+    console.log('Found person_id in JWT claims:', personId)
 
     // First try to get the authoritative artist profile linked to this person_id
     const { data: linkedProfile, error: linkedProfileError } = await supabase

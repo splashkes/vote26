@@ -101,16 +101,39 @@ serve(async (req) => {
       )
     }
 
-    // Verify ownership - user must own the artist profile
-    const userPersonId = user.user_metadata?.person_id
+    // Extract person data from JWT claims instead of user_metadata
+    let userPersonId = null
+    try {
+      const parts = token.split('.')
+      if (parts.length === 3) {
+        const payload = parts[1]
+        let decodedPayload = payload.replace(/-/g, '+').replace(/_/g, '/')
+        while (decodedPayload.length % 4) {
+          decodedPayload += '='
+        }
+        const decodedData = atob(decodedPayload)
+        const claims = JSON.parse(decodedData)
+        
+        // Verify auth version
+        if (claims.auth_version === 'v2-http') {
+          userPersonId = claims.person_id || null
+        } else {
+          console.warn(`Unexpected auth_version: ${claims.auth_version}`)
+        }
+      }
+    } catch (jwtError) {
+      console.error('JWT parsing error:', jwtError)
+    }
+
     if (!userPersonId) {
       return new Response(
         JSON.stringify({ 
-          error: 'User has no person_id in metadata',
+          error: 'User has no person_id in JWT claims',
           success: false,
           debug: {
             user_id: user.id,
-            user_metadata: user.user_metadata,
+            person_id_extracted: userPersonId,
+            jwt_parsing_attempted: true,
             timestamp: new Date().toISOString()
           }
         }),

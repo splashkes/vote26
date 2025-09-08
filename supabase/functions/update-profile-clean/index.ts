@@ -80,22 +80,54 @@ serve(async (req)=>{
     await logProfileEvent(supabase, 'profile_update', 'auth_validation', true, authUserId, undefined, undefined, undefined, undefined, {
       user_email: user.email
     }, undefined, ipAddress, userAgent);
-    const { profile_id, person_id, name, bio, city, country, email, website, instagram, facebook, twitter } = await req.json();
+    // Extract person data from JWT claims (V2 auth system)
+    let jwtPersonId = null;
+    try {
+      const tokenParts = token.split('.');
+      if (tokenParts.length === 3) {
+        const payload = JSON.parse(atob(tokenParts[1]));
+        console.log('JWT payload extracted:', {
+          auth_version: payload.auth_version,
+          person_id: payload.person_id,
+          person_pending: payload.person_pending
+        });
+        
+        if (payload.auth_version === 'v2-http') {
+          if (payload.person_pending === true) {
+            throw new Error('Cannot save profile: user authentication is missing. Please sign in again.');
+          }
+          if (!payload.person_id) {
+            throw new Error('Cannot save profile: no person data found in authentication token.');
+          }
+          jwtPersonId = payload.person_id;
+        } else {
+          throw new Error(`Unsupported auth version: ${payload.auth_version || 'unknown'}`);
+        }
+      }
+    } catch (jwtError) {
+      console.error('Failed to extract person data from JWT:', jwtError);
+      throw new Error('Cannot save profile: user authentication is missing. Please sign in again.');
+    }
+
+    if (!jwtPersonId) {
+      throw new Error('Cannot save profile: user authentication is missing. Please sign in again.');
+    }
+
+    const { profile_id, name, bio, city, country, email, website, instagram, facebook, twitter } = await req.json();
     profileId = profile_id;
-    personId = person_id;
+    personId = jwtPersonId; // Use person ID from JWT claims
+    
     // Log request data validation
     const validationErrors = [];
     if (!profile_id) validationErrors.push('profile_id is required but was missing or null');
-    if (!person_id) validationErrors.push('person_id is required but was missing or null');
     if (!name || !name.trim()) validationErrors.push('name is required but was missing, null, or empty');
     const isValidRequest = validationErrors.length === 0;
     await logProfileEvent(supabase, 'profile_update', 'request_validation', isValidRequest, authUserId, personId, profileId, isValidRequest ? undefined : 'validation_error', isValidRequest ? undefined : validationErrors.join('; '), {
       has_profile_id: !!profile_id,
-      has_person_id: !!person_id,
+      has_person_id: !!personId,
       has_name: !!(name && name.trim()),
       field_count: Object.keys({
         profile_id,
-        person_id,
         name,
         bio,
         city,
@@ -108,7 +140,6 @@ serve(async (req)=>{
       }).filter((key)=>{
         const value = {
           profile_id,
-          person_id,
           name,
           bio,
           city,
@@ -126,9 +157,6 @@ serve(async (req)=>{
     if (!profile_id) {
       throw new Error('profile_id is required but was missing or null');
     }
-    if (!person_id) {
-      throw new Error('person_id is required but was missing or null');
-    }
     if (!name || !name.trim()) {
       throw new Error('name is required but was missing, null, or empty');
     }
@@ -141,9 +169,9 @@ serve(async (req)=>{
       }, Date.now() - startTime, ipAddress, userAgent);
       throw new Error('Profile not found');
     }
-    if (existingProfile.person_id !== person_id) {
+    if (existingProfile.person_id !== personId) {
       await logProfileEvent(supabase, 'profile_update', 'ownership_check_failed', false, authUserId, personId, profileId, 'access_denied', 'Not authorized to update this profile', {
-        expected_person_id: person_id,
+        expected_person_id: personId,
         actual_person_id: existingProfile.person_id
       }, Date.now() - startTime, ipAddress, userAgent);
       throw new Error('Not authorized to update this profile');

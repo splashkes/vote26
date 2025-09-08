@@ -90,15 +90,52 @@ serve(async (req)=>{
       });
     }
     // Verify ownership - user must own the artist profile
-    // AUTH-FIRST: Only check user_metadata (set by auth-webhook)
-    const userPersonId = user.user_metadata?.person_id;
-    if (!userPersonId) {
+    // Extract person data from JWT claims (V2 auth system)
+    let userPersonId = null;
+    try {
+      const tokenParts = token.split('.');
+      if (tokenParts.length === 3) {
+        const payload = JSON.parse(atob(tokenParts[1]));
+        console.log('JWT payload extracted:', {
+          auth_version: payload.auth_version,
+          person_id: payload.person_id,
+          person_pending: payload.person_pending
+        });
+        
+        if (payload.auth_version === 'v2-http') {
+          if (payload.person_pending === true) {
+            return new Response(JSON.stringify({
+              error: 'User authentication is incomplete. Please sign in again.',
+              success: false,
+              debug: {
+                user_id: user.id,
+                person_pending: true,
+                timestamp: new Date().toISOString()
+              }
+            }), {
+              headers: {
+                ...corsHeaders,
+                'Content-Type': 'application/json'
+              },
+              status: 400
+            });
+          }
+          if (!payload.person_id) {
+            throw new Error('No person data found in authentication token.');
+          }
+          userPersonId = payload.person_id;
+        } else {
+          throw new Error(`Unsupported auth version: ${payload.auth_version || 'unknown'}`);
+        }
+      }
+    } catch (jwtError) {
+      console.error('Failed to extract person data from JWT:', jwtError);
       return new Response(JSON.stringify({
-        error: 'User has no person_id in metadata',
+        error: 'User authentication is incomplete. Please sign in again.',
         success: false,
         debug: {
           user_id: user.id,
-          user_metadata: user.user_metadata,
+          jwt_error: jwtError.message,
           timestamp: new Date().toISOString()
         }
       }), {
@@ -109,6 +146,24 @@ serve(async (req)=>{
         status: 400
       });
     }
+
+    if (!userPersonId) {
+      return new Response(JSON.stringify({
+        error: 'User has no person_id in authentication token',
+        success: false,
+        debug: {
+          user_id: user.id,
+          timestamp: new Date().toISOString()
+        }
+      }), {
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        },
+        status: 400
+      });
+    }
+
     // Verify profile ownership
     const { data: profileOwnership, error: ownershipError } = await supabase.from('artist_profiles').select('person_id').eq('id', submissionData.artistProfileId).single();
     if (ownershipError || !profileOwnership || profileOwnership.person_id !== userPersonId) {

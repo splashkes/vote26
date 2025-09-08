@@ -66,7 +66,8 @@ serve(async (req) => {
     
     if (authHeader) {
       try {
-        const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''))
+        const jwt = authHeader.replace('Bearer ', '')
+        const { data: { user }, error: authError } = await supabase.auth.getUser(jwt)
         if (authError) {
           return new Response(JSON.stringify({
             error: 'Authentication failed',
@@ -79,7 +80,34 @@ serve(async (req) => {
         
         if (user) {
           userId = user.id
-          personId = user.user_metadata?.person_id || null
+          
+          // Extract person data from JWT claims instead of user_metadata
+          try {
+            const parts = jwt.split('.')
+            if (parts.length === 3) {
+              const payload = parts[1]
+              let decodedPayload = payload.replace(/-/g, '+').replace(/_/g, '/')
+              while (decodedPayload.length % 4) {
+                decodedPayload += '='
+              }
+              const decodedData = atob(decodedPayload)
+              const claims = JSON.parse(decodedData)
+              
+              // Verify auth version
+              if (claims.auth_version === 'v2-http') {
+                personId = claims.person_id || null
+                debugInfo.auth_version = claims.auth_version
+                debugInfo.person_pending = claims.person_pending
+              } else {
+                console.warn(`Unexpected auth_version: ${claims.auth_version}`)
+                personId = null
+              }
+            }
+          } catch (jwtError) {
+            console.error('JWT parsing error:', jwtError)
+            personId = null
+          }
+          
           debugInfo.user_authenticated = true
           debugInfo.user_id = userId
           debugInfo.person_id = personId
