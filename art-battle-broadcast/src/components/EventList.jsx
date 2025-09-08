@@ -145,68 +145,11 @@ const EventList = () => {
       
       processEventsData(data);
     } catch (error) {
-      console.error('❌ [V2-BROADCAST] Error fetching events from cached endpoint:', error);
-      console.log('🔄 [V2-BROADCAST] Falling back to direct Supabase query...');
-      
-      // Fallback to direct Supabase query if cached endpoint fails
-      try {
-        const twoMonthsAgo = new Date();
-        twoMonthsAgo.setDate(twoMonthsAgo.getDate() - 60);
-        
-        const { data, error } = await supabase
-          .from('events')
-          .select(`
-            id,
-            eid,
-            name,
-            event_start_datetime,
-            event_end_datetime,
-            venue,
-            enable_auction,
-            vote_by_link
-          `)
-          .eq('enabled', true)
-          .eq('show_in_app', true)
-          .gte('event_start_datetime', twoMonthsAgo.toISOString())
-          .order('event_start_datetime', { ascending: true });
-
-        if (error) throw error;
-        
-        console.log('📡 [V2-BROADCAST] Fallback: Loaded events from Supabase directly:', data?.length, 'events');
-        processEventsData(data);
-      } catch (fallbackError) {
-        console.error('❌ [V2-BROADCAST] Fallback also failed:', fallbackError);
-        setError(fallbackError.message);
-        
-        // Auto-retry up to 3 times with geometric progression: 4s, 8s, 16s
-        if (retryCount < 3) {
-          const delay = Math.pow(2, retryCount + 2) * 1000; // 4s, 8s, 16s
-          console.log(`🔄 [V2-BROADCAST] Retrying in ${delay}ms (attempt ${retryCount + 1}/3)...`);
-          
-          setIsRetrying(true);
-          setRetryCountdown(Math.floor(delay / 1000));
-          
-          // Start countdown
-          const countdownInterval = setInterval(() => {
-            setRetryCountdown(prev => {
-              if (prev <= 1) {
-                clearInterval(countdownInterval);
-                return 0;
-              }
-              return prev - 1;
-            });
-          }, 1000);
-          
-          setTimeout(() => {
-            setIsRetrying(false);
-            setRetryCount(prev => prev + 1);
-            fetchEvents();
-          }, delay);
-        } else {
-          // Set empty state after all retries failed
-          setEvents({ active: [], recent: [], future: [] });
-        }
-      }
+      console.error('🚨 [V2-BROADCAST] CRITICAL ERROR: Cached endpoints failed:', error);
+      // HARD CRASH: No Supabase fallbacks supported in V2 system
+      setError(`🚨 V2-BROADCAST System Error: ${error.message}. Cached endpoints are down.`);
+      setLoading(false);
+      throw new Error(`🚨 V2-BROADCAST System Error: Cached endpoints failed. No fallbacks available.`);
     } finally {
       setLoading(false);
     }
@@ -371,13 +314,22 @@ const EventList = () => {
                 <Flex align="center" justify="center" gap="2">
                   <PersonIcon />
                   <Text size="2" color="gray">
-                    {person?.name || person?.first_name || person?.nickname || 
-                     (user.phone ? `User ${user.phone.slice(-4)}` : 'Logged in')}
+                    {person?.name || 'CRITICAL ERROR: No person data in JWT'}
                   </Text>
                   <Button 
                     size="1" 
                     variant="ghost" 
-                    onClick={() => signOut()}
+                    onClick={async () => {
+                      console.log('🔄 [AUTH-V2] Logging out...');
+                      const { error } = await signOut();
+                      if (!error) {
+                        console.log('✅ [AUTH-V2] Logout successful, reloading page');
+                        // Force reload to clear any cached state
+                        window.location.reload();
+                      } else {
+                        console.error('❌ [AUTH-V2] Logout failed:', error);
+                      }
+                    }}
                     style={{ padding: '2px 8px' }}
                   >
                     <ExitIcon />

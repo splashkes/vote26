@@ -35,7 +35,7 @@ export const useBroadcastCache = (eventId, onCacheInvalidation, options = {}) =>
   const handleCacheInvalidation = useCallback((notificationData) => {
     const { type, endpoints, timestamp } = notificationData;
     
-    console.log(`🌐 [V2-BROADCAST] Cache invalidated for event ${eventId}:`, {
+    console.log(`🌐 [V2-BROADCAST] Cache invalidated for event ${currentEventIdRef.current}:`, {
       type,
       endpoints,
       timestamp: new Date(timestamp).toISOString()
@@ -56,7 +56,7 @@ export const useBroadcastCache = (eventId, onCacheInvalidation, options = {}) =>
       // Call immediately if auto-refresh is disabled
       callbackRef.current(notificationData);
     }
-  }, [eventId, autoRefresh, refreshDelay]); // Removed onCacheInvalidation dependency
+  }, [autoRefresh, refreshDelay]); // Removed eventId dependency
 
   // Subscribe to broadcast notifications
   useEffect(() => {
@@ -96,7 +96,7 @@ export const useBroadcastCache = (eventId, onCacheInvalidation, options = {}) =>
       isSubscribedRef.current = false;
       currentEventIdRef.current = null;
     };
-  }, [eventId, debugMode]); // Removed handleCacheInvalidation dependency
+  }, [eventId, debugMode, handleCacheInvalidation]);
 
   // Cache management functions
   const cacheData = useCallback((endpoint, data, ttl) => {

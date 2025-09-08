@@ -10,7 +10,7 @@ export const AuthProvider = ({ children }) => {
   const [person, setPerson] = useState(null);
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState(null);
-  const [metadataSyncAttempts, setMetadataSyncAttempts] = useState({});
+  // Removed metadataSyncAttempts - no longer needed with JWT claims approach
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [sessionWarning, setSessionWarning] = useState(null);
   const personRef = useRef(null);
@@ -38,9 +38,7 @@ export const AuthProvider = ({ children }) => {
         setSession(session);
         setUser(session?.user ?? null);
         
-        if (session?.user) {
-          await extractPersonFromMetadata(session.user, null); // Initial load, no current person
-        }
+        // Don't extract JWT here - let onAuthStateChange handle it to avoid duplicate calls
       } catch (error) {
         console.error('AuthContext: Failed to initialize:', error);
         // Set to null state instead of staying in loading
@@ -64,8 +62,11 @@ export const AuthProvider = ({ children }) => {
       setUser(session?.user ?? null);
       
       if (session?.user) {
-        // Pass current person state to prevent unnecessary updates
-        await extractPersonFromMetadata(session.user, personRef.current);
+        // Only extract person data for initial session and token refresh to prevent loops
+        if (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
+          console.log('🔄 [AUTH-V2] Extracting person data for event:', event);
+          await extractPersonFromJWT(session.user, personRef.current);
+        }
       } else {
         setPerson(null);
       }
@@ -74,62 +75,87 @@ export const AuthProvider = ({ children }) => {
     return () => subscription.unsubscribe();
   }, []); // Empty dependency array is safe now with personRef
 
-  const extractPersonFromMetadata = async (authUser, currentPerson = null) => {
-    // Extract person data from auth metadata (no database query needed!)
-    let metadata = authUser.user_metadata || {};
+  const extractPersonFromJWT = async (authUser, currentPerson = null) => {
+    // AUTH V2: Extract person data from JWT claims (Custom Access Token Hook)
+    // This replaces metadata-based approach with secure, server-side JWT claims
+    console.log('🔄 [AUTH-V2] Extracting person data from JWT claims...');
     
-    // Handle JSONB storage issue - metadata might be stored as string in localStorage
-    if (typeof metadata === 'string') {
-      try {
-        metadata = JSON.parse(metadata);
-      } catch (e) {
-        console.warn('AuthContext: Could not parse user_metadata as JSON, using as-is');
-        metadata = {};
-      }
-    }
-    
-    if (metadata.person_id) {
-      // Check if person data has actually changed to prevent unnecessary re-renders
-      const newPersonData = {
-        id: metadata.person_id,
-        hash: metadata.person_hash,
-        name: metadata.person_name,
-        phone: authUser.phone
-      };
+    let currentSession;
+    try {
+      // Get current session with graceful timeout
+      const { data } = await supabase.auth.getSession();
+      currentSession = data.session;
       
-      // Only update if data has actually changed
-      if (!currentPerson || 
-          currentPerson.id !== newPersonData.id ||
-          currentPerson.hash !== newPersonData.hash ||
-          currentPerson.name !== newPersonData.name ||
-          currentPerson.phone !== newPersonData.phone) {
-        console.log('AuthContext: ✅ Found person_id, setting person');
-        setPerson(newPersonData);
-      }
-    } else {
-      console.log('AuthContext: ❌ No person_id found in metadata');
-      // Check if we've already tried to sync metadata for this user recently
-      const userId = authUser.id;
-      const lastAttempt = metadataSyncAttempts[userId];
-      const now = Date.now();
-      
-      if (lastAttempt && (now - lastAttempt) < 30000) { // 30 seconds cooldown
-        console.log('Skipping metadata sync, recent attempt detected');
+      if (!currentSession?.access_token) {
+        console.log('🔄 [AUTH-V2] No access token available, person data pending');
+        setPerson(null);
         return;
       }
       
-      // Only update last attempt time for users without metadata to avoid unnecessary re-renders
-      setMetadataSyncAttempts(prev => ({ ...prev, [userId]: now }));
+      console.log('✅ [AUTH-V2] Access token retrieved, length:', currentSession.access_token.length);
       
-      // Auth-webhook now handles all person linking automatically
-      console.log('No person metadata found - auth-webhook will handle linking on next login');
+    } catch (sessionError) {
+      console.warn('⚠️ [AUTH-V2] Session fetch failed, skipping JWT extraction:', sessionError.message);
+      return; // Gracefully skip instead of hard crash
+    }
+
+    try {
+      // Decode JWT payload (it's base64 encoded)
+      const tokenParts = currentSession.access_token.split('.');
+      if (tokenParts.length !== 3) {
+        throw new Error('Invalid JWT token format');
+      }
       
-      // REMOVED: Manual refreshSession() call that caused infinite refresh loops
-      // The auth-webhook now handles person linking automatically during phone confirmation
-      // Manual refresh calls trigger constant token refresh requests causing 15+ second delays
-      // Trust the auth state change handler to receive updated metadata when ready
-      console.log('No person metadata found - auth-webhook will handle linking automatically');
-      setPerson(null);
+      const payload = JSON.parse(atob(tokenParts[1]));
+      console.log('🔄 [AUTH-V2] JWT payload decoded, checking for person claims...');
+      console.log('🔍 [AUTH-V2] JWT payload contents:', payload);
+      
+      // HARD REQUIREMENT: Only v2-http system is supported, no legacy fallbacks
+      if (payload.auth_version === 'v2-http') {
+        console.log('✅ [AUTH-V2] Auth V2-HTTP system confirmed in JWT');
+        
+        if (payload.person_id) {
+          // Build person data from JWT claims
+          const newPersonData = {
+            id: payload.person_id,
+            hash: payload.person_hash,
+            name: payload.person_name || 'User',
+            verified: payload.person_verified || false,
+            phone: authUser.phone,
+            authVersion: 'v2-http'
+          };
+          
+          // Only update if data has actually changed
+          const hasChanges = !currentPerson || 
+              currentPerson.id !== newPersonData.id ||
+              currentPerson.hash !== newPersonData.hash ||
+              currentPerson.name !== newPersonData.name ||
+              currentPerson.verified !== newPersonData.verified ||
+              currentPerson.authVersion !== newPersonData.authVersion;
+              
+          if (hasChanges) {
+            console.log('✅ [AUTH-V2] Person data found in JWT, updating context:', newPersonData.id);
+            setPerson(newPersonData);
+          } else {
+            console.log('🔄 [AUTH-V2] Person data unchanged, skipping update');
+          }
+        } else if (payload.person_pending) {
+          console.log('⏳ [AUTH-V2] Person creation pending, trigger should handle this');
+          setPerson(null);
+        } else {
+          console.log('❌ [AUTH-V2] No person data in JWT, may need phone verification');
+          setPerson(null);
+        }
+      } else {
+        // HARD CRASH: No legacy support
+        const errorMsg = `🚨 [AUTH-V2] CRITICAL ERROR: Legacy auth system detected! Expected auth_version: 'v2-http' but got: '${payload.auth_version}'. Custom Access Token Hook not working properly.`;
+        console.error(errorMsg);
+        throw new Error(errorMsg);
+      }
+    } catch (error) {
+      console.error('🚨 [AUTH-V2] CRITICAL ERROR: Failed to decode JWT or extract person data:', error);
+      // HARD CRASH: No legacy fallbacks supported
+      throw new Error(`🚨 [AUTH-V2] JWT processing failed: ${error.message}. Auth system is broken.`);
     }
   };
 
@@ -150,10 +176,8 @@ export const AuthProvider = ({ children }) => {
       type: 'sms'
     });
     
-    // REMOVED: Manual refreshSession() call that caused infinite refresh loops
-    // The auth-webhook handles metadata updates automatically during phone confirmation
-    // Auth state change listener will receive updated user data when webhook completes
-    // Manual refresh calls were causing 15+ second delays and constant refresh spam
+    // Custom Access Token Hook now handles JWT claims automatically
+    // No manual session refresh needed - prevents cascading token refresh loops
     
     return { data, error };
   };
@@ -185,11 +209,26 @@ export const AuthProvider = ({ children }) => {
   };
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    setPerson(null);
-    setSession(null);
-    setUser(null);
-    return { error };
+    try {
+      // Clear local state immediately
+      setPerson(null);
+      setSession(null);
+      setUser(null);
+      
+      // Sign out from Supabase with scope 'global' to clear all sessions
+      const { error } = await supabase.auth.signOut({ scope: 'global' });
+      
+      if (error) {
+        console.error('SignOut error:', error);
+      } else {
+        console.log('✅ [AUTH-V2] Successfully signed out');
+      }
+      
+      return { error };
+    } catch (err) {
+      console.error('SignOut failed:', err);
+      return { error: err };
+    }
   };
 
   // DISABLED: Automatic session refresh to prevent conflicts causing loading loops

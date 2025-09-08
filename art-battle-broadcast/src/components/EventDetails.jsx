@@ -282,6 +282,7 @@ const EventDetails = () => {
   
 
   useEffect(() => {
+    console.log('EventDetails useEffect triggered - eventId:', eventId, 'authLoading:', authLoading);
     // Wait for auth to finish loading before fetching event data
     // This prevents race conditions and loading loops
     if (!authLoading && eventId) {
