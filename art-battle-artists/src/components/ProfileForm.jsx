@@ -183,18 +183,14 @@ const ProfileForm = ({ existingProfile = null, onSuccess }) => {
         throw new Error('Cannot update profile: profile ID is missing. Please refresh and try again.');
       }
       
-      if (!person?.id) {
-        throw new Error('Cannot save profile: user authentication is missing. Please sign in again.');
-      }
+      // No need to validate person.id - it will be read from JWT claims in the edge function
       
       const payload = isEditing 
         ? {
             profile_id: existingProfile.id,
-            person_id: person.id,
             ...formData,
           }
         : {
-            person_id: person.id,
             ...formData,
           };
 
