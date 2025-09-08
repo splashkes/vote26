@@ -49,12 +49,14 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
   const [selectedInvitation, setSelectedInvitation] = useState(null);
 
   useEffect(() => {
-    if (!authLoading && user && person) {
+    if (!authLoading && user) {
+      // Load data for authenticated users regardless of person state
+      // The backend functions will handle person creation/linking
       loadData();
     } else if (!authLoading && !user) {
       setLoading(false);
     }
-  }, [user, person, authLoading]);
+  }, [user, authLoading]); // Removed person dependency
 
   // Notify parent when profile picker state changes
   useEffect(() => {

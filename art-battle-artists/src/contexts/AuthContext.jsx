@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 
 const AuthContext = createContext({});
@@ -10,82 +10,157 @@ export const AuthProvider = ({ children }) => {
   const [person, setPerson] = useState(null);
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState(null);
-  const [metadataSyncAttempts, setMetadataSyncAttempts] = useState({});
+  const personRef = useRef(null);
+
+  // Keep ref in sync with person state
+  useEffect(() => {
+    personRef.current = person;
+  }, [person]);
 
   useEffect(() => {
     console.log('AuthContext: Initializing...');
-    // Get initial session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      console.log('AuthContext: Initial session check:', !!session);
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        console.log('AuthContext: User found, extracting metadata...');
-        await extractPersonFromMetadata(session.user);
+    
+    // Get initial session with timeout and error handling
+    const initializeAuth = async () => {
+      try {
+        console.log('AuthContext: Getting initial session...');
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('AuthContext: Error getting session:', error);
+          throw error;
+        }
+        
+        console.log('AuthContext: Session retrieved:', !!session);
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        // Don't extract JWT here - let onAuthStateChange handle it to avoid duplicate calls
+      } catch (error) {
+        console.error('AuthContext: Failed to initialize:', error);
+        // Set to null state instead of staying in loading
+        setSession(null);
+        setUser(null);
+        setPerson(null);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
-    });
+    };
+
+    initializeAuth();
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      console.log('AuthContext: Auth state change:', _event, !!session);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // Only log meaningful auth events, not repeated SIGNED_IN events from tab focus
+      if (event !== 'SIGNED_IN') {
+        console.log('AuthContext: Auth state changed:', event, !!session);
+      }
       setSession(session);
       setUser(session?.user ?? null);
+      
       if (session?.user) {
-        await extractPersonFromMetadata(session.user);
+        // Only extract person data for initial session and token refresh to prevent loops
+        if (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
+          console.log('🔄 [AUTH-V2] Extracting person data for event:', event);
+          await extractPersonFromJWT(session.user, personRef.current);
+        }
       } else {
         setPerson(null);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, []); // Empty dependency array is safe now with personRef
 
-  const extractPersonFromMetadata = async (authUser) => {
-    console.log('AuthContext: Extracting person metadata from user:', authUser.id);
+  const extractPersonFromJWT = async (authUser, currentPerson = null) => {
+    // AUTH V2: Extract person data from JWT claims (Custom Access Token Hook)
+    // This replaces metadata-based approach with secure, server-side JWT claims
+    console.log('🔄 [AUTH-V2] Extracting person data from JWT claims...');
     
-    // Extract person data from auth metadata - AUTH-FIRST APPROACH
-    // Only use user_metadata (set by auth-webhook)
-    const metadata = authUser.user_metadata || {};
-    
-    console.log('AuthContext: User metadata:', metadata);
-    
-    if (metadata.person_id) {
-      console.log('AuthContext: Setting person from metadata:', metadata.person_id);
-      setPerson({
-        id: metadata.person_id,
-        hash: metadata.person_hash,
-        name: metadata.person_name,
-        phone: authUser.phone
-      });
-    } else {
-      // Check if we've already tried to sync metadata for this user recently
-      const userId = authUser.id;
-      const lastAttempt = metadataSyncAttempts[userId];
-      const now = Date.now();
+    let currentSession;
+    try {
+      // Get current session with graceful timeout
+      const { data } = await supabase.auth.getSession();
+      currentSession = data.session;
       
-      if (lastAttempt && (now - lastAttempt) < 30000) { // 30 seconds cooldown
-        console.log('Skipping metadata sync, recent attempt detected');
+      if (!currentSession?.access_token) {
+        console.log('🔄 [AUTH-V2] No access token available, person data pending');
+        setPerson(null);
         return;
       }
       
-      // Update last attempt time
-      setMetadataSyncAttempts(prev => ({ ...prev, [userId]: now }));
+      console.log('✅ [AUTH-V2] Access token retrieved, length:', currentSession.access_token.length);
       
-      // Auth-webhook handles all person linking automatically during phone confirmation
-      console.log('No person metadata found - will be available after auth-webhook processing');
-      setPerson(null);
+    } catch (sessionError) {
+      console.warn('⚠️ [AUTH-V2] Session fetch failed, skipping JWT extraction:', sessionError.message);
+      return; // Gracefully skip instead of hard crash
+    }
+
+    try {
+      // Decode JWT payload (it's base64 encoded)
+      const tokenParts = currentSession.access_token.split('.');
+      if (tokenParts.length !== 3) {
+        throw new Error('Invalid JWT token format');
+      }
+      
+      const payload = JSON.parse(atob(tokenParts[1]));
+      console.log('🔄 [AUTH-V2] JWT payload decoded, checking for person claims...');
+      console.log('🔍 [AUTH-V2] JWT payload contents:', payload);
+      
+      // HARD REQUIREMENT: Only v2-http system is supported, no legacy fallbacks
+      if (payload.auth_version === 'v2-http') {
+        console.log('✅ [AUTH-V2] Auth V2-HTTP system confirmed in JWT');
+        
+        if (payload.person_id) {
+          // Build person data from JWT claims
+          const newPersonData = {
+            id: payload.person_id,
+            hash: payload.person_hash,
+            name: payload.person_name || 'User',
+            verified: payload.person_verified || false,
+            phone: authUser.phone,
+            authVersion: 'v2-http'
+          };
+          
+          // Only update if data has actually changed
+          const hasChanges = !currentPerson || 
+              currentPerson.id !== newPersonData.id ||
+              currentPerson.hash !== newPersonData.hash ||
+              currentPerson.name !== newPersonData.name ||
+              currentPerson.verified !== newPersonData.verified ||
+              currentPerson.authVersion !== newPersonData.authVersion;
+              
+          if (hasChanges) {
+            console.log('✅ [AUTH-V2] Person data found in JWT, updating context:', newPersonData.id);
+            setPerson(newPersonData);
+          } else {
+            console.log('🔄 [AUTH-V2] Person data unchanged, skipping update');
+          }
+        } else if (payload.person_pending) {
+          console.log('⏳ [AUTH-V2] Person creation pending, trigger should handle this');
+          setPerson(null);
+        } else {
+          console.log('❌ [AUTH-V2] No person data in JWT, may need phone verification');
+          setPerson(null);
+        }
+      } else {
+        // HARD CRASH: No legacy support
+        const errorMsg = `🚨 [AUTH-V2] CRITICAL ERROR: Legacy auth system detected! Expected auth_version: 'v2-http' but got: '${payload.auth_version}'. Custom Access Token Hook not working properly.`;
+        console.error(errorMsg);
+        throw new Error(errorMsg);
+      }
+    } catch (error) {
+      console.error('🚨 [AUTH-V2] CRITICAL ERROR: Failed to decode JWT or extract person data:', error);
+      // HARD CRASH: No legacy fallbacks supported
+      throw new Error(`🚨 [AUTH-V2] JWT processing failed: ${error.message}. Auth system is broken.`);
     }
   };
 
   const signInWithOtp = async (phone) => {
-    // Always use recovery flow since it works reliably
-    // This will create new users if they don't exist, but via the working SMS path
     const { data, error } = await supabase.auth.signInWithOtp({
       phone: phone,
       options: {
         channel: 'sms',
-        shouldCreateUser: true  // Allow user creation via recovery flow
       }
     });
     return { data, error };
@@ -98,15 +173,23 @@ export const AuthProvider = ({ children }) => {
       type: 'sms'
     });
     
-    // Auth-webhook handles metadata updates automatically during phone confirmation
-    // No need to manually refresh - next auth state change will have updated metadata
+    // Custom Access Token Hook now handles JWT claims automatically
+    // No manual session refresh needed - prevents cascading token refresh loops
     
     return { data, error };
   };
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    setPerson(null);
+    console.log('🔄 [AUTH-V2] Logging out...');
+    const { error } = await supabase.auth.signOut({ scope: 'global' });
+    if (!error) {
+      console.log('✅ [AUTH-V2] Successfully signed out');
+      setPerson(null);
+      // Reload page to ensure clean state
+      window.location.reload();
+    } else {
+      console.error('❌ [AUTH-V2] Logout failed:', error);
+    }
     return { error };
   };
 
