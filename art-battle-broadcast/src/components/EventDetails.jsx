@@ -2776,6 +2776,9 @@ const EventDetails = () => {
           </Flex>
         </AlertDialog.Content>
       </AlertDialog.Root>
+
+      {/* iOS app spacing - bottom */}
+      <Box style={{ height: '40px' }} />
     </Container>
   );
 };

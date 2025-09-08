@@ -75,7 +75,9 @@ const InternationalPhoneInput = forwardRef(({
 
   // Enhanced validation using Supabase edge function 
   const callEnhancedValidation = async (phoneNumber, countryCode) => {
-    if (!phoneNumber || phoneNumber.length < 8) {
+    // Must be at least 7 digits before sending to API
+    const digitsOnly = phoneNumber.replace(/\D/g, '');
+    if (!phoneNumber || digitsOnly.length < 7) {
       return;
     }
 
@@ -130,86 +132,65 @@ const InternationalPhoneInput = forwardRef(({
   };
 
 
-  // Handle phone input changes - SIMPLE VERSION THAT WORKS
+  // Handle phone input changes - SIMPLIFIED VERSION USING TWILIO
   const handlePhoneInput = (inputValue) => {
     console.log('📱 Phone input:', inputValue);
     
     // Clean input but keep basic formatting chars
     const cleanedInput = inputValue.replace(/[^\d\s\-\(\)\+]/g, '');
+    setPhone(cleanedInput); // Always show what user typed
     
-    let isValid = false;
-    let e164Phone = '';
-    let nationalFormat = cleanedInput;
-    
-    if (cleanedInput && cleanedInput.length >= 3) {
-      try {
-        // Try to parse with selected country context
-        const fullNumber = cleanedInput.startsWith('+') ? cleanedInput : cleanedInput;
-        
-        let phoneToValidate = fullNumber;
-        // If no country code, add the selected country's code
-        if (!fullNumber.startsWith('+')) {
-          const country = countryData.find(c => c.code === selectedCountry);
-          phoneToValidate = `${country?.dialCode || '+1'}${cleanedInput}`;
-        }
-        
-        console.log('📱 Validating:', phoneToValidate, 'for country:', selectedCountry);
-        
-        if (isPossiblePhoneNumber(phoneToValidate)) {
-          const parsed = parsePhoneNumber(phoneToValidate);
-          if (parsed && parsed.isValid()) {
-            isValid = true;
-            e164Phone = parsed.format('E.164');
-            nationalFormat = parsed.formatNational();
-            console.log('✅ Valid phone:', { e164Phone, nationalFormat });
-            
-            // Update the display with formatted version
-            setPhone(nationalFormat);
-          } else {
-            setPhone(cleanedInput); // Keep as entered if not valid
-          }
-        } else {
-          setPhone(cleanedInput); // Keep as entered if not possible
-        }
-      } catch (error) {
-        console.log('📱 Parse error:', error);
-        // Fallback validation for reasonable numbers
-        const digitsOnly = cleanedInput.replace(/\D/g, '');
-        if (digitsOnly.length >= 10) {
-          isValid = true;
-          e164Phone = selectedCountry === 'CA' || selectedCountry === 'US' ? `+1${digitsOnly}` : `+${digitsOnly}`;
-          nationalFormat = cleanedInput;
-        }
-        setPhone(cleanedInput); // Update display
-      }
-    } else {
-      setPhone(cleanedInput); // Update display for short input
-    }
-    
-    console.log('📱 Final result:', { isValid, e164Phone, nationalFormat });
-    
-    // Debounce enhanced validation
+    // Clear any existing timeout
     if (validationTimeoutRef.current) {
       clearTimeout(validationTimeoutRef.current);
     }
     
-    if (isValid && e164Phone) {
+    // Only validate if we have at least 7 digits
+    const digitsOnly = cleanedInput.replace(/\D/g, '');
+    if (digitsOnly.length >= 7) {
       validationTimeoutRef.current = setTimeout(() => {
-        callEnhancedValidation(e164Phone, selectedCountry);
-      }, 750);
+        // Smart country detection and preprocessing
+        let phoneForValidation = cleanedInput;
+        let countryForValidation = selectedCountry;
+        
+        // First, try to detect country from the number itself
+        const inputWithPlus = cleanedInput.startsWith('+') ? cleanedInput : `+${cleanedInput}`;
+        
+        // Check against all country codes to find potential matches
+        for (const country of countryData) {
+          const countryCode = country.dialCode.replace('+', '');
+          
+          if (cleanedInput.startsWith(countryCode) || cleanedInput.startsWith('+' + countryCode)) {
+            // Found a matching country code in the input
+            countryForValidation = country.code;
+            
+            if (cleanedInput.startsWith('+' + countryCode)) {
+              phoneForValidation = cleanedInput.substring(countryCode.length + 1); // Remove +44
+              console.log('📱 Detected country from +' + countryCode + ':', countryForValidation, 'stripped to:', phoneForValidation);
+            } else if (cleanedInput.startsWith(countryCode)) {
+              phoneForValidation = cleanedInput.substring(countryCode.length); // Remove 44
+              console.log('📱 Detected country from ' + countryCode + ':', countryForValidation, 'stripped to:', phoneForValidation);
+            }
+            break; // Use the first match (longest country codes should be checked first)
+          }
+        }
+        
+        // Send cleaned input + detected/selected country context to Twilio
+        callEnhancedValidation(phoneForValidation, countryForValidation);
+      }, 1000); // 1 second debounce
     }
     
-    // Notify parent
+    // Immediately notify parent with basic info (enhanced validation will update later)
     if (onChange) {
       onChange({
-        target: { value: nationalFormat },
-        phone: e164Phone,
+        target: { value: cleanedInput },
+        phone: '', // Will be filled by Twilio validation
         country: selectedCountry,
-        inputValue: nationalFormat,
-        isValid: isValid,
-        nationalFormat: nationalFormat,
-        e164Format: e164Phone,
-        validationResult: validationResult
+        inputValue: cleanedInput,
+        isValid: false, // Will be determined by Twilio
+        nationalFormat: cleanedInput,
+        e164Format: '',
+        validationResult: null
       });
     }
   };

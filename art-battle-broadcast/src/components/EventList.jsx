@@ -495,6 +495,9 @@ const EventList = () => {
         }}
         redirectTo={authRedirectTo}
       />
+
+      {/* iOS app spacing - bottom */}
+      <Box style={{ height: '40px' }} />
     </Box>
   );
 };

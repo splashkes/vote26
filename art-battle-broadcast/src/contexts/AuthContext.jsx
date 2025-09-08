@@ -38,7 +38,11 @@ export const AuthProvider = ({ children }) => {
         setSession(session);
         setUser(session?.user ?? null);
         
-        // Don't extract JWT here - let onAuthStateChange handle it to avoid duplicate calls
+        // Extract person data if we have a session but person is not set
+        if (session?.user) {
+          console.log('🔄 [AUTH-V2] Extracting person data for existing session...');
+          await extractPersonFromJWT(session.user);
+        }
       } catch (error) {
         console.error('AuthContext: Failed to initialize:', error);
         // Set to null state instead of staying in loading
@@ -64,7 +68,7 @@ export const AuthProvider = ({ children }) => {
       if (session?.user) {
         // Only extract person data for initial session and token refresh to prevent loops
         if (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
-          console.log('🔄 [AUTH-V2] Extracting person data for event:', event);
+          console.log('🔄 [AUTH-V2] Extracting person data for event:', event, 'person:', !!personRef.current);
           await extractPersonFromJWT(session.user, personRef.current);
         }
       } else {
@@ -74,6 +78,22 @@ export const AuthProvider = ({ children }) => {
 
     return () => subscription.unsubscribe();
   }, []); // Empty dependency array is safe now with personRef
+
+  // Additional safeguard: One-time check after auth loading completes
+  useEffect(() => {
+    const checkPersonData = async () => {
+      if (user && !person && !loading) {
+        console.log('🔄 [AUTH-V2] Post-load check: User authenticated but no person data, extracting...');
+        await extractPersonFromJWT(user);
+      }
+    };
+
+    // Only run once when loading completes and we have user but no person
+    if (!loading && user && !person) {
+      const timer = setTimeout(checkPersonData, 1000); // Small delay to allow other effects to run first
+      return () => clearTimeout(timer);
+    }
+  }, [loading]); // Only depend on loading state to run once after initialization
 
   const extractPersonFromJWT = async (authUser, currentPerson = null) => {
     // AUTH V2: Extract person data from JWT claims (Custom Access Token Hook)
