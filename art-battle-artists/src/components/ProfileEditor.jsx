@@ -104,12 +104,22 @@ const ProfileEditor = () => {
   };
 
   useEffect(() => {
-    if (!loading && user && person) {
+    if (!loading && user) {
+      // Load profiles for authenticated users regardless of person state
+      // The backend functions and ProfileForm will handle person creation/linking
       fetchProfiles();
     } else if (!loading && !user) {
       setProfileLoading(false);
     }
-  }, [user, person, loading]);
+  }, [user, loading]); // Initial load without person dependency
+
+  // Separate effect to refetch when person data becomes available
+  useEffect(() => {
+    if (!loading && user && person && !isEditingRef.current) {
+      console.log('ProfileEditor: Person data now available, refetching profiles');
+      fetchProfiles();
+    }
+  }, [person]); // Only re-run when person changes from null to data
 
   useEffect(() => {
     fetchCountries();
@@ -141,6 +151,28 @@ const ProfileEditor = () => {
     }
 
     try {
+      // If person is not available yet, set up for new profile creation
+      if (!person) {
+        console.log('ProfileEditor: Person data not available yet, setting up for new profile creation');
+        setProfiles([]);
+        setSelectedProfile(null);
+        setIsCreatingNew(true);
+        setProfile({
+          name: '',
+          bio: '',
+          website: '',
+          instagram: '',
+          facebook: '',
+          twitter: '',
+          city: '',
+          country: '',
+          email: user.email || '',
+          phone: parseAndFormatPhone(user.phone || ''),
+        });
+        setProfileLoading(false);
+        return;
+      }
+
       const { data: profilesData, error: profilesError } = await supabase
         .from('artist_profiles')
         .select('*')
