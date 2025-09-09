@@ -1495,10 +1495,10 @@ const EventDetails = () => {
     setBidSuccess(false);
   };
 
-  if (loading) {
+  if (loading || authLoading) {
     return (
       <Container size="3" style={{ paddingTop: '10rem' }}>
-        <LoadingScreen message="Loading event details..." />
+        <LoadingScreen message={authLoading ? "Loading authentication..." : "Loading event details..."} />
       </Container>
     );
   }

@@ -69,7 +69,7 @@ export const AuthProvider = ({ children }) => {
         // Only extract person data for initial session and token refresh to prevent loops
         if (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
           console.log('🔄 [AUTH-V2] Extracting person data for event:', event, 'person:', !!personRef.current);
-          await extractPersonFromJWT(session.user, personRef.current);
+          await extractPersonFromJWT(session.user, personRef.current, session);
         }
       } else {
         setPerson(null);
@@ -79,44 +79,29 @@ export const AuthProvider = ({ children }) => {
     return () => subscription.unsubscribe();
   }, []); // Empty dependency array is safe now with personRef
 
-  // Additional safeguard: One-time check after auth loading completes
-  useEffect(() => {
-    const checkPersonData = async () => {
-      if (user && !person && !loading) {
-        console.log('🔄 [AUTH-V2] Post-load check: User authenticated but no person data, extracting...');
-        await extractPersonFromJWT(user);
-      }
-    };
+  // Simplified: Auth state is managed by onAuthStateChange only
+  // No additional safeguards or complex fallback logic needed
 
-    // Only run once when loading completes and we have user but no person
-    if (!loading && user && !person) {
-      const timer = setTimeout(checkPersonData, 1000); // Small delay to allow other effects to run first
-      return () => clearTimeout(timer);
-    }
-  }, [loading]); // Only depend on loading state to run once after initialization
-
-  const extractPersonFromJWT = async (authUser, currentPerson = null) => {
-    // AUTH V2: Extract person data from JWT claims (Custom Access Token Hook)
-    // This replaces metadata-based approach with secure, server-side JWT claims
+  const extractPersonFromJWT = async (authUser, currentPerson = null, providedSession = null) => {
     console.log('🔄 [AUTH-V2] Extracting person data from JWT claims...');
     
-    let currentSession;
-    try {
-      // Get current session with graceful timeout
-      const { data } = await supabase.auth.getSession();
-      currentSession = data.session;
-      
-      if (!currentSession?.access_token) {
-        console.log('🔄 [AUTH-V2] No access token available, person data pending');
-        setPerson(null);
+    let currentSession = providedSession;
+    
+    if (!currentSession) {
+      // Only fetch session if not provided (rare fallback case)
+      try {
+        const { data } = await supabase.auth.getSession();
+        currentSession = data.session;
+      } catch (sessionError) {
+        console.warn('⚠️ [AUTH-V2] Session fetch failed:', sessionError.message);
         return;
       }
-      
-      console.log('✅ [AUTH-V2] Access token retrieved, length:', currentSession.access_token.length);
-      
-    } catch (sessionError) {
-      console.warn('⚠️ [AUTH-V2] Session fetch failed, skipping JWT extraction:', sessionError.message);
-      return; // Gracefully skip instead of hard crash
+    }
+    
+    if (!currentSession?.access_token) {
+      console.log('🔄 [AUTH-V2] No access token available, person data pending');
+      setPerson(null);
+      return;
     }
 
     try {

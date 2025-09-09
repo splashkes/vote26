@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Tabs, Box, Container, Heading, Button, Flex } from '@radix-ui/themes';
+import { Tabs, Box, Container, Heading, Button, Flex, Text } from '@radix-ui/themes';
 import { PersonIcon, CalendarIcon, HomeIcon, ClockIcon, CheckIcon, ExitIcon } from '@radix-ui/react-icons';
 import { useAuth } from '../contexts/AuthContext';
 import Home from './Home';
@@ -14,7 +14,7 @@ const MainNavigation = () => {
   const [loggingOut, setLoggingOut] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   
-  const { user, signOut } = useAuth();
+  const { user, signOut, loading } = useAuth();
 
   // Force tab to home when profile picker is showing
   const handleTabChange = (value) => {
@@ -49,6 +49,17 @@ const MainNavigation = () => {
       setLoggingOut(false);
     }
   };
+
+  // Show loading state while auth initializes
+  if (loading) {
+    return (
+      <Container size="4" style={{ padding: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+          <Text>Loading...</Text>
+        </div>
+      </Container>
+    );
+  }
 
   return (
     <Container size="4" style={{ 

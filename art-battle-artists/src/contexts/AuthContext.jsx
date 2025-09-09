@@ -20,49 +20,41 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     console.log('AuthContext: Initializing...');
     
-    // Get initial session with timeout and error handling
-    const initializeAuth = async () => {
-      try {
-        console.log('AuthContext: Getting initial session...');
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error('AuthContext: Error getting session:', error);
-          throw error;
-        }
-        
-        console.log('AuthContext: Session retrieved:', !!session);
-        setSession(session);
-        setUser(session?.user ?? null);
-        
-        // Don't extract JWT here - let onAuthStateChange handle it to avoid duplicate calls
-      } catch (error) {
-        console.error('AuthContext: Failed to initialize:', error);
-        // Set to null state instead of staying in loading
-        setSession(null);
-        setUser(null);
-        setPerson(null);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    initializeAuth();
-
+    // Keep loading state until we get first onAuthStateChange event
+    // This ensures we wait for session to load before rendering UI
+    
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       // Only log meaningful auth events, not repeated SIGNED_IN events from tab focus
       if (event !== 'SIGNED_IN') {
         console.log('AuthContext: Auth state changed:', event, !!session);
+        console.log('AuthContext: onAuthStateChange session details:', session ? {
+          hasAccessToken: !!session.access_token,
+          userId: session.user?.id,
+          phone: session.user?.phone
+        } : 'null');
       }
       setSession(session);
       setUser(session?.user ?? null);
+      
+      // Set loading to false after any auth state change
+      // This ensures UI waits for auth system to initialize
+      if (loading) {
+        setLoading(false);
+      }
       
       if (session?.user) {
         // Only extract person data for initial session and token refresh to prevent loops
         if (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
           console.log('🔄 [AUTH-V2] Extracting person data for event:', event);
-          await extractPersonFromJWT(session.user, personRef.current);
+          // Set loading during JWT extraction to prevent UI from rendering prematurely
+          if (event === 'TOKEN_REFRESHED') {
+            setLoading(true);
+          }
+          await extractPersonFromJWT(session.user, personRef.current, session);
+          if (event === 'TOKEN_REFRESHED') {
+            setLoading(false);
+          }
         }
       } else {
         setPerson(null);
@@ -72,28 +64,33 @@ export const AuthProvider = ({ children }) => {
     return () => subscription.unsubscribe();
   }, []); // Empty dependency array is safe now with personRef
 
-  const extractPersonFromJWT = async (authUser, currentPerson = null) => {
+  const extractPersonFromJWT = async (authUser, currentPerson = null, providedSession = null) => {
     // AUTH V2: Extract person data from JWT claims (Custom Access Token Hook)
     // This replaces metadata-based approach with secure, server-side JWT claims
     console.log('🔄 [AUTH-V2] Extracting person data from JWT claims...');
     
     let currentSession;
-    try {
-      // Get current session with graceful timeout
-      const { data } = await supabase.auth.getSession();
-      currentSession = data.session;
-      
-      if (!currentSession?.access_token) {
-        console.log('🔄 [AUTH-V2] No access token available, person data pending');
-        setPerson(null);
+    
+    if (providedSession) {
+      // Use the provided session from onAuthStateChange
+      currentSession = providedSession;
+      console.log('✅ [AUTH-V2] Using provided session, access token length:', currentSession.access_token?.length || 0);
+    } else {
+      // Fallback to fetching session (for legacy calls)
+      try {
+        const { data } = await supabase.auth.getSession();
+        currentSession = data.session;
+        console.log('✅ [AUTH-V2] Fetched session, access token length:', currentSession?.access_token?.length || 0);
+      } catch (sessionError) {
+        console.warn('⚠️ [AUTH-V2] Session fetch failed, skipping JWT extraction:', sessionError.message);
         return;
       }
-      
-      console.log('✅ [AUTH-V2] Access token retrieved, length:', currentSession.access_token.length);
-      
-    } catch (sessionError) {
-      console.warn('⚠️ [AUTH-V2] Session fetch failed, skipping JWT extraction:', sessionError.message);
-      return; // Gracefully skip instead of hard crash
+    }
+    
+    if (!currentSession?.access_token) {
+      console.log('🔄 [AUTH-V2] No access token available, person data pending');
+      setPerson(null);
+      return;
     }
 
     try {
@@ -204,7 +201,7 @@ export const AuthProvider = ({ children }) => {
       
       // Extract person data from the new JWT token
       if (data?.session?.user) {
-        await extractPersonFromJWT(data.session.user);
+        await extractPersonFromJWT(data.session.user, null, data.session);
         console.log('✅ [AUTH-V2] Authentication refreshed successfully');
       }
       
