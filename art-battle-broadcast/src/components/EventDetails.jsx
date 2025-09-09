@@ -1269,7 +1269,8 @@ const EventDetails = () => {
 
     const amount = bidAmounts[artId] || getMinimumBid(artId);
     
-    // Show confirmation dialog
+    // Clear any previous errors and show confirmation dialog
+    setBidError('');
     setConfirmBid({
       artId,
       amount,
@@ -2631,6 +2632,22 @@ const EventDetails = () => {
               <Text size="2" color="red">
                 Note: This bid is binding if you win the auction.
               </Text>
+              
+              {/* Error display in modal */}
+              {bidError && (
+                <Box mt="3" p="3" style={{ 
+                  background: 'var(--red-2)', 
+                  borderRadius: '4px',
+                  border: '1px solid var(--red-6)'
+                }}>
+                  <Flex align="center" gap="2">
+                    <ExclamationTriangleIcon style={{ color: 'var(--red-9)' }} />
+                    <Text size="2" color="red" weight="medium">
+                      {bidError}
+                    </Text>
+                  </Flex>
+                </Box>
+              )}
             </Flex>
           </AlertDialog.Description>
 

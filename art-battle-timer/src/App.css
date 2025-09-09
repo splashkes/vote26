@@ -85,23 +85,36 @@ html, body, #root {
   top: 0;
   left: 0;
   right: 0;
-  padding: 1rem 2rem;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(10px);
+  padding: 0.5rem 2rem;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(5px);
   z-index: 10;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  height: 3rem;
 }
 
-/* Main Countdown Display - 90% of screen */
+/* Main Countdown Display - Full screen */
 .countdown-display {
   flex: 1;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  padding: 6rem 2rem 2rem;
+  padding: 5rem 2rem 4rem;
   gap: 2rem;
   min-height: 0;
+}
+
+/* Round Display */
+.round-display {
+  text-align: center;
+}
+
+.round-text {
+  font-size: min(8vw, 4rem) !important;
+  font-weight: 800 !important;
+  color: #f1f5f9;
+  text-shadow: 0 0 1rem rgba(241, 245, 249, 0.3);
+  letter-spacing: 0.05em;
 }
 
 .countdown-timer {
@@ -112,10 +125,25 @@ html, body, #root {
   font-size: min(20vw, 12rem) !important;
   font-weight: 900 !important;
   line-height: 0.8;
-  color: #dc2626;
   text-shadow: 0 0 2rem rgba(220, 38, 38, 0.3);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
+  transition: color 0.5s ease, text-shadow 0.5s ease;
+}
+
+.timer-green {
+  color: #22c55e !important;
+  text-shadow: 0 0 2rem rgba(34, 197, 94, 0.3) !important;
+}
+
+.timer-yellow {
+  color: #eab308 !important;
+  text-shadow: 0 0 2rem rgba(234, 179, 8, 0.3) !important;
+}
+
+.timer-red {
+  color: #dc2626 !important;
+  text-shadow: 0 0 2rem rgba(220, 38, 38, 0.3) !important;
 }
 
 .progress-container {
@@ -143,30 +171,42 @@ html, body, #root {
   margin-top: 1rem;
 }
 
-/* Artworks Grid */
-.artworks-grid {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: 1rem 2rem 2rem;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-  max-height: 200px;
-  overflow-y: auto;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(10px);
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+/* Auction Timer Display */
+.auction-timer {
+  text-align: center;
+  margin-top: 2rem;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
-.artwork-card {
-  background: rgba(255, 255, 255, 0.05) !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  backdrop-filter: blur(10px);
-  padding: 0.75rem !important;
-  border-radius: 0.5rem !important;
+/* Art Battle Logo */
+.art-battle-logo {
+  height: 1.5rem;
+  width: auto;
+  object-fit: contain;
 }
+
+/* Art Battle Logo (main display) */
+.art-battle-logo-main {
+  height: 4rem;
+  width: auto;
+  object-fit: contain;
+  margin-bottom: 1rem;
+}
+
+/* Art Battle Logo (waiting screen) */
+.art-battle-logo-waiting {
+  height: 8rem;
+  width: auto;
+  object-fit: contain;
+  margin-bottom: 2rem;
+}
+
 
 /* Mobile Responsive */
 @media (max-width: 768px) {
@@ -174,23 +214,29 @@ html, body, #root {
     font-size: min(25vw, 8rem) !important;
   }
   
+  .round-text {
+    font-size: min(10vw, 3rem) !important;
+  }
+  
   .progress-container {
     width: 90vw;
   }
   
   .event-header {
-    padding: 0.75rem 1rem;
-  }
-  
-  .artworks-grid {
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    padding: 1rem;
-    max-height: 150px;
+    padding: 0.5rem 1rem;
   }
   
   .countdown-display {
     padding: 4rem 1rem 2rem;
     gap: 1.5rem;
+  }
+  
+  .art-battle-logo-main {
+    height: 3rem;
+  }
+  
+  .art-battle-logo-waiting {
+    height: 6rem;
   }
 }
 
@@ -205,10 +251,6 @@ html, body, #root {
     height: 1.5rem;
   }
   
-  .artworks-grid {
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    max-height: 250px;
-  }
 }
 
 /* Portrait orientation adjustments */
@@ -217,10 +259,6 @@ html, body, #root {
     font-size: min(30vw, 10rem) !important;
   }
   
-  .artworks-grid {
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    max-height: 30vh;
-  }
 }
 
 /* High contrast mode for better projector visibility */
@@ -257,20 +295,3 @@ html, body, #root {
   transition: color 0.3s ease, background-color 0.3s ease, transform 0.3s ease;
 }
 
-/* Scrollbar styling for artwork grid */
-.artworks-grid::-webkit-scrollbar {
-  width: 4px;
-}
-
-.artworks-grid::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.artworks-grid::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 2px;
-}
-
-.artworks-grid::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
-}

@@ -57,6 +57,8 @@ const AdminPanel = ({
   const [timerActionLoading, setTimerActionLoading] = useState(false);
   const [eventArtists, setEventArtists] = useState([]); // Artists added to event (including unassigned)
   const [selectedEasel, setSelectedEasel] = useState(null);
+  const [roundTimers, setRoundTimers] = useState({}); // Track timer states for each round
+  const [confirmCancelTimer, setConfirmCancelTimer] = useState(null); // For cancel confirmation modal
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [auctionArtworks, setAuctionArtworks] = useState([]);
   const [auctionBids, setAuctionBids] = useState({});
@@ -350,6 +352,7 @@ const AdminPanel = ({
         .select(`
           id,
           round_number,
+          closing_time,
           round_contestants (
             id,
             easel_number,
@@ -430,6 +433,22 @@ const AdminPanel = ({
           easels: r.easels.map(e => ({ easelNumber: e.easelNumber, hasArtist: !!e.artist }))
         })));
         setRounds(transformedRounds);
+        
+        // Process timer states from closing_time data
+        const timerStates = {};
+        roundsData.forEach(round => {
+          if (round.closing_time) {
+            const endTime = new Date(round.closing_time).getTime();
+            const now = Date.now();
+            if (endTime > now) {
+              timerStates[round.id] = {
+                endTime: endTime,
+                active: true
+              };
+            }
+          }
+        });
+        setRoundTimers(timerStates);
       }
 
       // Fetch artists from event_artists table
@@ -1136,8 +1155,66 @@ const AdminPanel = ({
     }
   };
 
+  // Timer functions
+  const startRoundTimer = async (roundId, roundNumber) => {
+    try {
+      // Calculate timer end time: now + 19:56 (19 minutes 56 seconds = 1196 seconds)
+      const now = new Date();
+      const timerEndTime = new Date(now.getTime() + (19 * 60 + 56) * 1000);
+      
+      // Use RPC function to bypass RLS policies
+      const { error } = await supabase.rpc('set_round_timer', {
+        p_round_id: roundId,
+        p_closing_time: timerEndTime.toISOString()
+      });
+      
+      if (error) throw error;
+      
+      // Update local state
+      setRoundTimers(prev => ({
+        ...prev,
+        [roundId]: {
+          endTime: timerEndTime.getTime(),
+          active: true
+        }
+      }));
+      
+      // Refresh rounds data
+      await fetchEventData();
+    } catch (error) {
+      console.error('Error starting timer:', error);
+      alert('Failed to start timer: ' + error.message);
+    }
+  };
+
+  const cancelRoundTimer = async (roundId) => {
+    try {
+      // Use RPC function to bypass RLS policies
+      const { error } = await supabase.rpc('set_round_timer', {
+        p_round_id: roundId,
+        p_closing_time: null
+      });
+      
+      if (error) throw error;
+      
+      // Update local state
+      setRoundTimers(prev => {
+        const newState = { ...prev };
+        delete newState[roundId];
+        return newState;
+      });
+      
+      // Refresh rounds data
+      await fetchEventData();
+      setConfirmCancelTimer(null);
+    } catch (error) {
+      console.error('Error canceling timer:', error);
+      alert('Failed to cancel timer: ' + error.message);
+    }
+  };
+
   return (
-    <Box>
+    <Box style={{ paddingBottom: '40px' }}>
       <Heading size="4" mb="4">Admin Controls</Heading>
       
       {/* Admin Mode Tabs */}
@@ -1332,7 +1409,40 @@ const AdminPanel = ({
               // Show actual rounds
               rounds.map(round => (
                 <Card key={round.id} size="2">
-                  <Heading size="3" mb="3">Round {round.roundNumber}</Heading>
+                  <Flex justify="between" align="center" mb="3">
+                    <Heading size="3">Round {round.roundNumber}</Heading>
+                    <Flex align="center" gap="2">
+                      {/* Timer Display */}
+                      {roundTimers[round.id]?.active && (
+                        <Text size="2" weight="bold" color="orange">
+                          {(() => {
+                            const timeLeft = Math.max(0, roundTimers[round.id].endTime - localTime);
+                            const minutes = Math.floor(timeLeft / 60000);
+                            const seconds = Math.floor((timeLeft % 60000) / 1000);
+                            return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                          })()}
+                        </Text>
+                      )}
+                      {/* Timer Button */}
+                      {!roundTimers[round.id]?.active ? (
+                        <Button
+                          size="1"
+                          onClick={() => startRoundTimer(round.id, round.roundNumber)}
+                        >
+                          Start 20:00 Timer
+                        </Button>
+                      ) : (
+                        <Button
+                          size="1"
+                          color="red"
+                          variant="soft"
+                          onClick={() => setConfirmCancelTimer({ roundId: round.id, roundNumber: round.roundNumber })}
+                        >
+                          Cancel Timer
+                        </Button>
+                      )}
+                    </Flex>
+                  </Flex>
                   <Grid columns="4" gap="3">
                     {round.easels.map(easel => (
                       <Box
@@ -3604,6 +3714,37 @@ const AdminPanel = ({
           </Flex>
         </Dialog.Content>
       </Dialog.Root>
+      
+      {/* Timer Cancellation Confirmation */}
+      <AlertDialog.Root open={!!confirmCancelTimer} onOpenChange={(open) => !open && setConfirmCancelTimer(null)}>
+        <AlertDialog.Content style={{ maxWidth: 450 }}>
+          <AlertDialog.Title>Cancel Timer?</AlertDialog.Title>
+          <AlertDialog.Description size="2">
+            Are you sure you want to cancel the timer for Round {confirmCancelTimer?.roundNumber}?
+            This action cannot be undone.
+          </AlertDialog.Description>
+
+          <Flex gap="3" mt="4" justify="end">
+            <AlertDialog.Cancel>
+              <Button variant="soft" color="gray">
+                Keep Timer
+              </Button>
+            </AlertDialog.Cancel>
+            <AlertDialog.Action>
+              <Button 
+                color="red"
+                onClick={() => {
+                  if (confirmCancelTimer?.roundId) {
+                    cancelRoundTimer(confirmCancelTimer.roundId);
+                  }
+                }}
+              >
+                Cancel Timer
+              </Button>
+            </AlertDialog.Action>
+          </Flex>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
     </Box>
   );
 };

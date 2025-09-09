@@ -51,23 +51,30 @@ const PaymentDashboard = () => {
 
   const loadPaymentData = async () => {
     try {
-      // Get ALL artist profiles for this person
-      const { data: allProfiles, error: profilesError } = await supabase
-        .from('artist_profiles')
-        .select('id')
-        .eq('person_id', person.id);
+      // Use the same edge function as other components for consistency
+      const { data, error } = await supabase.functions.invoke('artist-get-my-profile');
 
-      if (profilesError) {
-        throw profilesError;
-      }
-
-      if (!allProfiles || allProfiles.length === 0) {
-        setError('No artist profiles found. Please set up your profile first.');
+      if (error) {
+        console.error('PaymentDashboard: Secure profile lookup failed:', error);
+        setError(`Failed to get your profile: ${error.message || error}`);
         setLoading(false);
         return;
       }
 
-      const artistProfileIds = allProfiles.map(p => p.id);
+      let artistProfileIds = [];
+
+      if (data.profile) {
+        // Single authoritative profile
+        artistProfileIds = [data.profile.id];
+      } else if (data.candidateProfiles && data.candidateProfiles.length > 0) {
+        // Multiple profiles - include all for payment tracking
+        artistProfileIds = data.candidateProfiles.map(p => p.id);
+      } else {
+        // No profiles found
+        setError('No artist profiles found. Please create your profile first.');
+        setLoading(false);
+        return;
+      }
 
       // Get artworks for ALL artist profiles
       const { data: artworks, error: artworkError } = await supabase

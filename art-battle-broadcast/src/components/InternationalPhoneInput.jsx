@@ -26,6 +26,7 @@ const InternationalPhoneInput = forwardRef(({
     { code: 'AU', name: 'Australia', dialCode: '+61', flag: '🇦🇺' },
     { code: 'BR', name: 'Brazil', dialCode: '+55', flag: '🇧🇷' },
     { code: 'CA', name: 'Canada', dialCode: '+1', flag: '🇨🇦' },
+    { code: 'DE', name: 'Germany', dialCode: '+49', flag: '🇩🇪' },
     { code: 'FR', name: 'France', dialCode: '+33', flag: '🇫🇷' },
     { code: 'GB', name: 'United Kingdom', dialCode: '+44', flag: '🇬🇧' },
     { code: 'IN', name: 'India', dialCode: '+91', flag: '🇮🇳' },
@@ -149,33 +150,35 @@ const InternationalPhoneInput = forwardRef(({
     const digitsOnly = cleanedInput.replace(/\D/g, '');
     if (digitsOnly.length >= 7) {
       validationTimeoutRef.current = setTimeout(() => {
-        // Smart country detection and preprocessing
+        // Smart country detection and phone formatting
         let phoneForValidation = cleanedInput;
         let countryForValidation = selectedCountry;
         
-        // First, try to detect country from the number itself
-        const inputWithPlus = cleanedInput.startsWith('+') ? cleanedInput : `+${cleanedInput}`;
-        
-        // Check against all country codes to find potential matches
-        for (const country of countryData) {
-          const countryCode = country.dialCode.replace('+', '');
+        // If number doesn't start with +, try to detect country and add +
+        if (!cleanedInput.startsWith('+')) {
+          // Sort countries by dial code length (longest first) to avoid false matches
+          const sortedCountries = [...countryData].sort((a, b) => 
+            b.dialCode.replace('+', '').length - a.dialCode.replace('+', '').length
+          );
           
-          if (cleanedInput.startsWith(countryCode) || cleanedInput.startsWith('+' + countryCode)) {
-            // Found a matching country code in the input
-            countryForValidation = country.code;
+          // Check if number starts with any country code
+          for (const country of sortedCountries) {
+            const countryCode = country.dialCode.replace('+', '');
             
-            if (cleanedInput.startsWith('+' + countryCode)) {
-              phoneForValidation = cleanedInput.substring(countryCode.length + 1); // Remove +44
-              console.log('📱 Detected country from +' + countryCode + ':', countryForValidation, 'stripped to:', phoneForValidation);
-            } else if (cleanedInput.startsWith(countryCode)) {
-              phoneForValidation = cleanedInput.substring(countryCode.length); // Remove 44
-              console.log('📱 Detected country from ' + countryCode + ':', countryForValidation, 'stripped to:', phoneForValidation);
+            if (cleanedInput.startsWith(countryCode)) {
+              // Found matching country code - format as international number
+              phoneForValidation = '+' + cleanedInput;
+              countryForValidation = country.code;
+              console.log('📱 Detected country from ' + countryCode + ':', countryForValidation, 'formatted as:', phoneForValidation);
+              
+              // Update the selected country in UI
+              setSelectedCountry(country.code);
+              break;
             }
-            break; // Use the first match (longest country codes should be checked first)
           }
         }
         
-        // Send cleaned input + detected/selected country context to Twilio
+        // Send full international number to Twilio validation
         callEnhancedValidation(phoneForValidation, countryForValidation);
       }, 1000); // 1 second debounce
     }

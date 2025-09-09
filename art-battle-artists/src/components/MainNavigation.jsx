@@ -12,6 +12,7 @@ const MainNavigation = () => {
   const [activeTab, setActiveTab] = useState('home');
   const [showProfilePicker, setShowProfilePicker] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   
   const { user, signOut } = useAuth();
 
@@ -144,19 +145,19 @@ const MainNavigation = () => {
         </Tabs.Content>
 
         <Tabs.Content value="profile">
-          <ProfileEditor />
+          <ProfileEditor onProfileSuccess={() => setRefreshTrigger(prev => prev + 1)} />
         </Tabs.Content>
 
         <Tabs.Content value="events">
-          <EventApplications />
+          <EventApplications key={`events-${refreshTrigger}`} />
         </Tabs.Content>
 
         <Tabs.Content value="history">
-          <Activity />
+          <Activity key={`history-${refreshTrigger}`} />
         </Tabs.Content>
 
         <Tabs.Content value="payments">
-          <PaymentDashboard />
+          <PaymentDashboard key={`payments-${refreshTrigger}`} />
         </Tabs.Content>
       </Tabs.Root>
     </Container>

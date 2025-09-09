@@ -204,12 +204,6 @@ const ProfileForm = ({ existingProfile = null, onSuccess }) => {
 
       setSuccess(isEditing ? 'Profile updated successfully!' : 'Profile created successfully!');
       
-      // For new profile creation, refresh auth to get updated JWT claims
-      if (!isEditing && refreshAuth) {
-        console.log('🔄 Refreshing auth after new profile creation...');
-        await refreshAuth();
-      }
-      
       // Call success callback with the new/updated profile
       if (onSuccess) {
         onSuccess(data.profile);

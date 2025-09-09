@@ -21,7 +21,7 @@ import AuthModal from './AuthModal';
 import SampleWorksUpload from './SampleWorksUpload';
 import ProfileForm from './ProfileForm';
 
-const ProfileEditor = () => {
+const ProfileEditor = ({ onProfileSuccess }) => {
   const { user, person, loading } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [profiles, setProfiles] = useState([]);
@@ -447,6 +447,11 @@ const ProfileEditor = () => {
           setSelectedProfile(profile);
           setArtistProfileId(profile.id);
           setIsCreatingNew(false);
+          
+          // Trigger refresh of other tabs
+          if (onProfileSuccess) {
+            onProfileSuccess(profile);
+          }
           setSaveMessage('');
           setError('');
           // Refresh profiles list

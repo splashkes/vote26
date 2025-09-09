@@ -61,8 +61,8 @@ export default function TimerDisplay() {
     
     const now = currentTime
     const endTime = new Date(closingTime).getTime()
-    const thirtyMinutesInMs = 30 * 60 * 1000
-    const startTime = endTime - thirtyMinutesInMs
+    const twentyMinutesInMs = 20 * 60 * 1000
+    const startTime = endTime - twentyMinutesInMs
     
     if (now <= startTime) return 0
     if (now >= endTime) return 100
@@ -70,6 +70,14 @@ export default function TimerDisplay() {
     const elapsed = now - startTime
     const total = endTime - startTime
     return (elapsed / total) * 100
+  }
+
+  const getTimerColor = (timeRemaining) => {
+    const minutes = Math.floor(timeRemaining / (1000 * 60))
+    if (minutes >= 15) return 'green'
+    if (minutes >= 4) return 'yellow' 
+    if (minutes >= 1) return 'red'
+    return 'red'
   }
 
   if (loading) {
@@ -92,35 +100,110 @@ export default function TimerDisplay() {
   if (!timerData || !timerData.has_active_timers) {
     return (
       <div className="timer-waiting">
+        {/* Art Battle Logo */}
+        <img 
+          src="https://imagedelivery.net/IGZfH_Pl-6S6csykNnXNJw/0ce25113-c21e-4435-1dc0-6020d15fa300/public" 
+          alt="Art Battle Logo" 
+          className="art-battle-logo-waiting"
+        />
+        
         {timerData?.event && (
           <div className="event-info">
             <Text size="4" color="gray">{timerData.event.eid}</Text>
-            <Text size="6">{timerData.event.city}</Text>
-            <Text size="5">{timerData.event.venue}</Text>
-            <Text size="4" color="gray">Round {timerData.event.current_round}</Text>
+            <Text size="5">{timerData.event.city}</Text>
+            <Text size="4">{timerData.event.venue}</Text>
           </div>
         )}
         <div className="waiting-message">
-          <Text size="8">Waiting for Active Timers</Text>
-          <Text size="5" color="gray">Timers will appear when auctions end within 30 minutes</Text>
+          <Text size="5">Waiting for Active Timers</Text>
+          <Text size="3" color="gray">Timers will appear when auctions end within 30 minutes</Text>
         </div>
       </div>
     )
   }
 
-  const { event, active_round } = timerData
+  const { event, active_round, auction_times } = timerData
+
+  // If no active round but we have auction times, show auction-only display
+  if (!active_round && auction_times) {
+    const earliestAuctionTime = new Date(auction_times.earliest).getTime()
+    const timeRemaining = earliestAuctionTime - currentTime
+    const timerColor = getTimerColor(timeRemaining)
+
+    return (
+      <div className="timer-container">
+        {/* Small event info header */}
+        <div className="event-header">
+          <Flex justify="between" align="center" height="100%">
+            <div>
+              <Text size="3" color="gray">{event.eid} • {event.city} • {event.venue}</Text>
+            </div>
+            <div>
+              <Badge variant="soft" color="amber">
+                Auction Timer • {auction_times.count} Artworks
+              </Badge>
+            </div>
+          </Flex>
+        </div>
+
+        {/* Main countdown display */}
+        <div className="countdown-display">
+          {/* Art Battle Logo */}
+          <img 
+            src="https://imagedelivery.net/IGZfH_Pl-6S6csykNnXNJw/0ce25113-c21e-4435-1dc0-6020d15fa300/public" 
+            alt="Art Battle Logo" 
+            className="art-battle-logo-main"
+          />
+          
+          {/* Auction Timer Label */}
+          <div className="round-display">
+            <Text size="8" weight="bold" className="round-text">
+              AUCTION TIMER
+            </Text>
+          </div>
+          
+          <div className="countdown-timer">
+            <Text size="9" weight="bold" className={`timer-text timer-${timerColor}`}>
+              {formatTime(timeRemaining)}
+            </Text>
+          </div>
+          
+          <div className="progress-container">
+            <Progress 
+              value={calculateProgress(auction_times.earliest)} 
+              className="countdown-progress"
+              color="amber"
+              size="3"
+            />
+          </div>
+
+          <div className="timer-label">
+            <Text size="5" color="gray">
+              {timeRemaining > 0 ? 'Auction Closes In' : 'Auction Ended'}
+            </Text>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   if (!active_round) {
     return (
       <div className="timer-waiting">
+        {/* Art Battle Logo */}
+        <img 
+          src="https://imagedelivery.net/IGZfH_Pl-6S6csykNnXNJw/0ce25113-c21e-4435-1dc0-6020d15fa300/public" 
+          alt="Art Battle Logo" 
+          className="art-battle-logo-waiting"
+        />
+        
         <div className="event-info">
           <Text size="4" color="gray">{event.eid}</Text>
-          <Text size="6">{event.city}</Text>
-          <Text size="5">{event.venue}</Text>
-          <Text size="4" color="gray">Round {event.current_round}</Text>
+          <Text size="5">{event.city}</Text>
+          <Text size="4">{event.venue}</Text>
         </div>
         <div className="waiting-message">
-          <Text size="8">No Active Timers</Text>
+          <Text size="5">No Active Timers</Text>
         </div>
       </div>
     )
@@ -129,12 +212,13 @@ export default function TimerDisplay() {
   const closingTime = new Date(active_round.closing_time).getTime()
   const timeRemaining = closingTime - currentTime
   const progress = calculateProgress(active_round.closing_time)
+  const timerColor = getTimerColor(timeRemaining)
 
   return (
     <div className="timer-container">
       {/* Small event info header */}
       <div className="event-header">
-        <Flex justify="between" align="center">
+        <Flex justify="between" align="center" height="100%">
           <div>
             <Text size="3" color="gray">{event.eid} • {event.city} • {event.venue}</Text>
           </div>
@@ -148,8 +232,22 @@ export default function TimerDisplay() {
 
       {/* Main countdown display */}
       <div className="countdown-display">
+        {/* Art Battle Logo */}
+        <img 
+          src="https://imagedelivery.net/IGZfH_Pl-6S6csykNnXNJw/0ce25113-c21e-4435-1dc0-6020d15fa300/public" 
+          alt="Art Battle Logo" 
+          className="art-battle-logo-main"
+        />
+        
+        {/* Large Round Number */}
+        <div className="round-display">
+          <Text size="8" weight="bold" className="round-text">
+            ROUND {active_round.round}
+          </Text>
+        </div>
+        
         <div className="countdown-timer">
-          <Text size="9" weight="bold" className="timer-text">
+          <Text size="9" weight="bold" className={`timer-text timer-${timerColor}`}>
             {formatTime(timeRemaining)}
           </Text>
         </div>
@@ -168,32 +266,23 @@ export default function TimerDisplay() {
             {timeRemaining > 0 ? 'Time Remaining' : 'Auction Ended'}
           </Text>
         </div>
+
+        {/* Auction Timer Display */}
+        {timerData.auction_times && (
+          <div className="auction-timer">
+            <Text size="5" weight="bold" color="amber">
+              Auction Timer
+            </Text>
+            <Text size="4" weight="medium" color="gray">
+              {timerData.auction_times.same_time ? 
+                formatTime(new Date(timerData.auction_times.earliest).getTime() - currentTime) : 
+                `Earliest ${formatTime(new Date(timerData.auction_times.earliest).getTime() - currentTime)} • Latest ${formatTime(new Date(timerData.auction_times.latest).getTime() - currentTime)}`
+              }
+            </Text>
+          </div>
+        )}
       </div>
 
-      {/* Contestants in active round */}
-      <div className="artworks-grid">
-        {active_round.contestants.map((contestant, index) => {
-          return (
-            <Card key={`${active_round.round}-${contestant.easel}`} className="artwork-card">
-              <Flex direction="column" gap="2">
-                <Flex justify="between" align="center">
-                  <Text size="3" weight="bold">Round {active_round.round}</Text>
-                  <Text size="2" color="gray">Easel {contestant.easel}</Text>
-                </Flex>
-                <Text size="2">{contestant.artist_name}</Text>
-                <Flex justify="between" align="center">
-                  <Text size="2" color={timeRemaining > 0 ? "gray" : "red"}>
-                    {formatTime(timeRemaining)}
-                  </Text>
-                  <Text size="2" color="crimson">
-                    Round Timer
-                  </Text>
-                </Flex>
-              </Flex>
-            </Card>
-          )
-        })}
-      </div>
     </div>
   )
 }
