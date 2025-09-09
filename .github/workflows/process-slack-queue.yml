@@ -93,3 +93,21 @@ jobs:
           -d '{}'
         
         echo "Auction closing check complete"
+        
+        # CRITICAL: Actually close expired auctions
+        echo "Closing expired auctions..."
+        response=$(curl -X POST \
+          https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_and_close_expired_auctions \
+          -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+          -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+          -H "Content-Type: application/json" \
+          -d '{}')
+        
+        echo "Expired auction closing result: $response"
+        
+        # Parse results
+        closed=$(echo $response | jq -r '.closed_count // 0')
+        sold=$(echo $response | jq -r '.sold_count // 0')
+        errors=$(echo $response | jq -r '.error_count // 0')
+        
+        echo "Closed: $closed, Sold: $sold, Errors: $errors"
