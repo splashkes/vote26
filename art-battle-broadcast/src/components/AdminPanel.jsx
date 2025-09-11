@@ -1049,10 +1049,20 @@ const AdminPanel = ({
         throw new Error('Failed to get event EID for CSV export')
       }
 
-      // Use direct fetch to the CSV export URL with EID in path
+      // Get current session token for JWT authentication
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        throw new Error('Authentication required for CSV export')
+      }
+
+      // Use direct fetch to the CSV export URL with EID in path and JWT auth
       const functionsUrl = 'https://xsqdkubgyqwpyvfltnrf.supabase.co/functions/v1'
       const response = await fetch(`${functionsUrl}/auction-csv-export/${eventData.eid}`, {
         method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
+        }
       })
 
       if (!response.ok) {
@@ -3182,6 +3192,9 @@ const AdminPanel = ({
                             auctionBids[selectedAuctionItem.id].highestBidder.name || 
                             auctionBids[selectedAuctionItem.id].highestBidder.nickname || 
                             auctionBids[selectedAuctionItem.id].highestBidder.email || 
+                            auctionBids[selectedAuctionItem.id].highestBidder.phone_number || 
+                            auctionBids[selectedAuctionItem.id].highestBidder.auth_phone || 
+                            auctionBids[selectedAuctionItem.id].highestBidder.phone || 
                             'Unknown Bidder'
                         ) : (
                           // Other admin levels see abbreviated names
@@ -3360,7 +3373,7 @@ const AdminPanel = ({
                                 // Producer+ sees full names from any available field
                                 bid.bidder?.first_name ? 
                                   `${bid.bidder.first_name} ${bid.bidder.last_name || ''}` : 
-                                  bid.bidder?.name || bid.bidder?.nickname || bid.bidder?.email?.split('@')[0] || bid.bidder?.phone_number || bid.bidder?.auth_phone || 'Unknown Bidder'
+                                  bid.bidder?.name || bid.bidder?.nickname || bid.bidder?.email?.split('@')[0] || bid.bidder?.phone_number || bid.bidder?.auth_phone || bid.bidder?.phone || 'Unknown Bidder'
                               ) : (
                                 // Other admin levels see abbreviated names
                                 bid.bidder?.first_name ? 
