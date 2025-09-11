@@ -229,8 +229,25 @@ export const createRenderRoot = (spec, variant, eventData, artistData = null, al
     
     console.log('Text layer created:', textLayer);
     console.log('Text layer innerHTML:', textLayer.innerHTML);
+    console.log('=== INSPECTING ACTUAL DOM STRUCTURE ===');
+    console.log('Text layer HTML structure:', textLayer.outerHTML);
+    
     container.appendChild(textLayer);
     console.log('Text layer appended to container');
+    
+    // Debug: Check if classes exist after DOM insertion
+    setTimeout(() => {
+      console.log('=== DOM INSPECTION AFTER INSERTION ===');
+      const titleElements = container.querySelectorAll('.title');
+      const venueElements = container.querySelectorAll('.venue');
+      const tWrapElements = container.querySelectorAll('.t-wrap');
+      console.log('Found .title elements:', titleElements.length, titleElements);
+      console.log('Found .venue elements:', venueElements.length, venueElements);
+      console.log('Found .t-wrap elements:', tWrapElements.length, tWrapElements);
+      if (titleElements.length > 0) {
+        console.log('Title element computed styles:', window.getComputedStyle(titleElements[0]));
+      }
+    }, 100);
   }
   
   // Apply CSS with light scoping
@@ -241,8 +258,17 @@ export const createRenderRoot = (spec, variant, eventData, artistData = null, al
     const style = document.createElement('style');
     let scopedCSS = spec.css;
     
-    // FIXED APPROACH: Only replace class selectors at the start of rules
+    // FIXED APPROACH: Only replace class selectors at the start of rules AND add !important
     scopedCSS = scopedCSS.replace(/(^|[,}]\s*)(\.[\w-]+)/g, `$1#${renderId} $2`);
+    
+    // Add !important to CSS rules to override container defaults  
+    scopedCSS = scopedCSS.replace(/([^}]+{[^}]*)(;|})/g, (match, rule, ending) => {
+      if (rule.includes('!important')) return match;
+      return rule.replace(/;/g, ' !important;') + ending;
+    });
+    
+    // Add extra specificity by duplicating the container ID
+    scopedCSS = scopedCSS.replace(new RegExp(`#${renderId} \\.`, 'g'), `#${renderId}#${renderId} .`);
     
     // Also ensure the container styles work
     scopedCSS = `

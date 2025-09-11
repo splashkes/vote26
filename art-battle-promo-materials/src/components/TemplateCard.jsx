@@ -7,16 +7,207 @@ import {
   Badge, 
   Spinner,
   Grid,
-  Heading
+  Heading,
+  TextArea,
+  Tabs,
+  Switch,
+  Flex
 } from '@radix-ui/themes';
-import { DownloadIcon, PlayIcon, UpdateIcon, CheckCircledIcon } from '@radix-ui/react-icons';
+import { DownloadIcon, PlayIcon, UpdateIcon, CheckCircledIcon, CodeIcon, EyeOpenIcon } from '@radix-ui/react-icons';
 import { exportToPNG, exportToMP4 } from '../lib/templateRenderer';
 
 const TemplateCard = ({ template, eventData, artistData = null, allArtists = [] }) => {
   const [materials, setMaterials] = useState({}); // variant -> material status
   const [generating, setGenerating] = useState({}); // variant -> generating state
+  const [editMode, setEditMode] = useState(false);
+  const [editedSpec, setEditedSpec] = useState(null);
+  const [livePreview, setLivePreview] = useState(true);
 
   const supabaseUrl = 'https://xsqdkubgyqwpyvfltnrf.supabase.co';
+
+  // Resize image to reduce payload size before upload
+  const resizeImage = (dataUrl, scale) => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/png', 0.9));
+      };
+      img.src = dataUrl;
+    });
+  };
+
+  // Get current spec (edited or original)
+  const getCurrentSpec = () => {
+    if (editedSpec) return editedSpec;
+    return typeof template.spec === 'string' ? JSON.parse(template.spec) : template.spec;
+  };
+
+  // CSS Validation - check if CSS selectors match HTML elements
+  const validateCSS = (spec) => {
+    if (!spec.css || !spec.layers?.textHtml) return { valid: true, warnings: [] };
+    
+    const warnings = [];
+    const cssSelectors = [];
+    const htmlClasses = [];
+    
+    // Extract CSS class selectors (only at start of rules, not in values)
+    const cssClassMatches = spec.css.match(/(^|[{}])\s*\.([a-zA-Z][\w-]*)/g);
+    if (cssClassMatches) {
+      cssSelectors.push(...cssClassMatches.map(s => s.replace(/(^|[{}])\s*\./, ''))); // Extract class name only
+    }
+    
+    // Extract HTML classes
+    const htmlClassMatches = spec.layers.textHtml.match(/class="([^"]+)"/g);
+    if (htmlClassMatches) {
+      htmlClassMatches.forEach(match => {
+        const classes = match.replace('class="', '').replace('"', '').split(' ');
+        htmlClasses.push(...classes);
+      });
+    }
+    
+    // Add classes that are dynamically injected by templateRenderer
+    if (spec.dynamicContent?.allArtistsNames) {
+      htmlClasses.push('artist-name'); // Added by templateRenderer.js line 204
+    }
+    
+    // Find CSS selectors that don't match any HTML classes
+    const orphanedSelectors = cssSelectors.filter(cssClass => !htmlClasses.includes(cssClass));
+    const unusedHtmlClasses = htmlClasses.filter(htmlClass => !cssSelectors.includes(htmlClass));
+    
+    if (orphanedSelectors.length > 0) {
+      warnings.push(`CSS classes not found in HTML: ${orphanedSelectors.join(', ')}`);
+    }
+    
+    if (unusedHtmlClasses.length > 0) {
+      warnings.push(`HTML classes without CSS: ${unusedHtmlClasses.join(', ')}`);
+    }
+    
+    return {
+      valid: warnings.length === 0,
+      warnings,
+      cssSelectors,
+      htmlClasses
+    };
+  };
+
+  // Handle HTML editing
+  const handleHtmlEdit = (newHtml) => {
+    const currentSpec = getCurrentSpec();
+    const newSpec = {
+      ...currentSpec,
+      layers: {
+        ...currentSpec.layers,
+        textHtml: newHtml
+      }
+    };
+    setEditedSpec(newSpec);
+  };
+
+  // Handle CSS editing
+  const handleCssEdit = (newCss) => {
+    const currentSpec = getCurrentSpec();
+    const newSpec = {
+      ...currentSpec,
+      css: newCss
+    };
+    setEditedSpec(newSpec);
+  };
+
+  // Handle dynamic content flags
+  const handleDynamicContentEdit = (newFlags) => {
+    const currentSpec = getCurrentSpec();
+    const newSpec = {
+      ...currentSpec,
+      dynamicContent: newFlags
+    };
+    setEditedSpec(newSpec);
+  };
+
+  // Create live preview component (similar to templateRenderer but inline)
+  const LivePreview = ({ variant, spec }) => {
+    const variantSpec = spec.variants?.find(v => v.id === variant.id) || spec.variants?.[0];
+    if (!variantSpec) return null;
+
+    const previewId = `live-preview-${template.id}-${variant.id}`;
+    const styles = spec.styles || {};
+    
+    // Build the preview HTML similar to templateRenderer
+    const backgroundStyle = artistData?.image_url 
+      ? { backgroundImage: `url(${artistData.image_url})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+      : { backgroundColor: '#f0f0f0' };
+
+    return (
+      <Box
+        id={previewId}
+        style={{
+          width: '200px',
+          height: Math.round((200 * variantSpec.h) / variantSpec.w) + 'px',
+          border: '2px solid var(--gray-6)',
+          borderRadius: 'var(--radius-2)',
+          overflow: 'hidden',
+          position: 'relative',
+          margin: '12px 0',
+          ...backgroundStyle
+        }}
+      >
+        {/* Artist image if available */}
+        {artistData?.image_url && (
+          <img
+            src={artistData.image_url}
+            alt="Artist"
+            crossOrigin="anonymous"
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              objectPosition: 'center',
+              zIndex: 1
+            }}
+          />
+        )}
+        
+        {/* Template content overlay */}
+        <Box
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 2,
+            padding: '8px',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: variantSpec.contentPosition || 'flex-end',
+            color: 'white',
+            textShadow: '1px 1px 3px rgba(0,0,0,0.8)'
+          }}
+        >
+          {artistData && (
+            <Text size="1" weight="bold">
+              {artistData.display_name}
+            </Text>
+          )}
+          <Text size="1">
+            {eventData?.title}
+          </Text>
+        </Box>
+        
+        {/* Custom CSS overlay */}
+        {spec.customCSS && (
+          <style dangerouslySetInnerHTML={{
+            __html: `#${previewId} { ${spec.customCSS} }`
+          }} />
+        )}
+      </Box>
+    );
+  };
 
   // Check if materials already exist for this template
   useEffect(() => {
@@ -66,7 +257,7 @@ const TemplateCard = ({ template, eventData, artistData = null, allArtists = [] 
   const handleGenerate = async (variant) => {
     if (!template || !eventData) return;
 
-    const spec = typeof template.spec === 'string' ? JSON.parse(template.spec) : template.spec;
+    const spec = getCurrentSpec();
     const variantSpec = spec.variants?.find(v => v.id === variant) || spec.variants?.[0];
     
     if (!variantSpec) {
@@ -78,11 +269,19 @@ const TemplateCard = ({ template, eventData, artistData = null, allArtists = [] 
 
     try {
       console.log('Starting generation for:', { template: template.name, variant, artist: artistData?.display_name });
+      console.log('=== SPEC BEING USED FOR GENERATION ===');
+      console.log('CSS:', spec.css);
+      console.log('HTML:', spec.layers?.textHtml);
+      console.log('Dynamic Content:', spec.dynamicContent);
 
       // Generate PNG locally first
       const pngDataUrl = await exportToPNG(spec, variant, eventData, artistData, allArtists);
       
       console.log('PNG generated successfully, data URL length:', pngDataUrl.length);
+
+      // Resize to 50% before uploading to reduce payload size
+      const resizedDataUrl = await resizeImage(pngDataUrl, 0.5);
+      console.log('PNG resized to 50%, new data URL length:', resizedDataUrl.length);
 
       // Upload via edge function (handles Cloudflare upload internally)
       console.log('=== UPLOADING VIA EDGE FUNCTION ===');
@@ -95,7 +294,7 @@ const TemplateCard = ({ template, eventData, artistData = null, allArtists = [] 
         template_kind: template.kind,
         variant,
         spec,
-        png_data: pngDataUrl
+        png_data: resizedDataUrl
       };
 
       console.log('=== PREPARING UPLOAD ===');
@@ -192,7 +391,7 @@ const TemplateCard = ({ template, eventData, artistData = null, allArtists = [] 
         link.click();
       } else {
         // Generate and download directly
-        const spec = typeof template.spec === 'string' ? JSON.parse(template.spec) : template.spec;
+        const spec = getCurrentSpec();
         const dataUrl = await exportToPNG(spec, variant, eventData, artistData, allArtists);
         
         // Manual download
@@ -219,7 +418,7 @@ const TemplateCard = ({ template, eventData, artistData = null, allArtists = [] 
         link.click();
       } else {
         // Fallback to direct generation
-        const spec = typeof template.spec === 'string' ? JSON.parse(template.spec) : template.spec;
+        const spec = getCurrentSpec();
         await exportToMP4(spec, variant, eventData, artistData, allArtists);
       }
     } catch (error) {
@@ -232,7 +431,7 @@ const TemplateCard = ({ template, eventData, artistData = null, allArtists = [] 
     return null;
   }
 
-  const spec = typeof template.spec === 'string' ? JSON.parse(template.spec) : template.spec;
+  const spec = getCurrentSpec();
   const variants = spec.variants || [];
 
   return (
@@ -242,9 +441,20 @@ const TemplateCard = ({ template, eventData, artistData = null, allArtists = [] 
           position: 'absolute',
           top: '12px',
           right: '12px',
-          zIndex: 10
+          zIndex: 10,
+          display: 'flex',
+          gap: '8px',
+          alignItems: 'center'
         }}
       >
+        <Button
+          size="1"
+          variant={editMode ? "solid" : "ghost"}
+          onClick={() => setEditMode(!editMode)}
+        >
+          <CodeIcon />
+          {editMode ? 'View' : 'Edit'}
+        </Button>
         <Badge variant="soft" size="1">
           {template.kind === 'eventWide' ? 'Event-wide' : 'Per-artist'}
         </Badge>
@@ -256,6 +466,158 @@ const TemplateCard = ({ template, eventData, artistData = null, allArtists = [] 
         <Text size="2" color="gray" mb="3">
           For: {artistData.display_name}
         </Text>
+      )}
+
+      {editMode && (
+        <Box mb="4" p="3" style={{ backgroundColor: 'var(--gray-1)', borderRadius: 'var(--radius-2)', border: '1px solid var(--gray-6)' }}>
+          <Flex align="center" justify="between" mb="3">
+            <Text size="2" weight="medium">Live Editor</Text>
+            <Flex align="center" gap="2">
+              <Text size="1">Live Preview:</Text>
+              <Switch 
+                checked={livePreview} 
+                onCheckedChange={setLivePreview}
+                size="1"
+              />
+            </Flex>
+          </Flex>
+          
+          <Tabs.Root defaultValue="html">
+            <Tabs.List>
+              <Tabs.Trigger value="html">HTML Template</Tabs.Trigger>
+              <Tabs.Trigger value="css">CSS Styling</Tabs.Trigger>
+              <Tabs.Trigger value="data">Data Flags</Tabs.Trigger>
+              <Tabs.Trigger value="validate">Validation</Tabs.Trigger>
+            </Tabs.List>
+            
+            <Tabs.Content value="html">
+              <Box mb="2">
+                <Text size="1" color="gray">
+                  Edit the HTML structure. Use IDs like #event-title, #event-venue, #artist-list for dynamic content.
+                </Text>
+              </Box>
+              <TextArea
+                placeholder='<div class="container"><h1 id="event-title"></h1><div id="artist-list"></div></div>'
+                rows={10}
+                value={spec.layers?.textHtml || ''}
+                onChange={(e) => handleHtmlEdit(e.target.value)}
+                style={{ fontFamily: 'monospace', fontSize: '12px' }}
+              />
+            </Tabs.Content>
+            
+            <Tabs.Content value="css">
+              <Box mb="2">
+                <Text size="1" color="gray">
+                  Style your template with CSS. Target classes and IDs from your HTML.
+                </Text>
+              </Box>
+              <TextArea
+                placeholder=".container { padding: 20px; } #event-title { font-size: 48px; color: white; }"
+                rows={12}
+                value={spec.css || ''}
+                onChange={(e) => handleCssEdit(e.target.value)}
+                style={{ fontFamily: 'monospace', fontSize: '12px' }}
+              />
+            </Tabs.Content>
+
+            <Tabs.Content value="data">
+              <Box mb="2">
+                <Text size="1" color="gray">
+                  Enable dynamic data insertion. Check boxes to populate corresponding IDs.
+                </Text>
+              </Box>
+              <Grid columns="2" gap="2">
+                <label>
+                  <input 
+                    type="checkbox" 
+                    checked={spec.dynamicContent?.eventTitle || false}
+                    onChange={(e) => handleDynamicContentEdit({
+                      ...spec.dynamicContent,
+                      eventTitle: e.target.checked
+                    })}
+                  />
+                  <Text size="2" ml="1">Event Title (#event-title)</Text>
+                </label>
+                <label>
+                  <input 
+                    type="checkbox" 
+                    checked={spec.dynamicContent?.eventVenue || false}
+                    onChange={(e) => handleDynamicContentEdit({
+                      ...spec.dynamicContent,
+                      eventVenue: e.target.checked
+                    })}
+                  />
+                  <Text size="2" ml="1">Venue (#event-venue)</Text>
+                </label>
+                <label>
+                  <input 
+                    type="checkbox" 
+                    checked={spec.dynamicContent?.eventDateTime || false}
+                    onChange={(e) => handleDynamicContentEdit({
+                      ...spec.dynamicContent,
+                      eventDateTime: e.target.checked
+                    })}
+                  />
+                  <Text size="2" ml="1">Date/Time (#event-time)</Text>
+                </label>
+                <label>
+                  <input 
+                    type="checkbox" 
+                    checked={spec.dynamicContent?.allArtistsNames || false}
+                    onChange={(e) => handleDynamicContentEdit({
+                      ...spec.dynamicContent,
+                      allArtistsNames: e.target.checked
+                    })}
+                  />
+                  <Text size="2" ml="1">All Artists (#artist-list)</Text>
+                </label>
+              </Grid>
+            </Tabs.Content>
+
+            <Tabs.Content value="validate">
+              <Box mb="2">
+                <Text size="1" color="gray">
+                  CSS/HTML validation and class matching analysis
+                </Text>
+              </Box>
+              {(() => {
+                const validation = validateCSS(spec);
+                return (
+                  <Box>
+                    {validation.valid ? (
+                      <Box p="3" style={{ backgroundColor: 'var(--green-2)', borderRadius: 'var(--radius-2)', border: '1px solid var(--green-6)' }}>
+                        <Text size="2" weight="medium" color="green">✅ CSS and HTML are properly matched</Text>
+                      </Box>
+                    ) : (
+                      <Box p="3" style={{ backgroundColor: 'var(--amber-2)', borderRadius: 'var(--radius-2)', border: '1px solid var(--amber-6)' }}>
+                        <Text size="2" weight="medium" color="amber">⚠️ CSS/HTML Mismatches Found:</Text>
+                        {validation.warnings.map((warning, index) => (
+                          <Box key={index} mt="2">
+                            <Text size="1" color="amber">• {warning}</Text>
+                          </Box>
+                        ))}
+                      </Box>
+                    )}
+                    
+                    <Box mt="3">
+                      <Text size="1" weight="medium">Available HTML Classes:</Text>
+                      <Text size="1" color="gray" style={{ fontFamily: 'monospace' }}>
+                        {validation.htmlClasses.join(', ') || 'None found'}
+                      </Text>
+                    </Box>
+                    
+                    <Box mt="2">
+                      <Text size="1" weight="medium">CSS Classes:</Text>
+                      <Text size="1" color="gray" style={{ fontFamily: 'monospace' }}>
+                        {validation.cssSelectors.join(', ') || 'None found'}
+                      </Text>
+                    </Box>
+                  </Box>
+                );
+              })()}
+            </Tabs.Content>
+          </Tabs.Root>
+        </Box>
       )}
 
       <Grid columns="1" gap="3">
@@ -289,6 +651,7 @@ const TemplateCard = ({ template, eventData, artistData = null, allArtists = [] 
                   }}
                 />
               )}
+
 
               <Box style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                 {!isReady ? (

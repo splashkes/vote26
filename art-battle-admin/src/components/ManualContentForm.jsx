@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Dialog, 
   Flex, 
@@ -12,10 +12,11 @@ import {
   Badge,
   IconButton
 } from '@radix-ui/themes';
-import { Cross2Icon, PlusIcon, TrashIcon } from '@radix-ui/react-icons';
+import { Cross2Icon, PlusIcon, TrashIcon, UploadIcon, ImageIcon } from '@radix-ui/react-icons';
 import { supabase } from '../lib/supabase';
+import { getCloudflareConfig } from '../lib/cloudflare';
 
-const ManualContentForm = ({ isOpen, onClose, onSuccess }) => {
+const ManualContentForm = ({ isOpen, onClose, onSuccess, editingItem = null }) => {
   const [formData, setFormData] = useState({
     content_type: 'announcement',
     title: '',
@@ -36,26 +37,55 @@ const ManualContentForm = ({ isOpen, onClose, onSuccess }) => {
   const [newMoodTag, setNewMoodTag] = useState('');
   const [newImageUrl, setNewImageUrl] = useState('');
   const [newThumbnailUrl, setNewThumbnailUrl] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [cloudflareConfig, setCloudflareConfig] = useState(null);
 
-  // Reset form when modal opens
-  useState(() => {
+  // Load Cloudflare config when modal opens
+  useEffect(() => {
     if (isOpen) {
-      setFormData({
-        content_type: 'announcement',
-        title: '',
-        description: '',
-        image_url: '',
-        image_urls: [],
-        thumbnail_url: '',
-        thumbnail_urls: [],
-        video_url: '',
-        tags: [],
-        mood_tags: [],
-        available_until: ''
-      });
-      setError(null);
+      loadCloudflareConfig();
     }
   }, [isOpen]);
+
+  // Reset/populate form when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      if (editingItem) {
+        // Populate form with existing data for editing
+        setFormData({
+          content_type: editingItem.content_type || 'announcement',
+          title: editingItem.title || '',
+          description: editingItem.description || '',
+          image_url: editingItem.image_url || '',
+          image_urls: editingItem.image_urls || [],
+          thumbnail_url: editingItem.thumbnail_url || '',
+          thumbnail_urls: editingItem.thumbnail_urls || [],
+          video_url: editingItem.video_url || '',
+          tags: editingItem.tags || [],
+          mood_tags: editingItem.mood_tags || [],
+          available_until: editingItem.available_until ? editingItem.available_until.replace('Z', '').slice(0, -3) : ''
+        });
+        console.log('Editing item content_type:', editingItem.content_type);
+      } else {
+        // Reset form for new content
+        setFormData({
+          content_type: 'announcement',
+          title: '',
+          description: '',
+          image_url: '',
+          image_urls: [],
+          thumbnail_url: '',
+          thumbnail_urls: [],
+          video_url: '',
+          tags: [],
+          mood_tags: [],
+          available_until: ''
+        });
+      }
+      setError(null);
+    }
+  }, [isOpen, editingItem]);
 
   // Handle form field changes
   const handleFieldChange = (field, value) => {
@@ -131,6 +161,163 @@ const ManualContentForm = ({ isOpen, onClose, onSuccess }) => {
     }));
   };
 
+  // Load Cloudflare configuration
+  const loadCloudflareConfig = async () => {
+    try {
+      const config = await getCloudflareConfig();
+      if (!config) {
+        console.warn('Image upload not available - missing configuration');
+        return;
+      }
+      setCloudflareConfig(config);
+    } catch (err) {
+      console.error('Error loading Cloudflare config:', err);
+    }
+  };
+
+  // Resize image before upload (adapted from SampleWorksUpload)
+  const resizeImage = (file, maxWidth = 1200, maxHeight = 1200, quality = 0.8) => {
+    return new Promise((resolve, reject) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        img.onload = () => {
+          // Calculate new dimensions
+          let { width, height } = img;
+          
+          if (width > height) {
+            if (width > maxWidth) {
+              height = (height * maxWidth) / width;
+              width = maxWidth;
+            }
+          } else {
+            if (height > maxHeight) {
+              width = (width * maxHeight) / height;
+              height = maxHeight;
+            }
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          
+          // Draw and resize
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          canvas.toBlob((blob) => {
+            if (blob) {
+              resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+            } else {
+              reject(new Error('Failed to resize image'));
+            }
+          }, 'image/jpeg', quality);
+        };
+        img.onerror = () => reject(new Error('Failed to load image'));
+        img.src = e.target.result;
+      };
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Handle file upload to Cloudflare
+  const handleImageUpload = async (file) => {
+    if (!cloudflareConfig) {
+      throw new Error('Image upload not available - missing configuration');
+    }
+
+    setUploading(true);
+    setUploadProgress(0);
+    setError('');
+
+    try {
+      // Resize image before upload
+      setUploadProgress(20);
+      const resizedFile = await resizeImage(file);
+      
+      setUploadProgress(40);
+
+      // Get user session for auth
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('No active session');
+      }
+
+      setUploadProgress(60);
+
+      // Upload to Cloudflare Worker
+      const formData = new FormData();
+      formData.append('file', resizedFile);
+
+      const workerUrl = 'https://art-battle-image-upload-production.simon-867.workers.dev';
+      const uploadResponse = await fetch(workerUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'X-Upload-Source': 'admin_manual_content'
+        },
+        body: formData
+      });
+
+      if (!uploadResponse.ok) {
+        const error = await uploadResponse.text();
+        throw new Error(`Upload failed: ${error}`);
+      }
+
+      const uploadResult = await uploadResponse.json();
+      setUploadProgress(100);
+
+      // Return the Cloudflare image URL
+      const imageUrl = `${cloudflareConfig.deliveryUrl}/${uploadResult.id}/public`;
+      return imageUrl;
+
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      throw error;
+    } finally {
+      setUploading(false);
+      setUploadProgress(0);
+    }
+  };
+
+  // Handle file input change
+  const handleFileInputChange = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setError('Please select an image file');
+      return;
+    }
+
+    // Validate file size (5MB limit)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Image must be smaller than 5MB');
+      return;
+    }
+
+    try {
+      const imageUrl = await handleImageUpload(file);
+      
+      // Add to image URLs list
+      setFormData(prev => ({
+        ...prev,
+        image_urls: [...prev.image_urls, imageUrl],
+        image_url: prev.image_url || imageUrl // Set as primary if none exists
+      }));
+      
+      setError('');
+    } catch (error) {
+      setError(`Upload failed: ${error.message}`);
+    }
+
+    // Clear the file input
+    event.target.value = '';
+  };
+
   // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -152,10 +339,15 @@ const ManualContentForm = ({ isOpen, onClose, onSuccess }) => {
         available_until: formData.available_until || null
       };
 
-      const { data, error } = await supabase.functions.invoke('admin-content-library', {
-        method: 'POST',
-        body: submissionData
-      });
+      const { data, error } = editingItem 
+        ? await supabase.functions.invoke(`admin-content-library/${editingItem.id}`, {
+            method: 'PUT',
+            body: submissionData
+          })
+        : await supabase.functions.invoke('admin-content-library', {
+            method: 'POST',
+            body: submissionData
+          });
 
       if (error) throw error;
 
@@ -178,7 +370,12 @@ const ManualContentForm = ({ isOpen, onClose, onSuccess }) => {
     { value: 'news', label: 'News' },
     { value: 'featured', label: 'Featured Content' },
     { value: 'tutorial', label: 'Tutorial' },
-    { value: 'community', label: 'Community Highlight' }
+    { value: 'community', label: 'Community Highlight' },
+    // Add existing database types for editing
+    { value: 'artist_application', label: 'Artist Application (System)' },
+    { value: 'artist_spotlight', label: 'Artist Spotlight (System)' },
+    { value: 'event', label: 'Event (System)' },
+    { value: 'artwork', label: 'Artwork (System)' }
   ];
 
   if (!isOpen) return null;
@@ -186,9 +383,9 @@ const ManualContentForm = ({ isOpen, onClose, onSuccess }) => {
   return (
     <Dialog.Root open={isOpen} onOpenChange={onClose}>
       <Dialog.Content style={{ maxWidth: '600px', maxHeight: '80vh' }}>
-        <Dialog.Title>Add Manual Content</Dialog.Title>
+        <Dialog.Title>{editingItem ? 'Edit Content' : 'Add Manual Content'}</Dialog.Title>
         <Dialog.Description size="2" mb="4">
-          Create custom content for the curated feed
+          {editingItem ? 'Edit existing content in the curated feed' : 'Create custom content for the curated feed'}
         </Dialog.Description>
 
         <form onSubmit={handleSubmit}>
@@ -202,7 +399,7 @@ const ManualContentForm = ({ isOpen, onClose, onSuccess }) => {
                 value={formData.content_type}
                 onValueChange={(value) => handleFieldChange('content_type', value)}
               >
-                <Select.Trigger />
+                <Select.Trigger placeholder="Select content type..." />
                 <Select.Content>
                   {contentTypes.map(type => (
                     <Select.Item key={type.value} value={type.value}>
@@ -250,6 +447,39 @@ const ManualContentForm = ({ isOpen, onClose, onSuccess }) => {
                 placeholder="https://example.com/image.jpg"
                 type="url"
               />
+              {formData.image_url && (
+                <Box mt="2" style={{ position: 'relative', display: 'inline-block' }}>
+                  <img 
+                    src={formData.image_url} 
+                    alt="Main image preview"
+                    style={{ 
+                      width: '150px', 
+                      height: '100px', 
+                      objectFit: 'cover',
+                      border: '1px solid var(--gray-6)',
+                      borderRadius: '6px'
+                    }}
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      e.target.nextSibling.style.display = 'block';
+                    }}
+                  />
+                  <Box style={{ 
+                    display: 'none',
+                    width: '150px', 
+                    height: '100px', 
+                    backgroundColor: 'var(--gray-3)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '12px',
+                    color: 'var(--gray-9)',
+                    border: '1px solid var(--gray-6)',
+                    borderRadius: '6px'
+                  }}>
+                    Invalid image URL
+                  </Box>
+                </Box>
+              )}
             </Box>
 
             {/* Additional Image URLs */}
@@ -269,23 +499,117 @@ const ManualContentForm = ({ isOpen, onClose, onSuccess }) => {
                   <PlusIcon />
                 </Button>
               </Flex>
-              {formData.image_urls.length > 0 && (
-                <Flex gap="2" wrap="wrap">
-                  {formData.image_urls.map((url, index) => (
-                    <Badge key={index} variant="soft">
-                      Image {index + 1}
-                      <Button
-                        type="button"
-                        size="1"
-                        variant="ghost"
-                        onClick={() => removeImageUrl(url)}
-                        style={{ marginLeft: '4px' }}
-                      >
-                        <TrashIcon />
-                      </Button>
-                    </Badge>
-                  ))}
+              
+              {/* Image Upload */}
+              <Box mb="2">
+                <Text size="1" color="gray" mb="1" style={{ display: 'block' }}>
+                  Or upload image file:
+                </Text>
+                <Flex gap="2" align="center">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileInputChange}
+                    disabled={uploading}
+                    style={{ display: 'none' }}
+                    id="image-upload-input"
+                  />
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    disabled={uploading || !cloudflareConfig}
+                    onClick={() => document.getElementById('image-upload-input').click()}
+                  >
+                    <UploadIcon />
+                    {uploading ? 'Uploading...' : 'Upload Image'}
+                  </Button>
+                  {uploading && (
+                    <Text size="1" color="gray">
+                      {uploadProgress}%
+                    </Text>
+                  )}
+                  {!cloudflareConfig && (
+                    <Text size="1" color="red">
+                      Upload unavailable
+                    </Text>
+                  )}
                 </Flex>
+              </Box>
+              {formData.image_urls.length > 0 && (
+                <Box>
+                  <Text size="1" color="gray" mb="2" style={{ display: 'block' }}>
+                    Current Images (click trash to remove):
+                  </Text>
+                  <Flex gap="3" wrap="wrap">
+                    {formData.image_urls.map((url, index) => (
+                      <Box key={index} style={{ position: 'relative', border: '1px solid var(--gray-6)', borderRadius: '8px', overflow: 'hidden' }}>
+                        <img 
+                          src={url} 
+                          alt={`Image ${index + 1}`}
+                          style={{ 
+                            width: '120px', 
+                            height: '80px', 
+                            objectFit: 'cover',
+                            display: 'block'
+                          }}
+                          onError={(e) => {
+                            // Fallback to thumbnail URL if main image fails
+                            if (formData.thumbnail_urls && formData.thumbnail_urls[index]) {
+                              e.target.src = formData.thumbnail_urls[index];
+                            } else {
+                              // Show placeholder if image fails to load
+                              e.target.style.display = 'none';
+                              e.target.nextSibling.style.display = 'flex';
+                            }
+                          }}
+                        />
+                        <Box style={{ 
+                          display: 'none',
+                          width: '120px', 
+                          height: '80px', 
+                          backgroundColor: 'var(--gray-3)',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '12px',
+                          color: 'var(--gray-9)'
+                        }}>
+                          Image {index + 1}
+                        </Box>
+                        <IconButton
+                          type="button"
+                          size="1"
+                          variant="solid"
+                          color="red"
+                          onClick={() => removeImageUrl(url)}
+                          style={{ 
+                            position: 'absolute', 
+                            top: '4px', 
+                            right: '4px',
+                            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                            color: 'red'
+                          }}
+                        >
+                          <TrashIcon />
+                        </IconButton>
+                        <Text size="1" style={{ 
+                          position: 'absolute',
+                          bottom: '0',
+                          left: '0',
+                          right: '0',
+                          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                          color: 'white',
+                          padding: '2px 4px',
+                          fontSize: '10px',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap'
+                        }}>
+                          {url.split('/').pop()?.substring(0, 20) || `Image ${index + 1}`}
+                        </Text>
+                      </Box>
+                    ))}
+                  </Flex>
+                </Box>
               )}
             </Box>
 
@@ -405,7 +729,7 @@ const ManualContentForm = ({ isOpen, onClose, onSuccess }) => {
                 </Button>
               </Dialog.Close>
               <Button type="submit" loading={loading}>
-                Create Content
+                {editingItem ? 'Update Content' : 'Create Content'}
               </Button>
             </Flex>
           </Flex>

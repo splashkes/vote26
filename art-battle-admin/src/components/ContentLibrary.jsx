@@ -23,7 +23,9 @@ import {
   StarIcon,
   TrashIcon,
   DotsVerticalIcon,
-  FileTextIcon
+  FileTextIcon,
+  CaretUpIcon,
+  CaretDownIcon
 } from '@radix-ui/react-icons';
 import { supabase } from '../lib/supabase';
 import ContentStatsModal from './ContentStatsModal';
@@ -48,6 +50,12 @@ const ContentLibrary = () => {
     curator_type: ''
   });
 
+  // Sorting state
+  const [sortConfig, setSortConfig] = useState({
+    key: 'created_at',
+    direction: 'desc'
+  });
+
   // Selection state
   const [selectedItems, setSelectedItems] = useState(new Set());
 
@@ -56,6 +64,7 @@ const ContentLibrary = () => {
   const [selectedContentId, setSelectedContentId] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
 
   // Load content data
   const loadContent = async () => {
@@ -66,14 +75,13 @@ const ContentLibrary = () => {
       const params = new URLSearchParams({
         page: pagination.page.toString(),
         limit: pagination.limit.toString(),
+        sort_by: sortConfig.key,
+        sort_direction: sortConfig.direction,
         ...Object.fromEntries(Object.entries(filters).filter(([_, v]) => v))
       });
 
-      const { data, error } = await supabase.functions.invoke('admin-content-library', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json'
-        }
+      const { data, error } = await supabase.functions.invoke(`admin-content-library?${params.toString()}`, {
+        method: 'GET'
       });
 
       if (error) throw error;
@@ -92,10 +100,10 @@ const ContentLibrary = () => {
     }
   };
 
-  // Initial load and when filters/pagination change
+  // Initial load and when filters/pagination/sorting change
   useEffect(() => {
     loadContent();
-  }, [filters, pagination.page]);
+  }, [filters, pagination.page, sortConfig]);
 
   // Handle filter changes
   const handleFilterChange = (key, value) => {
@@ -106,6 +114,15 @@ const ContentLibrary = () => {
   // Handle pagination
   const handlePageChange = (newPage) => {
     setPagination(prev => ({ ...prev, page: newPage }));
+  };
+
+  // Handle sorting
+  const handleSort = (key) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc'
+    }));
+    setPagination(prev => ({ ...prev, page: 1 })); // Reset to page 1
   };
 
   // Handle item selection
@@ -323,12 +340,74 @@ const ContentLibrary = () => {
                 onCheckedChange={handleSelectAll}
               />
             </Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>Content</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>Type</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>Status</Table.ColumnHeaderCell>
+            <Table.ColumnHeaderCell 
+              style={{ cursor: 'pointer', userSelect: 'none' }}
+              onClick={() => handleSort('title')}
+            >
+              <Flex align="center" gap="1">
+                Content
+                {sortConfig.key === 'title' && (
+                  sortConfig.direction === 'asc' ? <CaretUpIcon /> : <CaretDownIcon />
+                )}
+              </Flex>
+            </Table.ColumnHeaderCell>
+            <Table.ColumnHeaderCell 
+              style={{ cursor: 'pointer', userSelect: 'none' }}
+              onClick={() => handleSort('content_type')}
+            >
+              <Flex align="center" gap="1">
+                Type
+                {sortConfig.key === 'content_type' && (
+                  sortConfig.direction === 'asc' ? <CaretUpIcon /> : <CaretDownIcon />
+                )}
+              </Flex>
+            </Table.ColumnHeaderCell>
+            <Table.ColumnHeaderCell 
+              style={{ cursor: 'pointer', userSelect: 'none' }}
+              onClick={() => handleSort('status')}
+            >
+              <Flex align="center" gap="1">
+                Status
+                {sortConfig.key === 'status' && (
+                  sortConfig.direction === 'asc' ? <CaretUpIcon /> : <CaretDownIcon />
+                )}
+              </Flex>
+            </Table.ColumnHeaderCell>
             <Table.ColumnHeaderCell>Curator</Table.ColumnHeaderCell>
             <Table.ColumnHeaderCell>Scores</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>Created</Table.ColumnHeaderCell>
+            <Table.ColumnHeaderCell 
+              style={{ cursor: 'pointer', userSelect: 'none' }}
+              onClick={() => handleSort('total_views')}
+            >
+              <Flex align="center" gap="1">
+                Views (30d)
+                {sortConfig.key === 'total_views' && (
+                  sortConfig.direction === 'asc' ? <CaretUpIcon /> : <CaretDownIcon />
+                )}
+              </Flex>
+            </Table.ColumnHeaderCell>
+            <Table.ColumnHeaderCell 
+              style={{ cursor: 'pointer', userSelect: 'none' }}
+              onClick={() => handleSort('avg_dwell_time')}
+            >
+              <Flex align="center" gap="1">
+                Avg Dwell (ms)
+                {sortConfig.key === 'avg_dwell_time' && (
+                  sortConfig.direction === 'asc' ? <CaretUpIcon /> : <CaretDownIcon />
+                )}
+              </Flex>
+            </Table.ColumnHeaderCell>
+            <Table.ColumnHeaderCell 
+              style={{ cursor: 'pointer', userSelect: 'none' }}
+              onClick={() => handleSort('created_at')}
+            >
+              <Flex align="center" gap="1">
+                Created
+                {sortConfig.key === 'created_at' && (
+                  sortConfig.direction === 'asc' ? <CaretUpIcon /> : <CaretDownIcon />
+                )}
+              </Flex>
+            </Table.ColumnHeaderCell>
             <Table.ColumnHeaderCell>Actions</Table.ColumnHeaderCell>
           </Table.Row>
         </Table.Header>
@@ -388,6 +467,17 @@ const ContentLibrary = () => {
                 </Flex>
               </Table.Cell>
               <Table.Cell>
+                <Text size="1">
+                  {item.calculated_total_views !== undefined ? item.calculated_total_views : '-'}
+                </Text>
+              </Table.Cell>
+              <Table.Cell>
+                <Text size="1">
+                  {item.calculated_avg_dwell_time !== undefined ? 
+                    `${(item.calculated_avg_dwell_time / 1000).toFixed(1)}s` : '-'}
+                </Text>
+              </Table.Cell>
+              <Table.Cell>
                 <Text size="1">{formatDate(item.created_at)}</Text>
               </Table.Cell>
               <Table.Cell>
@@ -397,7 +487,7 @@ const ContentLibrary = () => {
                       size="1"
                       variant="ghost"
                       onClick={() => {
-                        setSelectedContentId(item.content_id);
+                        setSelectedContentId(item);
                         setShowStatsModal(true);
                       }}
                     >
@@ -453,17 +543,22 @@ const ContentLibrary = () => {
           setShowStatsModal(false);
           setSelectedContentId(null);
         }}
-        contentId={selectedContentId}
+        contentItem={selectedContentId}
       />
 
-      {/* Create Content Modal */}
+      {/* Create/Edit Content Modal */}
       <ManualContentForm
         isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
+        onClose={() => {
+          setShowCreateModal(false);
+          setEditingItem(null);
+        }}
         onSuccess={() => {
           setShowCreateModal(false);
+          setEditingItem(null);
           loadContent();
         }}
+        editingItem={editingItem}
       />
 
       {/* Delete Confirmation Dialog */}

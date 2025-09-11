@@ -93,26 +93,61 @@ serve(async (req) => {
 
     // If content_id is provided, get detailed stats for that specific content
     if (contentId) {
+      // Extract UUID from content_id
+      const uuidMatch = contentId.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+      const uuid = uuidMatch ? uuidMatch[0] : contentId;
+      
+      // Get analytics data for this content
+      const { data: analyticsData, error: analyticsError } = await supabase
+        .from('app_content_analytics')
+        .select('*')
+        .eq('content_id', uuid)
+        .single();
+
+      if (analyticsError && analyticsError.code !== 'PGRST116') { // PGRST116 = not found
+        throw analyticsError;
+      }
+
+      // If no analytics data found, return zero stats
+      if (!analyticsData) {
+        const emptyStats: ContentStats = {
+          content_id: contentId,
+          total_views: 0,
+          unique_sessions: 0,
+          avg_dwell_time_ms: 0,
+          avg_viewport_percentage: 0,
+          avg_video_watch_percentage: 0,
+          total_actions: 0,
+          swipe_velocity_avg: 0,
+          exit_actions: {},
+          engagement_by_day: []
+        };
+
+        return new Response(JSON.stringify({
+          success: true,
+          data: emptyStats
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Get detailed engagement data for additional metrics
       const { data: engagementData, error: engagementError } = await supabase
         .from('app_engagement_events')
         .select('*')
-        .eq('content_id', contentId)
+        .or(`content_id.eq.${uuid},content_id.eq.${contentId},content_id.eq.event-${contentId}`)
         .gte('timestamp', new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000).toISOString());
 
       if (engagementError) {
         throw engagementError;
       }
 
-      // Calculate statistics
-      const totalViews = engagementData.length;
+      // Use analytics data as primary source, supplement with engagement data for detailed metrics
+      const totalViews = analyticsData.total_views || engagementData.length;
       const uniqueSessions = new Set(engagementData.map(e => e.session_id)).size;
       
-      const dwellTimes = engagementData
-        .filter(e => e.dwell_time_ms !== null && e.dwell_time_ms > 0)
-        .map(e => e.dwell_time_ms);
-      const avgDwellTime = dwellTimes.length > 0 
-        ? dwellTimes.reduce((a, b) => a + b, 0) / dwellTimes.length 
-        : 0;
+      // Use analytics avg_dwell_time_ms as primary source
+      const avgDwellTime = analyticsData.avg_dwell_time_ms || 0;
 
       const viewportPercentages = engagementData
         .filter(e => e.viewport_percentage !== null)

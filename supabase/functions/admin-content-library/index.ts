@@ -3,7 +3,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS'
 };
 
 interface ContentFilters {
@@ -92,6 +93,8 @@ serve(async (req) => {
       const page = parseInt(url.searchParams.get('page') || '1');
       const limit = parseInt(url.searchParams.get('limit') || '20');
       const offset = (page - 1) * limit;
+      const sortBy = url.searchParams.get('sort_by') || 'created_at';
+      const sortDirection = url.searchParams.get('sort_direction') || 'desc';
 
       const filters: ContentFilters = {
         content_type: url.searchParams.get('content_type') || undefined,
@@ -103,12 +106,17 @@ serve(async (req) => {
         curator_type: url.searchParams.get('curator_type') || undefined
       };
 
+      // Build the select query including cached stats
+      let selectFields = `
+        *,
+        curator:people(name, email),
+        cached_total_views,
+        cached_avg_dwell_time_ms
+      `;
+
       let query = supabase
         .from('app_curated_content')
-        .select(`
-          *,
-          curator:people(name, email)
-        `, { count: 'exact' });
+        .select(selectFields, { count: 'exact' });
 
       // Apply filters
       if (filters.content_type) {
@@ -133,9 +141,20 @@ serve(async (req) => {
         query = query.or('image_url.not.is.null,image_urls.not.is.null');
       }
 
-      // Apply pagination and ordering
+      // Handle database-level sorting for all fields including stats
+      const ascending = sortDirection === 'asc';
+      let sortColumn = sortBy;
+      
+      // Map sort fields to actual database columns
+      if (sortBy === 'total_views') {
+        sortColumn = 'cached_total_views';
+      } else if (sortBy === 'avg_dwell_time') {
+        sortColumn = 'cached_avg_dwell_time_ms';
+      }
+      
+      // Apply sorting and pagination at database level
       query = query
-        .order('created_at', { ascending: false })
+        .order(sortColumn, { ascending })
         .range(offset, offset + limit - 1);
 
       const { data: content, error: contentError, count } = await query;
@@ -144,15 +163,53 @@ serve(async (req) => {
         throw contentError;
       }
 
+      // Add calculated stats fields from cached database columns
+      let finalContent = (content || []).map(item => ({
+        ...item,
+        calculated_total_views: item.cached_total_views || 0,
+        calculated_avg_dwell_time: item.cached_avg_dwell_time_ms || 0,
+        calculated_total_likes: 0,
+        calculated_total_shares: 0,
+        calculated_total_saves: 0
+      }));
+
       return new Response(JSON.stringify({
         success: true,
-        data: content,
+        data: finalContent,
         pagination: {
           page,
           limit,
           total: count || 0,
           total_pages: Math.ceil((count || 0) / limit)
-        }
+        },
+        debug: (() => {
+          try {
+            return {
+              timestamp: new Date().toISOString(),
+              function_name: 'admin-content-library',
+              content_count: finalContent.length,
+              has_content: finalContent.length > 0,
+              extracted_uuids: finalContent.map(item => {
+                const uuidMatch = item.content_id.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+                return { 
+                  content_id: item.content_id, 
+                  extracted_uuid: uuidMatch ? uuidMatch[0] : null,
+                  has_calculated_views: item.calculated_total_views !== undefined
+                };
+              }),
+              stats_fields_present: finalContent.length > 0 ? {
+                first_item_has_calculated_views: finalContent[0].calculated_total_views !== undefined,
+                first_item_has_calculated_dwell: finalContent[0].calculated_avg_dwell_time !== undefined
+              } : null
+            };
+          } catch (debugError) {
+            return {
+              debug_error: debugError.message,
+              timestamp: new Date().toISOString(),
+              function_name: 'admin-content-library'
+            };
+          }
+        })()
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
@@ -186,8 +243,8 @@ serve(async (req) => {
         });
       }
 
-      // Generate unique content_id
-      const content_id = `manual-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      // Generate unique UUID for content_id (compatible with analytics table)
+      const content_id = crypto.randomUUID();
 
       const { data: newContent, error: createError } = await supabase
         .from('app_curated_content')

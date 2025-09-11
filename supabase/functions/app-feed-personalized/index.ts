@@ -25,7 +25,7 @@ serve(async (req) => {
       exclude_ids = [], 
       count = 20, 
       context = 'default',
-      content_types = ['artwork', 'event', 'artist_spotlight', 'artist_application'] 
+      content_types = ['artwork', 'event', 'artist_spotlight', 'artist_application', 'announcement'] 
     } = await req.json()
 
     // Validate session_id
