@@ -376,9 +376,15 @@ const ContentLibrary = () => {
               </Table.Cell>
               <Table.Cell>
                 <Flex direction="column" gap="1">
-                  <Text size="1">E: {item.engagement_score?.toFixed(1) || '0.0'}</Text>
-                  <Text size="1">T: {item.trending_score?.toFixed(1) || '0.0'}</Text>
-                  <Text size="1">Q: {item.quality_score?.toFixed(1) || '0.0'}</Text>
+                  <Tooltip content="Engagement Score: User interaction rate (0-10)">
+                    <Text size="1">E: {item.engagement_score?.toFixed(1) || '0.0'}</Text>
+                  </Tooltip>
+                  <Tooltip content="Trending Score: Feed priority ranking (0-10, higher = top of feed)">
+                    <Text size="1">T: {item.trending_score?.toFixed(1) || '0.0'}</Text>
+                  </Tooltip>
+                  <Tooltip content="Quality Score: Content quality assessment (0-10)">
+                    <Text size="1">Q: {item.quality_score?.toFixed(1) || '0.0'}</Text>
+                  </Tooltip>
                 </Flex>
               </Table.Cell>
               <Table.Cell>
@@ -396,6 +402,18 @@ const ContentLibrary = () => {
                       }}
                     >
                       <BarChartIcon />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip content="Edit Content">
+                    <IconButton
+                      size="1"
+                      variant="ghost"
+                      onClick={() => {
+                        setEditingItem(item);
+                        setShowCreateModal(true);
+                      }}
+                    >
+                      <FileTextIcon />
                     </IconButton>
                   </Tooltip>
                 </Flex>

@@ -32,7 +32,12 @@ const ContentStatsModal = ({ isOpen, onClose, contentId }) => {
       setLoading(true);
       setError(null);
 
-      const { data, error } = await supabase.functions.invoke('admin-content-stats', {
+      const params = new URLSearchParams({
+        content_id: contentId,
+        days_back: daysBack.toString()
+      });
+
+      const { data, error } = await supabase.functions.invoke(`admin-content-stats?${params}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'
