@@ -1,0 +1,77 @@
+/* Art Battle Promo Materials - Custom Styles */
+
+.app {
+  min-height: 100vh;
+  background: var(--color-background);
+}
+
+/* Card hover effects */
+.rt-Card:hover {
+  transform: translateY(-2px);
+  transition: all 0.2s ease;
+}
+
+/* Loading states */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+}
+
+/* Preview tiles */
+.preview-tile {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-2);
+}
+
+.preview-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Download buttons */
+.download-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+/* Template badges */
+.template-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .rt-Container {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  
+  .rt-Grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Custom animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in-up {
+  animation: fadeInUp 0.6s ease-out;
+}

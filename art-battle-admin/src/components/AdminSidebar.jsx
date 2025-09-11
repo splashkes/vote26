@@ -22,7 +22,8 @@ import {
   ChevronRightIcon,
   EnvelopeClosedIcon,
   PaperPlaneIcon,
-  ChatBubbleIcon
+  ChatBubbleIcon,
+  FileTextIcon
 } from '@radix-ui/react-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -86,6 +87,13 @@ const AdminSidebar = ({ collapsed = false, onToggleCollapse, hideToggleAndSignOu
       icon: BarChartIcon,
       label: 'Bulk Artist View',
       description: 'Bulk management of artist bios and promo images',
+      color: 'purple'
+    },
+    {
+      to: '/content',
+      icon: FileTextIcon,
+      label: 'Content',
+      description: 'Manage curated feed content and analytics',
       color: 'purple'
     },
     {

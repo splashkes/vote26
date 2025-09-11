@@ -71,7 +71,7 @@
    684419e9-642e-4062-9b64-7558350e6680 | test-basic-smtp                      | test-basic-smtp                      | ACTIVE | 11      | 2025-09-08 03:23:38 
    e643f4e7-6de9-4bd0-ada1-4fe0806e2efb | send-custom-email                    | send-custom-email                    | ACTIVE | 11      | 2025-09-08 03:23:20 
    0910c90f-4d2c-4149-8c8c-f219b006eda2 | admin-delete-user                    | admin-delete-user                    | ACTIVE | 14      | 2025-08-27 13:41:31 
-   eaf7644c-8d53-4cd6-85da-8c71836c32a6 | admin-set-password                   | admin-set-password                   | ACTIVE | 17      | 2025-09-08 03:23:32 
+   eaf7644c-8d53-4cd6-85da-8c71836c32a6 | admin-set-password                   | admin-set-password                   | ACTIVE | 18      | 2025-09-10 19:17:15 
    253f6c34-a73c-403e-9084-f977d245f16c | phone-data-analysis                  | phone-data-analysis                  | ACTIVE | 12      | 2025-08-26 15:35:18 
    b0bb1bed-74eb-45a7-916f-8a7a63aa0a9b | fix-artist-phones                    | fix-artist-phones                    | ACTIVE | 13      | 2025-08-26 15:51:46 
    86716d7c-00ff-4b1c-9984-027d2b512a8b | email-queue-manager                  | email-queue-manager                  | ACTIVE | 14      | 2025-08-26 20:16:17 
@@ -96,10 +96,15 @@
    3c8d4154-e22b-4f78-ad0b-aa1cd730cfcb | admin-artwork-ai-analysis            | admin-artwork-ai-analysis            | ACTIVE | 6       | 2025-09-03 01:40:15 
    a08dc564-4b78-4cac-9b9e-c397a6425a5e | artist-get-my-profile                | artist-get-my-profile                | ACTIVE | 7       | 2025-09-08 03:23:07 
    4927b290-8901-4f50-90cd-d28b6aadb2a4 | admin-security-monitor               | admin-security-monitor               | ACTIVE | 7       | 2025-09-08 03:23:27 
-   aab080f7-1d6e-4d3e-9321-c0756c8cba02 | app-feed-personalized                | app-feed-personalized                | ACTIVE | 7       | 2025-09-05 19:45:55 
+   aab080f7-1d6e-4d3e-9321-c0756c8cba02 | app-feed-personalized                | app-feed-personalized                | ACTIVE | 9       | 2025-09-10 16:02:28 
    ec96fc8d-0869-461d-8bd0-45950c28a64b | app-analytics-batch                  | app-analytics-batch                  | ACTIVE | 7       | 2025-09-05 16:51:20 
    4688984f-b661-4cf6-882b-fc2d28da10d4 | app-analytics-batch-simple           | app-analytics-batch-simple           | ACTIVE | 5       | 2025-09-05 16:54:28 
-   60979215-0dd7-4509-9b6c-0ebbf2699b46 | app-content-curator                  | app-content-curator                  | ACTIVE | 9       | 2025-09-05 19:20:28 
-   6bfaeb27-0f73-4f06-acbf-bbb8dc54396e | custom-access-token                  | custom-access-token                  | ACTIVE | 9       | 2025-09-08 00:35:16 
+   60979215-0dd7-4509-9b6c-0ebbf2699b46 | app-content-curator                  | app-content-curator                  | ACTIVE | 22      | 2025-09-10 19:17:36 
+   6bfaeb27-0f73-4f06-acbf-bbb8dc54396e | custom-access-token                  | custom-access-token                  | ACTIVE | 10      | 2025-09-09 14:35:15 
    1a92190d-aafe-4808-8d40-2f879f9ac7f8 | timer-data                           | timer-data                           | ACTIVE | 9       | 2025-09-09 02:19:10 
+   b29204f1-445f-4618-9e4e-fa8886078760 | wp-artists-export                    | wp-artists-export                    | ACTIVE | 10      | 2025-09-11 15:06:28 
+   c818f00b-60b6-44d5-a496-d8733c333045 | admin-content-stats                  | admin-content-stats                  | ACTIVE | 2       | 2025-09-11 15:07:46 
+   380b5261-d4fa-4ae9-8fed-5abc37ae013f | admin-content-actions                | admin-content-actions                | ACTIVE | 2       | 2025-09-11 15:07:46 
+   f6364321-cf68-494c-9df1-be39baf239ab | admin-content-library                | admin-content-library                | ACTIVE | 2       | 2025-09-11 15:07:46 
+   4ffb8b20-3bdf-428a-b800-44ca93cf36a0 | promo-materials-data                 | promo-materials-data                 | ACTIVE | 5       | 2025-09-11 15:28:27 
 

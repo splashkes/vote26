@@ -25,7 +25,7 @@ serve(async (req) => {
       exclude_ids = [], 
       count = 20, 
       context = 'default',
-      content_types = ['artwork', 'event', 'artist_spotlight'] 
+      content_types = ['artwork', 'event', 'artist_spotlight', 'artist_application'] 
     } = await req.json()
 
     // Validate session_id
@@ -98,6 +98,8 @@ serve(async (req) => {
         image_url,
         video_url,
         thumbnail_url,
+        image_urls,
+        thumbnail_urls,
         tags,
         color_palette,
         mood_tags,
@@ -131,6 +133,65 @@ serve(async (req) => {
     }
 
     if (!availableContent || availableContent.length === 0) {
+      return new Response(JSON.stringify({
+        session_id,
+        items: [],
+        algorithm: { version: '1.0.0', message: 'No available content' }
+      }), {
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      })
+    }
+
+    // Filter out poor performing content based on dwell time (bottom 20% with 5+ reports)
+    const { data: dwellStats } = await supabase
+      .from('app_engagement_events')
+      .select(`
+        content_id,
+        dwell_time_ms
+      `)
+      .in('content_id', availableContent.map(item => item.content_id))
+      .not('dwell_time_ms', 'is', null)
+      .gt('dwell_time_ms', 0)
+
+    const contentDwellMap = new Map()
+    
+    if (dwellStats) {
+      // Group dwell times by content_id
+      for (const stat of dwellStats) {
+        if (!contentDwellMap.has(stat.content_id)) {
+          contentDwellMap.set(stat.content_id, [])
+        }
+        contentDwellMap.get(stat.content_id).push(stat.dwell_time_ms)
+      }
+
+      // Calculate average dwell times and identify bottom 20%
+      const contentPerformance = []
+      for (const [contentId, dwellTimes] of contentDwellMap.entries()) {
+        if (dwellTimes.length >= 5) { // Only filter content with 5+ dwell reports
+          const avgDwellTime = dwellTimes.reduce((a, b) => a + b, 0) / dwellTimes.length
+          contentPerformance.push({ contentId, avgDwellTime, reportCount: dwellTimes.length })
+        }
+      }
+
+      if (contentPerformance.length > 0) {
+        // Sort by average dwell time and identify bottom 20%
+        contentPerformance.sort((a, b) => a.avgDwellTime - b.avgDwellTime)
+        const bottom20PercentCount = Math.ceil(contentPerformance.length * 0.2)
+        const poorPerformingIds = contentPerformance
+          .slice(0, bottom20PercentCount)
+          .map(item => item.contentId)
+
+        // Filter out poor performing content
+        const filteredContent = availableContent.filter(item => 
+          !poorPerformingIds.includes(item.content_id)
+        )
+        
+        console.log(`Dwell filter: removed ${availableContent.length - filteredContent.length} poor performers`)
+        availableContent.splice(0, availableContent.length, ...filteredContent)
+      }
+    }
+
+    if (availableContent.length === 0) {
       return new Response(JSON.stringify({
         session_id,
         items: [],
@@ -222,7 +283,13 @@ serve(async (req) => {
     // }
 
     // For testing: just take the top scored items without diversity filtering
-    const diversifiedContent = scoredContent.slice(0, count)
+    let diversifiedContent = scoredContent.slice(0, count)
+
+    // Randomize the final output order
+    for (let i = diversifiedContent.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [diversifiedContent[i], diversifiedContent[j]] = [diversifiedContent[j], diversifiedContent[i]]
+    }
 
     // Format response items
     const responseItems = diversifiedContent.slice(0, count).map((item, index) => ({
@@ -234,9 +301,13 @@ serve(async (req) => {
       data: {
         title: item.title,
         description: item.description,
+        // Backwards compatibility (required)
         imageUrl: item.image_url,
         videoUrl: item.video_url,
         thumbnailUrl: item.thumbnail_url,
+        // NEW: Multiple images support
+        imageUrls: item.image_urls || (item.image_url ? [item.image_url] : []),
+        thumbnailUrls: item.thumbnail_urls || (item.thumbnail_url ? [item.thumbnail_url] : []),
         tags: item.tags || [],
         colorPalette: item.color_palette || [],
         moodTags: item.mood_tags || [],

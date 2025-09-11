@@ -20,6 +20,7 @@ import EmailQueueDashboard from './components/EmailQueueDashboard';
 import EmailQueueManager from './components/EmailQueueManager';
 import PromotionSystem from './components/PromotionSystem';
 import BulkArtistView from './components/BulkArtistView';
+import ContentLibrary from './components/ContentLibrary';
 import Welcome from './components/Welcome';
 import './App.css';
 
@@ -50,6 +51,7 @@ function App() {
                 <Route path="events/:eventId/live" element={<LiveMonitor />} />
                 <Route path="artists" element={<ArtistsManagement />} />
                 <Route path="artists/bulk-management" element={<BulkArtistView />} />
+                <Route path="content" element={<ContentLibrary />} />
                 <Route path="people" element={<PeopleManagement />} />
                 <Route path="health" element={<HealthRecommendations />} />
                 <Route path="admin-users" element={<AdminUsers />} />

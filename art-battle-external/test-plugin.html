@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Art Battle Artists Display - Demo</title>
+    <link rel="stylesheet" href="wordpress-plugin/assets/styles.css">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 20px; background: #f5f5f5;">
+    
+    <h1>Art Battle Artists Display Plugin Demo</h1>
+    
+    <h2>Plugin Complete! ✅</h2>
+    
+    <div style="background: #e8f5e8; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #4caf50;">
+        <h3>✅ Edge Function Deployed & Working</h3>
+        <p><strong>Endpoint:</strong> <code>https://xsqdkubgyqwpyvfltnrf.supabase.co/functions/v1/wp-artists-export</code></p>
+        <p><strong>Test URL:</strong> <a href="https://xsqdkubgyqwpyvfltnrf.supabase.co/functions/v1/wp-artists-export?event=AB3053" target="_blank">View AB3053 Artists JSON</a></p>
+        <p><strong>Features:</strong> ✅ 3-hour caching, ✅ Proper HTTPS image URLs, ✅ Rich artist data</p>
+    </div>
+
+    <div style="background: #e3f2fd; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #2196f3;">
+        <h3>✅ WordPress Plugin Created</h3>
+        <p><strong>Location:</strong> <code>/root/vote_app/vote26/art-battle-external/wordpress-plugin/</code></p>
+        <p><strong>Usage:</strong> <code>[art-battle-artists event="AB3333"]</code></p>
+        <p><strong>Features:</strong></p>
+        <ul>
+            <li>✅ Shortcode support with multiple options</li>
+            <li>✅ 3-hour WordPress transient caching</li>
+            <li>✅ Grid and list layout options</li>
+            <li>✅ Responsive design (desktop, tablet, mobile)</li>
+            <li>✅ Admin settings page</li>
+            <li>✅ Error handling and fallbacks</li>
+            <li>✅ Artist photos, bios, and social links</li>
+        </ul>
+    </div>
+
+    <h2>Sample Output Preview</h2>
+    <p>Here's how the plugin would render artists from event AB3053:</p>
+
+    <!-- Simulated plugin output -->
+    <div class="ab-artists-container">
+        <div class="ab-event-header">
+            <h3>Art Battle Wilmington</h3>
+            <p class="ab-event-venue">📍 The Queen</p>
+            <p class="ab-event-date">📅 Saturday, September 6, 2025</p>
+            <p class="ab-artist-count">13 confirmed artists</p>
+        </div>
+
+        <div class="ab-artists-grid">
+            <!-- Sample artist with image -->
+            <div class="ab-artist-card">
+                <div class="ab-artist-image">
+                    <img src="https://imagedelivery.net/IGZfH_Pl-6S6csykNnXNJw/artist-c1637a6c-ea73-46f2-a5d9-cbb1b84c2ca0-1755837378705/thumbnail" alt="Crystal Baynard Norman" loading="lazy" />
+                </div>
+                <div class="ab-artist-content">
+                    <h4 class="ab-artist-name">Crystal Baynard Norman</h4>
+                    <div class="ab-artist-bio">I am inspired by life, and I enjoy painting. I create as I feel<br>I live in Wilmington, graduated from Delcastle was in commercial<br>art. I also went to the Art Institute Of Philadelphia.<br>My style is from my favorite Artist Salvadore Dali and I like add ons<br>and working in 3D.</div>
+                    <div class="ab-artist-social">
+                        <a href="https://instagram.com/SeparatingRealities" target="_blank" rel="noopener">📷 Instagram</a> • 
+                        <a href="https://therealitize.com" target="_blank" rel="noopener">🌐 Website</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sample artist without image -->
+            <div class="ab-artist-card">
+                <div class="ab-artist-content">
+                    <h4 class="ab-artist-name">Helen Ounjian</h4>
+                    <div class="ab-artist-bio">Helen Ounjian is a 2D artist based in Newark, predominantly working with acrylics, ink, pencil, and digital formats. Her artistic journey is influenced by a variety of sources, including the works of unconventional creatives, compelling narratives, music, and the guiding presence of the Holy Spirit.</div>
+                    <div class="ab-artist-social">
+                        <a href="https://instagram.com/this.helen" target="_blank" rel="noopener">📷 Instagram</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sample artist minimal info -->
+            <div class="ab-artist-card">
+                <div class="ab-artist-content">
+                    <h4 class="ab-artist-name">Jo Redbird</h4>
+                    <div class="ab-artist-bio">Jo creates bright, powerful paintings inspired by nature, travel, and motherhood. She enjoys working on large canvases and painting live to music.</div>
+                    <div class="ab-artist-social">
+                        <a href="https://instagram.com/jo_redbird" target="_blank" rel="noopener">📷 Instagram</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="ab-artists-footer">
+            <p class="ab-generated-time">Updated: Sep 10, 2025 2:56 PM</p>
+        </div>
+    </div>
+
+    <h2>Installation Instructions</h2>
+    <div style="background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #ddd;">
+        <h3>For WordPress Installation:</h3>
+        <ol>
+            <li>Copy the <code>art-battle-external/wordpress-plugin/</code> folder to your WordPress <code>/wp-content/plugins/</code> directory</li>
+            <li>Rename the folder to <code>art-battle-artists-display</code></li>
+            <li>Activate the plugin in WordPress admin under Plugins</li>
+            <li>Use the shortcode <code>[art-battle-artists event="AB3333"]</code> in any post or page</li>
+        </ol>
+
+        <h3>Shortcode Examples:</h3>
+        <ul>
+            <li><code>[art-battle-artists event="AB3053"]</code> - Basic grid layout</li>
+            <li><code>[art-battle-artists event="AB2900" layout="list"]</code> - List layout</li>
+            <li><code>[art-battle-artists event="AB3026" show_images="no"]</code> - No images</li>
+            <li><code>[art-battle-artists event="AB3053" layout="list" show_bios="no"]</code> - List without bios</li>
+        </ul>
+    </div>
+
+    <h2>🎉 Implementation Complete!</h2>
+    <p>Both the Supabase edge function and WordPress plugin are fully implemented and ready to use.</p>
+
+</body>
+</html>

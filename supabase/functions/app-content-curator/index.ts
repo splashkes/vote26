@@ -29,16 +29,18 @@ serve(async (req) => {
       fetchUpcomingEvents(supabase),
       fetchHighValueEvents(supabase),
       fetchConfirmedArtists(supabase),
+      fetchArtistApplications(supabase),
       fetchWinningPaintings(supabase)
     ])
 
-    const [upcomingEvents, highValueEvents, confirmedArtists, winningPaintings] = contentSources
+    const [upcomingEvents, highValueEvents, confirmedArtists, artistApplications, winningPaintings] = contentSources
 
     // Combine all content
     const allContent = [
       ...upcomingEvents,
       ...highValueEvents,
       ...confirmedArtists,
+      ...artistApplications,
       ...winningPaintings
     ]
 
@@ -74,6 +76,7 @@ serve(async (req) => {
         upcoming_events: upcomingEvents.length,
         high_value_events: highValueEvents.length,
         confirmed_artists: confirmedArtists.length,
+        artist_applications: artistApplications.length,
         winning_paintings: winningPaintings.length
       },
       debug: debugInfo
@@ -105,28 +108,101 @@ async function fetchUpcomingEvents(supabase) {
     .order('event_start_datetime', { ascending: true })
     .limit(10)
 
-  // Get fallback images from confirmed artists' sample works
-  // TODO: Replace this with proper event imagery in the future
-  const { data: sampleWorks } = await supabase
+  // Get artwork images from these specific upcoming events
+  const { data: eventArtworkImages } = await supabase
+    .from('art')
+    .select(`
+      event_id,
+      art_media(
+        display_order,
+        media_files(
+          original_url, compressed_url, thumbnail_url
+        )
+      )
+    `)
+    .in('event_id', events?.map(e => e.id) || [])
+    .not('art_media', 'is', null)
+    .order('event_id, art_media.display_order')
+    .limit(100)
+
+  // Get confirmed artists for these events as fallback images
+  const { data: eventArtists } = await supabase
     .from('artist_confirmations')
-    .select('promotion_artwork_url')
+    .select(`
+      event_eid,
+      promotion_artwork_url,
+      artist_profiles!artist_profile_id(sample_works_urls)
+    `)
+    .in('event_eid', events?.map(e => e.eid) || [])
     .eq('confirmation_status', 'confirmed')
     .is('withdrawn_at', null)
-    .not('promotion_artwork_url', 'is', null)
-    .limit(20)
 
-  const fallbackImages = sampleWorks?.map(sw => sw.promotion_artwork_url).filter(Boolean) || []
+  return events?.map((event, index) => {
+    // Get artwork images for this specific event
+    const eventArtworks = eventArtworkImages?.filter(a => a.event_id === event.id) || []
+    
+    // Build image arrays from artworks first
+    const imageUrls = []
+    const thumbnailUrls = []
+    
+    eventArtworks.forEach(artwork => {
+      if (artwork.art_media) {
+        artwork.art_media.forEach(media => {
+          if (media.media_files) {
+            const imageUrl = media.media_files.compressed_url || media.media_files.original_url
+            const thumbnailUrl = media.media_files.thumbnail_url || imageUrl
+            
+            if (imageUrl && imageUrls.length < 4) {
+              imageUrls.push(imageUrl)
+              thumbnailUrls.push(thumbnailUrl)
+            }
+          }
+        })
+      }
+    })
 
-  return events?.map((event, index) => ({
-    content_id: `event-${event.id}`,
-    content_type: 'event',
-    title: event.name,
-    description: event.description,
-    // TODO: Replace with proper event images when available
-    image_url: fallbackImages[index % fallbackImages.length] || null,
-    video_url: null,
-    thumbnail_url: fallbackImages[index % fallbackImages.length] || null,
-    tags: ['upcoming', 'event', 'art-battle'],
+    // If no artwork images, use confirmed artists' images for this event
+    if (imageUrls.length === 0) {
+      const confirmedArtistsForEvent = eventArtists?.filter(ea => ea.event_eid === event.eid) || []
+      
+      confirmedArtistsForEvent.forEach(artist => {
+        // Add promotion artwork first
+        if (artist.promotion_artwork_url && imageUrls.length < 4) {
+          imageUrls.push(artist.promotion_artwork_url)
+          thumbnailUrls.push(artist.promotion_artwork_url)
+        }
+        
+        // Add sample works
+        if (artist.artist_profiles?.sample_works_urls && imageUrls.length < 4) {
+          const remainingSlots = 4 - imageUrls.length
+          const sampleWorks = artist.artist_profiles.sample_works_urls.slice(0, remainingSlots)
+          imageUrls.push(...sampleWorks)
+          thumbnailUrls.push(...sampleWorks)
+        }
+      })
+    }
+    
+    // Skip events with no images
+    if (imageUrls.length === 0) {
+      return null
+    }
+    
+    // Primary image for backwards compatibility
+    const primaryImage = imageUrls[0]
+    
+    return {
+      content_id: `event-${event.id}`,
+      content_type: 'event',
+      title: event.name,
+      description: event.description,
+      // Backwards compatibility (required)
+      image_url: primaryImage,
+      thumbnail_url: primaryImage,
+      video_url: null,
+      // NEW: Multiple images support
+      image_urls: imageUrls,
+      thumbnail_urls: thumbnailUrls,
+      tags: ['upcoming', 'event', 'art-battle'],
     color_palette: [],
     mood_tags: ['competitive', 'live'],
     engagement_score: 1.0,
@@ -146,71 +222,60 @@ async function fetchUpcomingEvents(supabase) {
     available_until: event.event_start_datetime,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
-  })) || []
+    }
+  }).filter(Boolean) || [] // Remove null entries (events with no images)
 }
 
-// 2. Last 10 events with $500+ in top bids (sum of highest bid per artwork)
+// 2. High-value event recaps with latest artwork images
 async function fetchHighValueEvents(supabase) {
-  const { data: eventBids } = await supabase.rpc('get_events_with_high_auction_value', {
-    min_total_value: 500,
+  const { data: eventRecaps } = await supabase.rpc('get_high_value_event_recap', {
+    min_value: 500,
     limit_count: 10
   })
 
-  if (!eventBids) return []
+  if (!eventRecaps || eventRecaps.length === 0) return []
 
-  const eventIds = eventBids.map(eb => eb.event_id)
-  
-  const { data: events } = await supabase
-    .from('events')
-    .select(`
-      id, eid, name, description, venue, event_start_datetime,
-      countries!country_id(currency_code, currency_symbol)
-    `)
-    .in('id', eventIds)
-    .order('event_start_datetime', { ascending: false })
-
-  // Get fallback images from high-value artworks from these events
-  // TODO: Replace with proper event imagery in the future
-  const { data: artworkImages } = await supabase
-    .from('art')
-    .select(`
-      id,
-      art_media!inner(
-        media_files!inner(
-          original_url
-        )
-      )
-    `)
-    .in('event_id', eventIds)
-    .limit(20)
-
-  const fallbackImages = artworkImages?.map(a => a.art_media?.[0]?.media_files?.original_url).filter(Boolean) || []
-
-  return events?.map((event, index) => {
-    const bidData = eventBids.find(eb => eb.event_id === event.id)
+  return eventRecaps.map(recap => {
+    // Extract image URLs from the latest_images JSONB
+    const imageUrls = recap.latest_images?.map(img => img.image_url).slice(0, 5) || []
+    const thumbnailUrls = recap.latest_images?.map(img => img.thumbnail_url).slice(0, 5) || []
+    
+    // Skip events with no images
+    if (imageUrls.length === 0) {
+      return null
+    }
+    
+    // Primary image for backwards compatibility
+    const primaryImage = imageUrls[0]
+    const primaryThumbnail = thumbnailUrls[0]
+    
     return {
-      content_id: `high-value-event-${event.id}`,
+      content_id: `event-recap-${recap.event_id}`,
       content_type: 'event',
-      title: `${event.name} - High Value Auction`,
-      description: `${event.description || 'Art Battle event'} - Total auction value: $${bidData?.total_value || 0}`,
-      // TODO: Replace with proper event images when available
-      image_url: fallbackImages[index % fallbackImages.length] || null,
+      title: `${recap.event_name} - Event Recap`,
+      description: `Art Battle event recap with $${recap.total_value} in total auction value from ${recap.artwork_count} artworks`,
+      // Backwards compatibility (required)
+      image_url: primaryImage,
+      thumbnail_url: primaryThumbnail,
       video_url: null,
-      thumbnail_url: fallbackImages[index % fallbackImages.length] || null,
-      tags: ['high-value', 'auction', 'completed', 'event'],
+      // NEW: Multiple images support
+      image_urls: imageUrls,
+      thumbnail_urls: thumbnailUrls,
+      tags: ['event-recap', 'completed', 'high-value', 'artwork'],
       color_palette: [],
-      mood_tags: ['competitive', 'valuable', 'exciting'],
+      mood_tags: ['accomplished', 'valuable', 'artistic'],
       engagement_score: 0.9,
       trending_score: 0.8,
       quality_score: 0.9,
       data: {
-        event_id: event.id,
-        eid: event.eid,
-        venue: event.venue,
-        start_datetime: event.event_start_datetime,
-        total_auction_value: bidData?.total_value || 0,
-        currency_code: event.countries?.currency_code || 'USD',
-        currency_symbol: event.countries?.currency_symbol || '$'
+        event_id: recap.event_id,
+        eid: recap.event_eid,
+        venue: recap.event_venue,
+        start_datetime: recap.event_date,
+        total_auction_value: recap.total_value,
+        artwork_count: recap.artwork_count,
+        currency_code: recap.currency_code,
+        currency_symbol: recap.currency_symbol
       },
       status: 'active',
       curator_type: 'automated',
@@ -219,7 +284,7 @@ async function fetchHighValueEvents(supabase) {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }
-  }) || []
+  }).filter(Boolean) || [] // Remove null entries
 }
 
 // 3. Last 50 confirmed artists with cities/events/sample works
@@ -256,15 +321,48 @@ async function fetchConfirmedArtists(supabase) {
     const profile = artistProfiles.data?.find(p => p.id === confirmation.artist_profile_id)
     const event = events.data?.find(e => e.eid === confirmation.event_eid)
     
+    // Build multiple images from sample works and promotion artwork
+    const imageUrls = []
+    const thumbnailUrls = []
+    
+    // Add promotion artwork first (if available)
+    if (confirmation.promotion_artwork_url) {
+      imageUrls.push(confirmation.promotion_artwork_url)
+      thumbnailUrls.push(confirmation.promotion_artwork_url)
+    }
+    
+    // Add sample works (up to 4 additional to make max 5 total)
+    if (profile?.sample_works_urls) {
+      const remainingSlots = 5 - imageUrls.length
+      const additionalSamples = profile.sample_works_urls.slice(0, remainingSlots)
+      imageUrls.push(...additionalSamples)
+      thumbnailUrls.push(...additionalSamples)
+    }
+    
+    // Limit to max 10 images per app spec
+    const finalImageUrls = imageUrls.slice(0, 10)
+    const finalThumbnailUrls = thumbnailUrls.slice(0, 10)
+    
+    // Skip artists with no images
+    if (finalImageUrls.length === 0) {
+      return null
+    }
+    
+    // Primary image for backwards compatibility
+    const primaryImage = finalImageUrls[0]
+    
     return {
       content_id: `confirmed-artist-${confirmation.artist_profile_id || confirmation.artist_number}`,
       content_type: 'artist_spotlight',
       title: confirmation.legal_name || profile?.name || `Artist #${confirmation.artist_number}`,
       description: profile?.bio || confirmation.public_message || 'Featured Art Battle artist',
-      // Ensure we have image URLs from promotion artwork or sample works
-      image_url: confirmation.promotion_artwork_url || profile?.sample_works_urls?.[0] || null,
+      // Backwards compatibility (required)
+      image_url: primaryImage,
+      thumbnail_url: primaryImage,
       video_url: null,
-      thumbnail_url: confirmation.promotion_artwork_url || profile?.sample_works_urls?.[0] || null,
+      // NEW: Multiple images support
+      image_urls: finalImageUrls,
+      thumbnail_urls: finalThumbnailUrls,
       tags: ['confirmed', 'artist', 'spotlight'],
       color_palette: [],
       mood_tags: ['artistic', 'talented', 'featured'],
@@ -291,10 +389,100 @@ async function fetchConfirmedArtists(supabase) {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }
-  })
+  }).filter(Boolean) // Remove null entries (artists with no images)
 }
 
-// 4. Winning paintings from last 20 events
+// 4. Artist applications (using unified sample works, excluding confirmed by artist_number+event_eid)
+async function fetchArtistApplications(supabase) {
+  // Use RPC to get applications with unified sample works filtering and confirmation exclusion
+  const { data: applications } = await supabase.rpc('get_artist_applications_for_feed', {
+    days_back: 7,
+    limit_count: 25
+  })
+
+  if (!applications || applications.length === 0) return []
+
+  // Get additional profile and event data
+  const profileIds = applications.map(app => app.artist_profile_id)
+  const eventIds = applications.map(app => app.event_id).filter(Boolean)
+
+  const [profilesResult, eventsResult] = await Promise.all([
+    supabase
+      .from('artist_profiles')
+      .select('id, name, city_text, instagram, website, bio')
+      .in('id', profileIds),
+    
+    eventIds.length > 0 ? supabase
+      .from('events')
+      .select('id, eid, name, venue, event_start_datetime')
+      .in('id', eventIds) : Promise.resolve({ data: [] })
+  ])
+
+  const profilesMap = new Map(profilesResult.data?.map(p => [p.id, p]) || [])
+  const eventsMap = new Map(eventsResult.data?.map(e => [e.id, e]) || [])
+
+  return applications.map(app => {
+    const profile = profilesMap.get(app.artist_profile_id)
+    const event = eventsMap.get(app.event_id)
+    
+    if (!profile) return null
+
+    // Get sample works from the RPC result
+    const imageUrls = app.sample_works?.map(work => work.image_url).slice(0, 5) || []
+    const thumbnailUrls = imageUrls // Same URLs for thumbnails
+    
+    // Skip applications with no images
+    if (imageUrls.length === 0) {
+      return null
+    }
+    
+    // Primary image for backwards compatibility
+    const primaryImage = imageUrls[0]
+    
+    return {
+      content_id: `artist-application-${profile.id}`,
+      content_type: 'artist_application',
+      title: profile.name,
+      description: `Applied Artist - ${profile.bio || 'Talented artist seeking to compete'}`,
+      // Backwards compatibility (required)
+      image_url: primaryImage,
+      thumbnail_url: primaryImage,
+      video_url: null,
+      // NEW: Multiple images support
+      image_urls: imageUrls,
+      thumbnail_urls: thumbnailUrls,
+      tags: ['artist', 'application', 'pending', 'emerging'],
+      color_palette: [],
+      mood_tags: ['aspiring', 'emerging', 'hopeful'],
+      engagement_score: 0.6,
+      trending_score: 0.5,
+      quality_score: 0.6,
+      data: {
+        artist_id: profile.id,
+        artist_number: app.artist_number,
+        entry_id: profile.entry_id,
+        city: profile.city_text || 'Unknown',
+        event_eid: app.event_eid,
+        event_name: event?.name,
+        event_venue: event?.venue,
+        event_date: event?.event_start_datetime,
+        instagram: profile.instagram,
+        website: profile.website,
+        sample_works: imageUrls,
+        applied_date: app.applied_at,
+        application_status: 'pending'
+      },
+      status: 'active',
+      curator_type: 'automated',
+      curator_id: null,
+      available_until: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }
+  }).filter(Boolean) // Remove null entries
+}
+
+// 5. Winning paintings from last 20 events
 async function fetchWinningPaintings(supabase) {
   // Get recent events first
   const { data: recentEvents } = await supabase
@@ -344,16 +532,17 @@ async function fetchWinningPaintings(supabase) {
     }
   }
 
-  // Get media files for the matched winning artworks (any available, not just primary)
+  // Get ALL media files for the matched winning artworks (multiple images support)
   const artworkIds = artworkMatches.map(m => m.artwork.id)
-  const { data: mediaFiles } = await supabase
+  const { data: allMediaFiles } = await supabase
     .from('art_media')
     .select(`
       art_id,
+      display_order,
       media_files(original_url, thumbnail_url, compressed_url)
     `)
     .in('art_id', artworkIds)
-    .order('display_order', { ascending: true })
+    .order('art_id, display_order', { ascending: true })
 
   // Get fallback images from artist sample works for artworks without images
   const { data: artistSamples } = await supabase
@@ -365,22 +554,49 @@ async function fetchWinningPaintings(supabase) {
   return artworkMatches.slice(0, 10).map((match, index) => {
     const { winner, artwork } = match
     const event = recentEvents.find(e => e.id === winner.rounds?.event_id)
-    const media = mediaFiles?.find(m => m.art_id === artwork.id)
-    const mediaFile = media?.media_files
     
-    // Fallback to artist sample work if no artwork image
+    // Get ALL images for this artwork, ordered by display_order
+    const artworkMedia = allMediaFiles?.filter(m => m.art_id === artwork.id) || []
+    
+    // Helper function to get Cloudflare public URL
+    const getCloudflarePublicUrl = (originalUrl) => {
+      if (originalUrl && originalUrl.includes('imagedelivery.net')) {
+        return originalUrl.replace('/public', '/public') // Already has /public
+      }
+      return originalUrl
+    }
+    
+    // Build imageUrls and thumbnailUrls arrays
+    const imageUrls = artworkMedia
+      .map(media => getCloudflarePublicUrl(media.media_files?.compressed_url || media.media_files?.original_url))
+      .filter(Boolean)
+      .slice(0, 10) // Limit to 10 images per app spec
+      
+    const thumbnailUrls = artworkMedia
+      .map(media => media.media_files?.thumbnail_url)
+      .filter(Boolean)
+      .slice(0, 10)
+    
+    // Fallback to artist sample work if no artwork images
     const artistSample = artistSamples?.find(a => a.id === winner.artist_id)
     const fallbackImage = artistSample?.sample_works_urls?.[0] || null
+    
+    // Primary image for backwards compatibility
+    const primaryImage = imageUrls[0] || fallbackImage
+    const primaryThumbnail = thumbnailUrls[0] || fallbackImage
     
     return {
       content_id: `winning-artwork-${artwork.id}`,
       content_type: 'artwork',
       title: `${artwork?.artist_profiles?.name || 'Artist'} - Competition Winner`,
       description: artwork?.description || `Winning artwork from ${event?.name}`,
-      // Use artwork image or fallback to artist sample work
-      image_url: mediaFile?.compressed_url || mediaFile?.original_url || fallbackImage,
+      // Backwards compatibility (required)
+      image_url: primaryImage,
+      thumbnail_url: primaryThumbnail,
       video_url: null,
-      thumbnail_url: mediaFile?.thumbnail_url || mediaFile?.compressed_url || fallbackImage,
+      // NEW: Multiple images support
+      image_urls: imageUrls.length > 0 ? imageUrls : (fallbackImage ? [fallbackImage] : []),
+      thumbnail_urls: thumbnailUrls.length > 0 ? thumbnailUrls : (fallbackImage ? [fallbackImage] : []),
       tags: ['winner', 'competition', 'artwork', 'champion'],
       color_palette: [],
       mood_tags: ['victorious', 'artistic', 'competitive'],
