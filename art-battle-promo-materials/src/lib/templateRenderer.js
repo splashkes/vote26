@@ -143,37 +143,38 @@ export const createRenderRoot = (spec, variant, eventData, artistData = null, al
     
     // Check if we have a real image URL
     if (imageUrl) {
-      console.log('Using real image from unified sample works');
+      console.log('Using real image from unified sample works as IMG element for html-to-image compatibility');
       
-      // Check the domain to determine CORS compatibility
-      try {
-        const imageHost = new URL(imageUrl).hostname;
-        console.log('Image host:', imageHost);
-        
-        // Cloudflare imagedelivery.net and artbattle.com should work
-        const corsCompatible = [
-          'imagedelivery.net',
-          'artbattle.com'
-        ].some(domain => imageHost.includes(domain));
-        
-        if (corsCompatible) {
-          console.log('Image appears to be CORS-compatible, using directly');
-          underlay.style.background = `linear-gradient(45deg, rgba(220, 38, 127, 0.3), rgba(255, 107, 157, 0.3)), url(${imageUrl})`;
-        } else {
-          console.log('Image may have CORS issues, using with gradient overlay');
-          underlay.style.background = `linear-gradient(45deg, rgba(220, 38, 127, 0.6), rgba(255, 107, 157, 0.6)), url(${imageUrl})`;
-        }
-      } catch (error) {
-        console.warn('Error parsing image URL:', error);
-        underlay.style.background = `linear-gradient(45deg, rgba(220, 38, 127, 0.8), rgba(255, 107, 157, 0.8))`;
-      }
+      // Create an actual IMG element instead of CSS background for html-to-image compatibility
+      const bgImg = document.createElement('img');
+      bgImg.crossOrigin = 'anonymous';
+      bgImg.style.cssText = `
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: center;
+        z-index: 1;
+      `;
+      bgImg.src = imageUrl;
+      
+      // Add dark overlay on top of image
+      const overlay = document.createElement('div');
+      overlay.style.cssText = `
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(45deg, rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.2));
+        z-index: 2;
+      `;
+      
+      underlay.appendChild(bgImg);
+      underlay.appendChild(overlay);
+      console.log('Added IMG element and overlay for artist image');
     } else {
       console.log('No image URL available, using solid gradient');
       underlay.style.background = `linear-gradient(45deg, rgba(220, 38, 127, 0.8), rgba(255, 107, 157, 0.8))`;
     }
-    
-    underlay.style.backgroundSize = 'cover';
-    underlay.style.backgroundPosition = 'center';
     
     console.log('Underlay CSS applied:', underlay.style.cssText);
     container.appendChild(underlay);
@@ -189,7 +190,7 @@ export const createRenderRoot = (spec, variant, eventData, artistData = null, al
     textLayer.className = 'text-layer';
     textLayer.style.cssText = `
       position: relative;
-      z-index: 2;
+      z-index: 10;
       width: 100%;
       height: 100%;
     `;
@@ -320,16 +321,22 @@ export const exportToPNG = async (spec, variant, eventData, artistData = null, a
             container._styleElement.disabled = true;
           }
           
+          // Center the container on screen at actual pixel size
+          const centerX = (window.innerWidth - variantSpec.w) / 2;
+          const centerY = (window.innerHeight - variantSpec.h) / 2;
+          
           container.style.cssText = `
-            position: absolute !important;
-            top: 0px !important;
-            left: 0px !important;
+            position: fixed !important;
+            top: ${Math.max(0, centerY)}px !important;
+            left: ${Math.max(0, centerX)}px !important;
             width: ${variantSpec.w}px !important;
             height: ${variantSpec.h}px !important;
             background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%) !important;
             overflow: hidden !important;
             font-family: system-ui, -apple-system, sans-serif !important;
             z-index: 9999 !important;
+            border: 2px solid #fff !important;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important;
           `;
           
           // Force style recalculation
@@ -401,12 +408,8 @@ export const exportToPNG = async (spec, variant, eventData, artistData = null, a
           }
           document.body.removeChild(container);
           
-          // Trigger download
-          const filename = `${spec.name.replace(/\s+/g, '_')}_${variant}_${artistData?.display_name?.replace(/\s+/g, '_') || 'event'}.png`;
-          const link = document.createElement('a');
-          link.download = filename;
-          link.href = dataUrl;
-          link.click();
+          // Just return the data URL - no auto-download
+          console.log('PNG generation completed, ready for CF upload');
           
           console.log('PNG export completed successfully');
           resolve(dataUrl);
