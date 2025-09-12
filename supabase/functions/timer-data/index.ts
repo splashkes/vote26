@@ -62,10 +62,8 @@ serve(async (req) => {
     const eventName = event.name || ''
     const city = event.cities?.name || 'Unknown'
 
-    // Get rounds with closing times within 30 minutes
-    const thirtyMinutesFromNow = new Date(Date.now() + 30 * 60 * 1000)
-    
-    const { data: rounds, error: roundsError } = await supabase
+    // Get all rounds with closing times for history display
+    const { data: allRounds, error: roundsError } = await supabase
       .from('rounds')
       .select(`
         id,
@@ -79,8 +77,13 @@ serve(async (req) => {
       `)
       .eq('event_id', event.id)
       .not('closing_time', 'is', null)
-      .lt('closing_time', thirtyMinutesFromNow.toISOString())
-      .order('closing_time', { ascending: true })
+      .order('round_number', { ascending: true })
+      
+    // Filter active rounds (within 30 minutes) from all rounds
+    const thirtyMinutesFromNow = new Date(Date.now() + 30 * 60 * 1000)
+    const rounds = allRounds?.filter(round => 
+      new Date(round.closing_time).getTime() <= thirtyMinutesFromNow.getTime()
+    ) || []
 
     if (roundsError) {
       console.error('Rounds query error:', roundsError)
@@ -98,7 +101,7 @@ serve(async (req) => {
       )
     }
 
-    // Process rounds data
+    // Process rounds data (active rounds only)
     const processedRounds = rounds?.map(round => ({
       round: round.round_number,
       closing_time: round.closing_time,
@@ -107,6 +110,15 @@ serve(async (req) => {
         easel: contestant.easel_number,
         artist_name: 'Artist ' + (contestant.easel_number || 'TBD')
       })) || []
+    })) || []
+
+    // Process all rounds for history (includes past rounds)
+    const allProcessedRounds = allRounds?.map(round => ({
+      round: round.round_number,
+      closing_time: round.closing_time,
+      start_time: new Date(new Date(round.closing_time).getTime() - 20 * 60 * 1000).toISOString(), // 20 min before end
+      artists: round.round_contestants?.length || 0,
+      is_past: new Date(round.closing_time).getTime() < Date.now()
     })) || []
 
     // Find the active round (earliest closing time within 30 minutes)
@@ -149,6 +161,7 @@ serve(async (req) => {
         event_start: event.event_start_datetime
       },
       rounds: processedRounds,
+      all_rounds: allProcessedRounds,
       active_round: activeRound || null,
       auction_times: auctionTimes,
       timestamp: new Date().toISOString(),

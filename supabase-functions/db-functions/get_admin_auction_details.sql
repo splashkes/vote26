@@ -53,7 +53,6 @@
          'name', ap.name,                                                                                           +
          'entry_id', ap.entry_id                                                                                    +
        ),                                                                                                           +
-       'media', COALESCE(media_agg.media_array, '[]'::jsonb),                                                       +
        'payment_statuses', CASE                                                                                     +
          WHEN a.buyer_pay_recent_status_id IS NOT NULL THEN                                                         +
            jsonb_build_object(                                                                                      +
@@ -73,16 +72,6 @@
    LEFT JOIN LATERAL (                                                                                              +
      SELECT jsonb_agg(                                                                                              +
        jsonb_build_object(                                                                                          +
-         'id', m.id,                                                                                                +
-         'media_files', m.media_files                                                                               +
-       )                                                                                                            +
-     ) as media_array                                                                                               +
-     FROM media m                                                                                                   +
-     WHERE m.art_id = a.id                                                                                          +
-   ) media_agg ON true                                                                                              +
-   LEFT JOIN LATERAL (                                                                                              +
-     SELECT jsonb_agg(                                                                                              +
-       jsonb_build_object(                                                                                          +
          'art_id', pl.art_id,                                                                                       +
          'admin_phone', pl.admin_phone,                                                                             +
          'metadata', pl.metadata,                                                                                   +
@@ -97,8 +86,7 @@
      FROM payment_logs pl                                                                                           +
      WHERE pl.art_id = a.id                                                                                         +
    ) payment_agg ON true                                                                                            +
-   WHERE a.event_id = p_event_id                                                                                    +
-     AND a.status IN ('active', 'sold', 'paid', 'cancelled');                                                       +
+   WHERE a.event_id = p_event_id;                                                                                   +
                                                                                                                     +
    -- Get detailed bid information with FULL bidder details (bypasses RLS)                                          +
    SELECT jsonb_object_agg(                                                                                         +
@@ -115,18 +103,18 @@
        a.id as art_id,                                                                                              +
        COALESCE(MAX(b.amount), 0) as highest_bid,                                                                   +
        COUNT(b.id) as bid_count,                                                                                    +
-       -- Get highest bidder with FULL details                                                                      +
+       -- Get highest bidder with FULL details and comprehensive phone coalescing                                   +
        (                                                                                                            +
          SELECT jsonb_build_object(                                                                                 +
            'id', p.id,                                                                                              +
            'first_name', p.first_name,                                                                              +
            'last_name', p.last_name,                                                                                +
            'email', p.email,                                                                                        +
-           'phone_number', p.phone_number,                                                                          +
-           'auth_phone', p.auth_phone,                                                                              +
+           'phone_number', COALESCE(p.phone_number, p.phone, p.auth_phone),                                         +
+           'auth_phone', COALESCE(p.auth_phone, p.phone, p.phone_number),                                           +
+           'phone', COALESCE(p.phone, p.phone_number, p.auth_phone),                                                +
            'name', p.name,                                                                                          +
-           'nickname', p.nickname,                                                                                  +
-           'city_text', p.city_text                                                                                 +
+           'nickname', p.nickname                                                                                   +
          )                                                                                                          +
          FROM bids b2                                                                                               +
          JOIN people p ON b2.person_id = p.id                                                                       +
@@ -134,7 +122,7 @@
          ORDER BY b2.amount DESC, b2.created_at DESC                                                                +
          LIMIT 1                                                                                                    +
        ) as highest_bidder,                                                                                         +
-       -- Get bid history with FULL bidder details                                                                  +
+       -- Get bid history with FULL bidder details and comprehensive phone coalescing                               +
        (                                                                                                            +
          SELECT jsonb_agg(                                                                                          +
            jsonb_build_object(                                                                                      +
@@ -145,11 +133,11 @@
                'first_name', p3.first_name,                                                                         +
                'last_name', p3.last_name,                                                                           +
                'email', p3.email,                                                                                   +
-               'phone_number', p3.phone_number,                                                                     +
-               'auth_phone', p3.auth_phone,                                                                         +
+               'phone_number', COALESCE(p3.phone_number, p3.phone, p3.auth_phone),                                  +
+               'auth_phone', COALESCE(p3.auth_phone, p3.phone, p3.phone_number),                                    +
+               'phone', COALESCE(p3.phone, p3.phone_number, p3.auth_phone),                                         +
                'name', p3.name,                                                                                     +
-               'nickname', p3.nickname,                                                                             +
-               'city_text', p3.city_text                                                                            +
+               'nickname', p3.nickname                                                                              +
              )                                                                                                      +
            )                                                                                                        +
            ORDER BY b3.amount DESC, b3.created_at DESC                                                              +
@@ -161,7 +149,6 @@
      FROM art a                                                                                                     +
      LEFT JOIN bids b ON a.id = b.art_id                                                                            +
      WHERE a.event_id = p_event_id                                                                                  +
-       AND a.status IN ('active', 'sold', 'paid', 'cancelled')                                                      +
      GROUP BY a.id                                                                                                  +
    ) bid_summary;                                                                                                   +
                                                                                                                     +

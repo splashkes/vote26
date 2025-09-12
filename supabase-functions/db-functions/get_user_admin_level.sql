@@ -1,29 +1,19 @@
                                                                              pg_get_functiondef                                                                             
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- CREATE OR REPLACE FUNCTION public.get_user_admin_level(p_user_id uuid, p_phone text)                                                                                      +
+ CREATE OR REPLACE FUNCTION public.get_user_admin_level(p_event_id uuid, p_phone text)                                                                                     +
   RETURNS text                                                                                                                                                             +
   LANGUAGE plpgsql                                                                                                                                                         +
   SECURITY DEFINER                                                                                                                                                         +
  AS $function$                                                                                                                                                             +
- DECLARE                                                                                                                                                                   +
-   v_admin_level TEXT := 'none';                                                                                                                                           +
  BEGIN                                                                                                                                                                     +
-   -- Check if user is admin based on phone number                                                                                                                         +
-   SELECT                                                                                                                                                                  +
-     CASE                                                                                                                                                                  +
-       WHEN admin_level = 'super' THEN 'super'                                                                                                                             +
-       WHEN admin_level = 'producer' THEN 'producer'                                                                                                                       +
-       WHEN admin_level = 'photo' THEN 'photo'                                                                                                                             +
-       WHEN admin_level = 'voting' THEN 'voting'                                                                                                                           +
-       ELSE 'none'                                                                                                                                                         +
-     END                                                                                                                                                                   +
-   INTO v_admin_level                                                                                                                                                      +
-   FROM people                                                                                                                                                             +
-   WHERE (auth_phone = p_phone OR phone_number = p_phone)                                                                                                                  +
-   AND admin_level IS NOT NULL                                                                                                                                             +
-   LIMIT 1;                                                                                                                                                                +
-                                                                                                                                                                           +
-   RETURN COALESCE(v_admin_level, 'none');                                                                                                                                 +
+   -- Look up admin level in event_admins table, not people table                                                                                                          +
+   RETURN (                                                                                                                                                                +
+     SELECT admin_level                                                                                                                                                    +
+     FROM event_admins                                                                                                                                                     +
+     WHERE event_id = p_event_id                                                                                                                                           +
+     AND phone = p_phone                                                                                                                                                   +
+     LIMIT 1                                                                                                                                                               +
+   );                                                                                                                                                                      +
  END;                                                                                                                                                                      +
  $function$                                                                                                                                                                +
  

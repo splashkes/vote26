@@ -250,46 +250,29 @@ export const createRenderRoot = (spec, variant, eventData, artistData = null, al
     }, 100);
   }
   
-  // Apply CSS with light scoping
+  // Apply CSS - DIRECT INJECTION WITH MAXIMUM SPECIFICITY
   if (spec.css) {
-    console.log('=== CSS APPLICATION ===');
-    console.log('Original CSS:', spec.css);
+    console.log('=== INJECTING CSS DIRECTLY ===');
     
     const style = document.createElement('style');
-    let scopedCSS = spec.css;
+    style.id = `style-${renderId}`;
     
-    // FIXED APPROACH: Only replace class selectors at the start of rules AND add !important
-    scopedCSS = scopedCSS.replace(/(^|[,}]\s*)(\.[\w-]+)/g, `$1#${renderId} $2`);
+    // Create the most specific CSS possible - use attribute selector + ID + class
+    let maxSpecCSS = spec.css.replace(
+      /(^|[,}]\s*)(\.[\w-]+)/g, 
+      `$1#${renderId}$1#${renderId}[id="${renderId}"] $2`
+    );
     
-    // Add !important to CSS rules to override container defaults  
-    scopedCSS = scopedCSS.replace(/([^}]+{[^}]*)(;|})/g, (match, rule, ending) => {
+    // Force !important on everything
+    maxSpecCSS = maxSpecCSS.replace(/([^}]+{[^}]*)(;|})/g, (match, rule, ending) => {
       if (rule.includes('!important')) return match;
-      return rule.replace(/;/g, ' !important;') + ending;
+      return rule.replace(/([^;}]+);/g, '$1 !important;') + ending;
     });
     
-    // Add extra specificity by duplicating the container ID
-    scopedCSS = scopedCSS.replace(new RegExp(`#${renderId} \\.`, 'g'), `#${renderId}#${renderId} .`);
-    
-    // Also ensure the container styles work
-    scopedCSS = `
-      #${renderId} {
-        position: absolute !important;
-        top: -10000px !important;
-        left: -10000px !important;
-        width: ${variantSpec.w}px !important;
-        height: ${variantSpec.h}px !important;
-        overflow: hidden !important;
-        font-family: system-ui, -apple-system, sans-serif !important;
-      }
-      ${scopedCSS}
-    `;
-    
-    console.log('=== FINAL SCOPED CSS ===');
-    console.log(scopedCSS);
-    
-    style.textContent = scopedCSS;
+    style.textContent = maxSpecCSS;
     document.head.appendChild(style);
-    console.log('CSS style element added to head');
+    console.log('Direct CSS injection completed');
+    console.log('Applied CSS preview:', maxSpecCSS.substring(0, 150));
     
     // Store reference to clean up later
     container._styleElement = style;

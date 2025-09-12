@@ -24,6 +24,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import AuthModal from './AuthModal';
 import StripeConnectOnboarding from './StripeConnectOnboarding';
+import GlobalPaymentsOnboarding from './GlobalPaymentsOnboarding';
 
 const PaymentDashboard = () => {
   const { user, person, loading: authLoading } = useAuth();
@@ -37,17 +38,25 @@ const PaymentDashboard = () => {
     recentPayments: []
   });
   const [stripeAccount, setStripeAccount] = useState(null);
+  const [globalPaymentAccount, setGlobalPaymentAccount] = useState(null);
+  const [paymentSystem, setPaymentSystem] = useState('detect'); // 'connect', 'global', 'detect'
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (!authLoading && user && person) {
-      loadPaymentData();
-      loadStripeAccount();
+      Promise.all([loadPaymentData(), loadPaymentAccounts()]).finally(() => {
+        setLoading(false);
+      });
     } else if (!authLoading && !user) {
       setLoading(false);
     }
   }, [user, person, authLoading]);
+
+  // Detect payment system after accounts are loaded
+  useEffect(() => {
+    detectPaymentSystem();
+  }, [stripeAccount, globalPaymentAccount]);
 
   const loadPaymentData = async () => {
     try {
@@ -57,7 +66,6 @@ const PaymentDashboard = () => {
       if (error) {
         console.error('PaymentDashboard: Secure profile lookup failed:', error);
         setError(`Failed to get your profile: ${error.message || error}`);
-        setLoading(false);
         return;
       }
 
@@ -72,7 +80,6 @@ const PaymentDashboard = () => {
       } else {
         // No profiles found
         setError('No artist profiles found. Please create your profile first.');
-        setLoading(false);
         return;
       }
 
@@ -85,7 +92,6 @@ const PaymentDashboard = () => {
       if (artworkError) {
         console.error('Artwork query error:', artworkError);
         setError('Failed to load artwork data: ' + artworkError.message);
-        setLoading(false);
         return;
       }
       
@@ -114,7 +120,6 @@ const PaymentDashboard = () => {
       if (paymentError) {
         console.error('Payment query error:', paymentError);
         setError('Failed to load payment data: ' + paymentError.message);
-        setLoading(false);
         return;
       }
 
@@ -192,12 +197,10 @@ const PaymentDashboard = () => {
       });
     } catch (err) {
       setError('Failed to load payment data: ' + err.message);
-    } finally {
-      setLoading(false);
     }
   };
 
-  const loadStripeAccount = async () => {
+  const loadPaymentAccounts = async () => {
     try {
       // Get ALL artist profiles for this person
       const { data: allProfiles, error: profilesError } = await supabase
@@ -209,21 +212,51 @@ const PaymentDashboard = () => {
 
       const artistProfileIds = allProfiles.map(p => p.id);
 
+      // Load Stripe Connect accounts (legacy)
       const { data: stripeData, error: stripeError } = await supabase
         .from('artist_stripe_accounts')
         .select('*')
         .in('artist_profile_id', artistProfileIds);
 
       if (stripeError && stripeError.code !== 'PGRST116') {
-        console.error('Stripe account error:', stripeError);
-        return;
+        console.error('Stripe Connect account error:', stripeError);
+      } else {
+        setStripeAccount(stripeData && stripeData.length > 0 ? stripeData[0] : null);
       }
 
-      // Use the first Stripe account found, or null if none
-      setStripeAccount(stripeData && stripeData.length > 0 ? stripeData[0] : null);
+      // Load Global Payments accounts (new system)
+      const { data: globalData, error: globalError } = await supabase
+        .from('artist_global_payments')
+        .select('*')
+        .in('artist_profile_id', artistProfileIds);
+
+      if (globalError && globalError.code !== 'PGRST116') {
+        console.error('Global Payments account error:', globalError);
+      } else {
+        setGlobalPaymentAccount(globalData && globalData.length > 0 ? globalData[0] : null);
+      }
+
     } catch (err) {
-      console.error('Error loading Stripe account:', err);
+      console.error('Error loading payment accounts:', err);
     }
+  };
+
+  const detectPaymentSystem = () => {
+    // Simple auto-detection based on what accounts exist
+    // Priority: Global Payments > Connect > Default to Global for new users
+    if (globalPaymentAccount) {
+      setPaymentSystem('global');
+    } else if (stripeAccount) {
+      setPaymentSystem('connect');
+    } else {
+      // New users get Global Payments by default
+      setPaymentSystem('global');
+    }
+    console.log('🔧 Payment system detected:', {
+      globalPaymentAccount: !!globalPaymentAccount,
+      stripeAccount: !!stripeAccount,
+      selectedSystem: globalPaymentAccount ? 'global' : stripeAccount ? 'connect' : 'global'
+    });
   };
 
   const formatAmount = (amount, currency = 'USD') => {
@@ -404,11 +437,70 @@ const PaymentDashboard = () => {
         </Card>
       </Grid>
 
-      {/* Stripe Connect Onboarding */}
-      <StripeConnectOnboarding 
-        stripeAccount={stripeAccount} 
-        onAccountUpdate={loadStripeAccount}
-      />
+      {/* Payment System Switcher */}
+      {(stripeAccount && globalPaymentAccount) && (
+        <Card size="3">
+          <Flex direction="column" gap="3">
+            <Heading size="4">Payment System</Heading>
+            <Text size="2" color="gray">
+              You have both payment systems set up. Choose which one to use:
+            </Text>
+            <Flex gap="2">
+              <Button
+                variant={paymentSystem === 'connect' ? 'solid' : 'outline'}
+                onClick={() => setPaymentSystem('connect')}
+                size="2"
+              >
+                Stripe Connect (Legacy)
+              </Button>
+              <Button
+                variant={paymentSystem === 'global' ? 'solid' : 'outline'}
+                onClick={() => setPaymentSystem('global')}
+                size="2"
+                color="blue"
+              >
+                Global Payments (Recommended)
+              </Button>
+            </Flex>
+          </Flex>
+        </Card>
+      )}
+
+      {/* Migration Banner - Show to Connect users who haven't migrated */}
+      {paymentSystem === 'connect' && stripeAccount && !globalPaymentAccount && (
+        <Callout.Root color="blue">
+          <Callout.Icon>
+            <InfoCircledIcon />
+          </Callout.Icon>
+          <Callout.Text>
+            <Flex direction="column" gap="2">
+              <Text>
+                <strong>Upgrade to Global Payments:</strong> Faster setup, simpler onboarding, and direct payouts.
+              </Text>
+              <Button 
+                size="1" 
+                variant="soft" 
+                onClick={() => setPaymentSystem('global')}
+              >
+                Switch to Global Payments
+              </Button>
+            </Flex>
+          </Callout.Text>
+        </Callout.Root>
+      )}
+
+      {/* Payment System Onboarding */}
+      {paymentSystem === 'global' ? (
+        <GlobalPaymentsOnboarding 
+          globalPaymentAccount={globalPaymentAccount} 
+          onAccountUpdate={loadPaymentAccounts}
+        />
+      ) : (
+        <StripeConnectOnboarding 
+          stripeAccount={stripeAccount} 
+          onAccountUpdate={loadPaymentAccounts}
+        />
+      )}
 
       {/* Recent Payments */}
       {paymentData.recentPayments.length > 0 && (

@@ -49,6 +49,10 @@ import AdminPanel from './AdminPanel';
 // Import ArtUpload directly to avoid lazy loading issues
 import ArtUpload from './ArtUpload';
 
+// Import bidder info components
+import BidderInfoModal from './BidderInfoModal';
+import { isBuyerInfoMissing, getBuyerInfoStatus, extractUserPhone } from '../utils/buyerInfoHelpers';
+
 // Import ArtistsList component
 import ArtistsList from './ArtistsList';
 // Import PaymentButton for Stripe payments
@@ -77,6 +81,10 @@ const EventDetails = () => {
   const [bidSuccess, setBidSuccess] = useState(false);
   const [confirmVote, setConfirmVote] = useState(null);
   const [votingInProgress, setVotingInProgress] = useState(false);
+  
+  // Bidder info modal state
+  const [showBidderInfoModal, setShowBidderInfoModal] = useState(false);
+  const [bidderInfoModalData, setBidderInfoModalData] = useState(null);
   const [voteSuccess, setVoteSuccess] = useState(false);
   const [voteFactor, setVoteFactor] = useState(null);
   const [currentTime, setCurrentTime] = useState(Date.now());
@@ -776,8 +784,8 @@ const EventDetails = () => {
     
     // Find artwork where current user is winning bidder and needs to pay
     const winningArtwork = artworks.find(artwork => {
-      // Only check sold artworks (paid artworks are already handled)
-      if (artwork.status !== 'sold') {
+      // Check sold artworks or closed artworks with winners (for incorrectly marked items)
+      if (artwork.status !== 'sold' && !(artwork.status === 'closed' && artwork.winner_id)) {
         return false;
       }
       
@@ -1269,6 +1277,22 @@ const EventDetails = () => {
 
     const amount = bidAmounts[artId] || getMinimumBid(artId);
     
+    // Check if buyer info is missing - show modal if needed, but don't block bidding
+    const buyerInfoStatus = getBuyerInfoStatus(person);
+    if (buyerInfoStatus.isMissing) {
+      // Prepare data for the modal
+      setBidderInfoModalData({
+        artId,
+        amount,
+        artwork,
+        artistName: artwork?.artist_profiles?.name || 'Unknown Artist',
+        userPhone: extractUserPhone(user, person),
+        existingInfo: buyerInfoStatus.existingInfo
+      });
+      setShowBidderInfoModal(true);
+      return; // Show modal first, bid will continue after modal interaction
+    }
+    
     // Clear any previous errors and show confirmation dialog
     setBidError('');
     setConfirmBid({
@@ -1278,6 +1302,38 @@ const EventDetails = () => {
       artistName: artwork?.artist_profiles?.name || 'Unknown Artist',
       round: artwork?.round,
       easel: artwork?.easel
+    });
+  };
+
+  // Handle bidder info modal actions
+  const handleBidderInfoSuccess = (updatedInfo) => {
+    console.log('Bidder info updated:', updatedInfo);
+    // The person object will be updated on next auth refresh, but we can proceed with bidding
+    proceedWithBid();
+  };
+
+  const handleBidderInfoSkip = () => {
+    // User chose to skip, proceed with bidding anyway
+    proceedWithBid();
+  };
+
+  const proceedWithBid = () => {
+    if (!bidderInfoModalData) return;
+    
+    // Clear modal state
+    setShowBidderInfoModal(false);
+    const modalData = bidderInfoModalData;
+    setBidderInfoModalData(null);
+    
+    // Show bid confirmation dialog
+    setBidError('');
+    setConfirmBid({
+      artId: modalData.artId,
+      amount: modalData.amount,
+      artwork: modalData.artwork,
+      artistName: modalData.artistName,
+      round: modalData.artwork?.round,
+      easel: modalData.artwork?.easel
     });
   };
 
@@ -2796,6 +2852,17 @@ const EventDetails = () => {
 
       {/* iOS app spacing - bottom */}
       <Box style={{ height: '40px' }} />
+      
+      {/* Bidder Info Modal - for capturing buyer information when missing */}
+      {showBidderInfoModal && bidderInfoModalData && (
+        <BidderInfoModal
+          isOpen={showBidderInfoModal}
+          onClose={handleBidderInfoSkip}
+          onSuccess={handleBidderInfoSuccess}
+          userPhone={bidderInfoModalData.userPhone}
+          existingInfo={bidderInfoModalData.existingInfo}
+        />
+      )}
     </Container>
   );
 };

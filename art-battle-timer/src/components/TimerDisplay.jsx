@@ -80,6 +80,28 @@ export default function TimerDisplay() {
     return 'red'
   }
 
+  const formatTimeAgo = (pastTime) => {
+    const now = currentTime
+    const diffMs = now - pastTime
+    const diffMinutes = Math.floor(diffMs / (1000 * 60))
+    const diffHours = Math.floor(diffMinutes / 60)
+    const diffDays = Math.floor(diffHours / 24)
+
+    if (diffDays > 0) return `ended ${diffDays}d ago`
+    if (diffHours > 0) return `ended ${diffHours}h ago`
+    if (diffMinutes > 0) return `ended ${diffMinutes}m ago`
+    return 'just ended'
+  }
+
+  const formatDateTime = (timestamp) => {
+    const date = new Date(timestamp)
+    return date.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: false 
+    })
+  }
+
   if (loading) {
     return (
       <div className="timer-loading">
@@ -97,7 +119,7 @@ export default function TimerDisplay() {
     )
   }
 
-  if (!timerData || !timerData.has_active_timers) {
+  if (!timerData || (!timerData.has_active_timers && !timerData.auction_times && (!timerData.all_rounds || timerData.all_rounds.length === 0))) {
     return (
       <div className="timer-waiting">
         {/* Art Battle Logo */}
@@ -122,6 +144,58 @@ export default function TimerDisplay() {
     )
   }
 
+  // If we have historical rounds but no active timers, show history-only display
+  if (!timerData.has_active_timers && timerData.all_rounds && timerData.all_rounds.length > 0) {
+    return (
+      <div className="timer-waiting">
+        {/* Art Battle Logo */}
+        <img 
+          src="https://imagedelivery.net/IGZfH_Pl-6S6csykNnXNJw/0ce25113-c21e-4435-1dc0-6020d15fa300/public" 
+          alt="Art Battle Logo" 
+          className="art-battle-logo-waiting"
+        />
+        
+        {timerData?.event && (
+          <div className="event-info">
+            <Text size="4" color="gray">{timerData.event.eid}</Text>
+            <Text size="5">{timerData.event.city}</Text>
+            <Text size="4">{timerData.event.venue}</Text>
+          </div>
+        )}
+        
+        <div className="waiting-message">
+          <Text size="5">Event Complete</Text>
+          <Text size="3" color="gray">All rounds have finished</Text>
+        </div>
+
+        {/* Round History Display */}
+        <div className="round-history">
+          <Text size="3" weight="medium" color="gray" className="history-title">
+            Round History
+          </Text>
+          <div className="history-grid">
+            {timerData.all_rounds.map(round => (
+              <div key={round.round} className="history-item">
+                <Text size="2" weight="bold" color="amber">
+                  Round {round.round}
+                </Text>
+                <Text size="1" color="gray">
+                  {formatDateTime(round.start_time)} - {formatDateTime(round.closing_time)}
+                </Text>
+                <Text size="1" color="gray">
+                  {round.is_past ? 
+                    formatTimeAgo(new Date(round.closing_time).getTime()) : 
+                    'in progress'
+                  }
+                </Text>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   const { event, active_round, auction_times } = timerData
 
   // If no active round but we have auction times, show auction-only display
@@ -129,6 +203,7 @@ export default function TimerDisplay() {
     const earliestAuctionTime = new Date(auction_times.earliest).getTime()
     const timeRemaining = earliestAuctionTime - currentTime
     const timerColor = getTimerColor(timeRemaining)
+    const auctionClosed = earliestAuctionTime < currentTime
 
     return (
       <div className="timer-container">
@@ -139,8 +214,8 @@ export default function TimerDisplay() {
               <Text size="3" color="gray">{event.eid} • {event.city} • {event.venue}</Text>
             </div>
             <div>
-              <Badge variant="soft" color="amber">
-                Auction Timer • {auction_times.count} Artworks
+              <Badge variant="soft" color={auctionClosed ? "red" : "amber"}>
+                {auctionClosed ? "Auction Closed" : `Auction Timer • ${auction_times.count} Artworks`}
               </Badge>
             </div>
           </Flex>
@@ -158,30 +233,61 @@ export default function TimerDisplay() {
           {/* Auction Timer Label */}
           <div className="round-display">
             <Text size="8" weight="bold" className="round-text">
-              AUCTION TIMER
+              {auctionClosed ? "AUCTION CLOSED" : "AUCTION TIMER"}
             </Text>
           </div>
           
-          <div className="countdown-timer">
-            <Text size="9" weight="bold" className={`timer-text timer-${timerColor}`}>
-              {formatTime(timeRemaining)}
-            </Text>
-          </div>
-          
-          <div className="progress-container">
-            <Progress 
-              value={calculateProgress(auction_times.earliest)} 
-              className="countdown-progress"
-              color="amber"
-              size="3"
-            />
-          </div>
+          {!auctionClosed && (
+            <>
+              <div className="countdown-timer">
+                <Text size="9" weight="bold" className={`timer-text timer-${timerColor}`}>
+                  {formatTime(timeRemaining)}
+                </Text>
+              </div>
+              
+              <div className="progress-container">
+                <Progress 
+                  value={calculateProgress(auction_times.earliest)} 
+                  className="countdown-progress"
+                  color="amber"
+                  size="3"
+                />
+              </div>
 
-          <div className="timer-label">
-            <Text size="5" color="gray">
-              {timeRemaining > 0 ? 'Auction Closes In' : 'Auction Ended'}
-            </Text>
-          </div>
+              <div className="timer-label">
+                <Text size="5" color="gray">
+                  Auction Closes In
+                </Text>
+              </div>
+            </>
+          )}
+
+          {/* Round History Display */}
+          {timerData.all_rounds && timerData.all_rounds.length > 0 && (
+            <div className="round-history">
+              <Text size="3" weight="medium" color="gray" className="history-title">
+                Round History
+              </Text>
+              <div className="history-grid">
+                {timerData.all_rounds.map(round => (
+                  <div key={round.round} className="history-item">
+                    <Text size="2" weight="bold" color="amber">
+                      Round {round.round}
+                    </Text>
+                    <Text size="1" color="gray">
+                      {formatDateTime(round.start_time)} - {formatDateTime(round.closing_time)}
+                    </Text>
+                    <Text size="1" color="gray">
+                      {round.is_past ? 
+                        formatTimeAgo(new Date(round.closing_time).getTime()) : 
+                        'in progress'
+                      }
+                    </Text>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     )
@@ -270,15 +376,50 @@ export default function TimerDisplay() {
         {/* Auction Timer Display */}
         {timerData.auction_times && (
           <div className="auction-timer">
-            <Text size="5" weight="bold" color="amber">
-              Auction Timer
+            {new Date(timerData.auction_times.earliest).getTime() < currentTime ? (
+              <Text size="6" weight="bold" color="red" className="auction-closed">
+                AUCTION CLOSED
+              </Text>
+            ) : (
+              <>
+                <Text size="5" weight="bold" color="amber">
+                  Auction Timer
+                </Text>
+                <Text size="4" weight="medium" color="gray">
+                  {timerData.auction_times.same_time ? 
+                    formatTime(new Date(timerData.auction_times.earliest).getTime() - currentTime) : 
+                    `Earliest ${formatTime(new Date(timerData.auction_times.earliest).getTime() - currentTime)} • Latest ${formatTime(new Date(timerData.auction_times.latest).getTime() - currentTime)}`
+                  }
+                </Text>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Round History Display */}
+        {timerData.all_rounds && timerData.all_rounds.length > 0 && (
+          <div className="round-history">
+            <Text size="3" weight="medium" color="gray" className="history-title">
+              Round History
             </Text>
-            <Text size="4" weight="medium" color="gray">
-              {timerData.auction_times.same_time ? 
-                formatTime(new Date(timerData.auction_times.earliest).getTime() - currentTime) : 
-                `Earliest ${formatTime(new Date(timerData.auction_times.earliest).getTime() - currentTime)} • Latest ${formatTime(new Date(timerData.auction_times.latest).getTime() - currentTime)}`
-              }
-            </Text>
+            <div className="history-grid">
+              {timerData.all_rounds.map(round => (
+                <div key={round.round} className="history-item">
+                  <Text size="2" weight="bold" color="amber">
+                    Round {round.round}
+                  </Text>
+                  <Text size="1" color="gray">
+                    {formatDateTime(round.start_time)} - {formatDateTime(round.closing_time)}
+                  </Text>
+                  <Text size="1" color="gray">
+                    {round.is_past ? 
+                      formatTimeAgo(new Date(round.closing_time).getTime()) : 
+                      'in progress'
+                    }
+                  </Text>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

@@ -74,7 +74,11 @@ const TemplateCard = ({ template, eventData, artistData = null, allArtists = [] 
     
     // Add classes that are dynamically injected by templateRenderer
     if (spec.dynamicContent?.allArtistsNames) {
-      htmlClasses.push('artist-name'); // Added by templateRenderer.js line 204
+      htmlClasses.push('artist-name'); // Added by templateRenderer for all artists
+    }
+    
+    if (spec.dynamicContent?.featuredWithAll) {
+      htmlClasses.push('featured-artist', 'other-artists', 'other-artist'); // Added by templateRenderer for featured artist
     }
     
     // Find CSS selectors that don't match any HTML classes

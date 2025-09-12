@@ -75,6 +75,165 @@ serve(async (req) => {
 
     // Handle different event types
     switch (event.type) {
+      // Global Payments Events
+      case 'recipient.created': {
+        const recipient = event.data.object as any; // Global Payouts recipient
+        console.log('Processing recipient.created:', recipient.id)
+        
+        // Update Global Payments record if it exists
+        const { error: updateError } = await supabase
+          .from('artist_global_payments')
+          .update({
+            stripe_recipient_id: recipient.id,
+            status: 'in_review',
+            updated_at: new Date().toISOString(),
+            metadata: {
+              stripe_recipient_data: recipient,
+              last_webhook_update: new Date().toISOString()
+            }
+          })
+          .eq('stripe_recipient_id', recipient.id)
+
+        if (updateError) {
+          console.error('Error updating recipient record:', updateError)
+        }
+        break
+      }
+
+      case 'recipient.updated': {
+        const recipient = event.data.object as any; // Global Payouts recipient
+        console.log('Processing recipient.updated:', recipient.id, 'status:', recipient.status)
+        
+        // Map Stripe recipient status to our status
+        let ourStatus = 'in_review'
+        switch (recipient.status) {
+          case 'ready':
+            ourStatus = 'ready'
+            break
+          case 'blocked':
+            ourStatus = 'blocked'
+            break
+          case 'rejected':
+            ourStatus = 'rejected'
+            break
+        }
+
+        const { error: updateError } = await supabase
+          .from('artist_global_payments')
+          .update({
+            status: ourStatus,
+            updated_at: new Date().toISOString(),
+            metadata: {
+              stripe_recipient_data: recipient,
+              last_webhook_update: new Date().toISOString()
+            }
+          })
+          .eq('stripe_recipient_id', recipient.id)
+
+        if (updateError) {
+          console.error('Error updating recipient status:', updateError)
+        }
+        break
+      }
+
+      case 'payout.created': {
+        const payout = event.data.object as any; // Global Payouts payout
+        console.log('Processing payout.created:', payout.id)
+        
+        // Update our payout request record
+        const { error: updateError } = await supabase
+          .from('global_payment_requests')
+          .update({
+            status: 'sent',
+            sent_at: new Date(payout.created * 1000).toISOString(),
+            metadata: {
+              stripe_payout_data: payout,
+              last_webhook_update: new Date().toISOString()
+            }
+          })
+          .eq('stripe_payout_id', payout.id)
+
+        if (updateError) {
+          console.error('Error updating payout created status:', updateError)
+        }
+        break
+      }
+
+      case 'payout.paid': {
+        const payout = event.data.object as any; // Global Payouts payout
+        console.log('Processing payout.paid:', payout.id)
+        
+        // Update our payout request to paid status
+        const { error: updateError } = await supabase
+          .from('global_payment_requests')
+          .update({
+            status: 'paid',
+            paid_at: new Date().toISOString(),
+            metadata: {
+              stripe_payout_data: payout,
+              last_webhook_update: new Date().toISOString()
+            }
+          })
+          .eq('stripe_payout_id', payout.id)
+
+        if (updateError) {
+          console.error('Error updating payout paid status:', updateError)
+        }
+        break
+      }
+
+      case 'payout.failed': {
+        const payout = event.data.object as any; // Global Payouts payout
+        console.log('Processing payout.failed:', payout.id)
+        
+        // Update our payout request to failed status
+        const { error: updateError } = await supabase
+          .from('global_payment_requests')
+          .update({
+            status: 'failed',
+            error_code: payout.failure_code || 'unknown_failure',
+            error_message: payout.failure_message || 'Payout failed',
+            metadata: {
+              stripe_payout_data: payout,
+              failure_details: {
+                code: payout.failure_code,
+                message: payout.failure_message,
+                balance_transaction: payout.failure_balance_transaction
+              },
+              last_webhook_update: new Date().toISOString()
+            }
+          })
+          .eq('stripe_payout_id', payout.id)
+
+        if (updateError) {
+          console.error('Error updating payout failed status:', updateError)
+        }
+        break
+      }
+
+      case 'payout.canceled': {
+        const payout = event.data.object as any; // Global Payouts payout
+        console.log('Processing payout.canceled:', payout.id)
+        
+        // Update our payout request to canceled status
+        const { error: updateError } = await supabase
+          .from('global_payment_requests')
+          .update({
+            status: 'canceled',
+            metadata: {
+              stripe_payout_data: payout,
+              last_webhook_update: new Date().toISOString()
+            }
+          })
+          .eq('stripe_payout_id', payout.id)
+
+        if (updateError) {
+          console.error('Error updating payout canceled status:', updateError)
+        }
+        break
+      }
+
+      // Existing Stripe Connect/Checkout Events
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session
         

@@ -89,7 +89,8 @@ BEGIN
     FROM payment_logs pl
     WHERE pl.art_id = a.id
   ) payment_agg ON true
-  WHERE a.event_id = p_event_id;
+  WHERE a.event_id = p_event_id
+    AND a.status IN ('active', 'sold', 'paid', 'cancelled');
 
   -- Get detailed bid information with FULL bidder details (bypasses RLS)
   SELECT jsonb_object_agg(
@@ -152,6 +153,7 @@ BEGIN
     FROM art a
     LEFT JOIN bids b ON a.id = b.art_id
     WHERE a.event_id = p_event_id
+      AND a.status IN ('active', 'sold', 'paid', 'cancelled')
     GROUP BY a.id
   ) bid_summary;
 

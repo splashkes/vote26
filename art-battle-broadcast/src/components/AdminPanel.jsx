@@ -956,7 +956,8 @@ const AdminPanel = ({
             nickname,
             email,
             phone_number,
-            auth_phone
+            auth_phone,
+            phone
           )
         `)
         .in('art_id', artIds)
