@@ -134,7 +134,7 @@ const InternationalPhoneInput = forwardRef(({
 
 
   // Handle phone input changes - SIMPLIFIED VERSION USING TWILIO
-  const handlePhoneInput = (inputValue) => {
+  const handlePhoneInput = (inputValue, overrideCountry = null) => {
     console.log('📱 Phone input:', inputValue);
     
     // Clean input but keep basic formatting chars
@@ -152,7 +152,8 @@ const InternationalPhoneInput = forwardRef(({
       validationTimeoutRef.current = setTimeout(() => {
         // Smart country detection and phone formatting
         let phoneForValidation = cleanedInput;
-        let countryForValidation = selectedCountry;
+        let countryForValidation = overrideCountry || selectedCountry;
+        console.log('📱 Using country for validation:', countryForValidation, 'override:', overrideCountry, 'selected:', selectedCountry);
         
         // If number doesn't start with +, try to detect country and add +
         if (!cleanedInput.startsWith('+')) {
@@ -258,7 +259,7 @@ const InternationalPhoneInput = forwardRef(({
   return (
     <Flex direction="column" gap="2">
       {/* Simple Country + Phone Input */}
-      <Flex gap="2" align="center">
+      <Flex gap="2" align="center" className="phone-input-container">
         <Select.Root 
           value={selectedCountry} 
           onValueChange={(newCountry) => {
@@ -266,7 +267,7 @@ const InternationalPhoneInput = forwardRef(({
             setSelectedCountry(newCountry);
             // Re-validate current phone with new country
             if (phone) {
-              handlePhoneInput(phone);
+              handlePhoneInput(phone, newCountry);
             }
           }}
         >

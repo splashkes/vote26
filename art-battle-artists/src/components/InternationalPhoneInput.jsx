@@ -111,16 +111,22 @@ const InternationalPhoneInput = forwardRef(({
           }
         }
         
+        // Update display with Twilio's formatted version
+        if (data.nationalFormat && data.valid) {
+          console.log('📱 Updating display from', phone, 'to', data.nationalFormat);
+          setPhone(data.nationalFormat);
+        }
+        
         // Update parent component with enhanced validation
         if (onChange) {
           onChange({
-            target: { value: phone },
-            phone: data.phoneNumber || phone,
+            target: { value: data.nationalFormat || phone },
+            phone: data.phoneNumber || phone, // Use Twilio's E.164 format for backend
             country: data.countryCode || selectedCountry, // Use Twilio's detected country
             inputValue: phone,
             isValid: data.valid,
             nationalFormat: data.nationalFormat || phone,
-            e164Format: data.phoneNumber,
+            e164Format: data.phoneNumber, // This is what gets sent to OTP verification
             validationResult: data
           });
         }
@@ -133,13 +139,13 @@ const InternationalPhoneInput = forwardRef(({
   };
 
 
-  // Handle phone input changes - SIMPLIFIED VERSION USING TWILIO
-  const handlePhoneInput = (inputValue) => {
+  // Handle phone input changes - LET TWILIO DO THE WORK
+  const handlePhoneInput = (inputValue, overrideCountry = null) => {
     console.log('📱 Phone input:', inputValue);
     
     // Clean input but keep basic formatting chars
     const cleanedInput = inputValue.replace(/[^\d\s\-\(\)\+]/g, '');
-    setPhone(cleanedInput); // Always show what user typed
+    setPhone(cleanedInput); // Show what user typed until Twilio formats it
     
     // Clear any existing timeout
     if (validationTimeoutRef.current) {
@@ -150,36 +156,37 @@ const InternationalPhoneInput = forwardRef(({
     const digitsOnly = cleanedInput.replace(/\D/g, '');
     if (digitsOnly.length >= 7) {
       validationTimeoutRef.current = setTimeout(() => {
-        // Smart country detection and phone formatting
-        let phoneForValidation = cleanedInput;
-        let countryForValidation = selectedCountry;
+        let phoneForTwilio;
+        const countryToUse = overrideCountry || selectedCountry;
+        console.log('📱 Using country for validation:', countryToUse, 'override:', overrideCountry, 'selected:', selectedCountry);
         
-        // If number doesn't start with +, try to detect country and add +
-        if (!cleanedInput.startsWith('+')) {
-          // Sort countries by dial code length (longest first) to avoid false matches
-          const sortedCountries = [...countryData].sort((a, b) => 
-            b.dialCode.replace('+', '').length - a.dialCode.replace('+', '').length
-          );
-          
-          // Check if number starts with any country code
-          for (const country of sortedCountries) {
-            const countryCode = country.dialCode.replace('+', '');
+        if (cleanedInput.startsWith('+')) {
+          // User entered +, send raw and ignore country dropdown
+          phoneForTwilio = cleanedInput;
+          console.log('📱 User entered +, sending RAW to Twilio:', phoneForTwilio);
+        } else {
+          // No +, use country dropdown with smart duplicate detection
+          const selectedCountryData = countryData.find(c => c.code === countryToUse);
+          if (selectedCountryData) {
+            const countryDialCode = selectedCountryData.dialCode.replace('+', ''); // Remove + for comparison
             
-            if (cleanedInput.startsWith(countryCode)) {
-              // Found matching country code - format as international number
-              phoneForValidation = '+' + cleanedInput;
-              countryForValidation = country.code;
-              console.log('📱 Detected country from ' + countryCode + ':', countryForValidation, 'formatted as:', phoneForValidation);
-              
-              // Update the selected country in UI
-              setSelectedCountry(country.code);
-              break;
+            if (cleanedInput.startsWith(countryDialCode)) {
+              // Number already starts with country code, just add +
+              phoneForTwilio = '+' + cleanedInput;
+              console.log('📱 Duplicate detected, adding + to:', cleanedInput, '→', phoneForTwilio);
+            } else {
+              // Add country dial code
+              phoneForTwilio = selectedCountryData.dialCode + cleanedInput;
+              console.log('📱 Adding country code', selectedCountryData.dialCode, 'to:', cleanedInput, '→', phoneForTwilio);
             }
+          } else {
+            // No country selected, send raw
+            phoneForTwilio = cleanedInput;
+            console.log('📱 No country selected, sending RAW:', phoneForTwilio);
           }
         }
         
-        // Send full international number to Twilio validation
-        callEnhancedValidation(phoneForValidation, countryForValidation);
+        callEnhancedValidation(phoneForTwilio, null);
       }, 1000); // 1 second debounce
     }
     
@@ -266,7 +273,7 @@ const InternationalPhoneInput = forwardRef(({
             setSelectedCountry(newCountry);
             // Re-validate current phone with new country
             if (phone) {
-              handlePhoneInput(phone);
+              handlePhoneInput(phone, newCountry);
             }
           }}
         >
