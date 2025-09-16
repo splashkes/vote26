@@ -2,14 +2,17 @@
 ----------------------------------------------
  CREATE OR REPLACE FUNCTION public.is_admin()+
   RETURNS boolean                            +
-  LANGUAGE sql                               +
+  LANGUAGE plpgsql                           +
   SECURITY DEFINER                           +
  AS $function$                               +
-   SELECT EXISTS (                           +
-     SELECT 1 FROM abhq_admin_users          +
-     WHERE user_id = auth.uid()              +
-     AND active = true                       +
-   );                                        +
+ BEGIN                                       +
+     RETURN EXISTS (                         +
+         SELECT 1                            +
+         FROM abhq_admin_users               +
+         WHERE user_id = auth.uid()          +
+         AND active = true                   +
+     );                                      +
+ END;                                        +
  $function$                                  +
  
 (1 row)

@@ -154,7 +154,6 @@
          )                                                                                                                                          +
        );                                                                                                                                           +
                                                                                                                                                     +
-     -- Keep all other existing cases...                                                                                                            +
      WHEN 'auction_extended' THEN                                                                                                                   +
        RETURN jsonb_build_array(                                                                                                                    +
          jsonb_build_object(                                                                                                                        +
