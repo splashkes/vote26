@@ -125,8 +125,10 @@ const ProfileForm = ({ existingProfile = null, onSuccess }) => {
       errors.name = 'Name is required';
     }
 
-    // Email validation (if provided)
-    if (formData.email && formData.email.trim()) {
+    // Email is required
+    if (!formData.email || !formData.email.trim()) {
+      errors.email = 'Email is required';
+    } else {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(formData.email.trim())) {
         errors.email = 'Please enter a valid email address';
@@ -204,6 +206,26 @@ const ProfileForm = ({ existingProfile = null, onSuccess }) => {
 
       setSuccess(isEditing ? 'Profile updated successfully!' : 'Profile created successfully!');
       
+      // Clear any lingering validation errors on success
+      setValidationErrors({});
+      
+      // Scroll to very top to show success message and sample works
+      // Try multiple scroll methods for better browser compatibility
+      setTimeout(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+        // Also try scrolling any potential scroll containers
+        const scrollContainers = document.querySelectorAll('[data-scroll-container], .scroll-container, main, .main-content');
+        scrollContainers.forEach(container => {
+          if (container.scrollTo) {
+            container.scrollTo({ top: 0, behavior: 'smooth' });
+          } else {
+            container.scrollTop = 0;
+          }
+        });
+      }, 100);
+      
       // For new profile creation, refresh auth to get updated JWT claims
       if (!isEditing && refreshAuth) {
         console.log('🔄 Refreshing auth after new profile creation...');
@@ -256,6 +278,7 @@ const ProfileForm = ({ existingProfile = null, onSuccess }) => {
                   placeholder="Enter your full name"
                   value={formData.name}
                   onChange={(e) => handleChange('name', e.target.value)}
+                  tabIndex={1}
                   style={{
                     borderColor: validationErrors.name ? 'var(--red-8)' : undefined
                   }}
@@ -272,6 +295,7 @@ const ProfileForm = ({ existingProfile = null, onSuccess }) => {
                   value={formData.bio}
                   onChange={(e) => handleChange('bio', e.target.value)}
                   rows={4}
+                  tabIndex={2}
                 />
                 <Text size="1" color="gray">
                   Share your story, artistic style, experience, or anything you'd like people to know about you.
@@ -287,21 +311,12 @@ const ProfileForm = ({ existingProfile = null, onSuccess }) => {
               
               <Flex gap="3">
                 <Flex direction="column" gap="2" style={{ flex: 1 }}>
-                  <Text size="2" weight="medium">City</Text>
-                  <TextField.Root
-                    placeholder="Your city"
-                    value={formData.city}
-                    onChange={(e) => handleChange('city', e.target.value)}
-                  />
-                </Flex>
-                
-                <Flex direction="column" gap="2" style={{ flex: 1 }}>
                   <Text size="2" weight="medium">Country</Text>
                   <Select.Root
                     value={formData.country}
                     onValueChange={(value) => handleChange('country', value)}
                   >
-                    <Select.Trigger placeholder="Select country" />
+                    <Select.Trigger placeholder="Select country" tabIndex={3} />
                     <Select.Content>
                       {countries.map((country) => (
                         <Select.Item key={country.code} value={country.code}>
@@ -310,6 +325,16 @@ const ProfileForm = ({ existingProfile = null, onSuccess }) => {
                       ))}
                     </Select.Content>
                   </Select.Root>
+                </Flex>
+                
+                <Flex direction="column" gap="2" style={{ flex: 1 }}>
+                  <Text size="2" weight="medium">City</Text>
+                  <TextField.Root
+                    placeholder="Your city"
+                    value={formData.city}
+                    onChange={(e) => handleChange('city', e.target.value)}
+                    tabIndex={4}
+                  />
                 </Flex>
               </Flex>
             </Flex>
@@ -321,12 +346,13 @@ const ProfileForm = ({ existingProfile = null, onSuccess }) => {
               <Text size="4" weight="medium">Contact Information</Text>
               
               <Flex direction="column" gap="2">
-                <Text size="2" weight="medium">Email</Text>
+                <Text size="2" weight="medium">Email *</Text>
                 <TextField.Root
                   type="email"
                   placeholder="your@email.com"
                   value={formData.email}
                   onChange={(e) => handleChange('email', e.target.value)}
+                  tabIndex={5}
                   style={{
                     borderColor: validationErrors.email ? 'var(--red-8)' : undefined
                   }}

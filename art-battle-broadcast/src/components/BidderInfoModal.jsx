@@ -27,6 +27,20 @@ const BidderInfoModal = ({
     if (error) setError('');
   };
 
+  const generateAuctionHandle = () => {
+    const firstName = formData.first_name.trim();
+    const lastName = formData.last_name.trim();
+
+    if (firstName && lastName && !formData.nickname.trim()) {
+      const lastInitial = lastName.charAt(0).toUpperCase();
+      const auctionHandle = `${firstName} ${lastInitial}.`;
+      setFormData(prev => ({
+        ...prev,
+        nickname: auctionHandle
+      }));
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -46,15 +60,22 @@ const BidderInfoModal = ({
         return;
       }
 
-      // Get current session token
-      const { data: { session } } = await supabase.auth.getSession();
+      // Get current session token, refresh if needed
+      let { data: { session } } = await supabase.auth.getSession();
+
+      // If no session or token is expired, try to refresh
       if (!session?.access_token) {
-        throw new Error('Authentication required');
+        const { data: { session: refreshedSession } } = await supabase.auth.refreshSession();
+        session = refreshedSession;
+      }
+
+      if (!session?.access_token) {
+        throw new Error('Please sign in again to update your information');
       }
 
       // Call edge function to update bidder info
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-bidder-info`,
+        'https://xsqdkubgyqwpyvfltnrf.supabase.co/functions/v1/update-bidder-info',
         {
           method: 'POST',
           headers: {
@@ -68,7 +89,15 @@ const BidderInfoModal = ({
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || 'Failed to update bidder information');
+        // Log debug info for 401 errors
+        if (response.status === 401 && result.debug) {
+          console.log('401 Debug info from edge function:', result.debug);
+        }
+
+        if (response.status === 401) {
+          throw new Error('Session expired. Please refresh the page and try again.');
+        }
+        throw new Error(result.error || `Failed to update bidder information (${response.status})`);
       }
 
       if (result.success) {
@@ -135,6 +164,7 @@ const BidderInfoModal = ({
               <TextField.Root
                 value={formData.last_name}
                 onChange={(e) => handleInputChange('last_name', e.target.value)}
+                onBlur={generateAuctionHandle}
                 placeholder="Enter your last name"
                 disabled={loading}
                 required
@@ -144,7 +174,7 @@ const BidderInfoModal = ({
             {/* Nickname (Optional) */}
             <Box>
               <Text as="label" size="2" weight="medium" mb="1" style={{ display: 'block' }}>
-                Preferred Name (Optional)
+                Auction handle
               </Text>
               <TextField.Root
                 value={formData.nickname}

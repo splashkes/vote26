@@ -440,7 +440,17 @@ const ProfileEditor = ({ onProfileSuccess }) => {
         </Callout.Root>
       )}
 
-      {/* ===== NEW CLEAN PROFILE FORM ===== */}
+      {/* ===== SAMPLE WORKS UPLOAD (MOVED TO TOP FOR VISIBILITY) ===== */}
+      {artistProfileId && (
+        <SampleWorksUpload 
+          artistProfileId={artistProfileId}
+          onWorksChange={(works) => {
+            console.log('Sample works updated:', works.length);
+          }}
+        />
+      )}
+      
+      {/* ===== PROFILE FORM ===== */}
       <ProfileForm 
         existingProfile={selectedProfile}
         onSuccess={(profile) => {
@@ -458,16 +468,6 @@ const ProfileEditor = ({ onProfileSuccess }) => {
           fetchProfiles();
         }}
       />
-      
-      {/* ===== SAMPLE WORKS UPLOAD (KEEP THIS - WORKS WELL) ===== */}
-      {artistProfileId && (
-        <SampleWorksUpload 
-          artistProfileId={artistProfileId}
-          onWorksChange={(works) => {
-            console.log('Sample works updated:', works.length);
-          }}
-        />
-      )}
     </Flex>
   );
 };

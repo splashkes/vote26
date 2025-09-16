@@ -44,9 +44,9 @@ export const AuthProvider = ({ children }) => {
       }
       
       if (session?.user) {
-        // Only extract person data for initial session and token refresh to prevent loops
-        if (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
-          console.log('🔄 [AUTH-V2] Extracting person data for event:', event);
+        // Extract person data for initial session, token refresh, or when person is missing
+        if (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED' || (event === 'SIGNED_IN' && !personRef.current)) {
+          console.log('🔄 [AUTH-V2] Extracting person data for event:', event, 'person exists:', !!personRef.current);
           // Set loading during JWT extraction to prevent UI from rendering prematurely
           if (event === 'TOKEN_REFRESHED') {
             setLoading(true);

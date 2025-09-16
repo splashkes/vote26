@@ -22,17 +22,74 @@ serve(async (req) => {
       }
     )
 
-    // Verify user authentication
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
+    // Verify user authentication using JWT decoding approach
+    const authHeader = req.headers.get('Authorization')
 
-    if (authError || !user) {
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return new Response(
-        JSON.stringify({ error: 'Unauthorized', details: authError?.message }),
-        { 
-          status: 401, 
+        JSON.stringify({
+          error: 'Unauthorized - Missing or invalid authorization header',
+          success: false,
+          debug: {
+            timestamp: new Date().toISOString(),
+            function_name: 'update-bidder-info',
+            auth_details: {
+              has_auth_header: !!authHeader,
+              auth_header_format: authHeader ? (authHeader.startsWith('Bearer ') ? 'Bearer format' : 'Invalid format') : 'Missing',
+              auth_header_length: authHeader?.length || 0
+            }
+          }
+        }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      )
+    }
+
+    // Extract JWT token and decode it
+    const token = authHeader.replace('Bearer ', '')
+    let jwtPayload: any = null
+    let user: any = null
+
+    try {
+      // Decode JWT payload (base64 encoded)
+      const tokenParts = token.split('.')
+      if (tokenParts.length !== 3) {
+        throw new Error('Invalid JWT token format')
+      }
+
+      jwtPayload = JSON.parse(atob(tokenParts[1]))
+
+      // Extract user info from JWT
+      user = {
+        id: jwtPayload.sub,
+        phone: jwtPayload.phone,
+        email: jwtPayload.email
+      }
+
+      if (!user.id) {
+        throw new Error('No user ID in JWT token')
+      }
+
+    } catch (jwtError) {
+      return new Response(
+        JSON.stringify({
+          error: 'Unauthorized - Invalid JWT token',
+          success: false,
+          debug: {
+            timestamp: new Date().toISOString(),
+            function_name: 'update-bidder-info',
+            auth_details: {
+              jwt_decode_error: jwtError.message,
+              token_parts_count: token.split('.').length,
+              token_length: token.length,
+              jwt_payload_preview: jwtPayload ? Object.keys(jwtPayload) : null
+            }
+          }
+        }),
+        {
+          status: 401,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       )
@@ -72,8 +129,8 @@ serve(async (req) => {
       )
     }
 
-    // Get user's phone from auth metadata or find their people record
-    const userPhone = user.phone || user.user_metadata?.phone
+    // Get user's phone from JWT token
+    const userPhone = user.phone
 
     if (!userPhone) {
       return new Response(

@@ -109,7 +109,7 @@ serve(async (req) => {
     if (!artistProfile.phone) {
       missingFields.push('phone');
     }
-    if (!artistProfile.country && !country) {
+    if (!artistProfile.country) {
       missingFields.push('country');
     }
 
@@ -117,14 +117,26 @@ serve(async (req) => {
       throw new Error(`Please add ${missingFields.join(', ')} to profile before setting up payments`);
     }
 
-    // Use country from artist profile if not provided in request
-    const finalCountry = country || artistProfile.country;
+    // Always use country from artist profile (ignore request parameter)
+    const finalCountry = artistProfile.country;
 
+    console.log('=== COUNTRY DEBUG ===');
+    console.log('country from request:', country);
+    console.log('artistProfile.country:', artistProfile.country);
+    console.log('finalCountry:', finalCountry);
+    console.log('artistProfile.name:', artistProfile.name);
+    console.log('artistProfile.email:', artistProfile.email);
+    
     // Select appropriate Stripe key based on country
     const useCanadaKey = (finalCountry === 'CA' || finalCountry === 'Canada');
+    console.log('useCanadaKey decision:', useCanadaKey, '(finalCountry === CA:', finalCountry === 'CA', ', finalCountry === Canada:', finalCountry === 'Canada', ')');
+    
     const stripeSecretKey = useCanadaKey 
       ? Deno.env.get('stripe_canada_secret_key')
       : Deno.env.get('stripe_intl_secret_key');
+      
+    console.log('Selected Stripe key type:', useCanadaKey ? 'CANADA' : 'INTERNATIONAL');
+    console.log('Stripe key length:', stripeSecretKey?.length || 'KEY_NOT_FOUND');
     
     if (!stripeSecretKey) {
       throw new Error(`Stripe configuration error - ${useCanadaKey ? 'Canada' : 'International'} secret key not available`);
@@ -159,11 +171,12 @@ serve(async (req) => {
         stripeAccount = await stripe.accounts.retrieve(stripe_recipient_id);
         console.log('Retrieved Stripe account:', stripeAccount.id, 'status:', stripeAccount.requirements?.disabled_reason);
         
-        // Generate account link for onboarding continuation
+        // Generate account link for onboarding continuation  
+        const returnHandler = 'https://xsqdkubgyqwpyvfltnrf.supabase.co/functions/v1/stripe-onboarding-return';
         const accountLink = await stripe.accountLinks.create({
           account: stripe_recipient_id,
-          refresh_url: refresh_url,
-          return_url: return_url,
+          refresh_url: `${returnHandler}?account=${stripe_recipient_id}&status=refresh`,
+          return_url: `${returnHandler}?account=${stripe_recipient_id}&status=completed`,
           type: 'account_onboarding',
         });
         
@@ -177,15 +190,22 @@ serve(async (req) => {
       console.log('Creating new Stripe Global Payments account...');
       
       try {
+        console.log('=== STRIPE ACCOUNT CREATION ===');
         console.log('Creating Stripe account with country:', finalCountry);
+        console.log('Using Stripe key type:', useCanadaKey ? 'CANADA' : 'INTERNATIONAL');
+        console.log('Artist email:', artistProfile.email);
+        console.log('Artist name parts:', {
+          first: artistProfile.name.split(' ')[0] || 'Artist',
+          last: artistProfile.name.split(' ').slice(1).join(' ') || 'Profile'
+        });
         
-        // Create the account with Global Payouts configuration
-        stripeAccount = await stripe.accounts.create({
+        const accountData = {
           type: 'custom',
           country: finalCountry,
           email: artistProfile.email,
           capabilities: {
             transfers: { requested: true },
+            card_payments: { requested: true }, // Required for some countries like NL
           },
           business_type: 'individual',
           individual: {
@@ -193,6 +213,21 @@ serve(async (req) => {
             last_name: artistProfile.name.split(' ').slice(1).join(' ') || 'Profile',
             email: artistProfile.email,
           },
+          business_profile: {
+            mcc: '5971', // Art dealers and galleries
+            product_description: 'Independent visual artist participating in Art Battle live painting competitions and exhibitions.',
+            url: 'https://artbattle.com',
+            support_email: 'payments@artbattle.com',
+            support_phone: '+14163025959',
+            support_url: 'https://artbattle.com/contact'
+          },
+        };
+        
+        console.log('Account data being sent to Stripe:', JSON.stringify(accountData, null, 2));
+        
+        // Create the account with Global Payouts configuration
+        stripeAccount = await stripe.accounts.create({
+          ...accountData,
           metadata: {
             artist_profile_id: artistProfile.id.toString(),
             person_id: person.id.toString(),
@@ -203,11 +238,12 @@ serve(async (req) => {
 
         console.log('Created Stripe account:', stripeAccount.id);
 
-        // Generate onboarding link
+        // Generate onboarding link with our return handler
+        const returnHandler = 'https://xsqdkubgyqwpyvfltnrf.supabase.co/functions/v1/stripe-onboarding-return';
         const accountLink = await stripe.accountLinks.create({
           account: stripeAccount.id,
-          refresh_url: refresh_url,
-          return_url: return_url,
+          refresh_url: `${returnHandler}?account=${stripeAccount.id}&status=refresh`,
+          return_url: `${returnHandler}?account=${stripeAccount.id}&status=completed`,
           type: 'account_onboarding',
         });
 
@@ -228,7 +264,7 @@ serve(async (req) => {
               type: 'section',
               text: {
                 type: 'mrkdwn',
-                text: `*Artist:* ${artistProfile.name}\n*Email:* ${artistProfile.email}\n*Country:* ${finalCountry}\n*Stripe Account:* ${stripeAccount.id}\n*Profile ID:* ${artistProfile.id}`
+                text: `*Artist:* ${artistProfile.name}\n*Email:* ${artistProfile.email}\n*Country:* ${finalCountry} (from profile: ${artistProfile.country})\n*Stripe Key:* ${useCanadaKey ? 'CANADA' : 'INTERNATIONAL'}\n*Stripe Account:* ${stripeAccount.id}\n*Profile ID:* ${artistProfile.id}`
               }
             },
             {
@@ -319,6 +355,15 @@ serve(async (req) => {
       onboarding_url: onboardingUrl,
       stripe_account_id: stripeAccount.id,
       message: 'Redirecting to Stripe onboarding',
+      debug_info: {
+        country_from_request: country,
+        country_from_profile: artistProfile.country,
+        final_country: finalCountry,
+        using_canada_key: useCanadaKey,
+        stripe_key_type: useCanadaKey ? 'CANADA' : 'INTERNATIONAL',
+        artist_name: artistProfile.name,
+        artist_email: artistProfile.email
+      },
       contact_info: {
         email: artistProfile.email,
         name: artistProfile.name,

@@ -1,0 +1,2092 @@
+[
+  {
+    "event_message": "OPTIONS | 200 | 172.97.214.64 | 97e78619c90dac64 | https://xsqdkubgyqwpyvfltnrf.supabase.co/auth/v1/otp | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "08439c85-a89b-4a26-94d1-98fb0809617f",
+    "timestamp": 1757765241895000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e78619f963ac64 | https://xsqdkubgyqwpyvfltnrf.supabase.co/auth/v1/otp | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "d01ea905-70e6-43dc-83ed-c9dcac04746b",
+    "timestamp": 1757765241924000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 70.24.163.248 | 97e799e3ff60a2e0 | https://xsqdkubgyqwpyvfltnrf.supabase.co/auth/v1/token?grant_type=refresh_token | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "4e643f7c-1916-4dc7-9477-243145296894",
+    "timestamp": 1757766052488000
+  },
+  {
+    "event_message": "POST | 200 | 70.24.163.248 | 97e799e43fbca2e0 | https://xsqdkubgyqwpyvfltnrf.supabase.co/auth/v1/token?grant_type=refresh_token | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "821442f0-a8f1-4887-9428-efd7a874b021",
+    "timestamp": 1757766052527000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 70.24.163.248 | 97e799e4c882a2e0 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&person_id=eq.c1896176-87de-4801-b686-72f103b4c05d&order=created_at.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "ef89ca54-b83b-4338-a938-ce6a6107b864",
+    "timestamp": 1757766052617000
+  },
+  {
+    "event_message": "GET | 200 | 70.24.163.248 | 97e799e508e6a2e0 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&person_id=eq.c1896176-87de-4801-b686-72f103b4c05d&order=created_at.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "39b99503-98b0-49d4-bab1-5109188af42c",
+    "timestamp": 1757766052660000
+  },
+  {
+    "event_message": "GET | 200 | 70.24.163.248 | 97e79a1e8935a2e0 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&person_id=eq.c1896176-87de-4801-b686-72f103b4c05d&order=created_at.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "1f3028ef-7ee1-4174-b07c-310512406cf0",
+    "timestamp": 1757766061860000
+  },
+  {
+    "event_message": "GET | 200 | 70.24.163.248 | 97e79a38e9afa2e0 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&person_id=eq.c1896176-87de-4801-b686-72f103b4c05d&order=created_at.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "0a7c860f-af43-4873-bae6-0dc4d98f4746",
+    "timestamp": 1757766066083000
+  },
+  {
+    "event_message": "GET | 200 | 70.24.163.248 | 97e7a5b34c60a31e | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&person_id=eq.c1896176-87de-4801-b686-72f103b4c05d&order=created_at.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "ea05bfc5-783b-4cbf-ab92-cb885c367d8d",
+    "timestamp": 1757766536222000
+  },
+  {
+    "event_message": "GET | 200 | 70.24.163.248 | 97e7ab03bce0a26d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&person_id=eq.c1896176-87de-4801-b686-72f103b4c05d&order=created_at.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "cc487d1c-33d9-4879-a227-f064417f5b62",
+    "timestamp": 1757766753902000
+  },
+  {
+    "event_message": "POST | 200 | 71.175.25.144 | 97e8c01f4f9143b9 | https://xsqdkubgyqwpyvfltnrf.supabase.co/auth/v1/token?grant_type=refresh_token | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "35a0a0b6-c46a-44e3-bba0-053bef32b05e",
+    "timestamp": 1757778104210000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 71.175.25.144 | 97e8c0260dc843b9 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "ad8b85d3-db32-4e92-9fbe-f51208934987",
+    "timestamp": 1757778105294000
+  },
+  {
+    "event_message": "POST | 200 | 71.175.25.144 | 97e8c0262def43b9 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "4eb5c9cd-c20b-4825-9496-7fa760a32304",
+    "timestamp": 1757778105320000
+  },
+  {
+    "event_message": "GET | 200 | 71.175.25.144 | 97e8c026de8143b9 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_applications?select=*%2Cevent%3Aevents%28id%2Cname%2Cevent_start_datetime%2Cvenue%2Ccity%3Acities%28name%29%29&artist_profile_id=eq.c22e12f0-56e2-47ca-ac2e-9658001bf506&order=applied_at.desc&limit=5 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "c7f8a26a-22d4-4f09-a92b-426f94478157",
+    "timestamp": 1757778105425000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 71.175.25.144 | 97e8c027bf4943b9 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_invitations?select=*&artist_profile_id=eq.c22e12f0-56e2-47ca-ac2e-9658001bf506&status=eq.pending&accepted_at=is.null&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "01444615-000e-4818-8e80-b5011b6c3067",
+    "timestamp": 1757778105562000
+  },
+  {
+    "event_message": "GET | 200 | 71.175.25.144 | 97e8c027df5e43b9 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_invitations?select=*&artist_profile_id=eq.c22e12f0-56e2-47ca-ac2e-9658001bf506&status=eq.pending&accepted_at=is.null&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "71a2ff1d-aeb8-4bd4-90ae-f57da8ea1d79",
+    "timestamp": 1757778105585000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 71.175.25.144 | 97e8c028f84243b9 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_confirmations?select=*&artist_profile_id=eq.c22e12f0-56e2-47ca-ac2e-9658001bf506&confirmation_status=eq.confirmed&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "02f28905-80b8-4068-af34-1a77b9a01a73",
+    "timestamp": 1757778105765000
+  },
+  {
+    "event_message": "GET | 200 | 71.175.25.144 | 97e8c029287843b9 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_confirmations?select=*&artist_profile_id=eq.c22e12f0-56e2-47ca-ac2e-9658001bf506&confirmation_status=eq.confirmed&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "dff8c046-3c98-4a99-a230-d56ccc75807b",
+    "timestamp": 1757778105794000
+  },
+  {
+    "event_message": "POST | 200 | 71.175.25.144 | 97e8c415aaf1fd86 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "d6d8d2d0-b8c3-4dea-9ed5-63123bb560e7",
+    "timestamp": 1757778266509000
+  },
+  {
+    "event_message": "GET | 200 | 71.175.25.144 | 97e8c4164c5afd86 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_applications?select=*%2Cevent%3Aevents%28id%2Cname%2Cevent_start_datetime%2Cvenue%2Ccity%3Acities%28name%29%29&artist_profile_id=eq.c22e12f0-56e2-47ca-ac2e-9658001bf506&order=applied_at.desc&limit=5 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "1550ff41-97c2-4911-8631-89506807ab75",
+    "timestamp": 1757778266616000
+  },
+  {
+    "event_message": "GET | 200 | 71.175.25.144 | 97e8c4170df3fd86 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_invitations?select=*&artist_profile_id=eq.c22e12f0-56e2-47ca-ac2e-9658001bf506&status=eq.pending&accepted_at=is.null&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "108e6ba0-7562-4a2e-9a69-2e1f5763094a",
+    "timestamp": 1757778266731000
+  },
+  {
+    "event_message": "GET | 200 | 71.175.25.144 | 97e8c417bfeafd86 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_confirmations?select=*&artist_profile_id=eq.c22e12f0-56e2-47ca-ac2e-9658001bf506&confirmation_status=eq.confirmed&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "fe506c55-890e-4f1b-bf1d-f602cb508184",
+    "timestamp": 1757778266840000
+  },
+  {
+    "event_message": "POST | 200 | 71.175.25.144 | 97e8ca18fb747ce4 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "a65bf349-9fca-44f2-a7a5-d0b4ce431c71",
+    "timestamp": 1757778512805000
+  },
+  {
+    "event_message": "GET | 200 | 71.175.25.144 | 97e8ca19ac077ce4 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_applications?select=*%2Cevent%3Aevents%28id%2Cname%2Cevent_start_datetime%2Cvenue%2Ccity%3Acities%28name%29%29&artist_profile_id=eq.c22e12f0-56e2-47ca-ac2e-9658001bf506&order=applied_at.desc&limit=5 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "481b2c38-159d-48fd-82ec-8ac143650158",
+    "timestamp": 1757778512911000
+  },
+  {
+    "event_message": "GET | 200 | 71.175.25.144 | 97e8ca1a4c8a7ce4 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_invitations?select=*&artist_profile_id=eq.c22e12f0-56e2-47ca-ac2e-9658001bf506&status=eq.pending&accepted_at=is.null&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "0e25dffe-5ddb-4167-9e12-9245b8319183",
+    "timestamp": 1757778513016000
+  },
+  {
+    "event_message": "GET | 200 | 71.175.25.144 | 97e8ca1afd547ce4 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_confirmations?select=*&artist_profile_id=eq.c22e12f0-56e2-47ca-ac2e-9658001bf506&confirmation_status=eq.confirmed&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "d6f97c1d-b2e9-4ed4-8908-e127df166233",
+    "timestamp": 1757778513125000
+  },
+  {
+    "event_message": "POST | 200 | 71.175.25.144 | 97e8d5f2af0643a6 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "d5125368-299e-487a-9959-abe250e87849",
+    "timestamp": 1757778998198000
+  },
+  {
+    "event_message": "GET | 200 | 71.175.25.144 | 97e8d5f36f8243a6 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_applications?select=*%2Cevent%3Aevents%28id%2Cname%2Cevent_start_datetime%2Cvenue%2Ccity%3Acities%28name%29%29&artist_profile_id=eq.c22e12f0-56e2-47ca-ac2e-9658001bf506&order=applied_at.desc&limit=5 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "6445c032-6fef-4f25-9c93-ed5204a90c28",
+    "timestamp": 1757778998311000
+  },
+  {
+    "event_message": "GET | 200 | 71.175.25.144 | 97e8d5f3dfd143a6 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_invitations?select=*&artist_profile_id=eq.c22e12f0-56e2-47ca-ac2e-9658001bf506&status=eq.pending&accepted_at=is.null&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "c18ca462-d4fc-4d10-a081-2300fe8692cb",
+    "timestamp": 1757778998385000
+  },
+  {
+    "event_message": "GET | 200 | 71.175.25.144 | 97e8d5f4884843a6 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_confirmations?select=*&artist_profile_id=eq.c22e12f0-56e2-47ca-ac2e-9658001bf506&confirmation_status=eq.confirmed&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "ca27c197-a604-4a89-a817-172c42ed8e47",
+    "timestamp": 1757778998496000
+  },
+  {
+    "event_message": "POST | 200 | 71.175.25.144 | 97e8d78db8a87a99 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "78abc6e9-9621-4a66-83e9-9118de799a95",
+    "timestamp": 1757779063959000
+  },
+  {
+    "event_message": "GET | 200 | 71.175.25.144 | 97e8d78e5a507a99 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_applications?select=*%2Cevent%3Aevents%28id%2Cname%2Cevent_start_datetime%2Cvenue%2Ccity%3Acities%28name%29%29&artist_profile_id=eq.c22e12f0-56e2-47ca-ac2e-9658001bf506&order=applied_at.desc&limit=5 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "e484f404-831e-4c24-a878-87fea1be920a",
+    "timestamp": 1757779064067000
+  },
+  {
+    "event_message": "GET | 200 | 71.175.25.144 | 97e8d78f1c3f7a99 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_invitations?select=*&artist_profile_id=eq.c22e12f0-56e2-47ca-ac2e-9658001bf506&status=eq.pending&accepted_at=is.null&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "a702528e-d330-4577-994b-7518e88e00ea",
+    "timestamp": 1757779064179000
+  },
+  {
+    "event_message": "GET | 200 | 71.175.25.144 | 97e8d78fcdb37a99 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_confirmations?select=*&artist_profile_id=eq.c22e12f0-56e2-47ca-ac2e-9658001bf506&confirmation_status=eq.confirmed&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "c5b4358e-9045-4298-9e89-596507188a2e",
+    "timestamp": 1757779064291000
+  },
+  {
+    "event_message": "POST | 200 | 71.175.25.144 | 97e8d7cbcd757a99 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "a342d040-c06d-4ac5-b086-1436cbfad538",
+    "timestamp": 1757779073891000
+  },
+  {
+    "event_message": "GET | 200 | 71.175.25.144 | 97e8d7cc6ec07a99 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_applications?select=*%2Cevent%3Aevents%28id%2Cname%2Cevent_start_datetime%2Cvenue%2Ccity%3Acities%28name%29%29&artist_profile_id=eq.c22e12f0-56e2-47ca-ac2e-9658001bf506&order=applied_at.desc&limit=5 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "4d96dad5-4492-4d63-b0af-6ca37535a2d2",
+    "timestamp": 1757779073995000
+  },
+  {
+    "event_message": "GET | 200 | 71.175.25.144 | 97e8d7cccf747a99 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_invitations?select=*&artist_profile_id=eq.c22e12f0-56e2-47ca-ac2e-9658001bf506&status=eq.pending&accepted_at=is.null&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "d05107ff-8809-4f1b-88ba-b98616a07277",
+    "timestamp": 1757779074056000
+  },
+  {
+    "event_message": "GET | 200 | 71.175.25.144 | 97e8d7cd89437a99 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_confirmations?select=*&artist_profile_id=eq.c22e12f0-56e2-47ca-ac2e-9658001bf506&confirmation_status=eq.confirmed&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "ae5b6f0c-1898-408b-8dcc-aa5a4d573faa",
+    "timestamp": 1757779074182000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e905b03c436676 | https://xsqdkubgyqwpyvfltnrf.supabase.co/auth/v1/otp | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "43306bcb-8c60-4b6d-918d-027685718f41",
+    "timestamp": 1757780953646000
+  },
+  {
+    "event_message": "POST | 200 | 109.38.158.14 | 97e905b08ca46676 | https://xsqdkubgyqwpyvfltnrf.supabase.co/auth/v1/otp | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "2532a41d-baaf-418c-9e53-1d46548d3f34",
+    "timestamp": 1757780953690000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e905ef5aa26676 | https://xsqdkubgyqwpyvfltnrf.supabase.co/auth/v1/verify | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "fe3116e3-16c6-48a2-b073-42658a8be357",
+    "timestamp": 1757780963746000
+  },
+  {
+    "event_message": "POST | 200 | 109.38.158.14 | 97e905efbadf6676 | https://xsqdkubgyqwpyvfltnrf.supabase.co/auth/v1/verify | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "b2fadc30-e063-4698-9e82-18c4bc1f24b0",
+    "timestamp": 1757780963800000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e905ff98b26676 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "22e79386-fa05-4ca4-a681-cd3b165d1bf1",
+    "timestamp": 1757780966349000
+  },
+  {
+    "event_message": "POST | 200 | 109.38.158.14 | 97e905fff9026676 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "f247270a-e676-449c-9d59-6e2e9cf4f15d",
+    "timestamp": 1757780966405000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e906030b676676 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_applications?select=*%2Cevent%3Aevents%28id%2Cname%2Cevent_start_datetime%2Cvenue%2Ccity%3Acities%28name%29%29&artist_profile_id=eq.24ef8c69-2816-4059-a783-59638f21299a&order=applied_at.desc&limit=5 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "5472a578-4da9-4358-98c3-c72d85ad7d11",
+    "timestamp": 1757780966897000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e906037ba46676 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_applications?select=*%2Cevent%3Aevents%28id%2Cname%2Cevent_start_datetime%2Cvenue%2Ccity%3Acities%28name%29%29&artist_profile_id=eq.24ef8c69-2816-4059-a783-59638f21299a&order=applied_at.desc&limit=5 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "97263f22-bbf9-493f-90a4-175b93de0880",
+    "timestamp": 1757780966961000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e90606ae1d6676 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_invitations?select=*&artist_profile_id=eq.24ef8c69-2816-4059-a783-59638f21299a&status=eq.pending&accepted_at=is.null&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "ecbeb166-27dd-4395-b4cf-b0e9566faad5",
+    "timestamp": 1757780967471000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e90606fe536676 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_invitations?select=*&artist_profile_id=eq.24ef8c69-2816-4059-a783-59638f21299a&status=eq.pending&accepted_at=is.null&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "d315b1fa-3298-4f11-9688-9b343cb4a7e5",
+    "timestamp": 1757780967523000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e90609c8b96676 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_confirmations?select=*&artist_profile_id=eq.24ef8c69-2816-4059-a783-59638f21299a&confirmation_status=eq.confirmed&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "6dbf168c-e0db-4467-af28-521d8e2fe181",
+    "timestamp": 1757780967978000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e9060a18ea6676 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_confirmations?select=*&artist_profile_id=eq.24ef8c69-2816-4059-a783-59638f21299a&confirmation_status=eq.confirmed&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "0a19dde9-af09-47fc-91c9-700964e3ea28",
+    "timestamp": 1757780968029000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e90641c98f6676 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/countries?select=name%2Ccode&order=name.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "2f3b70c0-a73d-4697-9dcb-c3bd122e78d3",
+    "timestamp": 1757780976935000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e90641c98d6676 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/countries?select=name%2Ccode&order=name.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "72be528d-dd4a-4f09-afe4-a4737a77df56",
+    "timestamp": 1757780976936000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e90642fa8b6676 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/countries?select=name%2Ccode&order=name.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "3ee92174-c433-455a-93e8-e3ecb87dc580",
+    "timestamp": 1757780977117000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e90644cc166676 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/countries?select=name%2Ccode&order=name.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "b005d53d-363b-4c3b-8c0e-1ed3e2a31b4c",
+    "timestamp": 1757780977416000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e907397e15d8d0 | https://xsqdkubgyqwpyvfltnrf.supabase.co/auth/v1/token?grant_type=refresh_token | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "e90d168a-ccfe-4adb-9ed8-f063c9035960",
+    "timestamp": 1757781016574000
+  },
+  {
+    "event_message": "POST | 200 | 109.38.158.14 | 97e90739eec0d8d0 | https://xsqdkubgyqwpyvfltnrf.supabase.co/auth/v1/token?grant_type=refresh_token | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "5ce237fa-ca94-4dd5-a9fe-f724bf8f17e1",
+    "timestamp": 1757781016628000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e9073cbc1ad8d0 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_cloudflare_config | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "118c09e4-8e66-4574-aee8-720274d1163a",
+    "timestamp": 1757781017080000
+  },
+  {
+    "event_message": "POST | 200 | 109.38.158.14 | 97e9073cbc16d8d0 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "938e1dc4-469f-4b4c-a014-6a1ecb9852f4",
+    "timestamp": 1757781017080000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e9073cbc1bd8d0 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&person_id=eq.343602c6-0001-45bb-b2d8-6369ed4f99bd&order=created_at.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "698081cb-e6f2-416f-a107-01a5eec06317",
+    "timestamp": 1757781017081000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e9073cbc1ed8d0 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&person_id=eq.343602c6-0001-45bb-b2d8-6369ed4f99bd&order=created_at.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "4b594394-90f7-4333-9415-aba37624d7d8",
+    "timestamp": 1757781017081000
+  },
+  {
+    "event_message": "POST | 200 | 109.38.158.14 | 97e9073d1caad8d0 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_cloudflare_config | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "0cecb6c5-31a4-46a0-9467-dcc353f57dc6",
+    "timestamp": 1757781017140000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e9073d1cabd8d0 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&person_id=eq.343602c6-0001-45bb-b2d8-6369ed4f99bd&order=created_at.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "cd09cf95-b144-47cc-ae9c-696cd3d262f2",
+    "timestamp": 1757781017142000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e9073e9f2bd8d0 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&person_id=eq.343602c6-0001-45bb-b2d8-6369ed4f99bd&order=created_at.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "0e9745a0-259c-46e8-b4bb-c50abaa24612",
+    "timestamp": 1757781017381000
+  },
+  {
+    "event_message": "POST | 200 | 109.38.158.14 | 97e9073e9f39d8d0 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "17023295-bbd8-4dd7-b03f-bc09d52bdaa8",
+    "timestamp": 1757781017383000
+  },
+  {
+    "event_message": "POST | 200 | 109.38.158.14 | 97e9073e9f3bd8d0 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_cloudflare_config | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "9969a22a-4e1c-4d98-8323-c265589e071e",
+    "timestamp": 1757781017386000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e90afe1f490e3d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&person_id=eq.343602c6-0001-45bb-b2d8-6369ed4f99bd&order=created_at.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "051c1c23-c134-4f77-9ec6-deef4a92df98",
+    "timestamp": 1757781170903000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e90b355a2b0e3d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/media_files?select=* | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "54d68268-0c38-4590-b28b-0c79a684e683",
+    "timestamp": 1757781179747000
+  },
+  {
+    "event_message": "POST | 201 | 109.38.158.14 | 97e90b36bb4d0e3d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/media_files?select=* | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "7d4e2e78-7b8a-46c3-afc6-a25796f5bcb5",
+    "timestamp": 1757781179966000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e90b3a6e450e3d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "023af2ac-932e-4b9f-90e3-dc2158559236",
+    "timestamp": 1757781180551000
+  },
+  {
+    "event_message": "POST | 201 | 109.38.158.14 | 97e90b3b0edb0e3d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "0badc32c-6f14-43f3-8b29-bc513d4e0cbf",
+    "timestamp": 1757781180656000
+  },
+  {
+    "event_message": "POST | 200 | 109.38.158.14 | 97e90b3db9a40e3d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "e2206a94-34d2-445b-adf8-1db799b10a44",
+    "timestamp": 1757781181083000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e90bb63af10e3d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&person_id=eq.343602c6-0001-45bb-b2d8-6369ed4f99bd&order=created_at.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "e1f1b5e6-9c84-4841-a5f2-d1f97dbb425e",
+    "timestamp": 1757781200366000
+  },
+  {
+    "event_message": "POST | 201 | 109.38.158.14 | 97e90be3ec3c0e3d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/media_files?select=* | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "27853ba6-4fd4-4041-b897-40b67bf23a32",
+    "timestamp": 1757781207680000
+  },
+  {
+    "event_message": "POST | 201 | 109.38.158.14 | 97e90be63e2a0e3d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "15efac69-cd5e-43c6-866d-c40194fb6877",
+    "timestamp": 1757781208051000
+  },
+  {
+    "event_message": "POST | 200 | 109.38.158.14 | 97e90be78f760e3d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "2763f0b9-0602-4596-b8c4-53690ccca888",
+    "timestamp": 1757781208259000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e90c217dc30e3d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&person_id=eq.343602c6-0001-45bb-b2d8-6369ed4f99bd&order=created_at.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "8ae2b992-07d2-4c59-a319-a8e6b19180a4",
+    "timestamp": 1757781217527000
+  },
+  {
+    "event_message": "POST | 201 | 109.38.158.14 | 97e90c5c4d9f0e3d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/media_files?select=* | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "a297d1c8-1adc-4df1-b8c5-41eaf8b8ef91",
+    "timestamp": 1757781226933000
+  },
+  {
+    "event_message": "POST | 201 | 109.38.158.14 | 97e90c5f38820e3d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "c4c69f65-c178-4bce-af54-230d890a2b2c",
+    "timestamp": 1757781227400000
+  },
+  {
+    "event_message": "POST | 200 | 109.38.158.14 | 97e90c6059ad0e3d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "a31e2486-8718-46f7-95cd-318b0f0f80db",
+    "timestamp": 1757781227583000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e90d3d8a901c64 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&person_id=eq.343602c6-0001-45bb-b2d8-6369ed4f99bd&order=created_at.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "2bde19e1-17a8-4081-acf1-e5174a18bf79",
+    "timestamp": 1757781262971000
+  },
+  {
+    "event_message": "POST | 201 | 109.38.158.14 | 97e90d67ed1d1c64 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/media_files?select=* | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "e7eb8b94-90b4-45c4-ada8-98269088602f",
+    "timestamp": 1757781269756000
+  },
+  {
+    "event_message": "POST | 201 | 109.38.158.14 | 97e90d6a8a3f1c64 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "04bc9947-1323-41d3-96c8-3a838c9d3f72",
+    "timestamp": 1757781270177000
+  },
+  {
+    "event_message": "POST | 200 | 109.38.158.14 | 97e90d6cde851c64 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "2ed98ee6-673d-4e4c-84cb-f0e6dd8eb34f",
+    "timestamp": 1757781270541000
+  },
+  {
+    "event_message": "POST | 201 | 109.38.158.14 | 97e90df768df1c64 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/media_files?select=* | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "0e36f669-05ff-45b4-9803-3576b7d1a64d",
+    "timestamp": 1757781292717000
+  },
+  {
+    "event_message": "POST | 201 | 109.38.158.14 | 97e90dfa7ea01c64 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "010e48fe-7a70-4ba3-b962-c50c8dd5a2e0",
+    "timestamp": 1757781293202000
+  },
+  {
+    "event_message": "POST | 200 | 109.38.158.14 | 97e90dfcba551c64 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "9fe1a5f5-1f7c-434a-bf63-7855afb35211",
+    "timestamp": 1757781293566000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e90e1dd8451c64 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/has_primary_profile | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "6b3d5a69-cfb7-4fcc-ba11-26771bd1fa8d",
+    "timestamp": 1757781298865000
+  },
+  {
+    "event_message": "POST | 200 | 109.38.158.14 | 97e90e1e28da1c64 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/has_primary_profile | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "1da2a361-ae8f-4c0a-91a5-62c39024e552",
+    "timestamp": 1757781298912000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e90e1f9be01c64 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&id=eq.7bcc0739-3c98-47d5-a7cb-36822e7f71cf | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "ddd22f6e-5741-4797-a44f-1e2b3dca2302",
+    "timestamp": 1757781299143000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e90e1f9be61c64 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/events?select=id%2Ceid%2Cname%2Cevent_start_datetime%2Cevent_end_datetime%2Cvenue%2Ccity%3Acities%28name%29%2Cdescription&enabled=eq.true&show_in_app=eq.true&event_start_datetime=gte.2025-09-13T16%3A34%3A59.049Z&order=event_start_datetime.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "de71ecc6-8103-4d76-afcb-0a500ac13924",
+    "timestamp": 1757781299144000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e90e1f9bf31c64 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_confirmations?select=*&artist_profile_id=eq.7bcc0739-3c98-47d5-a7cb-36822e7f71cf&confirmation_status=eq.confirmed | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "2832a504-f56a-4802-ad13-3d88d0cc43a7",
+    "timestamp": 1757781299144000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e90e1f9bec1c64 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_applications?select=*&artist_profile_id=eq.7bcc0739-3c98-47d5-a7cb-36822e7f71cf | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "e625c9ae-874f-45db-9b7f-30f978b5f89a",
+    "timestamp": 1757781299145000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e90e1f9bf11c64 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_invitations?select=*&artist_profile_id=eq.7bcc0739-3c98-47d5-a7cb-36822e7f71cf&accepted_at=is.null | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "d79e1f82-1fb1-45ed-ba54-6f33a7dfa67d",
+    "timestamp": 1757781299146000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e90e1fec921c64 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_confirmations?select=*&artist_profile_id=eq.7bcc0739-3c98-47d5-a7cb-36822e7f71cf&confirmation_status=eq.confirmed | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "df0192a1-d976-496d-a00c-e72549810a04",
+    "timestamp": 1757781299188000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e90e1fec941c64 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&id=eq.7bcc0739-3c98-47d5-a7cb-36822e7f71cf | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "c125af02-e062-42de-8b33-69cb4e046eef",
+    "timestamp": 1757781299189000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e90e1ffcb41c64 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_invitations?select=*&artist_profile_id=eq.7bcc0739-3c98-47d5-a7cb-36822e7f71cf&accepted_at=is.null | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "c89c5a9a-1725-4119-82c8-b63eb2ee7b28",
+    "timestamp": 1757781299201000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e90e1ffcb51c64 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_applications?select=*&artist_profile_id=eq.7bcc0739-3c98-47d5-a7cb-36822e7f71cf | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "e95e00d7-80ea-43ed-85e3-955e5381f176",
+    "timestamp": 1757781299203000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e90e1fec901c64 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/events?select=id%2Ceid%2Cname%2Cevent_start_datetime%2Cevent_end_datetime%2Cvenue%2Ccity%3Acities%28name%29%2Cdescription&enabled=eq.true&show_in_app=eq.true&event_start_datetime=gte.2025-09-13T16%3A34%3A59.049Z&order=event_start_datetime.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "8bfdb769-c407-40b5-8c03-f1af89f0499a",
+    "timestamp": 1757781299204000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e910614d60e568 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_applications?select=*&artist_profile_id=eq.7bcc0739-3c98-47d5-a7cb-36822e7f71cf | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "3fbd58ba-a1c2-43c5-8f8a-51a71854a8ca",
+    "timestamp": 1757781391571000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e910acec97f5f2 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=id&person_id=eq.343602c6-0001-45bb-b2d8-6369ed4f99bd | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "99fa7924-bc43-40e4-ab4b-dbfeda0aa719",
+    "timestamp": 1757781403667000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e910ad5d63f5f2 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=id&person_id=eq.343602c6-0001-45bb-b2d8-6369ed4f99bd | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "d326b428-6f9c-4db5-9567-4e3f6ba4f8a1",
+    "timestamp": 1757781403747000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e910af7855f5f2 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_stripe_accounts?select=*&artist_profile_id=in.%2824ef8c69-2816-4059-a783-59638f21299a%2C7bcc0739-3c98-47d5-a7cb-36822e7f71cf%29 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "49c0e0ce-070c-4b5f-a3d5-de71d4982072",
+    "timestamp": 1757781404084000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e910afd8d8f5f2 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_stripe_accounts?select=*&artist_profile_id=in.%2824ef8c69-2816-4059-a783-59638f21299a%2C7bcc0739-3c98-47d5-a7cb-36822e7f71cf%29 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "ccb8ff3c-8626-4d23-b77f-edf5db3c7c31",
+    "timestamp": 1757781404145000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e910b00917f5f2 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/art?select=id%2Cart_code%2Cdescription%2Cstatus%2Ccurrent_bid%2Ccreated_at%2Cartist_id%2Cevent%3Aevents%28eid%2Cname%2Cevent_start_datetime%29%2Cart_media%28media_files%21art_media_media_id_fkey%28id%2Ccloudflare_id%2Cthumbnail_url%2Ccompressed_url%29%29&artist_id=in.%2824ef8c69-2816-4059-a783-59638f21299a%29&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "2305048a-4c83-40c2-970c-d617a985634b",
+    "timestamp": 1757781404173000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e910b0597cf5f2 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/art?select=id%2Cart_code%2Cdescription%2Cstatus%2Ccurrent_bid%2Ccreated_at%2Cartist_id%2Cevent%3Aevents%28eid%2Cname%2Cevent_start_datetime%29%2Cart_media%28media_files%21art_media_media_id_fkey%28id%2Ccloudflare_id%2Cthumbnail_url%2Ccompressed_url%29%29&artist_id=in.%2824ef8c69-2816-4059-a783-59638f21299a%29&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "e7eea62b-77b3-4eb4-a0aa-e992c397cf0d",
+    "timestamp": 1757781404223000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e910b26cd6f5f2 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_global_payments?select=*&artist_profile_id=in.%2824ef8c69-2816-4059-a783-59638f21299a%2C7bcc0739-3c98-47d5-a7cb-36822e7f71cf%29 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "983edbed-3e26-49c4-8413-eeffe6298e11",
+    "timestamp": 1757781404557000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e910b2bd4af5f2 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_global_payments?select=*&artist_profile_id=in.%2824ef8c69-2816-4059-a783-59638f21299a%2C7bcc0739-3c98-47d5-a7cb-36822e7f71cf%29 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "5c521b23-1e46-4495-a349-0c35dd8f6c06",
+    "timestamp": 1757781404608000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e910b31e2ef5f2 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/payment_processing?select=art_id%2Camount%2Ccurrency%2Cstatus%2Ccompleted_at&art_id=in.%28%29 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "6621d3dd-5eae-4fc4-87d0-28c6d00d8877",
+    "timestamp": 1757781404657000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e910b35eb2f5f2 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/payment_processing?select=art_id%2Camount%2Ccurrency%2Cstatus%2Ccompleted_at&art_id=in.%28%29 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "cc167d6c-ac75-4a71-9c2b-46b53935bcd5",
+    "timestamp": 1757781404699000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e910b5b9cef5f2 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_payments?select=art_id%2Cnet_amount%2Ccurrency%2Cstatus%2Cpaid_at&artist_profile_id=in.%2824ef8c69-2816-4059-a783-59638f21299a%29 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "1ee9cc8e-5fae-4cca-bb96-c1e224318b35",
+    "timestamp": 1757781405084000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e910b60a34f5f2 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_payments?select=art_id%2Cnet_amount%2Ccurrency%2Cstatus%2Cpaid_at&artist_profile_id=in.%2824ef8c69-2816-4059-a783-59638f21299a%29 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "d8041e0f-a972-4e60-909a-3393280d10ae",
+    "timestamp": 1757781405136000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e910b6ab53f5f2 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/art?select=id&artist_id=in.%2824ef8c69-2816-4059-a783-59638f21299a%29 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "e8429e21-4501-43dd-a120-8caf84b2290a",
+    "timestamp": 1757781405239000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e910b70bf3f5f2 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/art?select=id&artist_id=in.%2824ef8c69-2816-4059-a783-59638f21299a%29 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "921a2e47-be5e-4983-a382-7fb538726e73",
+    "timestamp": 1757781405292000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e910ba1878f5f2 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/payment_processing?select=id%2Cart_id%2Camount%2Ccurrency%2Cstatus%2Ccompleted_at%2Cart%3Aart%21payment_processing_art_id_fkey%28id%2Cart_code%2Cartist_id%2Cevent%3Aevents%28eid%2Cname%29%29&art_id=in.%28%29&status=eq.completed | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "8dabbc30-11c1-4a78-838f-a9c74a3534ea",
+    "timestamp": 1757781405782000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e910ba6910f5f2 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/payment_processing?select=id%2Cart_id%2Camount%2Ccurrency%2Cstatus%2Ccompleted_at%2Cart%3Aart%21payment_processing_art_id_fkey%28id%2Cart_code%2Cartist_id%2Cevent%3Aevents%28eid%2Cname%29%29&art_id=in.%28%29&status=eq.completed | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "f05efa89-1b15-45de-bbd0-4bb81d386737",
+    "timestamp": 1757781405831000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e910bbcb7df5f2 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_payments?select=id%2Cart_id%2Cgross_amount%2Cnet_amount%2Ccurrency%2Cstatus%2Cpaid_at%2Cart%3Aart%21artist_payments_art_id_fkey%28id%2Cart_code%2Cevent%3Aevents%28eid%2Cname%29%29&artist_profile_id=in.%2824ef8c69-2816-4059-a783-59638f21299a%29 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "1436014d-0129-4526-96b8-84d68f817a53",
+    "timestamp": 1757781406054000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e910bbcb7af5f2 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/art?select=id%2Cart_code%2Cdescription%2Cstatus%2Ccurrent_bid%2Ccreated_at%2Cartist_id%2Cevent%3Aevents%28eid%2Cname%2Cevent_start_datetime%29%2Cart_media%28media_files%21art_media_media_id_fkey%28id%2Ccloudflare_id%2Cthumbnail_url%2Ccompressed_url%29%29&artist_id=in.%2824ef8c69-2816-4059-a783-59638f21299a%29&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "3c24d59e-f012-4b5c-aa19-4d0ff37f18f3",
+    "timestamp": 1757781406056000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e910bc2c21f5f2 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_payments?select=id%2Cart_id%2Cgross_amount%2Cnet_amount%2Ccurrency%2Cstatus%2Cpaid_at%2Cart%3Aart%21artist_payments_art_id_fkey%28id%2Cart_code%2Cevent%3Aevents%28eid%2Cname%29%29&artist_profile_id=in.%2824ef8c69-2816-4059-a783-59638f21299a%29 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "0b98925d-dce9-4d6e-9338-f89677345d42",
+    "timestamp": 1757781406109000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e910bdbe9ef5f2 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/art?select=id%2Ccurrent_bid&artist_id=in.%2824ef8c69-2816-4059-a783-59638f21299a%29 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "53362071-516d-43b3-9d1a-be5e1fb1fac4",
+    "timestamp": 1757781406363000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e910bdfeecf5f2 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/payment_processing?select=art_id%2Camount%2Ccurrency%2Cstatus%2Ccompleted_at&art_id=in.%28%29 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "07e33742-c1a9-4624-8c73-49af7a7dcec0",
+    "timestamp": 1757781406397000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e910bdfef2f5f2 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/art?select=id%2Ccurrent_bid&artist_id=in.%2824ef8c69-2816-4059-a783-59638f21299a%29 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "b4e7df85-8f8f-4fbb-bd5a-81334d67831b",
+    "timestamp": 1757781406399000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e910c0bb5af5f2 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_payments?select=art_id%2Cnet_amount%2Ccurrency%2Cstatus%2Cpaid_at&artist_profile_id=in.%2824ef8c69-2816-4059-a783-59638f21299a%29 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "80bb15a6-f18f-413e-a0e7-622a31538817",
+    "timestamp": 1757781406846000
+  },
+  {
+    "event_message": "POST | 200 | 109.38.158.14 | 97e910cbbb4af5f2 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/has_primary_profile | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "9d3124d4-85f1-4e08-952f-6b63c7edee75",
+    "timestamp": 1757781408603000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e910ceffeef5f2 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&id=eq.7bcc0739-3c98-47d5-a7cb-36822e7f71cf | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "8621216b-48af-494b-835e-f6dba95a4245",
+    "timestamp": 1757781409120000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e910cefff3f5f2 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/events?select=id%2Ceid%2Cname%2Cevent_start_datetime%2Cevent_end_datetime%2Cvenue%2Ccity%3Acities%28name%29%2Cdescription&enabled=eq.true&show_in_app=eq.true&event_start_datetime=gte.2025-09-13T16%3A36%3A48.999Z&order=event_start_datetime.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "9b1ff0f0-2972-45ab-8f37-dd876ebe4071",
+    "timestamp": 1757781409121000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e910cefffcf5f2 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_confirmations?select=*&artist_profile_id=eq.7bcc0739-3c98-47d5-a7cb-36822e7f71cf&confirmation_status=eq.confirmed | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "3103ceba-e289-4507-b92d-702a0f9d47e5",
+    "timestamp": 1757781409125000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e910cefff4f5f2 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_applications?select=*&artist_profile_id=eq.7bcc0739-3c98-47d5-a7cb-36822e7f71cf | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "0e6c4b90-44d6-41a6-b31b-e82903e345f8",
+    "timestamp": 1757781409125000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e910cefff8f5f2 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_invitations?select=*&artist_profile_id=eq.7bcc0739-3c98-47d5-a7cb-36822e7f71cf&accepted_at=is.null | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "e0bedc5d-f2b7-4054-b28e-2b7712c9bb21",
+    "timestamp": 1757781409126000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e910cf3847f5f2 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/events?select=id%2Ceid%2Cname%2Cevent_start_datetime%2Cevent_end_datetime%2Cvenue%2Ccity%3Acities%28name%29%2Cdescription&enabled=eq.true&show_in_app=eq.true&event_start_datetime=gte.2025-09-13T16%3A36%3A48.999Z&order=event_start_datetime.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "074e77ba-281c-4e76-aaa9-bde0e05636b9",
+    "timestamp": 1757781409165000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e97706dc790e30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "ee51e5e0-920e-4b61-88fb-f54f12fc7c82",
+    "timestamp": 1757785595987000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e97706dc7d0e30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "1dd451fc-424a-459b-bbad-8f313994efa8",
+    "timestamp": 1757785595990000
+  },
+  {
+    "event_message": "POST | 200 | 109.38.158.14 | 97e977083de60e30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "98880a65-1008-4ebc-906e-ee8eaccfd4b6",
+    "timestamp": 1757785596205000
+  },
+  {
+    "event_message": "POST | 200 | 109.38.158.14 | 97e977083de50e30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "3b7ba3ba-f986-484b-b3c2-6b43e5fc6d7b",
+    "timestamp": 1757785596205000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e9770aafc20e30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_applications?select=*%2Cevent%3Aevents%28id%2Cname%2Cevent_start_datetime%2Cvenue%2Ccity%3Acities%28name%29%29&artist_profile_id=eq.24ef8c69-2816-4059-a783-59638f21299a&order=applied_at.desc&limit=5 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "9c67dbcc-a69a-4e64-9ae2-b60ad11d6c87",
+    "timestamp": 1757785596599000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e9770abfce0e30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_applications?select=*%2Cevent%3Aevents%28id%2Cname%2Cevent_start_datetime%2Cvenue%2Ccity%3Acities%28name%29%29&artist_profile_id=eq.24ef8c69-2816-4059-a783-59638f21299a&order=applied_at.desc&limit=5 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "2342b96d-ca23-4346-b229-501a67c62f59",
+    "timestamp": 1757785596611000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e9770af8060e30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_applications?select=*%2Cevent%3Aevents%28id%2Cname%2Cevent_start_datetime%2Cvenue%2Ccity%3Acities%28name%29%29&artist_profile_id=eq.24ef8c69-2816-4059-a783-59638f21299a&order=applied_at.desc&limit=5 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "acf53486-9714-4c3d-945c-5f1ddf6a6d0a",
+    "timestamp": 1757785596647000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e9770d3a060e30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_applications?select=*%2Cevent%3Aevents%28id%2Cname%2Cevent_start_datetime%2Cvenue%2Ccity%3Acities%28name%29%29&artist_profile_id=eq.24ef8c69-2816-4059-a783-59638f21299a&order=applied_at.desc&limit=5 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "d4cc7a63-3b19-4ba2-8834-f2d01648cbe8",
+    "timestamp": 1757785597007000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e9770d3a0f0e30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_invitations?select=*&artist_profile_id=eq.24ef8c69-2816-4059-a783-59638f21299a&status=eq.pending&accepted_at=is.null&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "e460a6b1-e080-4867-9ffc-6fffb6b03e0a",
+    "timestamp": 1757785597008000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e9770d9a710e30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_invitations?select=*&artist_profile_id=eq.24ef8c69-2816-4059-a783-59638f21299a&status=eq.pending&accepted_at=is.null&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "1f9071a0-ba83-4278-b470-c577696469f9",
+    "timestamp": 1757785597062000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e9770fbc5f0e30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_confirmations?select=*&artist_profile_id=eq.24ef8c69-2816-4059-a783-59638f21299a&confirmation_status=eq.confirmed&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "d8b6dfc8-de3d-4fe2-9616-68c969e726ad",
+    "timestamp": 1757785597404000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e9770fbc5c0e30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_invitations?select=*&artist_profile_id=eq.24ef8c69-2816-4059-a783-59638f21299a&status=eq.pending&accepted_at=is.null&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "126a40a9-51a3-4605-8b8d-aaa9817f911e",
+    "timestamp": 1757785597412000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e977100caa0e30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_confirmations?select=*&artist_profile_id=eq.24ef8c69-2816-4059-a783-59638f21299a&confirmation_status=eq.confirmed&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "be816d65-b816-41ae-9531-770904763d7f",
+    "timestamp": 1757785597451000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e977128f350e30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&person_id=eq.343602c6-0001-45bb-b2d8-6369ed4f99bd&order=created_at.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "6a7cfb3f-05c4-45ca-82b0-e448370513b1",
+    "timestamp": 1757785597857000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e977128f390e30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/countries?select=name%2Ccode&order=name.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "41203136-00cd-46f4-879d-093b4a71789f",
+    "timestamp": 1757785597857000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e97712af500e30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_confirmations?select=*&artist_profile_id=eq.24ef8c69-2816-4059-a783-59638f21299a&confirmation_status=eq.confirmed&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "c3fc8bfa-7048-49a0-94ce-3f8196097e5c",
+    "timestamp": 1757785597874000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e977128f370e30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&person_id=eq.343602c6-0001-45bb-b2d8-6369ed4f99bd&order=created_at.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "1411e315-90cf-4e65-b6dc-a78ee9dc5ffb",
+    "timestamp": 1757785597875000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e97712df9a0e30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&person_id=eq.343602c6-0001-45bb-b2d8-6369ed4f99bd&order=created_at.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "e8656cf0-ff7b-4b4a-8996-16226b741c59",
+    "timestamp": 1757785597912000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e97712df940e30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/countries?select=name%2Ccode&order=name.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "feaba9b4-f053-4b29-9c9d-98da1d36094e",
+    "timestamp": 1757785597913000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e97715faff0e30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&person_id=eq.343602c6-0001-45bb-b2d8-6369ed4f99bd&order=created_at.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "e23024e3-20e7-4d6c-b8b8-7f96c41d95dc",
+    "timestamp": 1757785598405000
+  },
+  {
+    "event_message": "POST | 200 | 109.38.158.14 | 97e977161b250e30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "6991a54f-a7f1-4860-a32e-e5b593b2d29e",
+    "timestamp": 1757785598422000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 109.38.158.14 | 97e977161b260e30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_cloudflare_config | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "c08802fe-1b6b-458e-a4e5-f4bbc2598c20",
+    "timestamp": 1757785598423000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e977161b270e30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/countries?select=name%2Ccode&order=name.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "e4612dd6-96da-4ae2-928e-fae3af35edc8",
+    "timestamp": 1757785598423000
+  },
+  {
+    "event_message": "POST | 200 | 109.38.158.14 | 97e977165b5b0e30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_cloudflare_config | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "14bc2434-0034-4924-82e6-add300894739",
+    "timestamp": 1757785598462000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e9774c2b660e30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&person_id=eq.343602c6-0001-45bb-b2d8-6369ed4f99bd&order=created_at.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "dcc5065f-b72d-4fe9-b7fe-c71e26647e01",
+    "timestamp": 1757785607070000
+  },
+  {
+    "event_message": "POST | 200 | 109.38.158.14 | 97e977771d660e30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "6dcd7cfb-9b1b-4102-8dde-744af5f810d7",
+    "timestamp": 1757785613944000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e977789ec90e30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_applications?select=*%2Cevent%3Aevents%28id%2Cname%2Cevent_start_datetime%2Cvenue%2Ccity%3Acities%28name%29%29&artist_profile_id=eq.24ef8c69-2816-4059-a783-59638f21299a&order=applied_at.desc&limit=5 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "80dd6b7b-6ace-4322-861f-b2d6bdd97944",
+    "timestamp": 1757785614180000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e9777a18570e30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_invitations?select=*&artist_profile_id=eq.24ef8c69-2816-4059-a783-59638f21299a&status=eq.pending&accepted_at=is.null&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "6be5cfd6-5ab9-4210-a08f-2c4f59b17307",
+    "timestamp": 1757785614424000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e9777b59520e30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_confirmations?select=*&artist_profile_id=eq.24ef8c69-2816-4059-a783-59638f21299a&confirmation_status=eq.confirmed&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "944a3a4d-2724-41c8-b502-6c02accca2be",
+    "timestamp": 1757785614623000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 172.97.214.64 | 97e988436d8fab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/auth/v1/token?grant_type=refresh_token | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "778723dc-4dd3-4813-9a63-7b74e3eb83d2",
+    "timestamp": 1757786302021000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e98843de17ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/auth/v1/token?grant_type=refresh_token | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "332d0f1a-c867-4c1a-a0ec-965ac7260050",
+    "timestamp": 1757786302067000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 172.97.214.64 | 97e988453fb6ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/events?select=id%2Ceid%2Cenable_auction%2Cvote_by_link&eid=in.%28AB2952%2CAB3034%2CAB3057%2CAB3045%2CAB3061%2CAB3058%2CAB2944%2CAB3067%2CAB3010%2CAB3062%2CAB3051%2CAB3054%2CAB2947%2CAB3065%2CAB3060%2CAB3032%2CAB2941%2CAB3064%2CAB3006%2CAB3038%2CAB3055%2CAB3049%2CAB3030%2CAB3044%2CAB3059%2CAB3056%2CAB3023%2CAB3050%2CAB3037%2CAB2938%2CAB3041%2CAB3036%2CAB3052%2CAB3035%2CAB3048%2CAB3001%2CAB3040%2CAB3026%2CAB3033%2CAB6050%2CAB3039%2CAB3063%2CAB3066%2CAB3029%2CAB3053%2CAB3046%2CAB2995%2CAB3019%2CAB3028%2CAB3043%29 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "1c329b57-fc0b-4703-9e4a-1a6aea9e23f4",
+    "timestamp": 1757786302286000
+  },
+  {
+    "event_message": "GET | 200 | 172.97.214.64 | 97e988456fdaab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/events?select=id%2Ceid%2Cenable_auction%2Cvote_by_link&eid=in.%28AB2952%2CAB3034%2CAB3057%2CAB3045%2CAB3061%2CAB3058%2CAB2944%2CAB3067%2CAB3010%2CAB3062%2CAB3051%2CAB3054%2CAB2947%2CAB3065%2CAB3060%2CAB3032%2CAB2941%2CAB3064%2CAB3006%2CAB3038%2CAB3055%2CAB3049%2CAB3030%2CAB3044%2CAB3059%2CAB3056%2CAB3023%2CAB3050%2CAB3037%2CAB2938%2CAB3041%2CAB3036%2CAB3052%2CAB3035%2CAB3048%2CAB3001%2CAB3040%2CAB3026%2CAB3033%2CAB6050%2CAB3039%2CAB3063%2CAB3066%2CAB3029%2CAB3053%2CAB3046%2CAB2995%2CAB3019%2CAB3028%2CAB3043%29 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "7a2f1b82-5ba4-4497-a3b7-3541c9a4ee51",
+    "timestamp": 1757786302314000
+  },
+  {
+    "event_message": "GET | 200 | 172.97.214.64 | 97e9884ddbe7ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/events?select=id%2Ceid%2Cenable_auction%2Cvote_by_link&eid=in.%28AB2952%2CAB3034%2CAB3057%2CAB3045%2CAB3061%2CAB3058%2CAB2944%2CAB3067%2CAB3010%2CAB3062%2CAB3051%2CAB3054%2CAB2947%2CAB3065%2CAB3060%2CAB3032%2CAB2941%2CAB3064%2CAB3006%2CAB3038%2CAB3055%2CAB3049%2CAB3030%2CAB3044%2CAB3059%2CAB3056%2CAB3023%2CAB3050%2CAB3037%2CAB2938%2CAB3041%2CAB3036%2CAB3052%2CAB3035%2CAB3048%2CAB3001%2CAB3040%2CAB3026%2CAB3033%2CAB6050%2CAB3039%2CAB3063%2CAB3066%2CAB3029%2CAB3053%2CAB3046%2CAB2995%2CAB3019%2CAB3028%2CAB3043%29 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "350fb216-6c02-4d2a-a5f6-9d31c3c8396d",
+    "timestamp": 1757786303676000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 172.97.214.64 | 97e98854bd80ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/auth/v1/logout?scope=global | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "09f50243-cf31-48be-8c14-f1c095135f3c",
+    "timestamp": 1757786304767000
+  },
+  {
+    "event_message": "POST | 204 | 172.97.214.64 | 97e98854fdcaab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/auth/v1/logout?scope=global | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "527d804e-bad9-47f7-b292-34369b968372",
+    "timestamp": 1757786304803000
+  },
+  {
+    "event_message": "GET | 200 | 172.97.214.64 | 97e988560f35ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/events?select=id%2Ceid%2Cenable_auction%2Cvote_by_link&eid=in.%28AB2952%2CAB3034%2CAB3057%2CAB3045%2CAB3061%2CAB3058%2CAB2944%2CAB3067%2CAB3010%2CAB3062%2CAB3051%2CAB3054%2CAB2947%2CAB3065%2CAB3060%2CAB3032%2CAB2941%2CAB3064%2CAB3006%2CAB3038%2CAB3055%2CAB3049%2CAB3030%2CAB3044%2CAB3059%2CAB3056%2CAB3023%2CAB3050%2CAB3037%2CAB2938%2CAB3041%2CAB3036%2CAB3052%2CAB3035%2CAB3048%2CAB3001%2CAB3040%2CAB3026%2CAB3033%2CAB6050%2CAB3039%2CAB3063%2CAB3066%2CAB3029%2CAB3053%2CAB3046%2CAB2995%2CAB3019%2CAB3028%2CAB3043%29 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "ce61ef6b-33b5-4d24-a833-a724a705056a",
+    "timestamp": 1757786304976000
+  },
+  {
+    "event_message": "GET | 200 | 172.97.214.64 | 97e988cd49a5ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/events?select=id%2Ceid%2Cenable_auction%2Cvote_by_link&eid=in.%28AB2952%2CAB3034%2CAB3057%2CAB3045%2CAB3061%2CAB3058%2CAB2944%2CAB3067%2CAB3010%2CAB3062%2CAB3051%2CAB3054%2CAB2947%2CAB3065%2CAB3060%2CAB3032%2CAB2941%2CAB3064%2CAB3006%2CAB3038%2CAB3055%2CAB3049%2CAB3030%2CAB3044%2CAB3059%2CAB3056%2CAB3023%2CAB3050%2CAB3037%2CAB2938%2CAB3041%2CAB3036%2CAB3052%2CAB3035%2CAB3048%2CAB3001%2CAB3040%2CAB3026%2CAB3033%2CAB6050%2CAB3039%2CAB3063%2CAB3066%2CAB3029%2CAB3053%2CAB3046%2CAB2995%2CAB3019%2CAB3028%2CAB3043%29 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "f55051d2-2771-47ce-acb9-23b42aee2c01",
+    "timestamp": 1757786324074000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 172.97.214.64 | 97e9897b1ed4ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/auth/v1/otp | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "3b1da6ad-5b9a-4c02-a291-6de33c285231",
+    "timestamp": 1757786351867000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9897b4f1aab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/auth/v1/otp | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "85818efe-7a99-4a75-a55c-63138fdd990b",
+    "timestamp": 1757786351900000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 172.97.214.64 | 97e989858e7fab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/auth/v1/verify | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "cac7e8e8-9072-48e1-9e26-6a354e7145d9",
+    "timestamp": 1757786353538000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e98985beceab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/auth/v1/verify | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "29080e32-2184-4be4-b956-57884dc2ab89",
+    "timestamp": 1757786353569000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 172.97.214.64 | 97e98987c9c6ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "966f70b7-2fbe-4870-b358-af42109a6701",
+    "timestamp": 1757786353898000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 172.97.214.64 | 97e98987c9c8ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "3f00329d-21c9-42e4-8ecf-73956480756d",
+    "timestamp": 1757786353899000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 172.97.214.64 | 97e98987d9dbab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/votes?select=art_id%2Cround&person_id=eq.6a84b73b-55a3-4481-9a2e-7e83202c1f37&event_id=eq.b67782e5-dbb3-428c-8d46-48a2395b3aa5 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "36130bfa-7c11-4e99-86d9-cf4a41e350e4",
+    "timestamp": 1757786353907000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 172.97.214.64 | 97e98987d9e1ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/votes?select=art_id%2Cround&person_id=eq.6a84b73b-55a3-4481-9a2e-7e83202c1f37&event_id=eq.b67782e5-dbb3-428c-8d46-48a2395b3aa5 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "2fdf5dfc-a2cd-4bf1-a91c-178e7f6c4816",
+    "timestamp": 1757786353907000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 172.97.214.64 | 97e98987d9dfab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "03bb373c-b0da-4267-bca7-96d421fdbabc",
+    "timestamp": 1757786353908000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e989880a1cab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "df59d4e1-40a5-4bfc-8d7a-1e3e5fe49ca4",
+    "timestamp": 1757786353940000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e989881a29ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "6b3104c3-d1c7-4c26-afdc-44bce8a571e3",
+    "timestamp": 1757786353949000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e989881a2eab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "ad7bda87-0ba3-46ba-937a-9b604960b84e",
+    "timestamp": 1757786353950000
+  },
+  {
+    "event_message": "GET | 200 | 172.97.214.64 | 97e989881a2fab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/votes?select=art_id%2Cround&person_id=eq.6a84b73b-55a3-4481-9a2e-7e83202c1f37&event_id=eq.b67782e5-dbb3-428c-8d46-48a2395b3aa5 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "ebc7954a-2a13-46a3-8fd8-b9bc1e8804d7",
+    "timestamp": 1757786353951000
+  },
+  {
+    "event_message": "GET | 200 | 172.97.214.64 | 97e989882a35ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/votes?select=art_id%2Cround&person_id=eq.6a84b73b-55a3-4481-9a2e-7e83202c1f37&event_id=eq.b67782e5-dbb3-428c-8d46-48a2395b3aa5 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "529ee4f9-f40c-47f7-a377-78320489a849",
+    "timestamp": 1757786353964000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e989889ad6ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "6063f40f-cd72-4406-9917-74eb4248026e",
+    "timestamp": 1757786354031000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e98988cb0bab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "ff5897e2-1010-4b3f-8ec5-d2a21af1cf87",
+    "timestamp": 1757786354058000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e98988fb24ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "89e27ab4-7da9-42e9-9e9b-a628d081e0e6",
+    "timestamp": 1757786354082000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e989894b7bab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "e9f24822-85ce-4fe8-808b-aa8a7eb24dff",
+    "timestamp": 1757786354138000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e989896baeab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "01e92d7a-9703-49c6-96f3-d4eaa69d62db",
+    "timestamp": 1757786354159000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e989897bc8ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "e3247764-1b7a-4bfb-86bd-865b7f159854",
+    "timestamp": 1757786354170000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 172.97.214.64 | 97e9898a0c68ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_event_cache_versions | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "2edbee9c-cd17-47bf-8fe6-87660ca8d1f5",
+    "timestamp": 1757786354252000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9898a3c96ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_event_cache_versions | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "c83b6a2e-cede-4c29-a91c-dc4e275f046b",
+    "timestamp": 1757786354283000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9898b0db4ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_event_cache_versions | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "ffcae035-d105-462a-b79a-3206dc1c8fed",
+    "timestamp": 1757786354418000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 172.97.214.64 | 97e9898c9fa5ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/art?select=*%2Cartist_profiles%21art_artist_id_fkey%28id%2Cname%2Cbio%2Cinstagram%2Ccity_text%29%2Cart_media%28id%2Cmedia_type%2Cis_primary%2Cdisplay_order%2Cmedia_files%28id%2Coriginal_url%2Cthumbnail_url%2Ccompressed_url%2Ccloudflare_id%2Cfile_type%2Cwidth%2Cheight%29%29&event_id=eq.b67782e5-dbb3-428c-8d46-48a2395b3aa5&artist_id=not.is.null&order=round.asc%2Ceasel.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "18b3cbc0-ac31-491e-bff0-c33b163f33c1",
+    "timestamp": 1757786354668000
+  },
+  {
+    "event_message": "GET | 101 | 172.97.214.64 | 97e9898cdf9cebbc | https://xsqdkubgyqwpyvfltnrf.supabase.co/realtime/v1/websocket?apikey=REDACTED&vsn=1.0.0 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "aadef0fe-ec9a-4a27-839a-136079c79ddf",
+    "timestamp": 1757786354704000
+  },
+  {
+    "event_message": "GET | 200 | 172.97.214.64 | 97e9898cd815ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/art?select=*%2Cartist_profiles%21art_artist_id_fkey%28id%2Cname%2Cbio%2Cinstagram%2Ccity_text%29%2Cart_media%28id%2Cmedia_type%2Cis_primary%2Cdisplay_order%2Cmedia_files%28id%2Coriginal_url%2Cthumbnail_url%2Ccompressed_url%2Ccloudflare_id%2Cfile_type%2Cwidth%2Cheight%29%29&event_id=eq.b67782e5-dbb3-428c-8d46-48a2395b3aa5&artist_id=not.is.null&order=round.asc%2Ceasel.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "1ca768c9-496f-4311-a270-78bfa759053e",
+    "timestamp": 1757786354718000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 172.97.214.64 | 97e9898d68c7ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/art_media?select=art_id%2Cmedia_id%2Cdisplay_order%2Cmedia_files%21art_media_media_id_fkey%28id%2Coriginal_url%2Cthumbnail_url%2Ccompressed_url%2Cfile_type%2Ccreated_at%29&art_id=in.%28%29&media_files.file_type=eq.image | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "942966f9-44e9-4717-b0e2-445aa468d912",
+    "timestamp": 1757786354792000
+  },
+  {
+    "event_message": "GET | 200 | 172.97.214.64 | 97e9898da91bab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/art_media?select=art_id%2Cmedia_id%2Cdisplay_order%2Cmedia_files%21art_media_media_id_fkey%28id%2Coriginal_url%2Cthumbnail_url%2Ccompressed_url%2Cfile_type%2Ccreated_at%29&art_id=in.%28%29&media_files.file_type=eq.image | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "b20bfb80-a6d1-4ddd-94ae-12ae6ba71ebf",
+    "timestamp": 1757786354839000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 172.97.214.64 | 97e9898e19eaab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_bid_history_with_names | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "7183b72b-178e-4183-a2ab-db8ab928aac9",
+    "timestamp": 1757786354905000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9898e5a3dab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_bid_history_with_names | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "daa18c48-708f-47e8-98eb-4cf369fb4d85",
+    "timestamp": 1757786354961000
+  },
+  {
+    "event_message": "GET | 200 | 172.97.214.64 | 97e9898e9a82ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/art?select=*%2Cartist_profiles%21art_artist_id_fkey%28id%2Cname%2Cbio%2Cinstagram%2Ccity_text%29%2Cart_media%28id%2Cmedia_type%2Cis_primary%2Cdisplay_order%2Cmedia_files%28id%2Coriginal_url%2Cthumbnail_url%2Ccompressed_url%2Ccloudflare_id%2Cfile_type%2Cwidth%2Cheight%29%29&event_id=eq.b67782e5-dbb3-428c-8d46-48a2395b3aa5&artist_id=not.is.null&order=round.asc%2Ceasel.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "6bc2e5e9-53a7-4209-8b12-c17f1ef71d07",
+    "timestamp": 1757786354984000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 172.97.214.64 | 97e9898ecad8ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_event_weighted_votes | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "ab034a82-3747-4bef-acbb-17696995ea3a",
+    "timestamp": 1757786355015000
+  },
+  {
+    "event_message": "GET | 101 | 172.97.214.64 | 97e9898ecc7da234 | https://xsqdkubgyqwpyvfltnrf.supabase.co/realtime/v1/websocket?apikey=REDACTED&vsn=1.0.0 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "bec4d1bb-14d5-45af-b7ba-8a3aebfecfd5",
+    "timestamp": 1757786355028000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9898efb10ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_event_weighted_votes | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "6ec5d2d5-485c-4f1a-bf6c-e5680912c08a",
+    "timestamp": 1757786355044000
+  },
+  {
+    "event_message": "GET | 200 | 172.97.214.64 | 97e9898f0b1dab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/art_media?select=art_id%2Cmedia_id%2Cdisplay_order%2Cmedia_files%21art_media_media_id_fkey%28id%2Coriginal_url%2Cthumbnail_url%2Ccompressed_url%2Cfile_type%2Ccreated_at%29&art_id=in.%28%29&media_files.file_type=eq.image | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "57d5dcc0-9229-4168-b998-103b67c0d566",
+    "timestamp": 1757786355052000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 172.97.214.64 | 97e9898f5bf6ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_event_vote_ranges | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "d9c1237d-4b15-429c-98d2-72a54f13b2ec",
+    "timestamp": 1757786355108000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9898f7c26ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_bid_history_with_names | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "7776eea7-9e4a-4720-8e10-fb8e5031162a",
+    "timestamp": 1757786355130000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9898f9c5fab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_event_vote_ranges | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "a5cd82b8-2012-4244-a569-966cd6d000e2",
+    "timestamp": 1757786355152000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9898fdca4ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_event_weighted_votes | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "26a3efdc-5eca-457f-91ab-27828d408561",
+    "timestamp": 1757786355192000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e989904d1eab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_event_vote_ranges | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "8c3d9bfc-ba42-4102-bcde-f3ea554f41ea",
+    "timestamp": 1757786355249000
+  },
+  {
+    "event_message": "GET | 200 | 172.97.214.64 | 97e989a19bc6ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/events?select=id%2Ceid%2Cenable_auction%2Cvote_by_link&eid=in.%28AB2952%2CAB3034%2CAB3057%2CAB3045%2CAB3061%2CAB3058%2CAB2944%2CAB3067%2CAB3010%2CAB3062%2CAB3051%2CAB3054%2CAB2947%2CAB3065%2CAB3060%2CAB3032%2CAB2941%2CAB3064%2CAB3006%2CAB3038%2CAB3055%2CAB3049%2CAB3030%2CAB3044%2CAB3059%2CAB3056%2CAB3023%2CAB3050%2CAB3037%2CAB2938%2CAB3041%2CAB3036%2CAB3052%2CAB3035%2CAB3048%2CAB3001%2CAB3040%2CAB3026%2CAB3033%2CAB6050%2CAB3039%2CAB3063%2CAB3066%2CAB3029%2CAB3053%2CAB3046%2CAB2995%2CAB3019%2CAB3028%2CAB3043%29 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "17799373-6438-4075-9e55-5a020c0ab2f1",
+    "timestamp": 1757786358038000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e989bec8beab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "7e72b6c9-9364-425b-9e10-6a6fb4de222a",
+    "timestamp": 1757786362708000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 172.97.214.64 | 97e989beb8afab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/votes?select=art_id%2Cround&person_id=eq.6a84b73b-55a3-4481-9a2e-7e83202c1f37&event_id=eq.f2fc286c-7f6e-4dae-a72c-757e93e0ebb9 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "a574d8bd-a44a-48db-9ceb-5e5677bd9f46",
+    "timestamp": 1757786362714000
+  },
+  {
+    "event_message": "GET | 200 | 172.97.214.64 | 97e989bf2938ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/votes?select=art_id%2Cround&person_id=eq.6a84b73b-55a3-4481-9a2e-7e83202c1f37&event_id=eq.f2fc286c-7f6e-4dae-a72c-757e93e0ebb9 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "26025801-0d0b-4178-84a9-e63342fa5b65",
+    "timestamp": 1757786362758000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e989bf3944ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "b0176e80-1de8-48d8-80a2-fcb6cd4c5d07",
+    "timestamp": 1757786362767000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e989bfa9d1ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "c3d2d402-ac2a-4577-9707-7be75cb04d6e",
+    "timestamp": 1757786362834000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e989c24cdeab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_event_cache_versions | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "8fc13b56-37ae-4302-9848-67aea16618b4",
+    "timestamp": 1757786363265000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 172.97.214.64 | 97e989dd78afab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/votes?select=art_id%2Cround&person_id=eq.6a84b73b-55a3-4481-9a2e-7e83202c1f37&event_id=eq.d1371076-8f1a-40e5-aa07-148aa25db596 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "2f9f89c4-26f8-480f-86c8-4d883c3a97b6",
+    "timestamp": 1757786367601000
+  },
+  {
+    "event_message": "GET | 200 | 172.97.214.64 | 97e989ddb8f8ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/votes?select=art_id%2Cround&person_id=eq.6a84b73b-55a3-4481-9a2e-7e83202c1f37&event_id=eq.d1371076-8f1a-40e5-aa07-148aa25db596 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "02cd1c14-e315-4130-9fe1-5355da12e0b8",
+    "timestamp": 1757786367648000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e989dd78b5ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "0e241be9-b1bc-4a1c-a1b7-1f8223e3758a",
+    "timestamp": 1757786367666000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e989de2996ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "d6f2bd15-7b74-402f-a29b-ed8aacd51184",
+    "timestamp": 1757786367717000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e989de8a16ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "4baddf39-9ea6-48c6-a263-b064f339a6aa",
+    "timestamp": 1757786367775000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e989e08c75ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_event_cache_versions | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "5914bd14-f8d0-4235-8579-6a9e09256b94",
+    "timestamp": 1757786368094000
+  },
+  {
+    "event_message": "GET | 101 | 172.97.214.64 | 97e989e5af08aabc | https://xsqdkubgyqwpyvfltnrf.supabase.co/realtime/v1/websocket?apikey=REDACTED&vsn=1.0.0 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "f4297e57-aeb9-4af5-8dd1-985b6d751fbd",
+    "timestamp": 1757786368916000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e98d1e0cc4ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "023edef4-e940-4647-8da4-7fe5c07db1c0",
+    "timestamp": 1757786500819000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e98d1e0cc5ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "756fc876-6abf-4794-9c11-f4b2ec981554",
+    "timestamp": 1757786500823000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e98d1e5d12ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "0284f442-aa87-4b4d-9e97-8e01fe677463",
+    "timestamp": 1757786500868000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e98d1e5d0fab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "30293585-4a2c-4f18-9315-d6b827944303",
+    "timestamp": 1757786500880000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e98d1ebd7cab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "59f62681-f13b-4681-acd1-d8c87b3235fc",
+    "timestamp": 1757786500923000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e98d1ebd80ab96 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "3d4ae983-7fd4-4ce4-8196-3dc9c5e4278d",
+    "timestamp": 1757786500925000
+  },
+  {
+    "event_message": "GET | 101 | 172.97.214.64 | 97e992852a0e74a5 | https://xsqdkubgyqwpyvfltnrf.supabase.co/realtime/v1/websocket?apikey=REDACTED&vsn=1.0.0 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "14154a25-4b22-44f8-a8b3-6d148fb30bd6",
+    "timestamp": 1757786722123000
+  },
+  {
+    "event_message": "GET | 101 | 172.97.214.64 | 97e992926caf39fc | https://xsqdkubgyqwpyvfltnrf.supabase.co/realtime/v1/websocket?apikey=REDACTED&vsn=1.0.0 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "05efd13d-c15f-42cf-b54a-326d28465630",
+    "timestamp": 1757786724240000
+  },
+  {
+    "event_message": "POST | 200 | 109.38.158.14 | 97e99c378c7a33b1 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "c919d922-913b-4f96-a0c0-c6f92232f1a3",
+    "timestamp": 1757787119291000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e99c3b5cd033b1 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_applications?select=*%2Cevent%3Aevents%28id%2Cname%2Cevent_start_datetime%2Cvenue%2Ccity%3Acities%28name%29%29&artist_profile_id=eq.24ef8c69-2816-4059-a783-59638f21299a&order=applied_at.desc&limit=5 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "e0fe048d-3ce4-41b7-a09d-3e56b6c98a51",
+    "timestamp": 1757787119903000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e99c3e3b6633b1 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_invitations?select=*&artist_profile_id=eq.24ef8c69-2816-4059-a783-59638f21299a&status=eq.pending&accepted_at=is.null&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "3e301751-dce0-4ea0-b778-64419b42a655",
+    "timestamp": 1757787120359000
+  },
+  {
+    "event_message": "GET | 200 | 109.38.158.14 | 97e99c4078f433b1 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_confirmations?select=*&artist_profile_id=eq.24ef8c69-2816-4059-a783-59638f21299a&confirmation_status=eq.confirmed&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "d58034bc-a278-4896-966b-cff825ca58ad",
+    "timestamp": 1757787120727000
+  },
+  {
+    "event_message": "GET | 101 | 172.97.214.64 | 97e9a8850995b8f3 | https://xsqdkubgyqwpyvfltnrf.supabase.co/realtime/v1/websocket?apikey=REDACTED&vsn=1.0.0 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "495def67-2623-4fa0-a1a1-87ac017b7e19",
+    "timestamp": 1757787623212000
+  },
+  {
+    "event_message": "GET | 101 | 172.97.214.64 | 97e9a92ae93e36d0 | https://xsqdkubgyqwpyvfltnrf.supabase.co/realtime/v1/websocket?apikey=REDACTED&vsn=1.0.0 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "30c7be17-f70e-450f-aba1-47ac47e18da2",
+    "timestamp": 1757787649760000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9aa050d04711b | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "ec0ecfd7-344b-42a9-80db-fd779c2a4419",
+    "timestamp": 1757787684669000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9aa050d02711b | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "5d789472-3ea5-4c38-b4b3-59f853fa68b7",
+    "timestamp": 1757787684672000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9aa050d03711b | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "9def8cf3-e626-4473-b2ce-b0330b6896d8",
+    "timestamp": 1757787684674000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9aa050cff711b | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "7b9cbc4c-1ce9-4740-b849-b611814f1cfe",
+    "timestamp": 1757787684685000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9aa05bdfb711b | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "68fc561b-2b43-4154-ba4d-a03cabd54687",
+    "timestamp": 1757787684764000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9aa05be05711b | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "240f38c8-a05f-43c4-b5d6-bd02ee6f3f29",
+    "timestamp": 1757787684768000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9aa05bdfd711b | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "0ecca0fe-dafa-4aff-95a7-2758bffb2fcc",
+    "timestamp": 1757787684770000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9aa05ee28711b | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "94172a67-d618-48fa-aa79-f136a13ac06a",
+    "timestamp": 1757787684792000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9aa063e7c711b | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "9bed3901-9c76-40d4-9626-42d6c19e41b3",
+    "timestamp": 1757787684843000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9aa065e9f711b | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "7c84368d-6fec-463b-8664-876acda2dedf",
+    "timestamp": 1757787684859000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9aa065ea3711b | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "d85f495b-6a57-4ea6-99fe-830799b133bf",
+    "timestamp": 1757787684867000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9aa066eae711b | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "a3093948-773a-4678-b20e-dc9c0fe604e6",
+    "timestamp": 1757787684881000
+  },
+  {
+    "event_message": "GET | 101 | 172.97.214.64 | 97e9b42f5bdfab6d | https://xsqdkubgyqwpyvfltnrf.supabase.co/realtime/v1/websocket?apikey=REDACTED&vsn=1.0.0 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "02d048d5-bebe-4a1c-a095-09b304fbb4db",
+    "timestamp": 1757788101030000
+  },
+  {
+    "event_message": "GET | 101 | 172.97.214.64 | 97e9b4324fd1aac7 | https://xsqdkubgyqwpyvfltnrf.supabase.co/realtime/v1/websocket?apikey=REDACTED&vsn=1.0.0 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "8bef3e06-fe91-483a-8930-22f2f8b31bd8",
+    "timestamp": 1757788101494000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9b58faa4339fc | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "404befa3-4650-4515-a6fe-2cc528f87164",
+    "timestamp": 1757788157394000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9b58faa3f39fc | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "f35b7908-5f62-40ad-b692-8f5784a323aa",
+    "timestamp": 1757788157395000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9b590ec0c39fc | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "a3477375-2386-4092-889b-303952393663",
+    "timestamp": 1757788157592000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9b590ec0e39fc | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "75703160-fcbf-4652-b70f-89ca0805cbbf",
+    "timestamp": 1757788157593000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9b5915c7939fc | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "cb45b7ff-d10c-4b84-adb8-93d5004a5875",
+    "timestamp": 1757788157668000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9b5915c7d39fc | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "07b3f403-b30a-449c-9c91-fecd32289046",
+    "timestamp": 1757788157672000
+  },
+  {
+    "event_message": "GET | 101 | 172.97.214.64 | 97e9b97dbe3aebb8 | https://xsqdkubgyqwpyvfltnrf.supabase.co/realtime/v1/websocket?apikey=REDACTED&vsn=1.0.0 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "707483aa-e8b1-404f-a5f3-a3c861013815",
+    "timestamp": 1757788318363000
+  },
+  {
+    "event_message": "GET | 101 | 172.97.214.64 | 97e9b98078fbabe2 | https://xsqdkubgyqwpyvfltnrf.supabase.co/realtime/v1/websocket?apikey=REDACTED&vsn=1.0.0 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "1117b0f1-e238-469d-9f03-678d5620f306",
+    "timestamp": 1757788318808000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 172.97.214.64 | 97e9b9dac89539fc | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "f2ccfc6c-b098-428e-93bd-f834494c6676",
+    "timestamp": 1757788333265000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 172.97.214.64 | 97e9b9dad8a739fc | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "ffc96eb3-9349-4a77-b855-af4a3a217d05",
+    "timestamp": 1757788333270000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 172.97.214.64 | 97e9b9dad8a439fc | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "96a42321-7e8f-4291-8309-4bdbca26ace6",
+    "timestamp": 1757788333271000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 172.97.214.64 | 97e9b9dac89839fc | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "bf067b4f-4ebd-450e-b50d-6d254d48feea",
+    "timestamp": 1757788333277000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9b9db18ed39fc | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "da3e56c5-40de-4067-89ee-946aedbb7bdc",
+    "timestamp": 1757788333304000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9b9db18f139fc | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "256b496a-79b6-4c4d-b3d6-dd65351a5958",
+    "timestamp": 1757788333307000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9b9db18f339fc | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "35d9a717-43f0-4245-a7e5-b92106206831",
+    "timestamp": 1757788333313000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9b9db492339fc | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "8310009e-fdcb-4e68-b912-e8fbe75f7278",
+    "timestamp": 1757788333334000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9b9dbc9ca39fc | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "c02b1dd9-65a3-441c-a269-13203ff7842b",
+    "timestamp": 1757788333419000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9b9dbc9c939fc | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "8985c143-cced-414d-bc9c-86fccd73070b",
+    "timestamp": 1757788333424000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9b9dbd9e439fc | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "d59c318f-86ff-49ce-a3f4-7e4191a35095",
+    "timestamp": 1757788333431000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9b9dbd9e939fc | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "4d1ce7e6-e693-4fe1-91eb-c7288a81b2ba",
+    "timestamp": 1757788333432000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9b9dc9b0f39fc | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "54285974-7f4e-4c82-97b9-7beb92e22174",
+    "timestamp": 1757788333542000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9b9dc9b0739fc | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "1918cdec-ee6e-4eac-a9d4-4443614b85d0",
+    "timestamp": 1757788333543000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9b9dc9b1139fc | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "1ab3ffa3-d95d-493b-b02b-e9bc65d57bc5",
+    "timestamp": 1757788333547000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9b9dc9b0e39fc | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "c77f6c09-1acf-4620-841f-9e7546e4bf0b",
+    "timestamp": 1757788333550000
+  },
+  {
+    "event_message": "GET | 101 | 172.97.214.64 | 97e9c9c948adac60 | https://xsqdkubgyqwpyvfltnrf.supabase.co/realtime/v1/websocket?apikey=REDACTED&vsn=1.0.0 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "aa8a6eb9-ea15-479d-89bf-b442f7319255",
+    "timestamp": 1757788985821000
+  },
+  {
+    "event_message": "GET | 101 | 172.97.214.64 | 97e9c9cb993bab36 | https://xsqdkubgyqwpyvfltnrf.supabase.co/realtime/v1/websocket?apikey=REDACTED&vsn=1.0.0 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "236860ed-9c94-4484-92cf-0dbdd2812c09",
+    "timestamp": 1757788986187000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 172.97.214.64 | 97e9ca657aa1ab2d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "025f2ff5-ab8e-4a3b-965d-03636948c8f0",
+    "timestamp": 1757789010811000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 172.97.214.64 | 97e9ca657aa3ab2d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "20e3b164-80f0-400e-9c10-80f697b0cef4",
+    "timestamp": 1757789010813000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 172.97.214.64 | 97e9ca657aa9ab2d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "64f6eca0-b382-4e46-97ba-1fa12a593724",
+    "timestamp": 1757789010818000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 172.97.214.64 | 97e9ca657aa4ab2d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "57f91e20-ebfb-4a87-b65d-49c6f3e6a6b5",
+    "timestamp": 1757789010826000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9ca65cb27ab2d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "3b3390e7-43d3-48ba-bf0a-af311d5ef447",
+    "timestamp": 1757789010861000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9ca65cb23ab2d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "ac5ecb3a-78d6-4127-9cf7-8b48274697e0",
+    "timestamp": 1757789010863000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9ca65db2eab2d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "b858748e-2940-4896-87a6-d67a35dd2d47",
+    "timestamp": 1757789010865000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9ca65cb28ab2d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "fa6674b7-20e5-4b7a-a42c-42e0733dfe06",
+    "timestamp": 1757789010865000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9ca667c25ab2d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "616bc1cf-f9a6-49f2-9800-e47067643e68",
+    "timestamp": 1757789010967000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9ca667c2dab2d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "de22de1a-cd99-449a-bb4c-62464b405114",
+    "timestamp": 1757789010970000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9ca667c19ab2d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "bcf40acf-ca07-4fc2-add0-59e89f8d87a2",
+    "timestamp": 1757789010972000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9ca668c38ab2d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "87fbaabc-7494-4395-82f3-68ce31a6bbc0",
+    "timestamp": 1757789010977000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9ca671ceaab2d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "f748f068-cca4-43b5-a933-c1e828b17b22",
+    "timestamp": 1757789011065000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9ca672d13ab2d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "26bfd9e7-735d-42eb-898d-3018849a5897",
+    "timestamp": 1757789011078000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9ca672d16ab2d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "2082c2fd-0ae5-4ce1-a449-daecc3b4cae7",
+    "timestamp": 1757789011079000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97e9ca672d0fab2d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "1ceff965-bec9-44cf-a37f-11b60d9fd5db",
+    "timestamp": 1757789011079000
+  },
+  {
+    "event_message": "GET | 101 | 172.97.214.64 | 97e9cfad9b35ab9a | https://xsqdkubgyqwpyvfltnrf.supabase.co/realtime/v1/websocket?apikey=REDACTED&vsn=1.0.0 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "9695c3ac-11d7-4a86-9d72-b509ca0cc4c6",
+    "timestamp": 1757789227149000
+  },
+  {
+    "event_message": "GET | 101 | 172.97.214.64 | 97e9cfafe80536cc | https://xsqdkubgyqwpyvfltnrf.supabase.co/realtime/v1/websocket?apikey=REDACTED&vsn=1.0.0 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "ea3d90a7-2250-446f-8c69-686f89515091",
+    "timestamp": 1757789227525000
+  },
+  {
+    "event_message": "GET | 101 | 172.97.214.64 | 97e9d4fc2e11a1e1 | https://xsqdkubgyqwpyvfltnrf.supabase.co/realtime/v1/websocket?apikey=REDACTED&vsn=1.0.0 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "1eb64954-10b6-4d0f-8b93-b3689ee5aa69",
+    "timestamp": 1757789444522000
+  },
+  {
+    "event_message": "GET | 101 | 172.97.214.64 | 97e9d4fe5d6dac84 | https://xsqdkubgyqwpyvfltnrf.supabase.co/realtime/v1/websocket?apikey=REDACTED&vsn=1.0.0 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "5ccc8c25-e18d-40b7-8d01-d25dc6810992",
+    "timestamp": 1757789444869000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 71.175.25.144 | 97e9fecbadebda80 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "6f8ead6e-79c3-4736-afbd-2cae5a3a75e0",
+    "timestamp": 1757791157080000
+  },
+  {
+    "event_message": "POST | 200 | 71.175.25.144 | 97e9fecbde76da80 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "fd1d99c9-82f1-4be4-9396-d7517ae61454",
+    "timestamp": 1757791157103000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 71.175.25.144 | 97e9fecc7800da80 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_applications?select=*%2Cevent%3Aevents%28id%2Cname%2Cevent_start_datetime%2Cvenue%2Ccity%3Acities%28name%29%29&artist_profile_id=eq.c22e12f0-56e2-47ca-ac2e-9658001bf506&order=applied_at.desc&limit=5 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "41546bbd-05ae-4603-bd34-a0c90f8f1daa",
+    "timestamp": 1757791157210000
+  },
+  {
+    "event_message": "GET | 200 | 71.175.25.144 | 97e9fecca866da80 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_applications?select=*%2Cevent%3Aevents%28id%2Cname%2Cevent_start_datetime%2Cvenue%2Ccity%3Acities%28name%29%29&artist_profile_id=eq.c22e12f0-56e2-47ca-ac2e-9658001bf506&order=applied_at.desc&limit=5 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "84326d66-d55e-41c2-98d8-120a9b217018",
+    "timestamp": 1757791157235000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 71.175.25.144 | 97e9fecd5a48da80 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_invitations?select=*&artist_profile_id=eq.c22e12f0-56e2-47ca-ac2e-9658001bf506&status=eq.pending&accepted_at=is.null&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "50e379af-ce5a-4d5a-844c-a52de6e66718",
+    "timestamp": 1757791157342000
+  },
+  {
+    "event_message": "GET | 200 | 71.175.25.144 | 97e9fecd7a9cda80 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_invitations?select=*&artist_profile_id=eq.c22e12f0-56e2-47ca-ac2e-9658001bf506&status=eq.pending&accepted_at=is.null&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "f47aef16-a561-4e56-9576-ce6772523051",
+    "timestamp": 1757791157370000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 71.175.25.144 | 97e9fece2c55da80 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_confirmations?select=*&artist_profile_id=eq.c22e12f0-56e2-47ca-ac2e-9658001bf506&confirmation_status=eq.confirmed&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "d2630655-fab4-4270-9f4c-96b8314df35c",
+    "timestamp": 1757791157474000
+  },
+  {
+    "event_message": "GET | 200 | 71.175.25.144 | 97e9fece5cd3da80 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_confirmations?select=*&artist_profile_id=eq.c22e12f0-56e2-47ca-ac2e-9658001bf506&confirmation_status=eq.confirmed&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "d36a33de-aafb-4a72-b324-a3505cc6b0a0",
+    "timestamp": 1757791157499000
+  },
+  {
+    "event_message": "POST | 200 | 71.175.25.144 | 97ea10aab9f9101e | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "da40121b-4503-41e5-991b-9ac2f13b5728",
+    "timestamp": 1757791889081000
+  },
+  {
+    "event_message": "GET | 200 | 71.175.25.144 | 97ea10ab5b73101e | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_applications?select=*%2Cevent%3Aevents%28id%2Cname%2Cevent_start_datetime%2Cvenue%2Ccity%3Acities%28name%29%29&artist_profile_id=eq.c22e12f0-56e2-47ca-ac2e-9658001bf506&order=applied_at.desc&limit=5 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "77a4da1e-34b7-45ab-a544-393c5d13f713",
+    "timestamp": 1757791889180000
+  },
+  {
+    "event_message": "GET | 200 | 71.175.25.144 | 97ea10abfce3101e | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_invitations?select=*&artist_profile_id=eq.c22e12f0-56e2-47ca-ac2e-9658001bf506&status=eq.pending&accepted_at=is.null&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "1ad70c91-1643-4ea0-890d-7be07d421c33",
+    "timestamp": 1757791889292000
+  },
+  {
+    "event_message": "GET | 200 | 71.175.25.144 | 97ea10ac8e9b101e | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_confirmations?select=*&artist_profile_id=eq.c22e12f0-56e2-47ca-ac2e-9658001bf506&confirmation_status=eq.confirmed&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "a1b1a7a9-69ab-4d23-b924-985345a67bc0",
+    "timestamp": 1757791889377000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 64.67.185.22 | 97ea48dd8f3aae04 | https://xsqdkubgyqwpyvfltnrf.supabase.co/auth/v1/otp | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Safari/605.1.15",
+    "id": "c0a5f592-8a82-4d06-b6b7-ba77195b5afe",
+    "timestamp": 1757794190976000
+  },
+  {
+    "event_message": "POST | 200 | 64.67.185.22 | 97ea48ddaf50ae04 | https://xsqdkubgyqwpyvfltnrf.supabase.co/auth/v1/otp | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Safari/605.1.15",
+    "id": "d2c12f35-cc24-4e7a-8ebf-cdcd44d0626e",
+    "timestamp": 1757794190995000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 50.101.116.85 | 97ea49554c08ac2a | https://xsqdkubgyqwpyvfltnrf.supabase.co/auth/v1/token?grant_type=refresh_token | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "04a1de43-6cad-448c-b598-44c047db33b6",
+    "timestamp": 1757794210136000
+  },
+  {
+    "event_message": "POST | 200 | 50.101.116.85 | 97ea49559c61ac2a | https://xsqdkubgyqwpyvfltnrf.supabase.co/auth/v1/token?grant_type=refresh_token | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "0e0accbf-c7ac-4d28-b861-eaf800b0c68f",
+    "timestamp": 1757794210184000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 50.101.116.85 | 97ea495a0a56ac2a | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "43202133-fa2f-44d4-876e-6b6b1d54e889",
+    "timestamp": 1757794210895000
+  },
+  {
+    "event_message": "POST | 200 | 50.101.116.85 | 97ea495a2a8dac2a | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "357145ef-abe3-4041-b24d-970462f23686",
+    "timestamp": 1757794210920000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 50.101.116.85 | 97ea495a8b03ac2a | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_applications?select=*%2Cevent%3Aevents%28id%2Cname%2Cevent_start_datetime%2Cvenue%2Ccity%3Acities%28name%29%29&artist_profile_id=eq.6f46f50d-9795-40b9-8931-2524a859a3cd&order=applied_at.desc&limit=5 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "fa845f2d-3f9c-4380-8f7d-c2b8c939a883",
+    "timestamp": 1757794210971000
+  },
+  {
+    "event_message": "GET | 200 | 50.101.116.85 | 97ea495aab46ac2a | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_applications?select=*%2Cevent%3Aevents%28id%2Cname%2Cevent_start_datetime%2Cvenue%2Ccity%3Acities%28name%29%29&artist_profile_id=eq.6f46f50d-9795-40b9-8931-2524a859a3cd&order=applied_at.desc&limit=5 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "68f25cda-e566-4e74-853d-379db1703dfd",
+    "timestamp": 1757794210997000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 50.101.116.85 | 97ea495b2c4bac2a | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_invitations?select=*&artist_profile_id=eq.6f46f50d-9795-40b9-8931-2524a859a3cd&status=eq.pending&accepted_at=is.null&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "2a1c6dfa-1701-4238-b7a2-af4e76583d3d",
+    "timestamp": 1757794211085000
+  },
+  {
+    "event_message": "GET | 200 | 50.101.116.85 | 97ea495b7ce0ac2a | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_invitations?select=*&artist_profile_id=eq.6f46f50d-9795-40b9-8931-2524a859a3cd&status=eq.pending&accepted_at=is.null&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "a393a3d9-6ecf-48cd-9ca7-0c22778b79a2",
+    "timestamp": 1757794211127000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 50.101.116.85 | 97ea495c3dddac2a | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_confirmations?select=*&artist_profile_id=eq.6f46f50d-9795-40b9-8931-2524a859a3cd&confirmation_status=eq.confirmed&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "b15c9622-f681-44bc-bd20-91c0f7ce50c1",
+    "timestamp": 1757794211251000
+  },
+  {
+    "event_message": "GET | 200 | 50.101.116.85 | 97ea495c6e10ac2a | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_confirmations?select=*&artist_profile_id=eq.6f46f50d-9795-40b9-8931-2524a859a3cd&confirmation_status=eq.confirmed&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "d2678c71-c0ee-4da7-bef0-3ea25191a23c",
+    "timestamp": 1757794211276000
+  },
+  {
+    "event_message": "POST | 200 | 50.101.116.85 | 97ea495d8fb8ac2a | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "db44629a-119c-46e7-8331-b1cdb8346d5c",
+    "timestamp": 1757794211460000
+  },
+  {
+    "event_message": "GET | 200 | 50.101.116.85 | 97ea495f7a4fac2a | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_applications?select=*%2Cevent%3Aevents%28id%2Cname%2Cevent_start_datetime%2Cvenue%2Ccity%3Acities%28name%29%29&artist_profile_id=eq.6f46f50d-9795-40b9-8931-2524a859a3cd&order=applied_at.desc&limit=5 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "09715812-e10a-4975-a521-264837a9cc10",
+    "timestamp": 1757794211770000
+  },
+  {
+    "event_message": "GET | 200 | 50.101.116.85 | 97ea4960dbd5ac2a | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_invitations?select=*&artist_profile_id=eq.6f46f50d-9795-40b9-8931-2524a859a3cd&status=eq.pending&accepted_at=is.null&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "6fe83e6f-1c44-4791-8ff3-928ea3d02f63",
+    "timestamp": 1757794211986000
+  },
+  {
+    "event_message": "GET | 200 | 50.101.116.85 | 97ea4961bd01ac2a | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_confirmations?select=*&artist_profile_id=eq.6f46f50d-9795-40b9-8931-2524a859a3cd&confirmation_status=eq.confirmed&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "id": "f8b409f6-bbaf-45ba-8add-3f5f6d959afa",
+    "timestamp": 1757794212132000
+  },
+  {
+    "event_message": "POST | 200 | 69.216.102.189 | 97ea7fd66907250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "0a9375c2-0095-4923-9adf-c5e63be0fa83",
+    "timestamp": 1757796442635000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea7fd74a0b250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_applications?select=*%2Cevent%3Aevents%28id%2Cname%2Cevent_start_datetime%2Cvenue%2Ccity%3Acities%28name%29%29&artist_profile_id=eq.cc9a5783-b807-43e2-9e9c-f7687b4f9120&order=applied_at.desc&limit=5 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "9378aa65-30f4-4d91-9e7b-3d71c7619b91",
+    "timestamp": 1757796442775000
+  },
+  {
+    "event_message": "POST | 200 | 69.216.102.189 | 97ea7fd88b83250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "6ff904fd-54fe-4631-aacc-39bebaf0ea80",
+    "timestamp": 1757796442975000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea7fd90c1b250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_invitations?select=*&artist_profile_id=eq.cc9a5783-b807-43e2-9e9c-f7687b4f9120&status=eq.pending&accepted_at=is.null&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "8a92d1b4-eb8d-4ed0-870a-fa14cb48ddc9",
+    "timestamp": 1757796443055000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea7fd96c86250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_applications?select=*%2Cevent%3Aevents%28id%2Cname%2Cevent_start_datetime%2Cvenue%2Ccity%3Acities%28name%29%29&artist_profile_id=eq.cc9a5783-b807-43e2-9e9c-f7687b4f9120&order=applied_at.desc&limit=5 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "a9a6dd5d-05d1-4021-8dd2-4545a2b19e38",
+    "timestamp": 1757796443114000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea7fdb1e66250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_invitations?select=*&artist_profile_id=eq.cc9a5783-b807-43e2-9e9c-f7687b4f9120&status=eq.pending&accepted_at=is.null&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "d595feaa-5a28-43d8-8922-10f23bb4df50",
+    "timestamp": 1757796443384000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea7fe2cf4b250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_confirmations?select=*&artist_profile_id=eq.cc9a5783-b807-43e2-9e9c-f7687b4f9120&confirmation_status=eq.confirmed&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "559f564f-7164-4de7-8b58-c550f4745b49",
+    "timestamp": 1757796444624000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea7fe48931250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_confirmations?select=*&artist_profile_id=eq.cc9a5783-b807-43e2-9e9c-f7687b4f9120&confirmation_status=eq.confirmed&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "c143ceaf-8a74-4769-b3c9-e9395861df50",
+    "timestamp": 1757796444899000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 69.216.102.189 | 97ea7ffb1d18250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&person_id=eq.13a27c47-8c08-40dc-b25d-bc2dcc7ba64e&order=created_at.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "bcb09cd3-47a2-4bc0-9575-0df18ef9be37",
+    "timestamp": 1757796448508000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea7ffb1d21250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/countries?select=name%2Ccode&order=name.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "9456d17a-f173-4a60-8bd8-8c902cdec956",
+    "timestamp": 1757796448510000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 69.216.102.189 | 97ea7ffb1d1f250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&person_id=eq.13a27c47-8c08-40dc-b25d-bc2dcc7ba64e&order=created_at.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "7b45ff09-a349-4338-913d-7207f2b1b6b7",
+    "timestamp": 1757796448512000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea7ffb4d5f250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&person_id=eq.13a27c47-8c08-40dc-b25d-bc2dcc7ba64e&order=created_at.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "287b0521-6907-48c1-92a7-1ba810b91a56",
+    "timestamp": 1757796448535000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea7ffcef25250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&person_id=eq.13a27c47-8c08-40dc-b25d-bc2dcc7ba64e&order=created_at.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "7bcf6c08-4592-4fdb-a8fe-80374692a4d5",
+    "timestamp": 1757796448801000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea7ffd1f52250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/countries?select=name%2Ccode&order=name.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "d129ec66-dd71-4747-84a9-0f3d20b6ea90",
+    "timestamp": 1757796448824000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 69.216.102.189 | 97ea801d0a4a250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/has_primary_profile | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "a86a6913-4d33-431e-9b85-1eefc582805f",
+    "timestamp": 1757796453953000
+  },
+  {
+    "event_message": "POST | 200 | 69.216.102.189 | 97ea801d7afb250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/has_primary_profile | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "b733ea61-ae08-4562-a141-5c393b0e1fa2",
+    "timestamp": 1757796454016000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 69.216.102.189 | 97ea80602806250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/art?select=id%2Cart_code%2Cdescription%2Cstatus%2Ccurrent_bid%2Ccreated_at%2Cartist_id%2Cevent%3Aevents%28eid%2Cname%2Cevent_start_datetime%29%2Cart_media%28media_files%21art_media_media_id_fkey%28id%2Ccloudflare_id%2Cthumbnail_url%2Ccompressed_url%29%29&artist_id=in.%28cc9a5783-b807-43e2-9e9c-f7687b4f9120%29&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "b22fd3cb-e863-4382-8421-8e3d9eac8c79",
+    "timestamp": 1757796464683000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea80606843250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/art?select=id%2Cart_code%2Cdescription%2Cstatus%2Ccurrent_bid%2Ccreated_at%2Cartist_id%2Cevent%3Aevents%28eid%2Cname%2Cevent_start_datetime%29%2Cart_media%28media_files%21art_media_media_id_fkey%28id%2Ccloudflare_id%2Cthumbnail_url%2Ccompressed_url%29%29&artist_id=in.%28cc9a5783-b807-43e2-9e9c-f7687b4f9120%29&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "23a54b5b-a323-4611-8ca5-ea2a095f15a7",
+    "timestamp": 1757796464712000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 69.216.102.189 | 97ea80622af7250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/payment_processing?select=art_id%2Camount%2Ccurrency%2Cstatus%2Ccompleted_at&art_id=in.%2853e7e37f-6864-45d9-9aed-18ebe75bfcc9%2C714098a1-e47c-48d3-bffe-f9814b744698%2C0275e21f-150e-4d8e-ba19-ab3c050bc820%2C69837fd7-84d9-4956-b1e8-8a9f0d2776a2%29 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "fd31f9a2-0ef8-4741-83a9-fb6e2c57d13f",
+    "timestamp": 1757796464998000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea80625b2c250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/payment_processing?select=art_id%2Camount%2Ccurrency%2Cstatus%2Ccompleted_at&art_id=in.%2853e7e37f-6864-45d9-9aed-18ebe75bfcc9%2C714098a1-e47c-48d3-bffe-f9814b744698%2C0275e21f-150e-4d8e-ba19-ab3c050bc820%2C69837fd7-84d9-4956-b1e8-8a9f0d2776a2%29 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "82a418ff-6bb0-4e51-a8ed-1e8d6e365278",
+    "timestamp": 1757796465029000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 69.216.102.189 | 97ea80634c7b250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_payments?select=art_id%2Cnet_amount%2Ccurrency%2Cstatus%2Cpaid_at&artist_profile_id=in.%28cc9a5783-b807-43e2-9e9c-f7687b4f9120%29 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "c2d1aca9-547c-433f-912f-f36fddd496db",
+    "timestamp": 1757796465170000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea80637cba250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_payments?select=art_id%2Cnet_amount%2Ccurrency%2Cstatus%2Cpaid_at&artist_profile_id=in.%28cc9a5783-b807-43e2-9e9c-f7687b4f9120%29 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "6e707e7b-0552-4658-b875-3216ac51b516",
+    "timestamp": 1757796465202000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 69.216.102.189 | 97ea80b15875250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=id&person_id=eq.13a27c47-8c08-40dc-b25d-bc2dcc7ba64e | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "9468b9e4-a43e-42fe-9c64-146fff5e813f",
+    "timestamp": 1757796477668000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea80b188ba250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=id&person_id=eq.13a27c47-8c08-40dc-b25d-bc2dcc7ba64e | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "5f575326-0800-47fd-a90b-2851d4b75bc9",
+    "timestamp": 1757796477699000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 69.216.102.189 | 97ea80b94994250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/art?select=id&artist_id=in.%28cc9a5783-b807-43e2-9e9c-f7687b4f9120%29 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "78cca24c-2084-4c35-a871-7ac19887d975",
+    "timestamp": 1757796478939000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea80b979c0250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/art?select=id&artist_id=in.%28cc9a5783-b807-43e2-9e9c-f7687b4f9120%29 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "4e298ff3-ddf9-40be-8fea-647350060479",
+    "timestamp": 1757796478963000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 69.216.102.189 | 97ea80bb3ba5250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/payment_processing?select=id%2Cart_id%2Camount%2Ccurrency%2Cstatus%2Ccompleted_at%2Cart%3Aart%21payment_processing_art_id_fkey%28id%2Cart_code%2Cartist_id%2Cevent%3Aevents%28eid%2Cname%29%29&art_id=in.%2869837fd7-84d9-4956-b1e8-8a9f0d2776a2%2C0275e21f-150e-4d8e-ba19-ab3c050bc820%2C714098a1-e47c-48d3-bffe-f9814b744698%2C53e7e37f-6864-45d9-9aed-18ebe75bfcc9%29&status=eq.completed | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "32565f02-a47d-41f5-949e-fa58d92da5de",
+    "timestamp": 1757796479254000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea80bb7be3250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/payment_processing?select=id%2Cart_id%2Camount%2Ccurrency%2Cstatus%2Ccompleted_at%2Cart%3Aart%21payment_processing_art_id_fkey%28id%2Cart_code%2Cartist_id%2Cevent%3Aevents%28eid%2Cname%29%29&art_id=in.%2869837fd7-84d9-4956-b1e8-8a9f0d2776a2%2C0275e21f-150e-4d8e-ba19-ab3c050bc820%2C714098a1-e47c-48d3-bffe-f9814b744698%2C53e7e37f-6864-45d9-9aed-18ebe75bfcc9%29&status=eq.completed | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "c0a418a7-fad3-47e8-8f4b-5274d009c406",
+    "timestamp": 1757796479283000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 69.216.102.189 | 97ea80bc4cfb250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_payments?select=id%2Cart_id%2Cgross_amount%2Cnet_amount%2Ccurrency%2Cstatus%2Cpaid_at%2Cart%3Aart%21artist_payments_art_id_fkey%28id%2Cart_code%2Cevent%3Aevents%28eid%2Cname%29%29&artist_profile_id=in.%28cc9a5783-b807-43e2-9e9c-f7687b4f9120%29 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "99983545-ec14-4d16-93a9-b24707220fc5",
+    "timestamp": 1757796479429000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea80bc9d4c250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_payments?select=id%2Cart_id%2Cgross_amount%2Cnet_amount%2Ccurrency%2Cstatus%2Cpaid_at%2Cart%3Aart%21artist_payments_art_id_fkey%28id%2Cart_code%2Cevent%3Aevents%28eid%2Cname%29%29&artist_profile_id=in.%28cc9a5783-b807-43e2-9e9c-f7687b4f9120%29 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "e0b61e03-c0e7-4d5a-b70d-24bf15e48c10",
+    "timestamp": 1757796479471000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 69.216.102.189 | 97ea80be7f63250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/art?select=id%2Ccurrent_bid&artist_id=in.%28cc9a5783-b807-43e2-9e9c-f7687b4f9120%29 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "391b579f-fa0d-412a-b546-b883f59037e4",
+    "timestamp": 1757796479762000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea80be9f8a250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/art?select=id%2Ccurrent_bid&artist_id=in.%28cc9a5783-b807-43e2-9e9c-f7687b4f9120%29 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "1c1dd6c0-b018-4336-b37e-176e5a01836f",
+    "timestamp": 1757796479785000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea80e2ed9e250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/countries?select=name%2Ccode&order=name.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "84f7da1e-b8bb-4b15-9e74-79582e8744b8",
+    "timestamp": 1757796485595000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea80e2ed9c250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&person_id=eq.13a27c47-8c08-40dc-b25d-bc2dcc7ba64e&order=created_at.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "1b7f36d0-9059-4902-8fc7-ded1521d5790",
+    "timestamp": 1757796485606000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea80e3ceaa250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&person_id=eq.13a27c47-8c08-40dc-b25d-bc2dcc7ba64e&order=created_at.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "0560e078-f99a-4de8-a152-58338c7142df",
+    "timestamp": 1757796485731000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea80e3cebf250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/countries?select=name%2Ccode&order=name.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "ef7db391-8254-40a2-8a3c-f9175710154d",
+    "timestamp": 1757796485738000
+  },
+  {
+    "event_message": "POST | 200 | 69.216.102.189 | 97ea80fc3eb6250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/has_primary_profile | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "ab6871b9-00c1-4c2f-b98e-6ce9b273ee2e",
+    "timestamp": 1757796489648000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea81211e48250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&person_id=eq.13a27c47-8c08-40dc-b25d-bc2dcc7ba64e&order=created_at.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "d8e4ae85-dfe5-4d80-901d-00859eda724a",
+    "timestamp": 1757796495542000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea81211e49250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/countries?select=name%2Ccode&order=name.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "90ba4b24-d12c-46f8-a9ca-41c0b4e832f9",
+    "timestamp": 1757796495543000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea8121ff57250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&person_id=eq.13a27c47-8c08-40dc-b25d-bc2dcc7ba64e&order=created_at.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "a6230aff-634f-4d06-9851-4660270d5326",
+    "timestamp": 1757796495688000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea81221f73250d | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/countries?select=name%2Ccode&order=name.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "4e132556-b5d3-4482-9ba8-75cf8b2f954e",
+    "timestamp": 1757796495703000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 69.216.102.189 | 97ea85684cc322f6 | https://xsqdkubgyqwpyvfltnrf.supabase.co/auth/v1/token?grant_type=refresh_token | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "1a2b4cfe-6836-4e26-9fb9-989af4a572fd",
+    "timestamp": 1757796670781000
+  },
+  {
+    "event_message": "POST | 200 | 69.216.102.189 | 97ea85687d1322f6 | https://xsqdkubgyqwpyvfltnrf.supabase.co/auth/v1/token?grant_type=refresh_token | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "41d80422-7173-4aa7-8508-5e9bce4a0c6f",
+    "timestamp": 1757796670820000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 69.216.102.189 | 97ea85697eb722f6 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_cloudflare_config | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "964e2553-35be-4c94-995b-d770940705f8",
+    "timestamp": 1757796670968000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea85697eaf22f6 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&person_id=eq.13a27c47-8c08-40dc-b25d-bc2dcc7ba64e&order=created_at.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "1e727719-8e6d-437e-bcda-47b9ec863ca0",
+    "timestamp": 1757796670972000
+  },
+  {
+    "event_message": "POST | 200 | 69.216.102.189 | 97ea85697eb422f6 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "8cd82528-0a64-4c65-b5e4-1d216e6059b9",
+    "timestamp": 1757796670977000
+  },
+  {
+    "event_message": "POST | 200 | 69.216.102.189 | 97ea8569bf4822f6 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_cloudflare_config | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "461be330-9522-4232-b188-1872e3c08571",
+    "timestamp": 1757796671009000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea856a785022f6 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&person_id=eq.13a27c47-8c08-40dc-b25d-bc2dcc7ba64e&order=created_at.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "e8e9ef55-6996-4c02-a2e0-a00adbb780cf",
+    "timestamp": 1757796671128000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea856b69b922f6 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&person_id=eq.13a27c47-8c08-40dc-b25d-bc2dcc7ba64e&order=created_at.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "c578407f-f335-4bd0-a63f-a1ad9c5a24ef",
+    "timestamp": 1757796671282000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea8a174d21173b | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&person_id=eq.13a27c47-8c08-40dc-b25d-bc2dcc7ba64e&order=created_at.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "73606c1c-4de1-474e-b807-8596a0214f65",
+    "timestamp": 1757796862612000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 69.216.102.189 | 97ea8a482c02173b | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/media_files?select=* | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "a994e2ce-e3e9-401f-82ac-f31c99a4c00d",
+    "timestamp": 1757796870440000
+  },
+  {
+    "event_message": "POST | 201 | 69.216.102.189 | 97ea8a485c30173b | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/media_files?select=* | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "184e4c6a-8146-4ac1-b481-8aadc42f226b",
+    "timestamp": 1757796870477000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 69.216.102.189 | 97ea8a4a4de1173b | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "15debfa4-d2a9-4375-8665-c216dc72844b",
+    "timestamp": 1757796870780000
+  },
+  {
+    "event_message": "POST | 201 | 69.216.102.189 | 97ea8a4a7e2b173b | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "2a376441-e0ab-4c66-8a44-f1b26b6f7b45",
+    "timestamp": 1757796870815000
+  },
+  {
+    "event_message": "POST | 200 | 69.216.102.189 | 97ea8a4c5fac173b | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "9e8d4bdc-55c5-4f45-9285-fcf560f73046",
+    "timestamp": 1757796871111000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea8a987c8a173b | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&person_id=eq.13a27c47-8c08-40dc-b25d-bc2dcc7ba64e&order=created_at.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "7165d5d6-d79f-452a-b79a-ff09f0ffcc2a",
+    "timestamp": 1757796883303000
+  },
+  {
+    "event_message": "POST | 200 | 69.216.102.189 | 97ea8afeef59eb30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/has_primary_profile | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "f2fc5b0a-f69d-4b9e-b897-27bce6c22241",
+    "timestamp": 1757796899684000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 69.216.102.189 | 97ea8b00ae2aeb30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/events?select=id%2Ceid%2Cname%2Cevent_start_datetime%2Cevent_end_datetime%2Cvenue%2Ccity%3Acities%28name%29%2Cdescription&enabled=eq.true&show_in_app=eq.true&event_start_datetime=gte.2025-09-13T20%3A54%3A59.924Z&order=event_start_datetime.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "1df6f9da-8e66-408f-ad1c-f8e0ffa2b2a3",
+    "timestamp": 1757796899951000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 69.216.102.189 | 97ea8b00ae25eb30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&id=eq.2a4a143c-e6ca-4619-90bc-d3b1b5947c13 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "67c10e4f-7e07-439f-8f6a-b5014e9b8131",
+    "timestamp": 1757796899953000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 69.216.102.189 | 97ea8b00ae2deb30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_applications?select=*&artist_profile_id=eq.2a4a143c-e6ca-4619-90bc-d3b1b5947c13 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "74aca91d-7e94-4db3-993f-6cd7ecec2a1f",
+    "timestamp": 1757796899954000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 69.216.102.189 | 97ea8b00ae41eb30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_invitations?select=*&artist_profile_id=eq.2a4a143c-e6ca-4619-90bc-d3b1b5947c13&accepted_at=is.null | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "3eee8c0a-3437-4c2c-960d-248246bf9707",
+    "timestamp": 1757796899955000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 69.216.102.189 | 97ea8b00ae45eb30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_confirmations?select=*&artist_profile_id=eq.2a4a143c-e6ca-4619-90bc-d3b1b5947c13&confirmation_status=eq.confirmed | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "5d0b7b41-fdee-485e-a19a-28076346742a",
+    "timestamp": 1757796899957000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea8b00cea6eb30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/events?select=id%2Ceid%2Cname%2Cevent_start_datetime%2Cevent_end_datetime%2Cvenue%2Ccity%3Acities%28name%29%2Cdescription&enabled=eq.true&show_in_app=eq.true&event_start_datetime=gte.2025-09-13T20%3A54%3A59.924Z&order=event_start_datetime.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "81094846-afe8-4121-8862-9e58cba70979",
+    "timestamp": 1757796899976000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea8b00ceaaeb30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_invitations?select=*&artist_profile_id=eq.2a4a143c-e6ca-4619-90bc-d3b1b5947c13&accepted_at=is.null | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "3cd23dd8-56f2-4600-a268-58cb81bc711e",
+    "timestamp": 1757796899976000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea8b00ceadeb30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_applications?select=*&artist_profile_id=eq.2a4a143c-e6ca-4619-90bc-d3b1b5947c13 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "ebdb5e6b-62c0-4101-8f65-7232326d0449",
+    "timestamp": 1757796899977000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea8b00cea2eb30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&id=eq.2a4a143c-e6ca-4619-90bc-d3b1b5947c13 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "9a24e0d8-414c-4781-90af-8b81a2c06537",
+    "timestamp": 1757796899977000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea8b00deb8eb30 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_confirmations?select=*&artist_profile_id=eq.2a4a143c-e6ca-4619-90bc-d3b1b5947c13&confirmation_status=eq.confirmed | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "d72dc98e-d764-468e-86c7-434cfd3c03c0",
+    "timestamp": 1757796899978000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea8dc3dd5bf997 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_applications?select=*&artist_profile_id=eq.2a4a143c-e6ca-4619-90bc-d3b1b5947c13 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "b0975d80-3fee-4c27-b7ab-7d228b0a72f8",
+    "timestamp": 1757797013110000
+  },
+  {
+    "event_message": "POST | 200 | 69.216.102.189 | 97ea927b0e29ed35 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/has_primary_profile | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "4e5e9705-8d93-4c50-8038-10f4f8e0367c",
+    "timestamp": 1757797206256000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea927c5ad3ed35 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&id=eq.2a4a143c-e6ca-4619-90bc-d3b1b5947c13 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "2d2498ca-f597-4658-8126-4b8ce47a6bfa",
+    "timestamp": 1757797206460000
+  },
+  {
+    "event_message": "POST | 200 | 69.216.102.189 | 97ea9281a8dced35 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "6dde6f1a-d99b-49c7-a7b1-e4fba794ebe3",
+    "timestamp": 1757797207313000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 69.216.102.189 | 97ea9282ad44ed35 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_applications?select=*%2Cevent%3Aevents%28id%2Cname%2Cevent_start_datetime%2Cvenue%2Ccity%3Acities%28name%29%29&artist_profile_id=eq.2a4a143c-e6ca-4619-90bc-d3b1b5947c13&order=applied_at.desc&limit=5 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "51e4a9a3-626f-4dca-aaea-32d65ebacc8d",
+    "timestamp": 1757797207471000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea9282cde7ed35 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_applications?select=*%2Cevent%3Aevents%28id%2Cname%2Cevent_start_datetime%2Cvenue%2Ccity%3Acities%28name%29%29&artist_profile_id=eq.2a4a143c-e6ca-4619-90bc-d3b1b5947c13&order=applied_at.desc&limit=5 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "4055a643-98c3-4d10-92fd-7456bb2902ad",
+    "timestamp": 1757797207496000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 69.216.102.189 | 97ea9283890aed35 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_invitations?select=*&artist_profile_id=eq.2a4a143c-e6ca-4619-90bc-d3b1b5947c13&status=eq.pending&accepted_at=is.null&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "510c7dea-ded0-47af-95f4-e464c827014b",
+    "timestamp": 1757797207618000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea9283b9b7ed35 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_invitations?select=*&artist_profile_id=eq.2a4a143c-e6ca-4619-90bc-d3b1b5947c13&status=eq.pending&accepted_at=is.null&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "a67a49f7-ee7b-46bf-8100-99088d1fe689",
+    "timestamp": 1757797207642000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 69.216.102.189 | 97ea92846c59ed35 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_confirmations?select=*&artist_profile_id=eq.2a4a143c-e6ca-4619-90bc-d3b1b5947c13&confirmation_status=eq.confirmed&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "6e572a4d-4f8e-4991-bbb7-728e630e8600",
+    "timestamp": 1757797207748000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea92848ceeed35 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_confirmations?select=*&artist_profile_id=eq.2a4a143c-e6ca-4619-90bc-d3b1b5947c13&confirmation_status=eq.confirmed&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "ac32ed52-7972-4b68-99b8-5fe387e1a2cc",
+    "timestamp": 1757797207767000
+  },
+  {
+    "event_message": "POST | 200 | 69.216.102.189 | 97ea928b2a43ed35 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/get_unified_sample_works | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "60d504b1-51e1-4263-9e81-c6ca317fbf42",
+    "timestamp": 1757797208828000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea928bdd76ed35 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_applications?select=*%2Cevent%3Aevents%28id%2Cname%2Cevent_start_datetime%2Cvenue%2Ccity%3Acities%28name%29%29&artist_profile_id=eq.2a4a143c-e6ca-4619-90bc-d3b1b5947c13&order=applied_at.desc&limit=5 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "8db401ae-61c8-4998-90f3-ed8da817b870",
+    "timestamp": 1757797208940000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea928c88b4ed35 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_invitations?select=*&artist_profile_id=eq.2a4a143c-e6ca-4619-90bc-d3b1b5947c13&status=eq.pending&accepted_at=is.null&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "20e89a73-8591-45c0-b2fe-fc917f3544d8",
+    "timestamp": 1757797209058000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea928d6c1ded35 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_confirmations?select=*&artist_profile_id=eq.2a4a143c-e6ca-4619-90bc-d3b1b5947c13&confirmation_status=eq.confirmed&order=created_at.desc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "99ff1752-b9be-4af0-bb52-23f7ea758c61",
+    "timestamp": 1757797209193000
+  },
+  {
+    "event_message": "POST | 200 | 69.216.102.189 | 97ea92b2ba33ed35 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/has_primary_profile | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "99aab9f4-d998-48e4-98d4-3a33279a181f",
+    "timestamp": 1757797215167000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea92b37d7ded35 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_applications?select=*&artist_profile_id=eq.2a4a143c-e6ca-4619-90bc-d3b1b5947c13 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "16d49090-6423-4d8d-875a-ae7ad77bb53c",
+    "timestamp": 1757797215285000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea92b37d6eed35 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_profiles?select=*&id=eq.2a4a143c-e6ca-4619-90bc-d3b1b5947c13 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "f7dab260-7761-453d-91c9-a3a45561ea39",
+    "timestamp": 1757797215286000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 69.216.102.189 | 97ea92b37d76ed35 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/events?select=id%2Ceid%2Cname%2Cevent_start_datetime%2Cevent_end_datetime%2Cvenue%2Ccity%3Acities%28name%29%2Cdescription&enabled=eq.true&show_in_app=eq.true&event_start_datetime=gte.2025-09-13T21%3A00%3A15.257Z&order=event_start_datetime.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "4fad3875-b44b-4215-8d01-70166754491f",
+    "timestamp": 1757797215287000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea92b37d84ed35 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_invitations?select=*&artist_profile_id=eq.2a4a143c-e6ca-4619-90bc-d3b1b5947c13&accepted_at=is.null | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "00df6388-d4e5-41ef-ba53-ef47f809df65",
+    "timestamp": 1757797215289000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea92b37d8bed35 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/artist_confirmations?select=*&artist_profile_id=eq.2a4a143c-e6ca-4619-90bc-d3b1b5947c13&confirmation_status=eq.confirmed | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "49c43e44-bbb0-4747-b415-d39af4d250f0",
+    "timestamp": 1757797215291000
+  },
+  {
+    "event_message": "GET | 200 | 69.216.102.189 | 97ea92b3ae18ed35 | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/events?select=id%2Ceid%2Cname%2Cevent_start_datetime%2Cevent_end_datetime%2Cvenue%2Ccity%3Acities%28name%29%2Cdescription&enabled=eq.true&show_in_app=eq.true&event_start_datetime=gte.2025-09-13T21%3A00%3A15.257Z&order=event_start_datetime.asc | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    "id": "bff749da-9337-475e-924a-a71ab404a2e7",
+    "timestamp": 1757797215311000
+  },
+  {
+    "event_message": "GET | 101 | 172.97.214.64 | 97eb74d99fa5abe8 | https://xsqdkubgyqwpyvfltnrf.supabase.co/realtime/v1/websocket?apikey=REDACTED&vsn=1.0.0 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "d2edbea6-6b0b-4bf0-85e8-10f5835c9841",
+    "timestamp": 1757806478348000
+  },
+  {
+    "event_message": "GET | 101 | 172.97.214.64 | 97eb74e1e93fac12 | https://xsqdkubgyqwpyvfltnrf.supabase.co/realtime/v1/websocket?apikey=REDACTED&vsn=1.0.0 | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "b1fcba90-fa23-4ef0-9c64-5154f90db3de",
+    "timestamp": 1757806479672000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 172.97.214.64 | 97eb74e37a0136cb | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "0eb69422-e832-494f-b985-fee903fc6f89",
+    "timestamp": 1757806479927000
+  },
+  {
+    "event_message": "OPTIONS | 200 | 172.97.214.64 | 97eb74e379fe36cb | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "14a57ea1-ffa6-46c9-ae8e-d738760e92c2",
+    "timestamp": 1757806479940000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97eb74e3ba3636cb | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "a7ad5bbc-07a5-4fc0-927b-10e1b1cc3167",
+    "timestamp": 1757806479962000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97eb74e3ba3d36cb | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "63ce60ce-0656-4baa-b03a-afaa40c20eb9",
+    "timestamp": 1757806479965000
+  },
+  {
+    "event_message": "POST | 200 | 172.97.214.64 | 97eb74e59cf836cb | https://xsqdkubgyqwpyvfltnrf.supabase.co/rest/v1/rpc/check_event_admin_permission | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+    "id": "8275fcc1-d309-4bff-ada7-3b1be5043365",
+    "timestamp": 1757806480269000
+  }
+]

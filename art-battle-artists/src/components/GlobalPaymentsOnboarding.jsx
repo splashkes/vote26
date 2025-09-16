@@ -55,7 +55,9 @@ const GlobalPaymentsOnboarding = ({ globalPaymentAccount, onAccountUpdate }) => 
       if (data.onboarding_type === 'direct_redirect' && data.onboarding_url) {
         // Direct redirect to Stripe onboarding
         console.log('Redirecting to Stripe onboarding:', data.onboarding_url);
+        // Don't reset loading - keep button disabled until redirect
         window.location.href = data.onboarding_url;
+        return; // Exit early, don't reset loading
       } else if (data.onboarding_type === 'manual_setup') {
         // Show setup confirmation message instead of redirecting
         setError('');
@@ -68,6 +70,7 @@ const GlobalPaymentsOnboarding = ({ globalPaymentAccount, onAccountUpdate }) => 
       } else if (data.onboarding_url) {
         // Fallback redirect to onboarding URL
         window.location.href = data.onboarding_url;
+        return; // Exit early, don't reset loading
       } else {
         throw new Error('Invalid onboarding response: ' + JSON.stringify(data));
       }
@@ -98,6 +101,35 @@ const GlobalPaymentsOnboarding = ({ globalPaymentAccount, onAccountUpdate }) => 
     }
   };
 
+  const handleCancelInvitation = async () => {
+    if (!globalPaymentAccount?.id) {
+      setError('No invitation to cancel');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      // Delete the Global Payments record to cancel the invitation
+      const { error } = await supabase
+        .from('artist_global_payments')
+        .delete()
+        .eq('id', globalPaymentAccount.id);
+
+      if (error) throw error;
+
+      // Refresh the account data
+      if (onAccountUpdate) {
+        onAccountUpdate();
+      }
+    } catch (err) {
+      setError('Failed to cancel invitation: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleRefreshOnboarding = async () => {
     if (!globalPaymentAccount?.stripe_recipient_id) {
       // If no recipient ID, treat as new onboarding
@@ -121,6 +153,7 @@ const GlobalPaymentsOnboarding = ({ globalPaymentAccount, onAccountUpdate }) => 
 
       if (data.onboarding_url) {
         window.location.href = data.onboarding_url;
+        return; // Exit early, don't reset loading
       } else {
         throw new Error('No onboarding URL received');
       }
@@ -193,14 +226,18 @@ const GlobalPaymentsOnboarding = ({ globalPaymentAccount, onAccountUpdate }) => 
           };
         }
         
+        // Show invitation active status with email and cancel option
+        const invitedEmail = globalPaymentAccount?.metadata?.person_email;
         return {
           status: 'invited',
-          badge: <Badge color="blue" variant="soft"><ClockIcon width="12" height="12" /> Setup Required</Badge>,
-          message: 'Complete your Global Payments setup to start receiving direct payouts.',
+          badge: <Badge color="orange" variant="soft"><ExclamationTriangleIcon width="12" height="12" /> Invitation Active</Badge>,
+          message: `Invitation active for ${invitedEmail || 'your account'} - complete setup or cancel to retry.`,
           canOnboard: true,
-          buttonText: 'Start Setup',
+          buttonText: 'Continue Setup',
           buttonAction: handleStartOnboarding,
-          color: 'blue'
+          canCancel: true,
+          cancelAction: () => handleCancelInvitation(),
+          color: 'orange'
         };
     }
   };
@@ -261,16 +298,31 @@ const GlobalPaymentsOnboarding = ({ globalPaymentAccount, onAccountUpdate }) => 
         </Text>
 
         {statusInfo.canOnboard && (
-          <Button 
-            size="3" 
-            variant="solid"
-            color={statusInfo.color}
-            loading={loading}
-            onClick={statusInfo.buttonAction}
-          >
-            {statusInfo.buttonText}
-            <ExternalLinkIcon width="16" height="16" />
-          </Button>
+          <Flex gap="3">
+            <Button 
+              size="3" 
+              variant="solid"
+              color={statusInfo.color}
+              loading={loading}
+              disabled={loading}
+              onClick={statusInfo.buttonAction}
+            >
+              {loading ? 'Redirecting to Stripe...' : statusInfo.buttonText}
+              {!loading && <ExternalLinkIcon width="16" height="16" />}
+            </Button>
+            
+            {statusInfo.canCancel && (
+              <Button 
+                size="3" 
+                variant="soft"
+                color="red"
+                disabled={loading}
+                onClick={statusInfo.cancelAction}
+              >
+                Cancel & Retry
+              </Button>
+            )}
+          </Flex>
         )}
 
         {statusInfo.showDetails && globalPaymentAccount && (

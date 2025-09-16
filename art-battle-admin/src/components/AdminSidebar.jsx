@@ -9,11 +9,11 @@ import {
   Badge,
   ScrollArea
 } from '@radix-ui/themes';
-import { 
-  DashboardIcon, 
-  PersonIcon, 
-  ImageIcon, 
-  GearIcon, 
+import {
+  DashboardIcon,
+  PersonIcon,
+  ImageIcon,
+  GearIcon,
   ExitIcon,
   HeartFilledIcon,
   BarChartIcon,
@@ -23,7 +23,8 @@ import {
   EnvelopeClosedIcon,
   PaperPlaneIcon,
   ChatBubbleIcon,
-  FileTextIcon
+  FileTextIcon,
+  CardStackIcon
 } from '@radix-ui/react-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -141,6 +142,13 @@ const AdminSidebar = ({ collapsed = false, onToggleCollapse, hideToggleAndSignOu
           label: 'Email Queue',
           description: 'Manage artist payment email notifications',
           color: 'purple'
+        },
+        {
+          to: '/payments',
+          icon: CardStackIcon,
+          label: 'Payments',
+          description: 'Artist payment administration and Stripe management',
+          color: 'green'
         },
         {
           to: '/sms-marketing',
