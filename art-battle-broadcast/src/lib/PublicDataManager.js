@@ -2,9 +2,8 @@
  * PublicDataManager - Cached endpoint system for V2
  * Replaces realtime subscriptions with cached HTTP endpoints
  * Reduces database load by ~87% for non-admin users
+ * SECURITY: NO DIRECT DATABASE QUERIES - CACHED ENDPOINTS ONLY
  */
-
-import { supabase } from './supabase';
 
 class PublicDataManager {
   constructor() {
@@ -48,30 +47,17 @@ class PublicDataManager {
       
       // Extract events array from response (API returns {events: [...], generated_at: "..."})
       const cachedEvents = responseData.events || responseData;
-      
-      // Enhance with UUIDs for app compatibility (minimal Supabase query)
-      const { supabase } = await import('../lib/supabase');
-      const eids = cachedEvents.map(event => event.eid);
-      const { data: uuidData } = await supabase
-        .from('events')
-        .select('id, eid, enable_auction, vote_by_link')
-        .in('eid', eids);
-      
-      // Create EID to UUID/fields mapping
-      const eidToFields = {};
-      uuidData?.forEach(event => {
-        eidToFields[event.eid] = {
-          id: event.id,
-          enable_auction: event.enable_auction,
-          vote_by_link: event.vote_by_link
-        };
-      });
-      
-      // Enhance cached events with UUIDs and missing fields
+
+      // SECURITY FIX: NO DIRECT DATABASE QUERIES FROM FRONTEND
+      // The cached endpoint should already include id, enable_auction, vote_by_link
+      // If these fields are missing, the cached endpoint needs to be updated, not bypassed
       const data = cachedEvents.map(event => ({
         ...event,
-        ...eidToFields[event.eid]
-      })).filter(event => event.id); // Only include events with valid UUIDs
+        // Ensure required fields exist with fallback values if cached endpoint doesn't provide them
+        id: event.id || event.uuid || null,
+        enable_auction: event.enable_auction !== undefined ? event.enable_auction : true,
+        vote_by_link: event.vote_by_link !== undefined ? event.vote_by_link : false
+      })).filter(event => event.id || event.eid); // Include events with either UUID or EID
       
       // Cache the result
       this.cache.set(cacheKey, {
@@ -100,34 +86,11 @@ class PublicDataManager {
 
   /**
    * Get cache versions for all endpoints related to an event
+   * SECURITY: NO DATABASE QUERIES - Return empty versions to use basic URLs
    */
   async getCacheVersions(eventEid) {
-    try {
-      console.log(`📋 [V2-BROADCAST] Fetching cache versions for event ${eventEid}`);
-      
-      const { data, error } = await supabase.rpc('get_event_cache_versions', {
-        p_event_eid: eventEid
-      });
-      
-      if (error) {
-        console.warn('⚠️ [V2-BROADCAST] Failed to get cache versions, using basic URLs:', error);
-        return new Map(); // Return empty map - will fall back to basic URLs
-      }
-      
-      // Convert to Map for O(1) lookup
-      const versions = new Map();
-      if (data && Array.isArray(data)) {
-        data.forEach(row => {
-          versions.set(row.endpoint_path, row.cache_version);
-        });
-        console.log(`✅ [V2-BROADCAST] Got ${versions.size} cache versions for event ${eventEid}`);
-      }
-      
-      return versions;
-    } catch (error) {
-      console.warn('⚠️ [V2-BROADCAST] Cache version fetch failed, using basic URLs:', error);
-      return new Map(); // Return empty map - will fall back to basic URLs
-    }
+    console.log(`📋 [V2-BROADCAST] Cache versions disabled for security - using basic URLs for event ${eventEid}`);
+    return new Map(); // Always return empty map - will use basic URLs without versioning
   }
 
   /**

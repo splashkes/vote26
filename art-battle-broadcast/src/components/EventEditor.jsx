@@ -45,10 +45,18 @@ const EventEditor = ({ eventId }) => {
 
   const fetchEventData = async () => {
     try {
+      // Convert EID to UUID for admin database calls
+      const { getEventUuidFromEid } = await import('../lib/adminHelpers');
+      const eventUuid = await getEventUuidFromEid(eventId);
+
+      if (!eventUuid) {
+        throw new Error(`Could not find UUID for event ${eventId}`);
+      }
+
       const { data, error } = await supabase
         .from('events')
         .select('*')
-        .eq('id', eventId)
+        .eq('id', eventUuid)
         .single();
 
       if (error) throw error;
@@ -124,9 +132,17 @@ const EventEditor = ({ eventId }) => {
     setMessage(null);
 
     try {
+      // Convert EID to UUID for admin database calls
+      const { getEventUuidFromEid } = await import('../lib/adminHelpers');
+      const eventUuid = await getEventUuidFromEid(eventId);
+
+      if (!eventUuid) {
+        throw new Error(`Could not find UUID for event ${eventId}`);
+      }
+
       // Prepare data for saving - combine date and time if needed
       const dataToSave = { ...formData };
-      
+
       // Update event_start_datetime from date and time fields
       if (formData.date && formData.time) {
         // Combine date and time into ISO format for event_start_datetime
@@ -138,11 +154,11 @@ const EventEditor = ({ eventId }) => {
 
       // Log what we're saving for debugging
       console.log('Saving event data:', dataToSave);
-      
+
       const { error } = await supabase
         .from('events')
         .update(dataToSave)
-        .eq('id', eventId);
+        .eq('id', eventUuid);
 
       if (error) throw error;
 

@@ -6,6 +6,15 @@ import { supabase } from './supabase';
  * to get complete image information
  */
 export async function loadArtworksWithMedia(eventId) {
+  // Convert EID to UUID for admin database calls
+  const { getEventUuidFromEid } = await import('./adminHelpers');
+  const eventUuid = await getEventUuidFromEid(eventId);
+
+  if (!eventUuid) {
+    console.error(`Could not find UUID for event ${eventId}`);
+    return { data: [], error: new Error(`Could not find UUID for event ${eventId}`) };
+  }
+
   const { data, error } = await supabase
     .from('art')
     .select(`
@@ -33,7 +42,7 @@ export async function loadArtworksWithMedia(eventId) {
         )
       )
     `)
-    .eq('event_id', eventId)
+    .eq('event_id', eventUuid)
     .order('round', { ascending: true })
     .order('easel', { ascending: true });
 

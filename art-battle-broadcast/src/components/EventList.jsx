@@ -199,7 +199,7 @@ const EventList = () => {
   };
 
   const EventCard = ({ event, category }) => {
-    const isExpanded = expandedEvent === event.id;
+    const isExpanded = expandedEvent === event.eid;
     const isActive = category === 'active';
     const isPast = category === 'recent';
 
@@ -216,7 +216,7 @@ const EventList = () => {
         }}
       >
         <Box
-          onClick={() => toggleEventExpanded(event.id)}
+          onClick={() => toggleEventExpanded(event.eid)}
           style={{ cursor: 'pointer' }}
         >
           <Flex justify="between" align="center">
@@ -265,10 +265,10 @@ const EventList = () => {
                 onClick={(e) => {
                   e.stopPropagation();
                   if (!user) {
-                    setAuthRedirectTo(`/event/${event.id}`);
+                    setAuthRedirectTo(`/event/${event.eid}`);
                     setShowAuthModal(true);
                   } else {
-                    navigate(`/event/${event.id}`);
+                    navigate(`/event/${event.eid}`);
                   }
                 }}
               >
@@ -381,7 +381,7 @@ const EventList = () => {
                     🔥 Active Events
                   </Heading>
                   {events.active.slice(0, visibleCounts.active).map((event) => (
-                    <EventCard key={event.id} event={event} category="active" />
+                    <EventCard key={event.eid} event={event} category="active" />
                   ))}
                   {events.active.length > visibleCounts.active && (
                     <Button
@@ -403,7 +403,7 @@ const EventList = () => {
                     🎯 Upcoming Events
                   </Heading>
                   {events.future.slice(0, visibleCounts.future).map((event) => (
-                    <EventCard key={event.id} event={event} category="future" />
+                    <EventCard key={event.eid} event={event} category="future" />
                   ))}
                   {events.future.length > visibleCounts.future && (
                     <Button
@@ -425,7 +425,7 @@ const EventList = () => {
                     📅 Recent Events
                   </Heading>
                   {events.recent.slice(0, visibleCounts.recent).map((event) => (
-                    <EventCard key={event.id} event={event} category="recent" />
+                    <EventCard key={event.eid} event={event} category="recent" />
                   ))}
                   {events.recent.length > visibleCounts.recent && (
                     <Button

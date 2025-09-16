@@ -153,11 +153,35 @@ serve(async (req) => {
       .single()
 
     if (findError && findError.code !== 'PGRST116') { // PGRST116 = no rows found
-      console.error('Error finding person:', findError)
       return new Response(
-        JSON.stringify({ error: 'Failed to find user record', details: findError.message }),
-        { 
-          status: 500, 
+        JSON.stringify({
+          error: 'Failed to find user record',
+          success: false,
+          debug: {
+            timestamp: new Date().toISOString(),
+            function_name: 'update-bidder-info',
+            stage: 'finding_person_record',
+            find_error: {
+              message: findError.message,
+              code: findError.code,
+              details: findError.details,
+              hint: findError.hint
+            },
+            search_criteria: {
+              normalized_phone: normalizedPhone,
+              original_phone: userPhone,
+              user_id: user.id
+            },
+            jwt_claims: {
+              sub: jwtPayload.sub,
+              phone: jwtPayload.phone,
+              person_id: jwtPayload.person_id,
+              person_name: jwtPayload.person_name
+            }
+          }
+        }),
+        {
+          status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       )
@@ -170,6 +194,7 @@ serve(async (req) => {
         first_name: first_name.trim(),
         last_name: last_name.trim(),
         name: `${first_name.trim()} ${last_name.trim()}`,
+        auth_user_id: user.id, // Ensure auth_user_id is set for future compatibility
         updated_at: new Date().toISOString()
       }
 
@@ -189,11 +214,44 @@ serve(async (req) => {
         .single()
 
       if (error) {
-        console.error('Error updating person:', error)
         return new Response(
-          JSON.stringify({ error: 'Failed to update user info', details: error.message }),
-          { 
-            status: 500, 
+          JSON.stringify({
+            error: 'Failed to update user info',
+            success: false,
+            debug: {
+              timestamp: new Date().toISOString(),
+              function_name: 'update-bidder-info',
+              stage: 'updating_person_record',
+              update_error: {
+                message: error.message,
+                code: error.code,
+                details: error.details,
+                hint: error.hint
+              },
+              person_record: {
+                id: existingPerson.id,
+                name: existingPerson.name,
+                phone_number: existingPerson.phone_number,
+                auth_phone: existingPerson.auth_phone,
+                auth_user_id: existingPerson.auth_user_id
+              },
+              update_data: updates,
+              jwt_claims: {
+                sub: jwtPayload.sub,
+                phone: jwtPayload.phone,
+                person_id: jwtPayload.person_id,
+                person_name: jwtPayload.person_name
+              },
+              rls_check: {
+                auth_uid: user.id,
+                person_auth_user_id: existingPerson.auth_user_id,
+                phone_match: existingPerson.phone_number === normalizedPhone || existingPerson.auth_phone === normalizedPhone,
+                person_id_match: existingPerson.id === jwtPayload.person_id
+              }
+            }
+          }),
+          {
+            status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           }
         )
@@ -223,11 +281,31 @@ serve(async (req) => {
         .single()
 
       if (error) {
-        console.error('Error creating person:', error)
         return new Response(
-          JSON.stringify({ error: 'Failed to create user record', details: error.message }),
-          { 
-            status: 500, 
+          JSON.stringify({
+            error: 'Failed to create user record',
+            success: false,
+            debug: {
+              timestamp: new Date().toISOString(),
+              function_name: 'update-bidder-info',
+              stage: 'creating_person_record',
+              create_error: {
+                message: error.message,
+                code: error.code,
+                details: error.details,
+                hint: error.hint
+              },
+              new_person_data: newPerson,
+              jwt_claims: {
+                sub: jwtPayload.sub,
+                phone: jwtPayload.phone,
+                person_id: jwtPayload.person_id,
+                person_name: jwtPayload.person_name
+              }
+            }
+          }),
+          {
+            status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           }
         )
@@ -247,21 +325,35 @@ serve(async (req) => {
         email: result.email,
         phone: normalizedPhone
       }),
-      { 
-        status: 200, 
+      {
+        status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     )
 
   } catch (error) {
-    console.error('Unexpected error:', error)
     return new Response(
-      JSON.stringify({ 
-        error: 'Internal server error', 
-        details: error.message 
+      JSON.stringify({
+        error: 'Internal server error',
+        success: false,
+        debug: {
+          timestamp: new Date().toISOString(),
+          function_name: 'update-bidder-info',
+          stage: 'unexpected_error',
+          error_details: {
+            message: error.message,
+            name: error.name,
+            stack: error.stack
+          },
+          request_info: {
+            method: req.method,
+            url: req.url,
+            headers_present: !!req.headers.get('Authorization')
+          }
+        }
       }),
-      { 
-        status: 500, 
+      {
+        status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     )

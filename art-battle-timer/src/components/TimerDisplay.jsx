@@ -93,6 +93,16 @@ export default function TimerDisplay() {
     return 'just ended'
   }
 
+  const formatEventDate = (dateTime) => {
+    if (!dateTime) return ''
+    const date = new Date(dateTime)
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    })
+  }
+
   const formatDateTime = (timestamp) => {
     const date = new Date(timestamp)
     return date.toLocaleTimeString('en-US', { 
@@ -170,9 +180,6 @@ export default function TimerDisplay() {
 
         {/* Round History Display */}
         <div className="round-history">
-          <Text size="3" weight="medium" color="gray" className="history-title">
-            Round History
-          </Text>
           <div className="history-grid">
             {timerData.all_rounds.map(round => (
               <div key={round.round} className="history-item">
@@ -211,7 +218,7 @@ export default function TimerDisplay() {
         <div className="event-header">
           <Flex justify="between" align="center" height="100%">
             <div>
-              <Text size="3" color="gray">{event.eid} • {event.city} • {event.venue}</Text>
+              <Text size="3" color="gray">{event.eid} • {event.city} • {event.venue} • {formatEventDate(event.event_start)}</Text>
             </div>
             <div>
               <Badge variant="soft" color={auctionClosed ? "red" : "amber"}>
@@ -265,9 +272,6 @@ export default function TimerDisplay() {
           {/* Round History Display */}
           {timerData.all_rounds && timerData.all_rounds.length > 0 && (
             <div className="round-history">
-              <Text size="3" weight="medium" color="gray" className="history-title">
-                Round History
-              </Text>
               <div className="history-grid">
                 {timerData.all_rounds.map(round => (
                   <div key={round.round} className="history-item">
@@ -367,11 +371,6 @@ export default function TimerDisplay() {
           />
         </div>
 
-        <div className="timer-label">
-          <Text size="5" color="gray">
-            {timeRemaining > 0 ? 'Time Remaining' : 'Auction Ended'}
-          </Text>
-        </div>
 
         {/* Auction Timer Display */}
         {timerData.auction_times && (
@@ -399,9 +398,6 @@ export default function TimerDisplay() {
         {/* Round History Display */}
         {timerData.all_rounds && timerData.all_rounds.length > 0 && (
           <div className="round-history">
-            <Text size="3" weight="medium" color="gray" className="history-title">
-              Round History
-            </Text>
             <div className="history-grid">
               {timerData.all_rounds.map(round => (
                 <div key={round.round} className="history-item">

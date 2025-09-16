@@ -2,8 +2,29 @@
 
 # Vote26 Deployment Script
 # Deploys the Art Battle Vote app to DigitalOcean CDN
+# Usage: ./deploy.sh [--production|--dev]
+#   (default): Standard production build (minified, no source maps)
+#   --production: Maximum obfuscation, console logs removed, aggressive optimization
+#   --dev: Development build (source maps, readable code, console logs preserved)
 
 set -e  # Exit on error
+
+# Parse command line arguments
+BUILD_MODE="standard"
+for arg in "$@"; do
+  case $arg in
+    --production)
+      BUILD_MODE="production"
+      shift
+      ;;
+    --dev)
+      BUILD_MODE="development"
+      shift
+      ;;
+    *)
+      ;;
+  esac
+done
 
 # Colors for output
 RED='\033[0;31m'
@@ -49,14 +70,36 @@ print_status "Checking required tools..."
 check_command "s3cmd"
 check_command "npm"
 
-# Build the app
-print_status "Building the application for production..."
-if npm run build; then
-    print_success "Build completed successfully"
-else
-    print_error "Build failed"
-    exit 1
-fi
+# Build the app based on mode
+case $BUILD_MODE in
+    "production")
+        print_status "Building for PRODUCTION (maximum obfuscation, console logs removed)..."
+        if npm run build:production; then
+            print_success "Production build completed successfully"
+        else
+            print_error "Production build failed"
+            exit 1
+        fi
+        ;;
+    "development")
+        print_status "Building for DEVELOPMENT (source maps, readable code, console logs)..."
+        if npm run build:dev; then
+            print_success "Development build completed successfully"
+        else
+            print_error "Development build failed"
+            exit 1
+        fi
+        ;;
+    *)
+        print_status "Building for STANDARD PRODUCTION (minified, no source maps)..."
+        if npm run build; then
+            print_success "Build completed successfully"
+        else
+            print_error "Build failed"
+            exit 1
+        fi
+        ;;
+esac
 
 # Check if dist folder exists
 if [ ! -d "dist" ]; then

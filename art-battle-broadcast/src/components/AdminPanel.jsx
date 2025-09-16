@@ -198,10 +198,19 @@ const AdminPanel = ({
     if (eventId) {
       const fetchEventData = async () => {
         try {
+          // Convert EID to UUID for admin database calls
+          const { getEventUuidFromEid } = await import('../lib/adminHelpers');
+          const eventUuid = await getEventUuidFromEid(eventId);
+
+          if (!eventUuid) {
+            console.error(`Could not find UUID for event ${eventId}`);
+            return;
+          }
+
           const { data, error } = await supabase
             .from('events')
             .select('eid, name')
-            .eq('id', eventId)
+            .eq('id', eventUuid)
             .single()
           
           if (!error && data) {
@@ -238,17 +247,28 @@ const AdminPanel = ({
   // Set up realtime subscription for auction updates with flash animations
   useEffect(() => {
     if (!eventId || adminMode !== 'auction') return;
-    
-    const channel = supabase
-      .channel(`admin-auction-${eventId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'art',
-          filter: `event_id=eq.${eventId}`,
-        },
+
+    let channel = null;
+
+    const setupRealtimeSubscription = async () => {
+      const { getEventUuidFromEid } = await import('../lib/adminHelpers');
+      const eventUuid = await getEventUuidFromEid(eventId);
+
+      if (!eventUuid) {
+        console.error('Could not get UUID for event:', eventId);
+        return;
+      }
+
+      channel = supabase
+        .channel(`admin-auction-${eventId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'art',
+            filter: `event_id=eq.${eventUuid}`,
+          },
         (payload) => {
           console.log('Art update:', payload);
           // Flash the auction status/timer if visible
@@ -282,26 +302,42 @@ const AdminPanel = ({
         }
       )
       .subscribe();
+    };
+
+    setupRealtimeSubscription();
 
     return () => {
-      supabase.removeChannel(channel);
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
     };
   }, [eventId, adminMode, auctionArtworks.length]);
 
   // Set up realtime subscription for voting updates
   useEffect(() => {
     if (!eventId || adminMode !== 'voting') return;
-    
-    const channel = supabase
-      .channel(`admin-voting-${eventId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'votes',
-          filter: `event_id=eq.${eventId}`,
-        },
+
+    let channel = null;
+
+    const setupRealtimeSubscription = async () => {
+      const { getEventUuidFromEid } = await import('../lib/adminHelpers');
+      const eventUuid = await getEventUuidFromEid(eventId);
+
+      if (!eventUuid) {
+        console.error('Could not get UUID for event:', eventId);
+        return;
+      }
+
+      channel = supabase
+        .channel(`admin-voting-${eventId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'votes',
+            filter: `event_id=eq.${eventUuid}`,
+          },
         (payload) => {
           console.log('Vote update:', payload);
           // Flash the vote display for the artwork
@@ -319,9 +355,14 @@ const AdminPanel = ({
         }
       )
       .subscribe();
+    };
+
+    setupRealtimeSubscription();
 
     return () => {
-      supabase.removeChannel(channel);
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
     };
   }, [eventId, adminMode]);
 
@@ -335,12 +376,20 @@ const AdminPanel = ({
 
   const fetchEventData = async () => {
     try {
+      // Convert EID to UUID for admin database calls
+      const { getEventUuidFromEid } = await import('../lib/adminHelpers');
+      const eventUuid = await getEventUuidFromEid(eventId);
+
+      if (!eventUuid) {
+        throw new Error(`Could not find UUID for event ${eventId}`);
+      }
+
       // Try to get the first round ID for this event (for staging artists)
       // This is optional - events can exist without rounds
       const { data: firstRound, error: roundError } = await supabase
         .from('rounds')
         .select('id')
-        .eq('event_id', eventId)
+        .eq('event_id', eventUuid)  // Use UUID instead of EID
         .eq('round_number', 1)
         .maybeSingle(); // Use maybeSingle instead of single to allow null
 
@@ -367,7 +416,7 @@ const AdminPanel = ({
             )
           )
         `)
-        .eq('event_id', eventId)
+        .eq('event_id', eventUuid)  // Use UUID instead of EID
         .order('round_number');
 
       if (roundsError) throw roundsError;
@@ -466,7 +515,7 @@ const AdminPanel = ({
             entry_id
           )
         `)
-        .eq('event_id', eventId)
+        .eq('event_id', eventUuid)
         .eq('status', 'confirmed');
 
       if (eventArtistsError) {
@@ -543,6 +592,14 @@ const AdminPanel = ({
 
   const addArtistToEvent = async (artistId) => {
     try {
+      // Convert EID to UUID for admin database calls
+      const { getEventUuidFromEid } = await import('../lib/adminHelpers');
+      const eventUuid = await getEventUuidFromEid(eventId);
+
+      if (!eventUuid) {
+        throw new Error(`Could not find UUID for event ${eventId}`);
+      }
+
       // First get the artist's entry_id to use as artist_number
       const { data: artistData, error: fetchError } = await supabase
         .from('artist_profiles')
@@ -558,7 +615,7 @@ const AdminPanel = ({
       const { error } = await supabase
         .from('event_artists')
         .insert({
-          event_id: eventId,
+          event_id: eventUuid,
           artist_id: artistId,
           artist_number: artistData.entry_id?.toString(),
           status: 'confirmed'
@@ -805,40 +862,16 @@ const AdminPanel = ({
   const fetchAuctionData = async () => {
     try {
       console.log('fetchAuctionData called - adminLevel:', adminLevel, 'user phone:', user?.phone);
-      
-      // Use admin function for producer+ users to get full bidder info
-      if (adminLevel === 'producer' || adminLevel === 'super') {
-        console.log('Using admin auction details function for producer+ user');
-        
-        const { data: adminData, error: adminError } = await supabase
-          .rpc('get_admin_auction_details', {
-            p_event_id: eventId,
-            p_admin_phone: user?.phone
-          });
 
-        if (adminError) {
-          console.error('Admin auction details error:', adminError);
-          // Fall back to regular method if admin function fails
-          throw adminError;
-        }
+      // Convert EID to UUID for admin RPC calls
+      const { getEventUuidFromEid } = await import('../lib/adminHelpers');
+      const eventUuid = await getEventUuidFromEid(eventId);
 
-        if (adminData?.success) {
-          console.log('Admin auction data received:', adminData);
-          console.log('Sample bid data:', Object.values(adminData.bids || {})[0]);
-          // Debug bidder info
-          const sampleBid = Object.values(adminData.bids || {})[0];
-          if (sampleBid && sampleBid.history && sampleBid.history.length > 0) {
-            console.log('Sample bidder data:', sampleBid.history[0].bidder);
-            console.log('Bidder fields available:', Object.keys(sampleBid.history[0].bidder || {}));
-          }
-          setAuctionArtworks(adminData.artworks || []);
-          setAuctionBids(adminData.bids || {});
-          return;
-        } else {
-          console.warn('Admin function returned error:', adminData?.error);
-          // Fall through to regular method
-        }
+      if (!eventUuid) {
+        throw new Error(`Could not find UUID for event ${eventId}`);
       }
+
+      // Note: get_admin_auction_details function doesn't exist, using regular method
 
       // Regular method for non-producer admins or fallback
       console.log('Using regular auction data fetch');
@@ -861,14 +894,37 @@ const AdminPanel = ({
           extension_count,
           buyer_pay_recent_status_id,
           buyer_pay_recent_date,
+          buyer_pay_recent_person_id,
           artist_id,
           artist_profiles (
             id,
             name,
             entry_id
+          ),
+          winner_people:people!winner_id (
+            id,
+            first_name,
+            last_name,
+            nickname,
+            email,
+            phone_number,
+            auth_phone,
+            phone,
+            name
+          ),
+          buyer_pay_recent_people:people!buyer_pay_recent_person_id (
+            id,
+            first_name,
+            last_name,
+            nickname,
+            email,
+            phone_number,
+            auth_phone,
+            phone,
+            name
           )
         `)
-        .eq('event_id', eventId)
+        .eq('event_id', eventUuid)  // Use UUID instead of EID
         .not('artist_id', 'is', null)  // Only show artworks with artists assigned
         .order('round')
         .order('easel');
@@ -882,12 +938,12 @@ const AdminPanel = ({
       // Use simple admin functions to bypass RLS for payment data
       const { data: paymentLogsData } = await supabase
         .rpc('get_payment_logs_admin', {
-          p_event_id: eventId
+          p_event_id: eventUuid
         });
 
       const { data: paymentStatusesData } = await supabase
         .rpc('get_payment_statuses_admin', {
-          p_event_id: eventId
+          p_event_id: eventUuid
         });
 
       console.log('Payment data result:', { paymentLogsData, paymentStatusesData });
@@ -941,36 +997,28 @@ const AdminPanel = ({
         });
       }
 
-      // Fetch all bids with bidder info (limited by RLS for non-producer users)
-      const { data: bidsData } = await supabase
-        .from('bids')
-        .select(`
-          art_id, 
-          amount,
-          created_at,
-          person_id,
-          people!bids_person_id_fkey (
-            name,
-            first_name,
-            last_name,
-            nickname,
-            email,
-            phone_number,
-            auth_phone,
-            phone
-          )
-        `)
-        .in('art_id', artIds)
-        .order('created_at', { ascending: false });
+      // Fetch comprehensive bid history with full buyer info using admin function
+      const { data: adminBidsData } = await supabase
+        .rpc('get_admin_bid_history', {
+          p_event_id: eventUuid
+        });
 
       // Group bids by artwork and find highest bid
       const bidsByArt = {};
-      if (bidsData) {
-        bidsData.forEach(bid => {
+      if (adminBidsData) {
+        adminBidsData.forEach(bid => {
           if (!bidsByArt[bid.art_id]) {
             bidsByArt[bid.art_id] = {
               highestBid: bid.amount,
-              highestBidder: bid.people,
+              highestBidder: {
+                first_name: bid.bidder_first_name,
+                last_name: bid.bidder_last_name,
+                nickname: bid.bidder_nickname,
+                email: bid.bidder_email,
+                phone_number: bid.bidder_phone,
+                auth_phone: bid.bidder_auth_phone,
+                name: bid.bidder_nickname || `${bid.bidder_first_name || ''} ${bid.bidder_last_name || ''}`.trim()
+              },
               bidCount: 0,
               history: []
             };
@@ -978,13 +1026,29 @@ const AdminPanel = ({
           // Update highest bid if this one is higher
           if (bid.amount > bidsByArt[bid.art_id].highestBid) {
             bidsByArt[bid.art_id].highestBid = bid.amount;
-            bidsByArt[bid.art_id].highestBidder = bid.people;
+            bidsByArt[bid.art_id].highestBidder = {
+              first_name: bid.bidder_first_name,
+              last_name: bid.bidder_last_name,
+              nickname: bid.bidder_nickname,
+              email: bid.bidder_email,
+              phone_number: bid.bidder_phone,
+              auth_phone: bid.bidder_auth_phone,
+              name: bid.bidder_nickname || `${bid.bidder_first_name || ''} ${bid.bidder_last_name || ''}`.trim()
+            };
           }
           bidsByArt[bid.art_id].bidCount++;
           bidsByArt[bid.art_id].history.push({
             amount: bid.amount,
-            created_at: bid.created_at,
-            bidder: bid.people
+            created_at: bid.bid_time,
+            bidder: {
+              first_name: bid.bidder_first_name,
+              last_name: bid.bidder_last_name,
+              nickname: bid.bidder_nickname,
+              email: bid.bidder_email,
+              phone_number: bid.bidder_phone,
+              auth_phone: bid.bidder_auth_phone,
+              name: bid.bidder_nickname || `${bid.bidder_first_name || ''} ${bid.bidder_last_name || ''}`.trim()
+            }
           });
         });
       }
@@ -1020,8 +1084,16 @@ const AdminPanel = ({
 
   const fetchAuctionTimerStatus = async () => {
     try {
+      // Convert EID to UUID for admin RPC calls
+      const { getEventUuidFromEid } = await import('../lib/adminHelpers');
+      const eventUuid = await getEventUuidFromEid(eventId);
+
+      if (!eventUuid) {
+        throw new Error(`Could not find UUID for event ${eventId}`);
+      }
+
       const { data, error } = await supabase
-        .rpc('get_auction_timer_status', { p_event_id: eventId });
+        .rpc('get_auction_timer_status', { p_event_id: eventUuid });
       
       if (error) throw error;
       
@@ -1039,11 +1111,19 @@ const AdminPanel = ({
 
   const handleCSVExport = async () => {
     try {
-      // Get event EID from database using eventId
+      // Convert EID to UUID for admin database calls
+      const { getEventUuidFromEid } = await import('../lib/adminHelpers');
+      const eventUuid = await getEventUuidFromEid(eventId);
+
+      if (!eventUuid) {
+        throw new Error(`Could not find UUID for event ${eventId}`);
+      }
+
+      // Get event EID from database using eventUuid
       const { data: eventData, error: eventError } = await supabase
         .from('events')
         .select('eid')
-        .eq('id', eventId)
+        .eq('id', eventUuid)
         .single()
       
       if (eventError || !eventData?.eid) {
@@ -1096,14 +1176,22 @@ const AdminPanel = ({
     setTimerActionLoading(true);
     try {
       console.log('Timer action:', action, 'Duration:', duration, 'Event ID:', eventId, 'Event ID type:', typeof eventId);
-      
+
       if (!eventId) {
         throw new Error('Event ID is missing');
       }
-      
+
+      // Convert EID to UUID for admin RPC calls
+      const { getEventUuidFromEid } = await import('../lib/adminHelpers');
+      const eventUuid = await getEventUuidFromEid(eventId);
+
+      if (!eventUuid) {
+        throw new Error(`Could not find UUID for event ${eventId}`);
+      }
+
       const { data, error } = await supabase
         .rpc('manage_auction_timer', {
-          p_event_id: eventId,
+          p_event_id: eventUuid,
           p_action: action,
           p_duration_minutes: duration,
           p_admin_phone: null // Optional parameter
@@ -1133,9 +1221,17 @@ const AdminPanel = ({
 
   const fetchEventAdmins = async () => {
     try {
+      // Convert EID to UUID for admin RPC calls
+      const { getEventUuidFromEid } = await import('../lib/adminHelpers');
+      const eventUuid = await getEventUuidFromEid(eventId);
+
+      if (!eventUuid) {
+        throw new Error(`Could not find UUID for event ${eventId}`);
+      }
+
       // Use a manual JOIN since we can't enforce foreign key due to orphaned phone numbers
       const { data, error } = await supabase.rpc('get_event_admins_with_people', {
-        p_event_id: eventId
+        p_event_id: eventUuid
       });
       
       if (error) throw error;
@@ -2091,11 +2187,20 @@ const AdminPanel = ({
                             phone = '+' + phone;
                             
                             try {
+                              // Convert EID to UUID for admin database calls
+                              const { getEventUuidFromEid } = await import('../lib/adminHelpers');
+                              const eventUuid = await getEventUuidFromEid(eventId);
+
+                              if (!eventUuid) {
+                                showAdminMessage('error', `Could not find UUID for event ${eventId}`);
+                                return;
+                              }
+
                               // Check if admin already exists
                               const { data: existing } = await supabase
                                 .from('event_admins')
                                 .select('id')
-                                .eq('event_id', eventId)
+                                .eq('event_id', eventUuid)
                                 .eq('phone', phone)
                                 .single();
                               
@@ -2276,10 +2381,19 @@ const AdminPanel = ({
                   onClick={async () => {
                     // Fetch data counts before showing confirmation
                     try {
+                      // Convert EID to UUID for admin database calls
+                      const { getEventUuidFromEid } = await import('../lib/adminHelpers');
+                      const eventUuid = await getEventUuidFromEid(eventId);
+
+                      if (!eventUuid) {
+                        alert(`Could not find UUID for event ${eventId}`);
+                        return;
+                      }
+
                       const { data: artData } = await supabase
                         .from('art')
                         .select('id, vote_count, bid_count')
-                        .eq('event_id', eventId)
+                        .eq('event_id', eventUuid)
                         .eq('round', selectedEasel.round)
                         .eq('easel', selectedEasel.easel)
                         .single();
@@ -2363,11 +2477,19 @@ const AdminPanel = ({
                     if (selectedEasel.roundId.startsWith('temp-round-')) {
                       // Need to create the round in the database first
                       const roundNumber = parseInt(selectedEasel.roundId.split('-')[2]);
-                      
+
+                      // Convert EID to UUID for admin database calls
+                      const { getEventUuidFromEid } = await import('../lib/adminHelpers');
+                      const eventUuid = await getEventUuidFromEid(eventId);
+
+                      if (!eventUuid) {
+                        throw new Error(`Could not find UUID for event ${eventId}`);
+                      }
+
                       const { data: newRound, error: createError } = await supabase
                         .from('rounds')
                         .insert({
-                          event_id: eventId,
+                          event_id: eventUuid,
                           round_number: roundNumber
                         })
                         .select('id')
@@ -2616,12 +2738,20 @@ const AdminPanel = ({
                       artistId: deleteConfirm.artist.id,
                       artistName: deleteConfirm.artist.name
                     });
-                    
+
+                    // Convert EID to UUID for admin database calls
+                    const { getEventUuidFromEid } = await import('../lib/adminHelpers');
+                    const eventUuid = await getEventUuidFromEid(eventId);
+
+                    if (!eventUuid) {
+                      throw new Error(`Could not find UUID for event ${eventId}`);
+                    }
+
                     // Remove artist from event_artists table
                     const { error } = await supabase
                       .from('event_artists')
                       .delete()
-                      .eq('event_id', eventId)
+                      .eq('event_id', eventUuid)
                       .eq('artist_id', deleteConfirm.artist.id);
                     
                     if (error) {
@@ -2684,11 +2814,19 @@ const AdminPanel = ({
                     onDataChange();
                     console.log('fetchEventData completed after easel removal');
                   } else if (deleteConfirm?.type === 'artist') {
+                    // Convert EID to UUID for admin database calls
+                    const { getEventUuidFromEid } = await import('../lib/adminHelpers');
+                    const eventUuid = await getEventUuidFromEid(eventId);
+
+                    if (!eventUuid) {
+                      throw new Error(`Could not find UUID for event ${eventId}`);
+                    }
+
                     // First, check if art record exists for this round/easel
                     const { data: artData, error: artCheckError } = await supabase
                       .from('art')
                       .select('id, art_code')
-                      .eq('event_id', eventId)
+                      .eq('event_id', eventUuid)
                       .eq('round', deleteConfirm.round)
                       .eq('easel', deleteConfirm.easel)
                       .single();
@@ -3179,45 +3317,74 @@ const AdminPanel = ({
                   </Flex>
                 </Card>
 
-                {/* Highest Bidder Info */}
-                {auctionBids[selectedAuctionItem.id]?.highestBidder && (
+                {/* Buyer/Bidder Info */}
+                {(auctionBids[selectedAuctionItem.id]?.highestBidder ||
+                  selectedAuctionItem.winner_people ||
+                  selectedAuctionItem.buyer_pay_recent_people) && (
                   <Card size="2">
-                    <Heading size="3" mb="3">Highest Bidder</Heading>
+                    <Heading size="3" mb="3">
+                      {auctionBids[selectedAuctionItem.id]?.highestBidder ? 'Highest Bidder' : 'Buyer Information'}
+                    </Heading>
                     <Flex direction="column" gap="2">
                       <Text size="3" weight="medium" style={{ display: 'block' }}>
-                        {adminLevel === 'producer' || adminLevel === 'super' ? (
-                          // Producer+ users see full names
-                          auctionBids[selectedAuctionItem.id].highestBidder.first_name && 
-                          auctionBids[selectedAuctionItem.id].highestBidder.last_name ? 
-                            `${auctionBids[selectedAuctionItem.id].highestBidder.first_name} ${auctionBids[selectedAuctionItem.id].highestBidder.last_name}` : 
-                            auctionBids[selectedAuctionItem.id].highestBidder.name || 
-                            auctionBids[selectedAuctionItem.id].highestBidder.nickname || 
-                            auctionBids[selectedAuctionItem.id].highestBidder.email || 
-                            auctionBids[selectedAuctionItem.id].highestBidder.phone_number || 
-                            auctionBids[selectedAuctionItem.id].highestBidder.auth_phone || 
-                            auctionBids[selectedAuctionItem.id].highestBidder.phone || 
-                            'Unknown Bidder'
-                        ) : (
-                          // Other admin levels see abbreviated names
-                          auctionBids[selectedAuctionItem.id].highestBidder.first_name ? 
-                            `${auctionBids[selectedAuctionItem.id].highestBidder.first_name} ${auctionBids[selectedAuctionItem.id].highestBidder.last_name ? auctionBids[selectedAuctionItem.id].highestBidder.last_name.charAt(0) + '.' : ''}` : 
-                            auctionBids[selectedAuctionItem.id].highestBidder.nickname || 
-                            'Anonymous'
-                        )}
+                        {(() => {
+                          // Try bid data first, then fallback to winner/buyer data
+                          const bidder = auctionBids[selectedAuctionItem.id]?.highestBidder;
+                          const winner = selectedAuctionItem.winner_people;
+                          const buyer = selectedAuctionItem.buyer_pay_recent_people;
+                          const person = bidder || winner || buyer;
+
+                          if (!person) return 'No bidder data';
+
+                          if (adminLevel === 'producer' || adminLevel === 'super') {
+                            // Producer+ users see full names
+                            if (person.first_name && person.last_name) {
+                              return `${person.first_name} ${person.last_name}`;
+                            }
+                            // Show what we have, with fallback for generic users
+                            const name = person.name || person.nickname || person.email || person.phone_number || person.auth_phone || person.phone;
+                            if (name && name !== 'User') {
+                              return name;
+                            }
+                            // For generic 'User' entries, show that it's a registered bidder
+                            const bidCount = auctionBids[selectedAuctionItem.id]?.bidCount || 0;
+                            return `Registered Bidder (${bidCount} bid${bidCount !== 1 ? 's' : ''})`;
+                          } else {
+                            // Other admin levels see abbreviated names
+                            if (person.first_name) {
+                              return `${person.first_name} ${person.last_name ? person.last_name.charAt(0) + '.' : ''}`;
+                            }
+                            return person.nickname || (person.name && person.name !== 'User' ? person.name : 'Registered Bidder');
+                          }
+                        })()}
                       </Text>
-                      {(adminLevel === 'producer' || adminLevel === 'super') && auctionBids[selectedAuctionItem.id].highestBidder.email && (
-                        <Text size="2" color="gray" style={{ display: 'block', marginTop: '4px' }}>
-                          📧 {auctionBids[selectedAuctionItem.id].highestBidder.email}
+                      {/* Debug info for troubleshooting */}
+                      {(adminLevel === 'producer' || adminLevel === 'super') && auctionBids[selectedAuctionItem.id] && (
+                        <Text size="1" color="gray" style={{ display: 'block', marginTop: '4px', fontFamily: 'monospace' }}>
+                          Debug: {auctionBids[selectedAuctionItem.id].bidCount} bids, highest: ${auctionBids[selectedAuctionItem.id].highestBid}
                         </Text>
                       )}
-                      {(adminLevel === 'producer' || adminLevel === 'super') && (
-                        auctionBids[selectedAuctionItem.id].highestBidder.phone_number || 
-                        auctionBids[selectedAuctionItem.id].highestBidder.auth_phone
-                      ) && (
-                        <Text size="2" color="gray" style={{ display: 'block', marginTop: '4px' }}>
-                          📱 {auctionBids[selectedAuctionItem.id].highestBidder.phone_number || auctionBids[selectedAuctionItem.id].highestBidder.auth_phone}
-                        </Text>
-                      )}
+                      {(adminLevel === 'producer' || adminLevel === 'super') && (() => {
+                        const person = auctionBids[selectedAuctionItem.id]?.highestBidder ||
+                                      selectedAuctionItem.winner_people ||
+                                      selectedAuctionItem.buyer_pay_recent_people;
+                        return person?.email && (
+                          <Text size="2" color="gray" style={{ display: 'block', marginTop: '4px' }}>
+                            📧 {person.email}
+                          </Text>
+                        );
+                      })()}
+                      {(adminLevel === 'producer' || adminLevel === 'super') && (() => {
+                        const person = auctionBids[selectedAuctionItem.id]?.highestBidder ||
+                                      selectedAuctionItem.winner_people ||
+                                      selectedAuctionItem.buyer_pay_recent_people;
+                        const phone = person?.phone_number || person?.auth_phone || person?.phone;
+                        return phone && (
+                          <Text size="2" color="gray" style={{ display: 'block', marginTop: '4px' }}>
+                            📱 {phone}
+                          </Text>
+                        );
+                      })()}
                     </Flex>
                   </Card>
                 )}
@@ -3450,11 +3617,41 @@ const AdminPanel = ({
                     Winning Bid: ${auctionBids[selectedAuctionItem.id]?.highestBid || selectedAuctionItem.current_bid || 0}
                   </Text>
                   {(adminLevel === 'producer' || adminLevel === 'super') && auctionBids[selectedAuctionItem.id]?.highestBidder && (
-                    <Text size="2" color="gray">
-                      Winner: {auctionBids[selectedAuctionItem.id].highestBidder.first_name && auctionBids[selectedAuctionItem.id].highestBidder.last_name ? 
-                        `${auctionBids[selectedAuctionItem.id].highestBidder.first_name} ${auctionBids[selectedAuctionItem.id].highestBidder.last_name}` : 
-                        auctionBids[selectedAuctionItem.id].highestBidder.name || 'Unknown'}
-                    </Text>
+                    <Flex direction="column" gap="1">
+                      <Text size="2" color="gray">
+                        Winner: {(() => {
+                          const bidder = auctionBids[selectedAuctionItem.id].highestBidder;
+
+                          // If we have first and last name, use them
+                          if (bidder.first_name && bidder.last_name) {
+                            return `${bidder.first_name} ${bidder.last_name}`;
+                          }
+
+                          // If we have a nickname, use it
+                          if (bidder.nickname && bidder.nickname !== 'User') {
+                            return bidder.nickname;
+                          }
+
+                          // If we only have phone, show "Bidder (phone)"
+                          if (bidder.phone_number) {
+                            return `Bidder (${bidder.phone_number})`;
+                          }
+
+                          // Fallback
+                          return bidder.name || 'Anonymous Bidder';
+                        })()}
+                      </Text>
+                      {auctionBids[selectedAuctionItem.id].highestBidder.phone_number && (
+                        <Text size="1" color="gray">
+                          Phone: {auctionBids[selectedAuctionItem.id].highestBidder.phone_number}
+                        </Text>
+                      )}
+                      {auctionBids[selectedAuctionItem.id].highestBidder.email && (
+                        <Text size="1" color="gray">
+                          Email: {auctionBids[selectedAuctionItem.id].highestBidder.email}
+                        </Text>
+                      )}
+                    </Flex>
                   )}
                 </Flex>
               </Card>

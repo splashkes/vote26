@@ -151,7 +151,7 @@ const EventDetail = () => {
             id,
             round_number,
             round_contestants(
-              id, 
+              id,
               easel_number,
               artist_profiles(id, name, instagram)
             )
@@ -159,6 +159,7 @@ const EventDetail = () => {
         `)
         .eq('id', eventId)
         .single();
+
 
       if (fetchError) {
         console.error('Error fetching event detail:', fetchError);
@@ -175,6 +176,33 @@ const EventDetail = () => {
       throw err;
     } finally {
       setLoading(false);
+    }
+  };
+
+  const toggleApplications = async () => {
+    try {
+      const newApplicationsOpen = !event.applications_open;
+
+      const { error } = await supabase.rpc('admin_toggle_event_applications', {
+        p_event_id: eventId,
+        p_applications_open: newApplicationsOpen
+      });
+
+      if (error) {
+        console.error('Error toggling applications:', error);
+        setError('Failed to toggle applications status');
+        return;
+      }
+
+      // Update local state
+      setEvent(prev => ({
+        ...prev,
+        applications_open: newApplicationsOpen
+      }));
+
+    } catch (err) {
+      console.error('Error in toggleApplications:', err);
+      setError('Failed to toggle applications status');
     }
   };
 
@@ -1475,6 +1503,19 @@ The Art Battle Team`);
                 <Text size="2">
                   <strong>Enabled:</strong> {event.enabled ? 'Yes' : 'No'}
                 </Text>
+                <Flex align="center" justify="between">
+                  <Text size="2">
+                    <strong>Applications:</strong> {event.applications_open ? 'Open' : 'Closed'}
+                  </Text>
+                  <Button
+                    size="1"
+                    onClick={toggleApplications}
+                    variant={event.applications_open ? "solid" : "soft"}
+                    color={event.applications_open ? "red" : "green"}
+                  >
+                    {event.applications_open ? "Close" : "Open"}
+                  </Button>
+                </Flex>
               </Flex>
             </Box>
           </Card>

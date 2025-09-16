@@ -89,9 +89,9 @@ const BidderInfoModal = ({
       const result = await response.json();
 
       if (!response.ok) {
-        // Log debug info for 401 errors
-        if (response.status === 401 && result.debug) {
-          console.log('401 Debug info from edge function:', result.debug);
+        // Log debug info for ALL error responses
+        if (result.debug) {
+          console.log(`🚨 Edge function error debug (${response.status}):`, result.debug);
         }
 
         if (response.status === 401) {
@@ -114,7 +114,12 @@ const BidderInfoModal = ({
       }
 
     } catch (error) {
-      console.error('Error updating bidder info:', error);
+      console.error('🚨 Error updating bidder info:', error);
+      console.error('🚨 Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       setError(error.message || 'Failed to update information. Please try again.');
     }
 

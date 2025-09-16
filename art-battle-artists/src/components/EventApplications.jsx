@@ -125,7 +125,8 @@ const EventApplications = () => {
           event_end_datetime,
           venue,
           city:cities(name),
-          description
+          description,
+          applications_open
         `)
         .eq('enabled', true)
         .eq('show_in_app', true)
@@ -699,17 +700,23 @@ const EventApplications = () => {
 
                     <Flex gap="2" align="center">
                       {eventStatus.type === 'none' && (
-                        <Button
-                          size="2"
-                          variant="solid"
-                          color="crimson"
-                          disabled={isApplying || !artistProfileId}
-                          loading={isApplying}
-                          onClick={() => handleApply(event.id)}
-                        >
-                          <PlusIcon width="16" height="16" />
-                          Apply
-                        </Button>
+                        event.applications_open ? (
+                          <Button
+                            size="2"
+                            variant="solid"
+                            color="crimson"
+                            disabled={isApplying || !artistProfileId}
+                            loading={isApplying}
+                            onClick={() => handleApply(event.id)}
+                          >
+                            <PlusIcon width="16" height="16" />
+                            Apply
+                          </Button>
+                        ) : (
+                          <Badge color="gray" variant="soft" size="2">
+                            Applications Closed
+                          </Badge>
+                        )
                       )}
                     </Flex>
                   </Flex>

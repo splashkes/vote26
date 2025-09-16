@@ -31,12 +31,20 @@ const QRAdminPanel = ({ eventId }) => {
       setLoading(true);
       setError(null);
 
+      // Convert EID to UUID for admin database calls
+      const { getEventUuidFromEid } = await import('../lib/adminHelpers');
+      const eventUuid = await getEventUuidFromEid(eventId);
+
+      if (!eventUuid) {
+        throw new Error(`Could not find UUID for event ${eventId}`);
+      }
+
       // Get existing secret for this event
-      console.log('Fetching QR secret for event:', eventId);
+      console.log('Fetching QR secret for event:', eventId, '-> UUID:', eventUuid);
       const { data: secretData, error: secretError } = await supabase
         .from('event_qr_secrets')
         .select('secret_token, created_at')
-        .eq('event_id', eventId)
+        .eq('event_id', eventUuid)  // Use UUID instead of EID
         .eq('is_active', true)
         .order('created_at', { ascending: false })
         .limit(1);
@@ -59,7 +67,7 @@ const QRAdminPanel = ({ eventId }) => {
       const { data: scanStats, error: statsError } = await supabase
         .from('people_qr_scans')
         .select('id, is_valid, scan_timestamp')
-        .eq('event_id', eventId);
+        .eq('event_id', eventUuid);
 
       if (statsError) {
         console.error('Error fetching scan stats:', statsError);
@@ -95,9 +103,17 @@ const QRAdminPanel = ({ eventId }) => {
       setGenerating(true);
       setError(null);
 
-      console.log('Creating QR secret for event:', eventId);
+      // Convert EID to UUID for admin RPC calls
+      const { getEventUuidFromEid } = await import('../lib/adminHelpers');
+      const eventUuid = await getEventUuidFromEid(eventId);
+
+      if (!eventUuid) {
+        throw new Error(`Could not find UUID for event ${eventId}`);
+      }
+
+      console.log('Creating QR secret for event:', eventId, '-> UUID:', eventUuid);
       const { data, error } = await supabase
-        .rpc('create_event_qr_secret', { p_event_id: eventId });
+        .rpc('create_event_qr_secret', { p_event_id: eventUuid });
 
       if (error) {
         console.error('Create QR secret error:', error);
