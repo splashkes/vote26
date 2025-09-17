@@ -4,18 +4,19 @@
   RETURNS text                                                                                                                                                             +
   LANGUAGE plpgsql                                                                                                                                                         +
   SECURITY DEFINER                                                                                                                                                         +
+  SET search_path TO 'pg_catalog', 'public', 'auth', 'extensions'                                                                                                          +
  AS $function$                                                                                                                                                             +
- BEGIN                                                                                                                                                                     +
-   -- Look up admin level in event_admins table, not people table                                                                                                          +
-   RETURN (                                                                                                                                                                +
-     SELECT admin_level                                                                                                                                                    +
-     FROM event_admins                                                                                                                                                     +
-     WHERE event_id = p_event_id                                                                                                                                           +
-     AND phone = p_phone                                                                                                                                                   +
-     LIMIT 1                                                                                                                                                               +
-   );                                                                                                                                                                      +
- END;                                                                                                                                                                      +
- $function$                                                                                                                                                                +
+  BEGIN                                                                                                                                                                    +
+    -- Look up admin level in event_admins table, not people table                                                                                                         +
+    RETURN (                                                                                                                                                               +
+      SELECT admin_level                                                                                                                                                   +
+      FROM event_admins                                                                                                                                                    +
+      WHERE event_id = p_event_id                                                                                                                                          +
+      AND phone = p_phone                                                                                                                                                  +
+      LIMIT 1                                                                                                                                                              +
+    );                                                                                                                                                                     +
+  END;                                                                                                                                                                     +
+  $function$                                                                                                                                                               +
  
  CREATE OR REPLACE FUNCTION public.get_user_admin_level(p_event_id uuid, p_user_id uuid DEFAULT auth.uid(), p_user_phone character varying DEFAULT NULL::character varying)+
   RETURNS text                                                                                                                                                             +

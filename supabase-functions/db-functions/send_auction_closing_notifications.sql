@@ -66,7 +66,7 @@
        END  -- Additional safety check per recipient                                                            +
      FROM people p                                                                                              +
      WHERE EXISTS (                                                                                             +
-       SELECT 1 FROM registrations r                                                                            +
+       SELECT 1 FROM event_registrations r  -- FIXED: Changed from registrations to event_registrations         +
        WHERE r.person_id = p.id                                                                                 +
          AND r.event_id = v_event.id                                                                            +
      )                                                                                                          +

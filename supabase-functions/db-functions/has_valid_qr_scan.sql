@@ -4,21 +4,22 @@
   RETURNS boolean                                                                      +
   LANGUAGE plpgsql                                                                     +
   STABLE SECURITY DEFINER                                                              +
+  SET search_path TO 'pg_catalog', 'public', 'auth', 'extensions'                      +
  AS $function$                                                                         +
- DECLARE                                                                               +
-   v_has_scan BOOLEAN;                                                                 +
- BEGIN                                                                                 +
-   SELECT EXISTS(                                                                      +
-     SELECT 1                                                                          +
-     FROM people_qr_scans                                                              +
-     WHERE person_id = p_person_id                                                     +
-       AND event_id = p_event_id                                                       +
-       AND is_valid = true                                                             +
-   ) INTO v_has_scan;                                                                  +
+  DECLARE                                                                              +
+    v_has_scan BOOLEAN;                                                                +
+  BEGIN                                                                                +
+    SELECT EXISTS(                                                                     +
+      SELECT 1                                                                         +
+      FROM people_qr_scans                                                             +
+      WHERE person_id = p_person_id                                                    +
+        AND event_id = p_event_id                                                      +
+        AND is_valid = true                                                            +
+    ) INTO v_has_scan;                                                                 +
                                                                                        +
-   RETURN COALESCE(v_has_scan, false);                                                 +
- END;                                                                                  +
- $function$                                                                            +
+    RETURN COALESCE(v_has_scan, false);                                                +
+  END;                                                                                 +
+  $function$                                                                           +
  
 (1 row)
 

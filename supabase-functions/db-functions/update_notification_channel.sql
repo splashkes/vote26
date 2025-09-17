@@ -4,15 +4,15 @@
   RETURNS void                                                                                                        +
   LANGUAGE plpgsql                                                                                                    +
  AS $function$                                                                                                        +
- BEGIN                                                                                                                +
-   UPDATE slack_notifications                                                                                         +
-   SET                                                                                                                +
-     channel_id = p_channel_id,                                                                                       +
-     status = 'pending',                                                                                              +
-     payload = payload - 'needs_channel_lookup' - 'channel_name'                                                      +
-   WHERE id = p_notification_id;                                                                                      +
- END;                                                                                                                 +
- $function$                                                                                                           +
+  BEGIN                                                                                                               +
+    UPDATE slack_notifications                                                                                        +
+    SET                                                                                                               +
+      channel_id = p_channel_id,                                                                                      +
+      status = 'pending',                                                                                             +
+      payload = payload - 'needs_channel_lookup' - 'channel_name'                                                     +
+    WHERE id = p_notification_id;                                                                                     +
+  END;                                                                                                                +
+  $function$                                                                                                          +
  
 (1 row)
 

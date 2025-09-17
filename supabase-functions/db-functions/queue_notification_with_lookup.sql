@@ -4,12 +4,13 @@
   RETURNS uuid                                                                                                                                                         +
   LANGUAGE plpgsql                                                                                                                                                     +
   SECURITY DEFINER                                                                                                                                                     +
+  SET search_path TO 'pg_catalog', 'public', 'auth', 'extensions'                                                                                                      +
  AS $function$                                                                                                                                                         +
- BEGIN                                                                                                                                                                 +
-   -- Delegate to the new cache-only function                                                                                                                          +
-   RETURN queue_notification_with_cache_only(p_event_id, p_channel_name, p_message_type, p_payload);                                                                   +
- END;                                                                                                                                                                  +
- $function$                                                                                                                                                            +
+  BEGIN                                                                                                                                                                +
+    -- Delegate to the new cache-only function                                                                                                                         +
+    RETURN queue_notification_with_cache_only(p_event_id, p_channel_name, p_message_type, p_payload);                                                                  +
+  END;                                                                                                                                                                 +
+  $function$                                                                                                                                                           +
  
 (1 row)
 

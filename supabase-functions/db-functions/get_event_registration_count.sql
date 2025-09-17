@@ -4,15 +4,16 @@
   RETURNS integer                                                               +
   LANGUAGE plpgsql                                                              +
   SECURITY DEFINER                                                              +
+  SET search_path TO 'pg_catalog', 'public', 'auth', 'extensions'               +
  AS $function$                                                                  +
- BEGIN                                                                          +
-     RETURN (                                                                   +
-         SELECT COUNT(*)::INTEGER                                               +
-         FROM event_registrations                                               +
-         WHERE event_id = p_event_id                                            +
-     );                                                                         +
- END;                                                                           +
- $function$                                                                     +
+  BEGIN                                                                         +
+      RETURN (                                                                  +
+          SELECT COUNT(*)::INTEGER                                              +
+          FROM event_registrations                                              +
+          WHERE event_id = p_event_id                                           +
+      );                                                                        +
+  END;                                                                          +
+  $function$                                                                    +
  
 (1 row)
 

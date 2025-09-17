@@ -4,32 +4,33 @@
   RETURNS boolean                                                                                                               +
   LANGUAGE plpgsql                                                                                                              +
   SECURITY DEFINER                                                                                                              +
+  SET search_path TO 'pg_catalog', 'public', 'auth', 'extensions'                                                               +
  AS $function$                                                                                                                  +
- DECLARE                                                                                                                        +
-   v_updated_rows INTEGER;                                                                                                      +
- BEGIN                                                                                                                          +
-   -- Update the promo image URL in artist_confirmations                                                                        +
-   UPDATE artist_confirmations                                                                                                  +
-   SET                                                                                                                          +
-     promotion_artwork_url = CASE                                                                                               +
-       WHEN TRIM(p_image_url) = '' THEN NULL                                                                                    +
-       ELSE TRIM(p_image_url)                                                                                                   +
-     END,                                                                                                                       +
-     updated_at = NOW()                                                                                                         +
-   WHERE                                                                                                                        +
-     artist_profile_id = p_artist_profile_id                                                                                    +
-     AND event_eid = p_event_eid                                                                                                +
-     AND confirmation_status = 'confirmed';                                                                                     +
+  DECLARE                                                                                                                       +
+    v_updated_rows INTEGER;                                                                                                     +
+  BEGIN                                                                                                                         +
+    -- Update the promo image URL in artist_confirmations                                                                       +
+    UPDATE artist_confirmations                                                                                                 +
+    SET                                                                                                                         +
+      promotion_artwork_url = CASE                                                                                              +
+        WHEN TRIM(p_image_url) = '' THEN NULL                                                                                   +
+        ELSE TRIM(p_image_url)                                                                                                  +
+      END,                                                                                                                      +
+      updated_at = NOW()                                                                                                        +
+    WHERE                                                                                                                       +
+      artist_profile_id = p_artist_profile_id                                                                                   +
+      AND event_eid = p_event_eid                                                                                               +
+      AND confirmation_status = 'confirmed';                                                                                    +
                                                                                                                                 +
-   GET DIAGNOSTICS v_updated_rows = ROW_COUNT;                                                                                  +
+    GET DIAGNOSTICS v_updated_rows = ROW_COUNT;                                                                                 +
                                                                                                                                 +
-   IF v_updated_rows = 0 THEN                                                                                                   +
-     RAISE EXCEPTION 'Artist confirmation not found or not updated';                                                            +
-   END IF;                                                                                                                      +
+    IF v_updated_rows = 0 THEN                                                                                                  +
+      RAISE EXCEPTION 'Artist confirmation not found or not updated';                                                           +
+    END IF;                                                                                                                     +
                                                                                                                                 +
-   RETURN TRUE;                                                                                                                 +
- END;                                                                                                                           +
- $function$                                                                                                                     +
+    RETURN TRUE;                                                                                                                +
+  END;                                                                                                                          +
+  $function$                                                                                                                    +
  
 (1 row)
 

@@ -4,161 +4,136 @@
   RETURNS jsonb                                                                                                     +
   LANGUAGE plpgsql                                                                                                  +
   SECURITY DEFINER                                                                                                  +
+  SET search_path TO 'public', 'auth'                                                                               +
  AS $function$                                                                                                      +
  DECLARE                                                                                                            +
-   v_admin_level TEXT;                                                                                              +
-   v_result JSONB;                                                                                                  +
-   v_artworks JSONB;                                                                                                +
-   v_bids JSONB;                                                                                                    +
+   v_user_id uuid;                                                                                                  +
+   v_user_phone text;                                                                                               +
+   v_admin_events jsonb;                                                                                            +
+   v_user_claims jsonb;                                                                                             +
+   v_is_admin boolean := false;                                                                                     +
+   v_result jsonb := '{"success": false}'::jsonb;                                                                   +
+   v_bids jsonb := '{}'::jsonb;                                                                                     +
+   v_art_record RECORD;                                                                                             +
+   v_highest_bid RECORD;                                                                                            +
+   v_bid_data jsonb;                                                                                                +
  BEGIN                                                                                                              +
-   -- Check admin permission level                                                                                  +
-   -- Allow service role to bypass admin level check                                                                +
-   IF p_admin_phone = 'service-role' THEN                                                                           +
-     v_admin_level := 'super';                                                                                      +
-   ELSE                                                                                                             +
-     SELECT get_user_admin_level(p_event_id, p_admin_phone) INTO v_admin_level;                                     +
+   -- Get current authenticated user                                                                                +
+   v_user_id := auth.uid();                                                                                         +
                                                                                                                     +
-     -- Only producer and super admins can access full bidder info                                                  +
-     IF v_admin_level NOT IN ('producer', 'super') THEN                                                             +
-       RETURN jsonb_build_object(                                                                                   +
-         'success', false,                                                                                          +
-         'error', 'Insufficient permissions - requires producer or super admin access',                             +
-         'admin_level', v_admin_level                                                                               +
-       );                                                                                                           +
-     END IF;                                                                                                        +
+   -- If no authenticated user, reject immediately                                                                  +
+   IF v_user_id IS NULL THEN                                                                                        +
+     RETURN jsonb_build_object(                                                                                     +
+       'success', false,                                                                                            +
+       'error', 'Authentication required'                                                                           +
+     );                                                                                                             +
    END IF;                                                                                                          +
                                                                                                                     +
-   -- Get artworks with full details (bypasses RLS due to SECURITY DEFINER)                                         +
-   SELECT jsonb_agg(                                                                                                +
-     jsonb_build_object(                                                                                            +
-       'id', a.id,                                                                                                  +
-       'art_code', a.art_code,                                                                                      +
-       'round', a.round,                                                                                            +
-       'easel', a.easel,                                                                                            +
-       'status', a.status,                                                                                          +
-       'starting_bid', a.starting_bid,                                                                              +
-       'current_bid', a.current_bid,                                                                                +
-       'bid_count', a.bid_count,                                                                                    +
-       'winner_id', a.winner_id,                                                                                    +
-       'closing_time', a.closing_time,                                                                              +
-       'auction_extended', a.auction_extended,                                                                      +
-       'extension_count', a.extension_count,                                                                        +
-       'buyer_pay_recent_status_id', a.buyer_pay_recent_status_id,                                                  +
-       'buyer_pay_recent_date', a.buyer_pay_recent_date,                                                            +
-       'artist_id', a.artist_id,                                                                                    +
-       'tax', e.tax,                                                                                                +
-       'currency', e.currency,                                                                                      +
-       'artist_profiles', jsonb_build_object(                                                                       +
-         'id', ap.id,                                                                                               +
-         'name', ap.name,                                                                                           +
-         'entry_id', ap.entry_id                                                                                    +
-       ),                                                                                                           +
-       'payment_statuses', CASE                                                                                     +
-         WHEN a.buyer_pay_recent_status_id IS NOT NULL THEN                                                         +
-           jsonb_build_object(                                                                                      +
-             'id', ps.id,                                                                                           +
-             'code', ps.code,                                                                                       +
-             'description', ps.description                                                                          +
-           )                                                                                                        +
-         ELSE NULL                                                                                                  +
-       END,                                                                                                         +
-       'payment_logs', COALESCE(payment_agg.payment_array, '[]'::jsonb)                                             +
-     )                                                                                                              +
-   ) INTO v_artworks                                                                                                +
-   FROM art a                                                                                                       +
-   JOIN events e ON a.event_id = e.id                                                                               +
-   LEFT JOIN artist_profiles ap ON a.artist_id = ap.id                                                              +
-   LEFT JOIN payment_statuses ps ON a.buyer_pay_recent_status_id = ps.id                                            +
-   LEFT JOIN LATERAL (                                                                                              +
-     SELECT jsonb_agg(                                                                                              +
-       jsonb_build_object(                                                                                          +
-         'art_id', pl.art_id,                                                                                       +
-         'admin_phone', pl.admin_phone,                                                                             +
-         'metadata', pl.metadata,                                                                                   +
-         'created_at', pl.created_at,                                                                               +
-         'payment_type', pl.payment_type,                                                                           +
-         'actual_amount_collected', pl.actual_amount_collected,                                                     +
-         'actual_tax_collected', pl.actual_tax_collected,                                                           +
-         'payment_method', pl.payment_method,                                                                       +
-         'collection_notes', pl.collection_notes                                                                    +
-       )                                                                                                            +
-     ) as payment_array                                                                                             +
-     FROM payment_logs pl                                                                                           +
-     WHERE pl.art_id = a.id                                                                                         +
-   ) payment_agg ON true                                                                                            +
-   WHERE a.event_id = p_event_id;                                                                                   +
+   -- Get user claims from JWT token                                                                                +
+   SELECT auth.jwt() -> 'app_metadata' INTO v_user_claims;                                                          +
                                                                                                                     +
-   -- Get detailed bid information with FULL bidder details (bypasses RLS)                                          +
-   SELECT jsonb_object_agg(                                                                                         +
-     art_id::text,                                                                                                  +
-     jsonb_build_object(                                                                                            +
-       'highestBid', highest_bid,                                                                                   +
-       'bidCount', bid_count,                                                                                       +
-       'highestBidder', highest_bidder,                                                                             +
-       'history', bid_history                                                                                       +
-     )                                                                                                              +
-   ) INTO v_bids                                                                                                    +
-   FROM (                                                                                                           +
+   -- Extract admin_events claim                                                                                    +
+   v_admin_events := v_user_claims -> 'admin_events';                                                               +
+                                                                                                                    +
+   -- Check if user has admin access to this event                                                                  +
+   -- First get the event EID to check against admin_events claim                                                   +
+   IF v_admin_events IS NOT NULL THEN                                                                               +
+     -- Get event EID for this event_id                                                                             +
+     DECLARE                                                                                                        +
+       v_event_eid text;                                                                                            +
+     BEGIN                                                                                                          +
+       SELECT eid INTO v_event_eid FROM events WHERE id = p_event_id;                                               +
+                                                                                                                    +
+       -- Check if user is admin for this specific event or has global admin access                                 +
+       IF v_admin_events ? v_event_eid OR v_admin_events ? 'global' THEN                                            +
+         v_is_admin := true;                                                                                        +
+       END IF;                                                                                                      +
+     END;                                                                                                           +
+   END IF;                                                                                                          +
+                                                                                                                    +
+   -- Special case: allow service role access (for edge functions)                                                  +
+   IF p_admin_phone = 'service-role' THEN                                                                           +
+     v_is_admin := true;                                                                                            +
+   END IF;                                                                                                          +
+                                                                                                                    +
+   -- Reject if not admin                                                                                           +
+   IF NOT v_is_admin THEN                                                                                           +
+     RETURN jsonb_build_object(                                                                                     +
+       'success', false,                                                                                            +
+       'error', 'Admin access required for this event'                                                              +
+     );                                                                                                             +
+   END IF;                                                                                                          +
+                                                                                                                    +
+   -- Get auction details for each artwork in the event                                                             +
+   FOR v_art_record IN                                                                                              +
      SELECT                                                                                                         +
-       a.id as art_id,                                                                                              +
-       COALESCE(MAX(b.amount), 0) as highest_bid,                                                                   +
-       COUNT(b.id) as bid_count,                                                                                    +
-       -- Get highest bidder with FULL details and comprehensive phone coalescing                                   +
-       (                                                                                                            +
-         SELECT jsonb_build_object(                                                                                 +
-           'id', p.id,                                                                                              +
-           'first_name', p.first_name,                                                                              +
-           'last_name', p.last_name,                                                                                +
-           'email', p.email,                                                                                        +
-           'phone_number', COALESCE(p.phone_number, p.phone, p.auth_phone),                                         +
-           'auth_phone', COALESCE(p.auth_phone, p.phone, p.phone_number),                                           +
-           'phone', COALESCE(p.phone, p.phone_number, p.auth_phone),                                                +
-           'name', p.name,                                                                                          +
-           'nickname', p.nickname                                                                                   +
-         )                                                                                                          +
-         FROM bids b2                                                                                               +
-         JOIN people p ON b2.person_id = p.id                                                                       +
-         WHERE b2.art_id = a.id                                                                                     +
-         ORDER BY b2.amount DESC, b2.created_at DESC                                                                +
-         LIMIT 1                                                                                                    +
-       ) as highest_bidder,                                                                                         +
-       -- Get bid history with FULL bidder details and comprehensive phone coalescing                               +
-       (                                                                                                            +
-         SELECT jsonb_agg(                                                                                          +
-           jsonb_build_object(                                                                                      +
-             'amount', b3.amount,                                                                                   +
-             'created_at', b3.created_at,                                                                           +
-             'bidder', jsonb_build_object(                                                                          +
-               'id', p3.id,                                                                                         +
-               'first_name', p3.first_name,                                                                         +
-               'last_name', p3.last_name,                                                                           +
-               'email', p3.email,                                                                                   +
-               'phone_number', COALESCE(p3.phone_number, p3.phone, p3.auth_phone),                                  +
-               'auth_phone', COALESCE(p3.auth_phone, p3.phone, p3.phone_number),                                    +
-               'phone', COALESCE(p3.phone, p3.phone_number, p3.auth_phone),                                         +
-               'name', p3.name,                                                                                     +
-               'nickname', p3.nickname                                                                              +
-             )                                                                                                      +
-           )                                                                                                        +
-           ORDER BY b3.amount DESC, b3.created_at DESC                                                              +
-         )                                                                                                          +
-         FROM bids b3                                                                                               +
-         JOIN people p3 ON b3.person_id = p3.id                                                                     +
-         WHERE b3.art_id = a.id                                                                                     +
-       ) as bid_history                                                                                             +
+       a.id,                                                                                                        +
+       a.art_code,                                                                                                  +
+       a.current_bid,                                                                                               +
+       a.status                                                                                                     +
      FROM art a                                                                                                     +
-     LEFT JOIN bids b ON a.id = b.art_id                                                                            +
      WHERE a.event_id = p_event_id                                                                                  +
-     GROUP BY a.id                                                                                                  +
-   ) bid_summary;                                                                                                   +
+     ORDER BY a.art_code                                                                                            +
+   LOOP                                                                                                             +
+     -- Get highest bidder for this artwork                                                                         +
+     SELECT                                                                                                         +
+       b.id as bid_id,                                                                                              +
+       b.amount,                                                                                                    +
+       b.created_at as bid_time,                                                                                    +
+       p.id as person_id,                                                                                           +
+       p.first_name,                                                                                                +
+       p.last_name,                                                                                                 +
+       p.nickname,                                                                                                  +
+       COALESCE(p.email, u.email) as email,                                                                         +
+       COALESCE(p.phone_number, u.phone) as phone_number,                                                           +
+       u.phone as auth_phone                                                                                        +
+     INTO v_highest_bid                                                                                             +
+     FROM bids b                                                                                                    +
+     INNER JOIN people p ON b.person_id = p.id                                                                      +
+     LEFT JOIN auth.users u ON p.auth_user_id = u.id                                                                +
+     WHERE b.art_id = v_art_record.id                                                                               +
+     ORDER BY b.amount DESC, b.created_at DESC                                                                      +
+     LIMIT 1;                                                                                                       +
                                                                                                                     +
-   -- Return comprehensive admin data                                                                               +
+     -- Build bid data for this artwork                                                                             +
+     IF v_highest_bid.bid_id IS NOT NULL THEN                                                                       +
+       v_bid_data := jsonb_build_object(                                                                            +
+         'artCode', v_art_record.art_code,                                                                          +
+         'currentBid', v_art_record.current_bid,                                                                    +
+         'status', v_art_record.status,                                                                             +
+         'highestBidder', jsonb_build_object(                                                                       +
+           'person_id', v_highest_bid.person_id,                                                                    +
+           'first_name', v_highest_bid.first_name,                                                                  +
+           'last_name', v_highest_bid.last_name,                                                                    +
+           'nickname', v_highest_bid.nickname,                                                                      +
+           'email', v_highest_bid.email,                                                                            +
+           'phone_number', v_highest_bid.phone_number,                                                              +
+           'auth_phone', v_highest_bid.auth_phone                                                                   +
+         ),                                                                                                         +
+         'winningBid', v_highest_bid.amount,                                                                        +
+         'bidTime', v_highest_bid.bid_time                                                                          +
+       );                                                                                                           +
+     ELSE                                                                                                           +
+       -- No bids for this artwork                                                                                  +
+       v_bid_data := jsonb_build_object(                                                                            +
+         'artCode', v_art_record.art_code,                                                                          +
+         'currentBid', v_art_record.current_bid,                                                                    +
+         'status', v_art_record.status,                                                                             +
+         'highestBidder', null,                                                                                     +
+         'winningBid', 0,                                                                                           +
+         'bidTime', null                                                                                            +
+       );                                                                                                           +
+     END IF;                                                                                                        +
+                                                                                                                    +
+     -- Add to bids object using art_id as key (string for JSON compatibility)                                      +
+     v_bids := v_bids || jsonb_build_object(v_art_record.id::text, v_bid_data);                                     +
+   END LOOP;                                                                                                        +
+                                                                                                                    +
+   -- Return success with bid data                                                                                  +
    RETURN jsonb_build_object(                                                                                       +
      'success', true,                                                                                               +
-     'admin_level', v_admin_level,                                                                                  +
-     'artworks', COALESCE(v_artworks, '[]'::jsonb),                                                                 +
-     'bids', COALESCE(v_bids, '{}'::jsonb),                                                                         +
-     'timestamp', EXTRACT(EPOCH FROM NOW()) * 1000                                                                  +
+     'bids', v_bids,                                                                                                +
+     'event_id', p_event_id                                                                                         +
    );                                                                                                               +
                                                                                                                     +
  EXCEPTION                                                                                                          +
@@ -166,7 +141,7 @@
      RETURN jsonb_build_object(                                                                                     +
        'success', false,                                                                                            +
        'error', SQLERRM,                                                                                            +
-       'admin_level', v_admin_level                                                                                 +
+       'sqlstate', SQLSTATE                                                                                         +
      );                                                                                                             +
  END;                                                                                                               +
  $function$                                                                                                         +

@@ -1,12 +1,13 @@
-                            pg_get_functiondef                             
----------------------------------------------------------------------------
- CREATE OR REPLACE FUNCTION public.get_auth_person_id()                   +
-  RETURNS uuid                                                            +
-  LANGUAGE sql                                                            +
-  STABLE SECURITY DEFINER                                                 +
- AS $function$                                                            +
-   SELECT ((auth.jwt()->>'user_metadata'::text)::json->>'person_id')::uuid+
- $function$                                                               +
+                             pg_get_functiondef                             
+----------------------------------------------------------------------------
+ CREATE OR REPLACE FUNCTION public.get_auth_person_id()                    +
+  RETURNS uuid                                                             +
+  LANGUAGE sql                                                             +
+  STABLE SECURITY DEFINER                                                  +
+  SET search_path TO 'pg_catalog', 'public', 'auth', 'extensions'          +
+ AS $function$                                                             +
+    SELECT ((auth.jwt()->>'user_metadata'::text)::json->>'person_id')::uuid+
+  $function$                                                               +
  
 (1 row)
 

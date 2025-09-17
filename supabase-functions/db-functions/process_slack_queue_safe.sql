@@ -4,6 +4,7 @@
   RETURNS TABLE(processed integer, succeeded integer, failed integer, cleaned integer)     +
   LANGUAGE plpgsql                                                                         +
   SECURITY DEFINER                                                                         +
+  SET search_path TO 'pg_catalog', 'public', 'auth', 'extensions', 'realtime'              +
  AS $function$                                                                             +
  DECLARE                                                                                   +
    v_notification_id UUID;                                                                 +
@@ -13,8 +14,8 @@
    v_cleaned INT := 0;                                                                     +
    v_result BOOLEAN;                                                                       +
  BEGIN                                                                                     +
-   -- First, clean up any test messages                                                    +
-   SELECT cleanup_test_notifications() INTO v_cleaned;                                     +
+   -- Removed cleanup_test_notifications() call since function doesn't exist               +
+   -- and we don't have test notifications to clean up                                     +
                                                                                            +
    -- Check for spam conditions                                                            +
    IF EXISTS (                                                                             +

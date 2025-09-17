@@ -4,21 +4,21 @@
   RETURNS integer                                                                                                           +
   LANGUAGE plpgsql                                                                                                          +
  AS $function$                                                                                                              +
- DECLARE                                                                                                                    +
-   v_updated INTEGER;                                                                                                       +
- BEGIN                                                                                                                      +
-   UPDATE art                                                                                                               +
-   SET                                                                                                                      +
-     closing_time = p_closing_time,                                                                                         +
-     updated_at = NOW()                                                                                                     +
-   WHERE event_id = p_event_id                                                                                              +
-     AND status = 'active';                                                                                                 +
+  DECLARE                                                                                                                   +
+    v_updated INTEGER;                                                                                                      +
+  BEGIN                                                                                                                     +
+    UPDATE art                                                                                                              +
+    SET                                                                                                                     +
+      closing_time = p_closing_time,                                                                                        +
+      updated_at = NOW()                                                                                                    +
+    WHERE event_id = p_event_id                                                                                             +
+      AND status = 'active';                                                                                                +
                                                                                                                             +
-   GET DIAGNOSTICS v_updated = ROW_COUNT;                                                                                   +
+    GET DIAGNOSTICS v_updated = ROW_COUNT;                                                                                  +
                                                                                                                             +
-   RETURN v_updated;                                                                                                        +
- END;                                                                                                                       +
- $function$                                                                                                                 +
+    RETURN v_updated;                                                                                                       +
+  END;                                                                                                                      +
+  $function$                                                                                                                +
  
 (1 row)
 

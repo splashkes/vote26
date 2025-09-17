@@ -4,10 +4,10 @@
   RETURNS text                                               +
   LANGUAGE plpgsql                                           +
  AS $function$                                               +
- BEGIN                                                       +
-   RETURN encode(gen_random_bytes(32), 'hex');               +
- END;                                                        +
- $function$                                                  +
+  BEGIN                                                      +
+    RETURN encode(gen_random_bytes(32), 'hex');              +
+  END;                                                       +
+  $function$                                                 +
  
 (1 row)
 

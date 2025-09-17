@@ -4,10 +4,10 @@
   RETURNS void                                          +
   LANGUAGE plpgsql                                      +
  AS $function$                                          +
- BEGIN                                                  +
-     DELETE FROM system_logs WHERE expires_at < NOW();  +
- END;                                                   +
- $function$                                             +
+  BEGIN                                                 +
+      DELETE FROM system_logs WHERE expires_at < NOW(); +
+  END;                                                  +
+  $function$                                            +
  
 (1 row)
 

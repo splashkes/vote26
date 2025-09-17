@@ -4,6 +4,7 @@
   RETURNS trigger                                                                                +
   LANGUAGE plpgsql                                                                               +
   SECURITY DEFINER                                                                               +
+  SET search_path TO 'pg_catalog', 'public', 'auth', 'extensions', 'realtime'                    +
  AS $function$                                                                                   +
  DECLARE                                                                                         +
    v_event_eid VARCHAR;                                                                          +
