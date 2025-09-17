@@ -168,6 +168,7 @@ const EventApplications = () => {
         .from('artist_invitations')
         .select('*')
         .eq('artist_profile_id', artistProfileId)
+        .eq('status', 'pending')
         .is('accepted_at', null);
 
       if (error) throw error;

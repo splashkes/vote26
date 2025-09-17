@@ -1006,7 +1006,7 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
         )}
 
         {/* Pending Invitations */}
-        {invitations.length > 0 && (
+        {invitations.filter(inv => inv.event?.applications_open).length > 0 && (
           <Card size="3" style={{ border: '2px solid var(--crimson-9)' }}>
             <Flex direction="column" gap="4">
               <Flex justify="between" align="center">
@@ -1014,12 +1014,12 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
                   🎉 Event Invitations
                 </Heading>
                 <Badge color="crimson" variant="solid">
-                  {invitations.length} pending
+                  {invitations.filter(inv => inv.event?.applications_open).length} pending
                 </Badge>
               </Flex>
               
               <Flex direction="column" gap="3">
-                {invitations.map((invitation) => (
+                {invitations.filter(inv => inv.event?.applications_open).map((invitation) => (
                   <Card key={invitation.id} size="2" style={{ backgroundColor: 'var(--crimson-2)', border: '1px solid var(--crimson-6)' }}>
                     <Flex direction="column" gap="3">
                       <Flex justify="between" align="start">

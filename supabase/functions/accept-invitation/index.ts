@@ -223,6 +223,49 @@ serve(async (req)=>{
         status: 409
       });
     }
+
+    // Check if applications are still open for this event
+    const { data: eventData, error: eventError } = await supabase
+      .from('events')
+      .select('applications_open')
+      .eq('eid', submissionData.eventEid)
+      .single();
+
+    if (eventError) {
+      return new Response(JSON.stringify({
+        error: 'Failed to check event status',
+        success: false,
+        debug: {
+          event_error: eventError,
+          event_eid: submissionData.eventEid,
+          timestamp: new Date().toISOString()
+        }
+      }), {
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        },
+        status: 400
+      });
+    }
+
+    if (!eventData || !eventData.applications_open) {
+      return new Response(JSON.stringify({
+        error: 'Applications for this event are now closed. You cannot accept this invitation.',
+        success: false,
+        debug: {
+          event_eid: submissionData.eventEid,
+          applications_open: eventData?.applications_open,
+          timestamp: new Date().toISOString()
+        }
+      }), {
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        },
+        status: 403
+      });
+    }
     // Update artist profile with pronouns if provided
     if (submissionData.profileUpdates) {
       const { error: profileUpdateError } = await supabase.from('artist_profiles').update(submissionData.profileUpdates).eq('id', submissionData.artistProfileId);

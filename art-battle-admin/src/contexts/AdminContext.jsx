@@ -23,11 +23,11 @@ export const AdminProvider = ({ children }) => {
       setLoading(true);
       console.log('Loading admin permissions for:', user.email);
       
-      // Try to get admin permissions from admin_users table
+      // Try to get admin permissions from abhq_admin_users table
       const { data: adminData, error: adminError } = await supabase
-        .from('admin_users')
-        .select('user_email, admin_level, event_access')
-        .eq('user_email', user.email)
+        .from('abhq_admin_users')
+        .select('email, level, events_access')
+        .eq('email', user.email)
         .eq('active', true);
 
       if (adminError && adminError.code !== 'PGRST116') { // Ignore table not found
@@ -36,20 +36,20 @@ export const AdminProvider = ({ children }) => {
 
       if (adminData && adminData.length > 0) {
         const adminUser = adminData[0];
-        setUserLevel(adminUser.admin_level);
-        
+        setUserLevel(adminUser.level);
+
         // If user has specific event access, load those events
-        if (adminUser.event_access && adminUser.event_access.length > 0) {
+        if (adminUser.events_access && adminUser.events_access.length > 0) {
           const { data: eventsData, error: eventsError } = await supabase
             .from('events')
             .select('id, eid, name, venue, event_start_datetime, event_end_datetime')
-            .in('id', adminUser.event_access)
+            .in('id', adminUser.events_access)
             .order('event_start_datetime', { ascending: false });
 
           if (!eventsError && eventsData) {
             const adminEvents = eventsData.map(event => ({
               event_id: event.id,
-              level: adminUser.admin_level,
+              level: adminUser.level,
               event_name: event.name,
               event_eid: event.eid,
               event_venue: event.venue,
@@ -58,7 +58,7 @@ export const AdminProvider = ({ children }) => {
             }));
             setAdminEvents(adminEvents);
           }
-        } else if (adminUser.admin_level === 'super') {
+        } else if (adminUser.level === 'super') {
           // Super admins get access to all events
           setUserLevel('super');
           // Load all events for super admin

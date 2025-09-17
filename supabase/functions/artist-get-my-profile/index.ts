@@ -12,19 +12,26 @@ serve(async (req) => {
   }
 
   try {
-    // Create supabase client
+    // Create supabase client with service role key for bypassing RLS
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: {
-          headers: { Authorization: req.headers.get('Authorization')! },
-        },
-      }
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Get the authenticated user
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    // Get auth token and verify user
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'No authorization header' }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      )
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
     
     if (authError || !user) {
       console.error('Auth error:', authError)
@@ -42,11 +49,6 @@ serve(async (req) => {
     // Extract person data from JWT claims (V2 auth system)
     let personId = null;
     try {
-      const authHeader = req.headers.get('Authorization');
-      if (!authHeader) {
-        throw new Error('No authorization header');
-      }
-      const token = authHeader.replace('Bearer ', '');
       const tokenParts = token.split('.');
       if (tokenParts.length === 3) {
         const payload = JSON.parse(atob(tokenParts[1]));

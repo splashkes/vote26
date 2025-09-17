@@ -69,7 +69,15 @@ const PaymentButton = ({
       }
     } catch (err) {
       console.error('Payment error:', err);
-      setError(err.message || 'Failed to initiate payment');
+
+      // Check if this is a "not winning bidder" error
+      const errorMessage = err.message || 'Failed to initiate payment';
+      if (errorMessage.includes('not the winning bidder') || errorMessage.includes('winning bidder')) {
+        setError('It appears you are not the top bidder for this artwork. Please refresh the page to see current bid status.');
+      } else {
+        setError(errorMessage);
+      }
+
       setLoading(false);
     }
   };

@@ -11,7 +11,32 @@ serve(async (req)=>{
     });
   }
   try {
-    const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+    // Get JWT token from Authorization header
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({
+        error: 'Authorization required. Please provide JWT token in Authorization header.'
+      }), {
+        status: 401,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        }
+      });
+    }
+
+    // Create Supabase client with user's JWT token for authentication
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+    const jwt = authHeader.replace('Bearer ', '');
+
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: {
+          Authorization: authHeader,
+        },
+      },
+    });
     // Get EID from URL path (e.g., /auction-csv-export/AB3019)
     const url = new URL(req.url);
     const pathParts = url.pathname.split('/');
@@ -56,10 +81,10 @@ serve(async (req)=>{
       supabase.rpc('get_payment_statuses_admin', {
         p_event_id: event.id
       }),
-      // Get bidder info using admin function with service role access
+      // Get bidder info using admin function with JWT authentication
       supabase.rpc('get_admin_auction_details', {
         p_event_id: event.id,
-        p_admin_phone: 'service-role' // Service role bypasses phone check
+        p_admin_phone: null // Use JWT token for authentication
       }),
       // Get direct bid counts for each artwork
       supabase.from('bids').select(`

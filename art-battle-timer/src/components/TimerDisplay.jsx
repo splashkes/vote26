@@ -210,7 +210,7 @@ export default function TimerDisplay() {
     const earliestAuctionTime = new Date(auction_times.earliest).getTime()
     const timeRemaining = earliestAuctionTime - currentTime
     const timerColor = getTimerColor(timeRemaining)
-    const auctionClosed = earliestAuctionTime < currentTime
+    const auctionClosed = auction_times.auction_closed
 
     return (
       <div className="timer-container">
@@ -375,7 +375,7 @@ export default function TimerDisplay() {
         {/* Auction Timer Display */}
         {timerData.auction_times && (
           <div className="auction-timer">
-            {new Date(timerData.auction_times.earliest).getTime() < currentTime ? (
+            {timerData.auction_times.auction_closed ? (
               <Text size="6" weight="bold" color="red" className="auction-closed">
                 AUCTION CLOSED
               </Text>

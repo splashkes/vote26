@@ -49,15 +49,20 @@ import {
   EyeOpenIcon as ViewedIcon,
   DotFilledIcon,
   BadgeIcon,
-  ReloadIcon
+  ReloadIcon,
+  TrashIcon
 } from '@radix-ui/react-icons';
 import { getRFMScore, getBatchRFMScores, getSegmentColor, getSegmentTier } from '../lib/rfmScoring';
 import PersonTile from './PersonTile';
 import { parsePhoneNumber, isValidPhoneNumber } from 'libphonenumber-js';
+import EventDeleteModal from './EventDeleteModal';
+import { useAdmin } from '../contexts/AdminContext';
+import { checkEventAdminPermission } from '../lib/adminHelpers';
 
 const EventDetail = () => {
   const { eventId } = useParams();
   const navigate = useNavigate();
+  const { userLevel } = useAdmin();
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -111,6 +116,8 @@ const EventDetail = () => {
   const [reminderSent, setReminderSent] = useState(false);
   const [reminderPhoneUsed, setReminderPhoneUsed] = useState(null);
   const [showAllArtists, setShowAllArtists] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   useEffect(() => {
     if (eventId) {
@@ -119,7 +126,7 @@ const EventDetail = () => {
         try {
           // Load event details first (required for artist data)
           const eventData = await fetchEventDetail();
-          
+
           // Then load all other data in parallel, passing event data to artist fetch
           await Promise.all([
             fetchHealthData(),
@@ -131,8 +138,26 @@ const EventDetail = () => {
           console.error('Error preloading event data:', err);
         }
       };
-      
+
       loadAllData();
+    }
+  }, [eventId]);
+
+  // Check super admin permission
+  useEffect(() => {
+    const checkSuperAdmin = async () => {
+      try {
+        const hasPermission = await checkEventAdminPermission(eventId, 'super');
+        console.log('Super admin check result:', hasPermission);
+        setIsSuperAdmin(hasPermission);
+      } catch (error) {
+        console.error('Error checking super admin permission:', error);
+        setIsSuperAdmin(false);
+      }
+    };
+
+    if (eventId) {
+      checkSuperAdmin();
     }
   }, [eventId]);
 
@@ -1098,18 +1123,22 @@ The Art Battle Team`);
     }
 
     const invitationId = artist.artist_invitations[0].id;
-    
+
     try {
       const { error } = await supabase
         .from('artist_invitations')
-        .delete()
+        .update({
+          status: 'withdrawn',
+          withdrawn_at: new Date().toISOString(),
+          withdrawn_by: user?.id
+        })
         .eq('id', invitationId);
 
       if (error) {
         console.error('Error withdrawing invitation:', error);
         showAdminMessage('error', 'Failed to withdraw invitation');
       } else {
-        showAdminMessage('success', 'Invitation withdrawn successfully');
+        showAdminMessage('success', 'Invitation withdrawn successfully - artist will no longer see this invitation');
         // Refresh the applications to update the UI
         await fetchEventApplications();
         // Close the modal
@@ -1353,6 +1382,59 @@ The Art Battle Team`);
     }
   };
 
+  const handleEventDeleted = (deletedEvent, result) => {
+    console.log('Event deleted:', deletedEvent.eid, 'Result:', result);
+    setDeleteModalOpen(false);
+    // Navigate back to events list
+    navigate('/events');
+  };
+
+  const handleCsvExport = async () => {
+    try {
+      // Get the current session for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Not authenticated');
+      }
+
+      // Call the auction CSV export function with proper auth headers
+      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/auction-csv-export/${event.eid}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        // Check if response is CSV
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('text/csv')) {
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${event.eid}_auction_export.csv`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+        } else {
+          const text = await response.text();
+          console.error('Unexpected response:', text);
+          alert('Error: Unexpected response format');
+        }
+      } else {
+        const errorData = await response.json();
+        console.error('CSV export error:', errorData);
+        alert(`Error ${response.status}: ${errorData.error || 'Failed to export CSV'}`);
+      }
+    } catch (error) {
+      console.error('CSV export error:', error);
+      alert(`Error: ${error.message}`);
+    }
+  };
+
   const fetchPersonHistory = async (person) => {
     try {
       setHistoryLoading(true);
@@ -1478,9 +1560,27 @@ The Art Battle Team`);
               />
             </Text>
           </Box>
-          <Button onClick={() => navigate(`/events/create?edit=${eventId}`)}>
-            Edit Event
-          </Button>
+          <Flex gap="2">
+            <Button onClick={() => navigate(`/events/create?edit=${eventId}`)}>
+              Edit Event
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleCsvExport}
+            >
+              Export CSV
+            </Button>
+            {isSuperAdmin && (
+              <Button
+                color="red"
+                variant="soft"
+                onClick={() => setDeleteModalOpen(true)}
+              >
+                <TrashIcon />
+                Delete Event
+              </Button>
+            )}
+          </Flex>
         </Flex>
 
         {/* Event Info Cards */}
@@ -3368,6 +3468,14 @@ The Art Battle Team`);
           )}
         </Dialog.Content>
       </Dialog.Root>
+
+      {/* Event Delete Modal */}
+      <EventDeleteModal
+        event={event}
+        isOpen={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        onDeleted={handleEventDeleted}
+      />
     </Box>
   );
 };

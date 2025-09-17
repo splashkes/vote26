@@ -11,16 +11,25 @@ serve(async (req)=>{
     });
   }
   try {
-    const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
-    // Get auth token and verify user
+    // Create supabase client for reading public event data
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+    )
+
+    // Light authentication - just verify a valid auth header exists
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      throw new Error('No authorization header');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      throw new Error('Authentication required');
     }
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !user) {
-      throw new Error('Unauthorized');
+
+    // Optional: verify the token is valid (but don't fail if user extraction fails)
+    try {
+      const token = authHeader.replace('Bearer ', '');
+      const { data: { user } } = await supabase.auth.getUser(token);
+      console.log('Authenticated user requesting event details:', user?.id || 'unknown');
+    } catch (authError) {
+      console.log('Auth verification failed, but continuing since this is public data:', authError);
     }
     const { event_eid } = await req.json();
     if (!event_eid) {
@@ -35,6 +44,7 @@ serve(async (req)=>{
         event_end_datetime,
         venue,
         city_id,
+        applications_open,
         cities(name)
       `).eq('eid', event_eid).single();
     if (eventError) {
@@ -52,6 +62,7 @@ serve(async (req)=>{
       event_start_datetime: eventData.event_start_datetime,
       event_end_datetime: eventData.event_end_datetime,
       venue: eventData.venue,
+      applications_open: eventData.applications_open,
       city: eventData.cities?.name || null
     };
     return new Response(JSON.stringify({

@@ -1233,11 +1233,18 @@ const EventDetails = () => {
 
   const handleDeleteMedia = async (mediaId) => {
     try {
+      // Get user session for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        alert('Please sign in to delete images');
+        return;
+      }
+
       // Call edge function to delete media and handle broadcast
-      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/delete-media`, {
+      const response = await fetch('https://db.artb.art/functions/v1/delete-media', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${supabase.supabaseKey}`,
+          'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -1251,9 +1258,15 @@ const EventDetails = () => {
 
       const data = await response.json();
 
+      console.log('Delete media response:', {
+        status: response.status,
+        ok: response.ok,
+        data: data
+      });
+
       if (!response.ok || !data.success) {
-        console.error('Media deletion failed:', data.error);
-        alert('Failed to delete image. Please try again.');
+        console.error('Media deletion failed:', data.error || data);
+        alert(`Failed to delete image: ${data.error || 'Unknown error'}. Please try again.`);
         return;
       }
 
