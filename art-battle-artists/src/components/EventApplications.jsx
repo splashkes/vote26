@@ -268,9 +268,15 @@ const EventApplications = () => {
   const handleAcceptInvitation = (eventId) => {
     const event = events.find(e => e.id === eventId);
     const invitation = invitations.find(inv => inv.event_eid === event?.eid);
-    
+
     if (!invitation) {
       setError('Invitation not found for this event');
+      return;
+    }
+
+    // Check if applications are still open for this event
+    if (!event.applications_open) {
+      setError('Applications for this event are now closed. You cannot accept this invitation.');
       return;
     }
 
@@ -280,7 +286,7 @@ const EventApplications = () => {
       setError('You have already accepted an invitation for this event!');
       return;
     }
-    
+
     setSelectedEvent(event);
     setSelectedInvitation(invitation);
     setShowInvitationModal(true);
@@ -764,20 +770,31 @@ const EventApplications = () => {
                           🎉 Congratulations! You have been invited to participate in this event.
                         </Callout.Text>
                       </Callout.Root>
-                      <Button
-                        size="3"
-                        variant="solid"
-                        color="crimson"
-                        onClick={() => handleAcceptInvitation(event.id)}
-                        style={{ 
-                          fontSize: '14px',
-                          fontWeight: 'bold',
-                          textTransform: 'uppercase'
-                        }}
-                      >
-                        <CheckCircledIcon width="16" height="16" />
-                        Click to Accept and Confirm Attendance
-                      </Button>
+                      {event.applications_open ? (
+                        <Button
+                          size="3"
+                          variant="solid"
+                          color="crimson"
+                          onClick={() => handleAcceptInvitation(event.id)}
+                          style={{
+                            fontSize: '14px',
+                            fontWeight: 'bold',
+                            textTransform: 'uppercase'
+                          }}
+                        >
+                          <CheckCircledIcon width="16" height="16" />
+                          Click to Accept and Confirm Attendance
+                        </Button>
+                      ) : (
+                        <Callout.Root color="gray" size="1">
+                          <Callout.Icon>
+                            <CrossCircledIcon />
+                          </Callout.Icon>
+                          <Callout.Text>
+                            Applications for this event are now closed. You cannot accept this invitation at this time.
+                          </Callout.Text>
+                        </Callout.Root>
+                      )}
                     </Flex>
                   )}
 
