@@ -9,6 +9,7 @@ export default function TimerDisplay() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [currentTime, setCurrentTime] = useState(Date.now())
+  const [currentRoundIndex, setCurrentRoundIndex] = useState(0)
 
   const refreshData = async () => {
     try {
@@ -45,6 +46,20 @@ export default function TimerDisplay() {
       clearInterval(timeInterval)
     }
   }, [eid])
+
+  // Rotation effect for upcoming rounds display
+  useEffect(() => {
+    // Reset index when rounds data changes
+    setCurrentRoundIndex(0)
+
+    if (timerData?.upcoming_rounds && timerData.upcoming_rounds.length > 1 && !timerData.has_active_timers) {
+      const rotationInterval = setInterval(() => {
+        setCurrentRoundIndex(prev => (prev + 1) % timerData.upcoming_rounds.length)
+      }, 15000) // 15 seconds
+
+      return () => clearInterval(rotationInterval)
+    }
+  }, [timerData?.upcoming_rounds, timerData?.has_active_timers])
 
   const formatTime = (timeMs) => {
     if (timeMs <= 0) return "00:00"
@@ -154,8 +169,17 @@ export default function TimerDisplay() {
     )
   }
 
-  // If we have historical rounds but no active timers, show history-only display
-  if (!timerData.has_active_timers && timerData.all_rounds && timerData.all_rounds.length > 0) {
+  // Check if auction is active (has items and not all timers expired)
+  const hasActiveAuction = timerData.auction_times &&
+    timerData.auction_times.has_active_items &&
+    !timerData.auction_times.all_timers_expired
+
+  // If we have historical rounds but no active timers AND no active auction, check for upcoming rounds or show history-only display
+  if (!timerData.has_active_timers && !hasActiveAuction && timerData.all_rounds && timerData.all_rounds.length > 0) {
+    // Check if there are upcoming rounds
+    const hasUpcomingRounds = timerData.upcoming_rounds && timerData.upcoming_rounds.length > 0
+    const safeIndex = hasUpcomingRounds ? Math.min(currentRoundIndex, timerData.upcoming_rounds.length - 1) : 0
+    const nextRound = hasUpcomingRounds ? timerData.upcoming_rounds[safeIndex] : null
     return (
       <div className="timer-waiting">
         {/* Art Battle Logo */}
@@ -165,18 +189,58 @@ export default function TimerDisplay() {
           className="art-battle-logo-waiting"
         />
         
-        {timerData?.event && (
-          <div className="event-info">
-            <Text size="4" color="gray">{timerData.event.eid}</Text>
-            <Text size="5">{timerData.event.city}</Text>
-            <Text size="4">{timerData.event.venue}</Text>
+        {hasUpcomingRounds ? (
+          <>
+            <div className="waiting-message">
+              <Text size="5" color="amber">UP NEXT: ROUND {nextRound.round}</Text>
+            </div>
+          </>
+        ) : (
+          // No upcoming rounds - show champion if available, otherwise event info
+          timerData?.champion?.has_champion ? (
+            <div className="champion-display">
+              <Text size="6" weight="bold" color="gold" className="champion-title">
+                CHAMPION
+              </Text>
+              <Text size="9" weight="bold" color="white" className="champion-name">
+                {timerData.champion.champion_name.toUpperCase()}
+              </Text>
+            </div>
+          ) : (
+            timerData?.event && (
+              <div className="event-info-large">
+                <Text size="8" weight="bold" color="white">{timerData.event.eid}</Text>
+                <Text size="7" weight="medium" color="amber">{timerData.event.city}</Text>
+                <Text size="6" color="gray">{timerData.event.venue}</Text>
+                <Text size="4" color="gray">{formatEventDate(timerData.event.event_start)}</Text>
+              </div>
+            )
+          )
+        )}
+
+        {/* Artist Names Display for Upcoming Round */}
+        {hasUpcomingRounds && nextRound.artist_names && (
+          <div className="upcoming-artists-large">
+            <div className="artists-large-grid">
+              {nextRound.artist_names.map((artist, index) => (
+                <div key={artist.easel} className="artist-large-item">
+                  <Text size="9" weight="bold" color="white" className="artist-name-large">
+                    {artist.name.toUpperCase()}
+                  </Text>
+                </div>
+              ))}
+            </div>
           </div>
         )}
-        
-        <div className="waiting-message">
-          <Text size="5">Event Complete</Text>
-          <Text size="3" color="gray">All rounds have finished</Text>
-        </div>
+
+        {/* Event Info for Champion Display */}
+        {timerData?.champion?.has_champion && timerData?.event && (
+          <div className="event-info-one-line">
+            <Text size="6" weight="bold" color="white">
+              {timerData.event.city} • {timerData.event.eid} • {formatEventDate(timerData.event.event_start)}
+            </Text>
+          </div>
+        )}
 
         {/* Round History Display */}
         <div className="round-history">
@@ -321,8 +385,10 @@ export default function TimerDisplay() {
 
   const closingTime = new Date(active_round.closing_time).getTime()
   const timeRemaining = closingTime - currentTime
-  const progress = calculateProgress(active_round.closing_time)
-  const timerColor = getTimerColor(timeRemaining)
+  const isGracePeriod = active_round.is_grace_period || timeRemaining <= 0
+  const displayTime = isGracePeriod ? 0 : timeRemaining
+  const progress = isGracePeriod ? 100 : calculateProgress(active_round.closing_time)
+  const timerColor = isGracePeriod ? 'red' : getTimerColor(timeRemaining)
 
   return (
     <div className="timer-container">
@@ -358,7 +424,7 @@ export default function TimerDisplay() {
         
         <div className="countdown-timer">
           <Text size="9" weight="bold" className={`timer-text timer-${timerColor}`}>
-            {formatTime(timeRemaining)}
+            {formatTime(displayTime)}
           </Text>
         </div>
         
@@ -379,18 +445,22 @@ export default function TimerDisplay() {
               <Text size="6" weight="bold" color="red" className="auction-closed">
                 AUCTION CLOSED
               </Text>
-            ) : (
+            ) : timerData.auction_times.earliest && timerData.auction_times.latest ? (
               <>
                 <Text size="5" weight="bold" color="amber">
-                  Auction Timer
+                  {timerData.auction_times.total_bids} BIDS
                 </Text>
                 <Text size="4" weight="medium" color="gray">
-                  {timerData.auction_times.same_time ? 
-                    formatTime(new Date(timerData.auction_times.earliest).getTime() - currentTime) : 
+                  {timerData.auction_times.same_time ?
+                    formatTime(new Date(timerData.auction_times.earliest).getTime() - currentTime) :
                     `Earliest ${formatTime(new Date(timerData.auction_times.earliest).getTime() - currentTime)} • Latest ${formatTime(new Date(timerData.auction_times.latest).getTime() - currentTime)}`
                   }
                 </Text>
               </>
+            ) : (
+              <Text size="6" weight="bold" color="green">
+                AUCTION OPEN
+              </Text>
             )}
           </div>
         )}

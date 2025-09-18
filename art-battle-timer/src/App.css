@@ -64,6 +64,15 @@ html, body, #root {
   align-items: center;
 }
 
+.event-info-large {
+  display: flex;
+  flex-direction: column;
+  gap: min(1rem, 2vh);
+  align-items: center;
+  text-align: center;
+  margin: min(2rem, 4vh) 0;
+}
+
 .waiting-message {
   display: flex;
   flex-direction: column;
@@ -248,6 +257,88 @@ html, body, #root {
   text-shadow: 0 0 1rem rgba(239, 68, 68, 0.5) !important;
 }
 
+/* Upcoming Artists Display */
+.upcoming-artists {
+  margin-top: min(2rem, 3vh);
+  padding: min(1rem, 2vh) min(1rem, 2vw);
+  background: rgba(245, 158, 11, 0.1);
+  border-radius: 0.5rem;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.artists-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: min(0.75rem, 1vh) min(1rem, 2vw);
+  max-width: 80vw;
+  margin: 0 auto;
+}
+
+.artist-item {
+  text-align: center;
+  padding: min(0.5rem, 1vh);
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 0.25rem;
+}
+
+/* Large Artist Names Display - Clean, Bold, No Clutter */
+.upcoming-artists-large {
+  margin-top: min(3rem, 4vh);
+  width: 100%;
+}
+
+.artists-large-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: min(3rem, 4vh) min(2rem, 3vw);
+  max-width: 90vw;
+  margin: 0 auto;
+}
+
+.artist-large-item {
+  text-align: center;
+  padding: min(2rem, 3vh) min(1rem, 1.5vw);
+}
+
+.artist-name-large {
+  font-size: min(12vw, 8vh, 6rem) !important;
+  font-weight: 900 !important;
+  line-height: 0.9;
+  letter-spacing: 0.02em;
+  text-shadow: 0 0 2rem rgba(255, 255, 255, 0.2);
+}
+
+/* Champion Display */
+.champion-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin: 1rem 0;
+  gap: min(1rem, 2vh);
+}
+
+.champion-title {
+  font-size: min(8vw, 5vh, 4rem) !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.1em;
+  text-shadow: 0 0 3rem rgba(255, 215, 0, 0.8);
+}
+
+.champion-name {
+  font-size: min(15vw, 10vh, 8rem) !important;
+  font-weight: 900 !important;
+  line-height: 0.9;
+  letter-spacing: 0.02em;
+  text-shadow: 0 0 3rem rgba(255, 255, 255, 0.3);
+}
+
+/* Event Info One Line */
+.event-info-one-line {
+  text-align: center;
+  margin: 0.25rem 0;
+}
+
 /* Mobile Responsive */
 @media (max-width: 768px) {
   .timer-text {
@@ -282,6 +373,33 @@ html, body, #root {
   .history-item {
     padding: 0.25rem;
     min-width: 100px;
+  }
+
+  .artists-grid {
+    grid-template-columns: 1fr;
+    max-width: 90vw;
+  }
+
+  .artist-item {
+    padding: 0.75rem 0.5rem;
+  }
+
+  .artists-large-grid {
+    grid-template-columns: 1fr;
+    gap: min(2rem, 3vh);
+    max-width: 95vw;
+  }
+
+  .artist-name-large {
+    font-size: min(18vw, 4rem) !important;
+  }
+
+  .champion-title {
+    font-size: min(12vw, 3rem) !important;
+  }
+
+  .champion-name {
+    font-size: min(20vw, 5rem) !important;
   }
 }
 

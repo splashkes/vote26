@@ -87,14 +87,14 @@
         -- Generate auction URL                                                                                              +
         v_auction_url := format('https://artb.art/e/%s/auction', v_event_code);                                              +
                                                                                                                              +
-        -- Send SMS notification                                                                                             +
+        -- FIXED: Send SMS notification with proper currency formatting                                                      +
         v_message_id := send_sms_instantly(                                                                                  +
           p_destination := v_phone,                                                                                          +
           p_message_body := format(                                                                                          +
             'Congratulations! You won %s''s artwork for %s%s. Complete your purchase: %s',                                   +
             COALESCE(v_art.artist_name, 'Artist'),                                                                           +
             COALESCE(v_art.currency, '$'),                                                                                   +
-            v_winner.winning_bid,                                                                                            +
+            round(v_total_with_tax, 2),                                                                                      +
             v_auction_url                                                                                                    +
           ),                                                                                                                 +
           p_metadata := jsonb_build_object(                                                                                  +
