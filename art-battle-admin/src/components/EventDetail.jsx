@@ -58,6 +58,7 @@ import { parsePhoneNumber, isValidPhoneNumber } from 'libphonenumber-js';
 import EventDeleteModal from './EventDeleteModal';
 import { useAdmin } from '../contexts/AdminContext';
 import { checkEventAdminPermission } from '../lib/adminHelpers';
+import { formatDateForDisplay, sortByNewestFirst, getRecentActivityColor } from '../lib/dateUtils';
 
 const EventDetail = () => {
   const { eventId } = useParams();
@@ -661,15 +662,18 @@ const EventDetail = () => {
       }
     }, []);
 
-    if (showAllArtists) return deduplicatedApps;
-    
-    const confirmedNumbers = getConfirmedArtistNumbers();
-    const invitedNumbers = getInvitedArtistNumbers();
-    
-    return deduplicatedApps.filter(app => 
-      !confirmedNumbers.has(app.artist_number) && 
-      !invitedNumbers.has(app.artist_number)
-    );
+    const filteredApps = showAllArtists ? deduplicatedApps :
+      (() => {
+        const confirmedNumbers = getConfirmedArtistNumbers();
+        const invitedNumbers = getInvitedArtistNumbers();
+        return deduplicatedApps.filter(app =>
+          !confirmedNumbers.has(app.artist_number) &&
+          !invitedNumbers.has(app.artist_number)
+        );
+      })();
+
+    // Sort by newest first
+    return sortByNewestFirst(filteredApps, 'created_at');
   };
 
   const getFilteredInvitations = () => {
@@ -689,18 +693,21 @@ const EventDetail = () => {
       }
     }, []);
 
-    if (showAllArtists) return deduplicatedInvites;
-    
-    const confirmedNumbers = getConfirmedArtistNumbers();
-    
-    return deduplicatedInvites.filter(invite => 
-      !confirmedNumbers.has(invite.artist_number)
-    );
+    const filteredInvites = showAllArtists ? deduplicatedInvites :
+      (() => {
+        const confirmedNumbers = getConfirmedArtistNumbers();
+        return deduplicatedInvites.filter(invite =>
+          !confirmedNumbers.has(invite.artist_number)
+        );
+      })();
+
+    // Sort by newest first
+    return sortByNewestFirst(filteredInvites, 'created_at');
   };
 
   const getFilteredConfirmations = () => {
     // Simple deduplicate confirmations by artist_number (keep most recent)
-    return artistConfirmations.reduce((acc, confirmation) => {
+    const deduplicatedConfirmations = artistConfirmations.reduce((acc, confirmation) => {
       if (!confirmation.artist_number) return [...acc, confirmation];
       const existingIndex = acc.findIndex(existing => existing.artist_number === confirmation.artist_number);
       if (existingIndex === -1) {
@@ -714,6 +721,9 @@ const EventDetail = () => {
         return acc;
       }
     }, []);
+
+    // Sort by newest first
+    return sortByNewestFirst(deduplicatedConfirmations, 'created_at');
   };
 
   const saveBio = async () => {
@@ -2056,12 +2066,34 @@ The Art Battle Team`);
                               >
                                 <Box p="3">
                                   <Flex direction="column" gap="2">
-                                    <Text size="2" weight="bold">
-                                      {application.artist_profiles?.name || 'Unknown Artist'}
-                                    </Text>
-                                    <Text size="1" color="gray">
-                                      #{application.artist_number}
-                                    </Text>
+                                    <Flex align="center" gap="2">
+                                      <Text size="2" weight="bold">
+                                        {application.artist_profiles?.name || 'Unknown Artist'}
+                                      </Text>
+                                      {(() => {
+                                        const dateInfo = formatDateForDisplay(application.created_at);
+                                        return dateInfo.isRecent && (
+                                          <Box
+                                            style={{
+                                              width: '8px',
+                                              height: '8px',
+                                              borderRadius: '50%',
+                                              backgroundColor: getRecentActivityColor(true),
+                                              flexShrink: 0
+                                            }}
+                                            title="Recent activity (last 36 hours)"
+                                          />
+                                        );
+                                      })()}
+                                    </Flex>
+                                    <Flex justify="between" align="center" gap="2">
+                                      <Text size="1" color="gray">
+                                        #{application.artist_number}
+                                      </Text>
+                                      <Text size="1" color="gray" title={formatDateForDisplay(application.created_at).fullDate}>
+                                        {formatDateForDisplay(application.created_at).timeAgo}
+                                      </Text>
+                                    </Flex>
                                   </Flex>
                                 </Box>
                               </Card>
@@ -2099,12 +2131,34 @@ The Art Battle Team`);
                                 >
                                   <Box p="3">
                                     <Flex direction="column" gap="2">
-                                      <Text size="2" weight="bold">
-                                        {invite.artist_profiles?.name || 'Unknown Artist'}
-                                      </Text>
-                                      <Text size="1" color="gray">
-                                        #{invite.artist_number}
-                                      </Text>
+                                      <Flex align="center" gap="2">
+                                        <Text size="2" weight="bold">
+                                          {invite.artist_profiles?.name || 'Unknown Artist'}
+                                        </Text>
+                                        {(() => {
+                                          const dateInfo = formatDateForDisplay(invite.created_at);
+                                          return dateInfo.isRecent && (
+                                            <Box
+                                              style={{
+                                                width: '8px',
+                                                height: '8px',
+                                                borderRadius: '50%',
+                                                backgroundColor: getRecentActivityColor(true),
+                                                flexShrink: 0
+                                              }}
+                                              title="Recent activity (last 36 hours)"
+                                            />
+                                          );
+                                        })()}
+                                      </Flex>
+                                      <Flex justify="between" align="center" gap="2">
+                                        <Text size="1" color="gray">
+                                          #{invite.artist_number}
+                                        </Text>
+                                        <Text size="1" color="gray" title={formatDateForDisplay(invite.created_at).fullDate}>
+                                          {formatDateForDisplay(invite.created_at).timeAgo}
+                                        </Text>
+                                      </Flex>
                                     </Flex>
                                   </Box>
                                 </Card>
@@ -2141,12 +2195,34 @@ The Art Battle Team`);
                               >
                                 <Box p="3">
                                   <Flex direction="column" gap="2">
-                                    <Text size="2" weight="bold">
-                                      {confirmation.artist_profiles?.name || 'Unknown Artist'}
-                                    </Text>
-                                    <Text size="1" color="gray">
-                                      #{confirmation.artist_number}
-                                    </Text>
+                                    <Flex align="center" gap="2">
+                                      <Text size="2" weight="bold">
+                                        {confirmation.artist_profiles?.name || 'Unknown Artist'}
+                                      </Text>
+                                      {(() => {
+                                        const dateInfo = formatDateForDisplay(confirmation.created_at);
+                                        return dateInfo.isRecent && (
+                                          <Box
+                                            style={{
+                                              width: '8px',
+                                              height: '8px',
+                                              borderRadius: '50%',
+                                              backgroundColor: getRecentActivityColor(true),
+                                              flexShrink: 0
+                                            }}
+                                            title="Recent activity (last 36 hours)"
+                                          />
+                                        );
+                                      })()}
+                                    </Flex>
+                                    <Flex justify="between" align="center" gap="2">
+                                      <Text size="1" color="gray">
+                                        #{confirmation.artist_number}
+                                      </Text>
+                                      <Text size="1" color="gray" title={formatDateForDisplay(confirmation.created_at).fullDate}>
+                                        {formatDateForDisplay(confirmation.created_at).timeAgo}
+                                      </Text>
+                                    </Flex>
                                   </Flex>
                                 </Box>
                               </Card>

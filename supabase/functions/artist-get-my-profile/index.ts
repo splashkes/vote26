@@ -12,13 +12,18 @@ serve(async (req) => {
   }
 
   try {
-    // Create supabase client with service role key for bypassing RLS
+    // Create supabase clients - anon for auth verification, service for data access
+    const supabaseAnon = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+    )
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Get auth token and verify user
+    // Get auth token and verify user using anon client
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(
@@ -31,15 +36,15 @@ serve(async (req) => {
     }
 
     const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
-    
+    const { data: { user }, error: authError } = await supabaseAnon.auth.getUser(token)
+
     if (authError || !user) {
       console.error('Auth error:', authError)
       return new Response(
         JSON.stringify({ error: 'Authentication required' }),
-        { 
-          status: 401, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       )
     }
@@ -118,7 +123,7 @@ serve(async (req) => {
       .from('artist_profiles')
       .select('*')
       .eq('person_id', personId)
-      .order('created_at', { ascending: true })
+      .order('updated_at', { ascending: false })
       .limit(1)
       .single()
 

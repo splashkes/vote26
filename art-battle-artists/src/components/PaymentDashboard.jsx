@@ -375,7 +375,7 @@ const PaymentDashboard = () => {
       )}
 
       {/* Payment Summary Cards */}
-      <Grid columns="4" gap="4">
+      <Grid columns="2" gap="4">
         <Card size="3">
           <Flex direction="column" gap="2">
             <Flex align="center" gap="2">
@@ -391,7 +391,8 @@ const PaymentDashboard = () => {
           </Flex>
         </Card>
 
-        <Card size="3">
+        {/* HIDDEN: Pending Payments Card */}
+        {/* <Card size="3">
           <Flex direction="column" gap="2">
             <Flex align="center" gap="2">
               <ClockIcon width="16" height="16" />
@@ -404,7 +405,7 @@ const PaymentDashboard = () => {
               Waiting to be transferred
             </Text>
           </Flex>
-        </Card>
+        </Card> */}
 
         <Card size="3">
           <Flex direction="column" gap="2">
@@ -421,7 +422,8 @@ const PaymentDashboard = () => {
           </Flex>
         </Card>
 
-        <Card size="3">
+        {/* HIDDEN: Awaiting Buyer Payment Card */}
+        {/* <Card size="3">
           <Flex direction="column" gap="2">
             <Flex align="center" gap="2">
               <ExclamationTriangleIcon width="16" height="16" />
@@ -434,7 +436,7 @@ const PaymentDashboard = () => {
               Artwork{(paymentData.awaitingPayment || 0) !== 1 ? 's' : ''} sold but not paid
             </Text>
           </Flex>
-        </Card>
+        </Card> */}
       </Grid>
 
       {/* Payment System Switcher */}

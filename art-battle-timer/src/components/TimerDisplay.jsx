@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { fetchTimerData } from '../lib/supabase'
 import { Card, Text, Progress, Flex, Box, Badge } from '@radix-ui/themes'
@@ -118,6 +118,79 @@ export default function TimerDisplay() {
     })
   }
 
+  const formatEventDateTime = (dateTime) => {
+    if (!dateTime) return ''
+    const date = new Date(dateTime)
+    const dateStr = date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    })
+    const timeStr = date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    })
+    return `${dateStr} • ${timeStr}`
+  }
+
+  // Auto-scaling font system for artist names
+  const [autoFontSize, setAutoFontSize] = useState(4) // rem
+
+  // Get all artist names for font scaling
+  const allArtistNames = timerData?.upcoming_rounds?.length >= 2 &&
+                        timerData.upcoming_rounds[0]?.artist_names &&
+                        timerData.upcoming_rounds[1]?.artist_names
+    ? [
+        ...timerData.upcoming_rounds[0].artist_names.map(a => a.name || 'ARTIST'),
+        ...timerData.upcoming_rounds[1].artist_names.map(a => a.name || 'ARTIST')
+      ]
+    : []
+
+  useEffect(() => {
+    if (!allArtistNames || allArtistNames.length === 0) return
+
+    const containerWidth = typeof window !== 'undefined' ? window.innerWidth : 1200
+
+    // Find the longest name
+    const longestName = allArtistNames.reduce((longest, name) =>
+      name.length > longest.length ? name : longest, '')
+
+    // Create temporary element to measure text
+    const measureElement = document.createElement('div')
+    measureElement.style.position = 'absolute'
+    measureElement.style.visibility = 'hidden'
+    measureElement.style.whiteSpace = 'nowrap'
+    measureElement.style.fontFamily = 'inherit'
+    measureElement.style.fontWeight = '900'
+    measureElement.style.letterSpacing = '0.01em'
+    measureElement.textContent = longestName.toUpperCase()
+    document.body.appendChild(measureElement)
+
+    // Binary search for optimal font size
+    let minSize = 1
+    let maxSize = 8
+    let optimalSize = minSize
+
+    while (minSize <= maxSize) {
+      const testSize = (minSize + maxSize) / 2
+      measureElement.style.fontSize = `${testSize}rem`
+
+      const textWidth = measureElement.offsetWidth
+      const availableWidth = containerWidth * 0.45 // Account for padding and column width
+
+      if (textWidth <= availableWidth) {
+        optimalSize = testSize
+        minSize = testSize + 0.1
+      } else {
+        maxSize = testSize - 0.1
+      }
+    }
+
+    document.body.removeChild(measureElement)
+    setAutoFontSize(Math.max(1.5, Math.min(6, optimalSize))) // Clamp between 1.5rem and 6rem
+  }, [allArtistNames, timerData])
+
   const formatDateTime = (timestamp) => {
     const date = new Date(timestamp)
     return date.toLocaleTimeString('en-US', { 
@@ -169,33 +242,46 @@ export default function TimerDisplay() {
     )
   }
 
-  // Check if auction is active (has items and not all timers expired)
+  // Check if auction is active (has items with actual times and not all timers expired)
   const hasActiveAuction = timerData.auction_times &&
     timerData.auction_times.has_active_items &&
-    !timerData.auction_times.all_timers_expired
+    !timerData.auction_times.all_timers_expired &&
+    (timerData.auction_times.earliest || timerData.auction_times.latest)
 
-  // If we have historical rounds but no active timers AND no active auction, check for upcoming rounds or show history-only display
-  if (!timerData.has_active_timers && !hasActiveAuction && timerData.all_rounds && timerData.all_rounds.length > 0) {
+  // If we have historical rounds OR upcoming rounds but no active timers AND no active auction, show appropriate display
+  if (!timerData.has_active_timers && !hasActiveAuction &&
+      ((timerData.all_rounds && timerData.all_rounds.length > 0) ||
+       (timerData.upcoming_rounds && timerData.upcoming_rounds.length > 0))) {
     // Check if there are upcoming rounds
     const hasUpcomingRounds = timerData.upcoming_rounds && timerData.upcoming_rounds.length > 0
     const safeIndex = hasUpcomingRounds ? Math.min(currentRoundIndex, timerData.upcoming_rounds.length - 1) : 0
     const nextRound = hasUpcomingRounds ? timerData.upcoming_rounds[safeIndex] : null
     return (
       <div className="timer-waiting">
-        {/* Art Battle Logo */}
-        <img 
-          src="https://imagedelivery.net/IGZfH_Pl-6S6csykNnXNJw/0ce25113-c21e-4435-1dc0-6020d15fa300/public" 
-          alt="Art Battle Logo" 
+        {/* Always show Art Battle Logo for dual rounds or single round */}
+        <img
+          src="https://imagedelivery.net/IGZfH_Pl-6S6csykNnXNJw/0ce25113-c21e-4435-1dc0-6020d15fa300/public"
+          alt="Art Battle Logo"
           className="art-battle-logo-waiting"
         />
-        
-        {hasUpcomingRounds ? (
-          <>
-            <div className="waiting-message">
-              <Text size="5" color="amber">UP NEXT: ROUND {nextRound.round}</Text>
-            </div>
-          </>
-        ) : (
+
+        {/* Show event info for dual rounds */}
+        {hasUpcomingRounds && timerData.upcoming_rounds.length >= 2 && timerData?.event && (
+          <div className="event-info-one-line">
+            <Text size="6" weight="bold" color="white">
+              {timerData.event.city} • {timerData.event.eid} • {formatEventDateTime(timerData.event.event_start)}
+            </Text>
+          </div>
+        )}
+
+        {/* Show round header for single upcoming round only */}
+        {hasUpcomingRounds && timerData.upcoming_rounds.length === 1 && (
+          <div className="round-header">
+            <Text size="8" weight="bold" color="amber">ROUND {nextRound.round} - UP NEXT:</Text>
+          </div>
+        )}
+
+        {hasUpcomingRounds ? null : (
           // No upcoming rounds - show champion if available, otherwise event info
           timerData?.champion?.has_champion ? (
             <div className="champion-display">
@@ -218,20 +304,75 @@ export default function TimerDisplay() {
           )
         )}
 
-        {/* Artist Names Display for Upcoming Round */}
-        {hasUpcomingRounds && nextRound.artist_names && (
-          <div className="upcoming-artists-large">
-            <div className="artists-large-grid">
-              {nextRound.artist_names.map((artist, index) => (
-                <div key={artist.easel} className="artist-large-item">
-                  <Text size="9" weight="bold" color="white" className="artist-name-large">
-                    {artist.name.toUpperCase()}
-                  </Text>
+        {/* Artist Names Display */}
+        {hasUpcomingRounds && (() => {
+          // Collect all artist names for auto-scaling
+
+          return (
+            <>
+              {/* Dual Round Layout - Side by Side */}
+              {timerData.upcoming_rounds.length >= 2 &&
+               timerData.upcoming_rounds[0]?.artist_names &&
+               timerData.upcoming_rounds[1]?.artist_names ? (
+                <div className="dual-rounds-container">
+                  <div className="round-column round-left">
+                    <div className="round-title">
+                      <Text size="5" weight="bold" color="amber">ROUND 1</Text>
+                    </div>
+                    <div className="artists-column">
+                      {timerData.upcoming_rounds[0].artist_names.map((artist, index) => (
+                        <div key={artist.easel || index} className="artist-dual-item">
+                          <Text
+                            weight="bold"
+                            color="white"
+                            className="artist-dual-name"
+                            style={{ fontSize: `${autoFontSize}rem` }}
+                          >
+                            {artist.name?.toUpperCase() || 'ARTIST'}
+                          </Text>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="round-column round-right">
+                    <div className="round-title">
+                      <Text size="5" weight="bold" color="amber">ROUND 2</Text>
+                    </div>
+                    <div className="artists-column">
+                      {timerData.upcoming_rounds[1].artist_names.map((artist, index) => (
+                        <div key={artist.easel || index} className="artist-dual-item">
+                          <Text
+                            weight="bold"
+                            color="white"
+                            className="artist-dual-name"
+                            style={{ fontSize: `${autoFontSize}rem` }}
+                          >
+                            {artist.name?.toUpperCase() || 'ARTIST'}
+                          </Text>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
+              ) : (
+              /* Single Round Layout - Original */
+              nextRound.artist_names && (
+                <div className="upcoming-artists-large">
+                  <div className="artists-large-grid">
+                    {nextRound.artist_names.map((artist, index) => (
+                      <div key={artist.easel} className="artist-large-item">
+                        <Text size="9" weight="bold" color="white" className="artist-name-large">
+                          {artist.name.toUpperCase()}
+                        </Text>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            )}
+            </>
+          )
+        })()}
 
         {/* Event Info for Champion Display */}
         {timerData?.champion?.has_champion && timerData?.event && (
@@ -269,8 +410,8 @@ export default function TimerDisplay() {
 
   const { event, active_round, auction_times } = timerData
 
-  // If no active round but we have auction times, show auction-only display
-  if (!active_round && auction_times) {
+  // If no active round but we have auction times AND no upcoming rounds, show auction-only display
+  if (!active_round && auction_times && (!timerData.upcoming_rounds || timerData.upcoming_rounds.length === 0)) {
     const earliestAuctionTime = new Date(auction_times.earliest).getTime()
     const timeRemaining = earliestAuctionTime - currentTime
     const timerColor = getTimerColor(timeRemaining)

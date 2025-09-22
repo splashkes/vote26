@@ -85,6 +85,10 @@ const AdminPanel = ({
     collectionNotes: ''
   });
 
+  // Offer functionality state
+  const [showOfferConfirm, setShowOfferConfirm] = useState(null); // { bid, bidder }
+  const [offerLoading, setOfferLoading] = useState(false);
+
   // Helper function to show temporary messages
   const showAdminMessage = (type, text) => {
     setAdminMessage({ type, text });
@@ -1038,6 +1042,7 @@ const AdminPanel = ({
           }
           bidsByArt[bid.art_id].bidCount++;
           bidsByArt[bid.art_id].history.push({
+            id: bid.bid_id, // Include the bid_id from the RPC response
             amount: bid.amount,
             created_at: bid.bid_time,
             bidder: {
@@ -1259,6 +1264,47 @@ const AdminPanel = ({
     } catch (error) {
       console.error('Error searching people:', error);
       setPeopleSearchResults([]);
+    }
+  };
+
+  // Create offer to bidder function
+  const handleCreateOffer = async () => {
+    if (!showOfferConfirm || !selectedAuctionItem) return;
+
+    setOfferLoading(true);
+    try {
+      const response = await fetch('https://db.artb.art/functions/v1/admin-offer-to-bidder', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcWRrdWJneXF3cHl2Zmx0bnJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ1MDM5NjIsImV4cCI6MjA1MDA3OTk2Mn0.dBR_kWN0YCKkUrBKlMGJJkXO31g4CmMg4WZD6U-JMG0'
+        },
+        body: JSON.stringify({
+          art_id: selectedAuctionItem.id,
+          bid_id: showOfferConfirm.bid.id,
+          admin_note: `Offer created via admin panel for ${showOfferConfirm.bidder.first_name || 'bidder'}`
+        })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to create offer');
+      }
+
+      // Success
+      showAdminMessage('success', `Offer created for ${result.offer.bidder_name} at $${result.offer.offered_amount}`);
+      setShowOfferConfirm(null);
+
+      // Optionally refresh auction data to show any updates
+      fetchAuctionData();
+
+    } catch (error) {
+      console.error('Error creating offer:', error);
+      showAdminMessage('error', 'Failed to create offer: ' + error.message);
+    } finally {
+      setOfferLoading(false);
     }
   };
 
@@ -3539,13 +3585,13 @@ const AdminPanel = ({
                             <Text size="2" style={{ display: 'block' }}>
                               {(adminLevel === 'producer' || adminLevel === 'super') ? (
                                 // Producer+ sees full names from any available field
-                                bid.bidder?.first_name ? 
-                                  `${bid.bidder.first_name} ${bid.bidder.last_name || ''}` : 
+                                bid.bidder?.first_name ?
+                                  `${bid.bidder.first_name} ${bid.bidder.last_name || ''}` :
                                   bid.bidder?.name || bid.bidder?.nickname || bid.bidder?.email?.split('@')[0] || bid.bidder?.phone_number || bid.bidder?.auth_phone || bid.bidder?.phone || 'Unknown Bidder'
                               ) : (
                                 // Other admin levels see abbreviated names
-                                bid.bidder?.first_name ? 
-                                  `${bid.bidder.first_name} ${bid.bidder.last_name ? bid.bidder.last_name.charAt(0) + '.' : ''}` : 
+                                bid.bidder?.first_name ?
+                                  `${bid.bidder.first_name} ${bid.bidder.last_name ? bid.bidder.last_name.charAt(0) + '.' : ''}` :
                                   bid.bidder?.nickname || 'Anonymous'
                               )}
                             </Text>
@@ -3563,9 +3609,29 @@ const AdminPanel = ({
                               {new Date(bid.created_at).toLocaleString()}
                             </Text>
                           </Box>
-                          <Text size="2" weight="medium">
-                            ${Math.round(bid.amount)}
-                          </Text>
+                          <Flex align="center" gap="2">
+                            <Text size="2" weight="medium">
+                              ${Math.round(bid.amount)}
+                            </Text>
+                            {/* Only show offer button if not the highest bidder and artwork is sold/closed */}
+                            {index !== 0 &&
+                             ['sold', 'closed'].includes(selectedAuctionItem.status) &&
+                             !selectedAuctionItem.buyer_pay_recent_status_id &&
+                             selectedAuctionItem.status !== 'paid' && (
+                              <Button
+                                size="1"
+                                variant="soft"
+                                color="orange"
+                                onClick={() => setShowOfferConfirm({
+                                  bid: { id: bid.id, amount: bid.amount },
+                                  bidder: bid.bidder
+                                })}
+                                style={{ fontSize: '11px', padding: '4px 8px' }}
+                              >
+                                Offer to This Bidder
+                              </Button>
+                            )}
+                          </Flex>
                         </Flex>
                       ))}
                     </Flex>
@@ -3951,6 +4017,67 @@ const AdminPanel = ({
                 }}
               >
                 Cancel Timer
+              </Button>
+            </AlertDialog.Action>
+          </Flex>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
+
+      {/* Offer to Bidder Confirmation Dialog */}
+      <AlertDialog.Root open={!!showOfferConfirm} onOpenChange={(open) => !open && setShowOfferConfirm(null)}>
+        <AlertDialog.Content style={{ maxWidth: 500 }}>
+          <AlertDialog.Title>Offer Artwork to Bidder</AlertDialog.Title>
+          <AlertDialog.Description size="2">
+            {showOfferConfirm && (
+              <Flex direction="column" gap="3">
+                <Text>
+                  Are you sure you want to offer this artwork to{' '}
+                  <strong>
+                    {showOfferConfirm.bidder.first_name && showOfferConfirm.bidder.last_name
+                      ? `${showOfferConfirm.bidder.first_name} ${showOfferConfirm.bidder.last_name}`
+                      : showOfferConfirm.bidder.name || showOfferConfirm.bidder.nickname || 'this bidder'}
+                  </strong>{' '}
+                  for <strong>${showOfferConfirm.bid.amount}</strong>?
+                </Text>
+                <Card size="2" style={{ backgroundColor: 'var(--amber-2)', border: '1px solid var(--amber-6)' }}>
+                  <Flex direction="column" gap="2">
+                    <Text size="2" weight="medium" color="amber">
+                      ⚡ Payment Race
+                    </Text>
+                    <Text size="2">
+                      This will create a payment race between the current winner and this bidder.
+                      Whoever pays first gets the artwork. The offer expires in 15 minutes.
+                    </Text>
+                  </Flex>
+                </Card>
+                <Text size="2" color="gray">
+                  Art Code: {selectedAuctionItem?.art_code} •
+                  Current Winner: ${auctionBids[selectedAuctionItem?.id]?.highestBid || selectedAuctionItem?.current_bid || 0}
+                </Text>
+              </Flex>
+            )}
+          </AlertDialog.Description>
+
+          <Flex gap="3" mt="4" justify="end">
+            <AlertDialog.Cancel>
+              <Button variant="soft" color="gray" disabled={offerLoading}>
+                Cancel
+              </Button>
+            </AlertDialog.Cancel>
+            <AlertDialog.Action>
+              <Button
+                color="orange"
+                onClick={handleCreateOffer}
+                disabled={offerLoading}
+              >
+                {offerLoading ? (
+                  <Flex align="center" gap="2">
+                    <Spinner size="1" />
+                    Creating Offer...
+                  </Flex>
+                ) : (
+                  'Create Offer'
+                )}
               </Button>
             </AlertDialog.Action>
           </Flex>

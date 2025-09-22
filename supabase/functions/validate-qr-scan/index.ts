@@ -147,7 +147,7 @@ serve(async (req) => {
       qr_code: qr_code,
       is_valid: true,
       user_agent: user_agent || '',
-      scanned_at: now.toISOString(),
+      scan_timestamp: now.toISOString(),
       created_at: now.toISOString()
     })
 

@@ -46,8 +46,14 @@ const PaymentsAdmin = () => {
   const [loadingLedger, setLoadingLedger] = useState(false);
   const [showZeroAccount, setShowZeroAccount] = useState(false);
   const [artistBalances, setArtistBalances] = useState({ owing: [], zero: [] });
+  const [recentPayments, setRecentPayments] = useState([]);
+  const [enhancedData, setEnhancedData] = useState(null);
+  const [groupByCity, setGroupByCity] = useState(false);
   const [loadingBalances, setLoadingBalances] = useState(false);
   const [searchFilter, setSearchFilter] = useState('');
+  const [showPayNowDialog, setShowPayNowDialog] = useState(false);
+  const [paymentCurrency, setPaymentCurrency] = useState('');
+  const [processingPayment, setProcessingPayment] = useState(false);
   const [manualPaymentData, setManualPaymentData] = useState({
     amount: '',
     currency: 'USD',
@@ -64,8 +70,24 @@ const PaymentsAdmin = () => {
     try {
       setLoading(true);
 
-      // Get all artists who participated in recent events (last 90 days)
-      // Include their payment account status for onboarding management
+      // Try enhanced function first
+      const { data: enhancedResult, error: enhancedError } = await supabase
+        .rpc('get_enhanced_payments_admin_data');
+
+      if (enhancedResult && !enhancedError) {
+        // Use enhanced data structure
+        setEnhancedData(enhancedResult);
+        setRecentPayments(enhancedResult.recent_payments || []);
+        setArtistBalances({
+          owing: enhancedResult.artists_owing || [],
+          zero: enhancedResult.artists_zero_balance || []
+        });
+        setArtists([...enhancedResult.artists_owing, ...enhancedResult.artists_zero_balance]);
+        setLoading(false);
+        return;
+      }
+
+      // Fallback to original function
       const { data: recentArtists, error: artistsError } = await supabase
         .rpc('get_recent_event_artists_with_payment_status');
 
@@ -102,7 +124,14 @@ const PaymentsAdmin = () => {
         const processedData = await processArtistData(fallbackData || []);
         setArtists(processedData);
       } else {
-        setArtists(recentArtists || []);
+        // Process RPC data to ensure balance info is loaded
+        const processedData = recentArtists || [];
+        setArtists(processedData);
+
+        // Always fetch balance information for grouping (only for fallback)
+        if (!enhancedResult) {
+          await fetchArtistBalancesForGrouping(processedData);
+        }
       }
     } catch (err) {
       setError('Failed to load recent event artists: ' + err.message);
@@ -292,7 +321,30 @@ const PaymentsAdmin = () => {
       // Show success message - you could add a success state if needed
       console.log('Reminder sent successfully:', data);
     } catch (err) {
-      setError(`Failed to send ${reminderType} reminder: ` + err.message);
+      // Parse debug info from edge function if available
+      let errorMessage = `Failed to send ${reminderType} reminder: ` + err.message;
+
+      try {
+        if (err.context && err.context.text) {
+          const responseText = await err.context.text();
+          console.log('Raw edge function response:', responseText);
+          const parsed = JSON.parse(responseText);
+
+          if (parsed.debug) {
+            console.log('Edge function debug info:', parsed.debug);
+            errorMessage = parsed.error || errorMessage;
+
+            // Add specific error details if available
+            if (parsed.debug.email_error) {
+              errorMessage += ` (Database error: ${parsed.debug.email_error.message})`;
+            }
+          }
+        }
+      } catch (parseError) {
+        console.log('Could not parse error response:', parseError);
+      }
+
+      setError(errorMessage);
     } finally {
       setSendingReminder(false);
     }
@@ -324,6 +376,54 @@ const PaymentsAdmin = () => {
   const handleZeroAccount = async () => {
     await fetchArtistAccountLedger(true);
     setShowZeroAccount(false);
+  };
+
+  const handlePayNow = async (currency) => {
+    if (!selectedArtist || !accountLedger) return;
+
+    try {
+      setProcessingPayment(true);
+
+      // Get the balance for this specific currency
+      const currencyBalance = accountLedger.summary.currency_breakdown?.[currency]?.balance || 0;
+
+      if (currencyBalance <= 0) {
+        setError('No balance owing in this currency');
+        return;
+      }
+
+      // Create automated payment via Stripe
+      const { data, error } = await supabase.functions.invoke('process-artist-payment', {
+        body: {
+          artist_profile_id: selectedArtist.artist_profiles.id,
+          amount: currencyBalance,
+          currency: currency,
+          payment_type: 'automated',
+          description: `Payment for artwork sales - ${currency} balance`
+        }
+      });
+
+      if (error) throw error;
+
+      // Refresh the account ledger and artist data
+      await Promise.all([
+        fetchArtistAccountLedger(),
+        fetchRecentEventArtists()
+      ]);
+
+      setShowPayNowDialog(false);
+      setError(''); // Clear any previous errors
+
+    } catch (err) {
+      setError('Failed to process payment: ' + err.message);
+    } finally {
+      setProcessingPayment(false);
+    }
+  };
+
+  const openPayNowDialog = (currency) => {
+    setPaymentCurrency(currency);
+    setShowPayNowDialog(true);
   };
 
   const fetchArtistBalancesForGrouping = async (artists) => {
@@ -381,8 +481,11 @@ const PaymentsAdmin = () => {
   };
 
   const formatArtistBalance = (artist) => {
+    // Handle both estimated_balance (from enhanced function) and current_balance (from original)
+    const balance = artist.estimated_balance || artist.current_balance || 0;
+
     if (!artist.currency_info) {
-      return `$${(artist.current_balance || 0).toFixed(2)}`;
+      return `$${balance.toFixed(2)}`;
     }
 
     const { primary_currency, has_mixed_currencies, currency_breakdown } = artist.currency_info;
@@ -414,14 +517,53 @@ const PaymentsAdmin = () => {
       artist.artist_profiles.name?.toLowerCase().includes(filter) ||
       artist.artist_profiles.email?.toLowerCase().includes(filter) ||
       artist.artist_profiles.entry_id?.toString().includes(filter) ||
-      artist.artist_profiles.phone?.includes(filter)
+      artist.artist_profiles.phone?.includes(filter) ||
+      artist.recent_city?.toLowerCase().includes(filter)
     );
+  };
+
+  // Group artists by city if enabled
+  const groupArtistsByCity = (artists) => {
+    if (!groupByCity) return { 'All Cities': artists };
+
+    const grouped = {};
+    artists.forEach(artist => {
+      const city = artist.recent_city || 'Unknown City';
+      if (!grouped[city]) grouped[city] = [];
+      grouped[city].push(artist);
+    });
+
+    // Sort cities by total balance (for owing group) or artist count (for zero group)
+    const sortedCities = Object.keys(grouped).sort((a, b) => {
+      const aTotal = grouped[a].reduce((sum, artist) => sum + (artist.estimated_balance || artist.current_balance || 0), 0);
+      const bTotal = grouped[b].reduce((sum, artist) => sum + (artist.estimated_balance || artist.current_balance || 0), 0);
+      return bTotal - aTotal; // Highest total first
+    });
+
+    const result = {};
+    sortedCities.forEach(city => {
+      result[city] = grouped[city];
+    });
+
+    return result;
   };
 
   const filteredArtistBalances = {
     owing: filterArtists(artistBalances.owing),
     zero: filterArtists(artistBalances.zero)
   };
+
+  const groupedOwingArtists = groupArtistsByCity(filteredArtistBalances.owing);
+  const groupedZeroArtists = groupArtistsByCity(filteredArtistBalances.zero);
+
+  // Filter recent payments
+  const filteredRecentPayments = searchFilter.trim() ?
+    recentPayments.filter(payment =>
+      payment.artist_name?.toLowerCase().includes(searchFilter.toLowerCase()) ||
+      payment.artist_email?.toLowerCase().includes(searchFilter.toLowerCase()) ||
+      payment.entry_id?.toString().includes(searchFilter.toLowerCase()) ||
+      payment.recent_city?.toLowerCase().includes(searchFilter.toLowerCase())
+    ) : recentPayments;
 
   if (loading) {
     return (
@@ -453,15 +595,15 @@ const PaymentsAdmin = () => {
         </Callout.Root>
       )}
 
-      {/* Search Filter */}
+      {/* Search Filter and Controls */}
       <Card mb="4">
-        <Flex align="center" gap="3">
+        <Flex align="center" gap="3" wrap="wrap">
           <MagnifyingGlassIcon width="16" height="16" />
           <TextField.Root
-            placeholder="Search artists by name, email, entry ID, or phone..."
+            placeholder="Search artists by name, email, entry ID, phone, or city..."
             value={searchFilter}
             onChange={(e) => setSearchFilter(e.target.value)}
-            style={{ flex: 1 }}
+            style={{ flex: 1, minWidth: '300px' }}
           />
           {searchFilter && (
             <Button
@@ -473,7 +615,31 @@ const PaymentsAdmin = () => {
               <Cross2Icon width="14" height="14" />
             </Button>
           )}
+          <Button
+            variant={groupByCity ? 'solid' : 'soft'}
+            size="2"
+            onClick={() => setGroupByCity(!groupByCity)}
+            title="Group by city"
+          >
+            Group by City
+          </Button>
         </Flex>
+        {enhancedData?.summary && (
+          <Flex mt="3" gap="4" wrap="wrap">
+            <Text size="2" color="gray">
+              <Text weight="medium">{enhancedData.summary.total_artists}</Text> artists total
+            </Text>
+            <Text size="2" color="green">
+              <Text weight="medium">{enhancedData.summary.artists_owing_count}</Text> with balance owing
+            </Text>
+            <Text size="2" color="gray">
+              <Text weight="medium">{enhancedData.summary.artists_zero_count}</Text> with zero balance
+            </Text>
+            <Text size="2" color="blue">
+              <Text weight="medium">{enhancedData.summary.recent_payments_count}</Text> recent payments (30 days)
+            </Text>
+          </Flex>
+        )}
       </Card>
 
       <Card>
@@ -517,6 +683,7 @@ const PaymentsAdmin = () => {
                     <Table.Row>
                       <Table.ColumnHeaderCell>Artist</Table.ColumnHeaderCell>
                       <Table.ColumnHeaderCell>Entry ID</Table.ColumnHeaderCell>
+                      <Table.ColumnHeaderCell>Recent City</Table.ColumnHeaderCell>
                       <Table.ColumnHeaderCell>Balance Owing</Table.ColumnHeaderCell>
                       <Table.ColumnHeaderCell>Payment Status</Table.ColumnHeaderCell>
                       <Table.ColumnHeaderCell>Actions</Table.ColumnHeaderCell>
@@ -549,6 +716,11 @@ const PaymentsAdmin = () => {
                           </Badge>
                         </Table.Cell>
                         <Table.Cell>
+                          <Text size="2" color="gray">
+                            {artist.recent_city || 'N/A'}
+                          </Text>
+                        </Table.Cell>
+                        <Table.Cell>
                           <Text size="3" weight="bold" color="green">
                             {formatArtistBalance(artist)}
                           </Text>
@@ -557,7 +729,7 @@ const PaymentsAdmin = () => {
                           {getStatusBadge(artist.payment_status)}
                         </Table.Cell>
                         <Table.Cell>
-                          <Flex gap="2">
+                          <Flex gap="2" wrap="wrap">
                             <IconButton
                               size="1"
                               variant="soft"
@@ -566,6 +738,31 @@ const PaymentsAdmin = () => {
                             >
                               <EyeOpenIcon />
                             </IconButton>
+
+                            {/* Pay Now buttons for each currency if account is ready */}
+                            {artist.payment_status === 'ready' && artist.stripe_recipient_id && artist.currency_info?.currency_breakdown && (
+                              <Flex gap="1" wrap="wrap">
+                                {Object.entries(artist.currency_info.currency_breakdown).map(([currency, info]) => (
+                                  info.balance > 0.01 && (
+                                    <Button
+                                      key={currency}
+                                      size="1"
+                                      variant="solid"
+                                      color="green"
+                                      onClick={() => {
+                                        setSelectedArtist(artist);
+                                        openPayNowDialog(currency);
+                                      }}
+                                      title={`Pay ${formatCurrency(info.balance, currency)} now`}
+                                    >
+                                      Pay {currency}
+                                    </Button>
+                                  )
+                                ))}
+                              </Flex>
+                            )}
+
+                            {/* Setup payment button for accounts without setup */}
                             {!artist.payment_status && artist.artist_profiles.email && (
                               <Button
                                 size="1"
@@ -603,6 +800,7 @@ const PaymentsAdmin = () => {
                     <Table.Row>
                       <Table.ColumnHeaderCell>Artist</Table.ColumnHeaderCell>
                       <Table.ColumnHeaderCell>Entry ID</Table.ColumnHeaderCell>
+                      <Table.ColumnHeaderCell>Recent City</Table.ColumnHeaderCell>
                       <Table.ColumnHeaderCell>Recent Events</Table.ColumnHeaderCell>
                       <Table.ColumnHeaderCell>Payment Status</Table.ColumnHeaderCell>
                       <Table.ColumnHeaderCell>Actions</Table.ColumnHeaderCell>
@@ -633,6 +831,11 @@ const PaymentsAdmin = () => {
                           >
                             {artist.artist_profiles.entry_id}
                           </Badge>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <Text size="2" color="gray">
+                            {artist.recent_city || 'N/A'}
+                          </Text>
                         </Table.Cell>
                         <Table.Cell>
                           <Flex direction="column" gap="1">
@@ -684,12 +887,12 @@ const PaymentsAdmin = () => {
 
       {/* Artist Detail Modal */}
       <Dialog.Root open={showArtistDetail} onOpenChange={setShowArtistDetail}>
-        <Dialog.Content style={{ maxWidth: '800px', maxHeight: '80vh' }}>
+        <Dialog.Content style={{ maxWidth: '1100px', maxHeight: '95vh', overflow: 'auto' }}>
           <Dialog.Title>
             {selectedArtist?.artist_profiles?.name} - Payment Details
           </Dialog.Title>
 
-          <ScrollArea style={{ maxHeight: '70vh' }}>
+          <Box style={{ maxHeight: 'none', padding: '0' }}>
             {selectedArtist && (
               <Flex direction="column" gap="4" mt="4">
 
@@ -843,7 +1046,7 @@ const PaymentsAdmin = () => {
                       </Card>
 
                       {/* Ledger Entries */}
-                      <ScrollArea style={{ maxHeight: '400px' }}>
+                      <Box>
                         <Table.Root>
                           <Table.Header>
                             <Table.Row>
@@ -952,7 +1155,7 @@ const PaymentsAdmin = () => {
                             ))}
                           </Table.Body>
                         </Table.Root>
-                      </ScrollArea>
+                      </Box>
                     </Flex>
                   ) : (
                     <Text color="gray">Click refresh to load account ledger</Text>
@@ -967,12 +1170,12 @@ const PaymentsAdmin = () => {
                     onClick={() => setShowManualPayment(true)}
                   >
                     <PlusIcon width="16" height="16" />
-                    Create Manual Payment
+                    Record Manual Payment
                   </Button>
                 </Flex>
               </Flex>
             )}
-          </ScrollArea>
+          </Box>
 
           <Flex gap="3" mt="4" justify="end">
             <Dialog.Close>
@@ -985,9 +1188,9 @@ const PaymentsAdmin = () => {
       {/* Manual Payment Modal */}
       <Dialog.Root open={showManualPayment} onOpenChange={setShowManualPayment}>
         <Dialog.Content style={{ maxWidth: '500px' }}>
-          <Dialog.Title>Create Manual Payment</Dialog.Title>
+          <Dialog.Title>Record Manual Payment</Dialog.Title>
           <Dialog.Description>
-            Create a manual payment record for {selectedArtist?.artist_profiles?.name}
+            Record a manual payment for {selectedArtist?.artist_profiles?.name}
           </Dialog.Description>
 
           <Flex direction="column" gap="3" mt="4">
@@ -1064,7 +1267,7 @@ const PaymentsAdmin = () => {
               onClick={handleManualPayment}
               disabled={!manualPaymentData.amount || !manualPaymentData.description}
             >
-              Create Payment
+              Record Payment
             </Button>
           </Flex>
         </Dialog.Content>
@@ -1145,6 +1348,75 @@ const PaymentsAdmin = () => {
               color="orange"
             >
               {sendingReminder ? 'Sending...' : `Send ${reminderType === 'email' ? 'Email' : 'SMS'}`}
+            </Button>
+          </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
+
+      {/* Pay Now Confirmation Dialog */}
+      <Dialog.Root open={showPayNowDialog} onOpenChange={setShowPayNowDialog}>
+        <Dialog.Content style={{ maxWidth: '500px' }}>
+          <Dialog.Title>Process Payment Now</Dialog.Title>
+          <Dialog.Description>
+            Process payment to {selectedArtist?.artist_profiles?.name} via Stripe
+          </Dialog.Description>
+
+          <Flex direction="column" gap="4" mt="4">
+            <Card variant="ghost">
+              <Flex direction="column" gap="3">
+                <Heading size="3">Payment Details</Heading>
+                <Flex justify="between">
+                  <Text size="2" color="gray">Artist:</Text>
+                  <Text size="2" weight="medium">{selectedArtist?.artist_profiles?.name}</Text>
+                </Flex>
+                <Flex justify="between">
+                  <Text size="2" color="gray">Entry ID:</Text>
+                  <Text size="2">{selectedArtist?.artist_profiles?.entry_id}</Text>
+                </Flex>
+                <Flex justify="between">
+                  <Text size="2" color="gray">Payment Currency:</Text>
+                  <Badge color="blue">{paymentCurrency}</Badge>
+                </Flex>
+                <Flex justify="between">
+                  <Text size="2" color="gray">Amount:</Text>
+                  <Text size="3" weight="bold" color="green">
+                    {accountLedger?.summary?.currency_breakdown?.[paymentCurrency] &&
+                      formatCurrency(
+                        accountLedger.summary.currency_breakdown[paymentCurrency].balance,
+                        paymentCurrency
+                      )
+                    }
+                  </Text>
+                </Flex>
+                <Flex justify="between">
+                  <Text size="2" color="gray">Payment Method:</Text>
+                  <Text size="2">Stripe Transfer</Text>
+                </Flex>
+              </Flex>
+            </Card>
+
+            <Callout.Root color="orange">
+              <Callout.Icon>
+                <InfoCircledIcon />
+              </Callout.Icon>
+              <Callout.Text>
+                This will immediately process the payment to the artist's Stripe account.
+                The payment cannot be reversed once processed.
+              </Callout.Text>
+            </Callout.Root>
+          </Flex>
+
+          <Flex gap="3" mt="4" justify="end">
+            <Dialog.Close>
+              <Button variant="soft" color="gray" disabled={processingPayment}>Cancel</Button>
+            </Dialog.Close>
+            <Button
+              onClick={() => handlePayNow(paymentCurrency)}
+              disabled={processingPayment || !paymentCurrency}
+              color="green"
+              loading={processingPayment}
+            >
+              {processingPayment ? 'Processing...' : 'Process Payment Now'}
             </Button>
           </Flex>
         </Dialog.Content>

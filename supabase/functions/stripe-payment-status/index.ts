@@ -123,8 +123,42 @@ serve(async (req) => {
       (paymentStatus?.person_id === personId) ||
       (winningBid?.person_id === personId)
     )
-    
+
     console.log('DEBUG: personId found:', personId, 'winningBid.person_id:', winningBid?.person_id, 'isWinningBidder:', isWinningBidder)
+
+    // Check for active offers (for both the user and overall)
+    let activeOffer = null;
+    let activeOfferCount = 0;
+    let hasActiveOffer = false;
+
+    if (personId) {
+      // Check if current user has an active offer
+      const { data: userOffer } = await supabase
+        .from('artwork_offers')
+        .select('id, offered_amount, expires_at, bid_id')
+        .eq('art_id', art_id)
+        .eq('offered_to_person_id', personId)
+        .eq('status', 'pending')
+        .gt('expires_at', new Date().toISOString())
+        .single()
+
+      if (userOffer) {
+        activeOffer = userOffer;
+        hasActiveOffer = true;
+      }
+    }
+
+    // Get count of all active offers (for race condition display)
+    const { data: allActiveOffers } = await supabase
+      .from('artwork_offers')
+      .select('id')
+      .eq('art_id', art_id)
+      .eq('status', 'pending')
+      .gt('expires_at', new Date().toISOString())
+
+    if (allActiveOffers) {
+      activeOfferCount = allActiveOffers.length;
+    }
 
     // Get winning bidder info (only if payment exists)
     let winnerInfo = null
@@ -134,7 +168,7 @@ serve(async (req) => {
         .select('first_name, last_name')
         .eq('id', paymentStatus.person_id)
         .single()
-      
+
       if (winner) {
         winnerInfo = {
           display_name: `${winner.first_name} ${winner.last_name?.charAt(0) || ''}`,
@@ -142,6 +176,10 @@ serve(async (req) => {
         }
       }
     }
+
+    // Determine if user can pay (winning bidder OR has active offer)
+    const canPayAsWinner = artwork.status === 'sold' && isWinningBidder && (!paymentStatus || paymentStatus.status === 'pending');
+    const canPayAsOfferedBidder = hasActiveOffer && ['sold', 'closed'].includes(artwork.status) && (!paymentStatus || paymentStatus.status === 'pending');
 
     // Prepare response
     const response = {
@@ -159,7 +197,12 @@ serve(async (req) => {
       art_code: artwork.art_code,
       is_winning_bidder: isWinningBidder,
       winner_info: winnerInfo,
-      can_pay: artwork.status === 'sold' && isWinningBidder && (!paymentStatus || paymentStatus.status === 'pending'),
+      can_pay: canPayAsWinner || canPayAsOfferedBidder,
+
+      // Offer-related fields
+      has_active_offer: hasActiveOffer,
+      active_offer: activeOffer,
+      active_offer_count: activeOfferCount,
     }
 
     return new Response(

@@ -14,7 +14,14 @@ serve(async (req)=>{
     // Create supabase client for reading public event data
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      {
+        global: {
+          headers: {
+            Authorization: req.headers.get('Authorization') ?? ''
+          }
+        }
+      }
     )
 
     // Light authentication - just verify a valid auth header exists
@@ -31,8 +38,18 @@ serve(async (req)=>{
     } catch (authError) {
       console.log('Auth verification failed, but continuing since this is public data:', authError);
     }
-    const { event_eid } = await req.json();
+    let requestBody;
+    try {
+      requestBody = await req.json();
+      console.log('Request body received:', requestBody);
+    } catch (parseError) {
+      console.error('JSON parsing error:', parseError);
+      throw new Error('Invalid JSON in request body');
+    }
+
+    const { event_eid } = requestBody;
     if (!event_eid) {
+      console.error('Missing event_eid in request:', requestBody);
       throw new Error('event_eid is required');
     }
     // Get event details with proper joins (handle NULL city_id)
@@ -49,10 +66,36 @@ serve(async (req)=>{
       `).eq('eid', event_eid).single();
     if (eventError) {
       console.error('Event query error:', eventError);
+      if (eventError.code === 'PGRST116') {
+        // No rows found - event doesn't exist
+        console.log(`Event ${event_eid} not found, returning null event data`);
+        return new Response(JSON.stringify({
+          success: true,
+          event: null,
+          message: `Event ${event_eid} not found`
+        }), {
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          },
+          status: 200
+        });
+      }
       throw new Error(`Failed to get event details: ${eventError.message}`);
     }
     if (!eventData) {
-      throw new Error('Event not found');
+      console.log(`Event ${event_eid} not found, returning null event data`);
+      return new Response(JSON.stringify({
+        success: true,
+        event: null,
+        message: `Event ${event_eid} not found`
+      }), {
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        },
+        status: 200
+      });
     }
     // Format the response properly
     const response = {

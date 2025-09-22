@@ -39,6 +39,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import publicDataManager from '../lib/PublicDataManager';
 import { useBroadcastCache } from '../hooks/useBroadcastCache';
+import { useOfferNotifications } from '../hooks/useOfferNotifications';
 import LoadingScreen from './LoadingScreen';
 import { getImageUrl, getArtworkImageUrls } from '../lib/imageHelpers';
 // V2 BROADCAST: Perfect cache invalidation system
@@ -100,6 +101,7 @@ const EventDetails = () => {
   const [paymentModalChecked, setPaymentModalChecked] = useState(false); // Prevent duplicate modals
   const [voteSummary, setVoteSummary] = useState([]); // V2 BROADCAST: Vote summary from cached data
   const [bidRanges, setBidRanges] = useState({}); // V2 BROADCAST: Bid ranges from cached data
+  const [offerNotification, setOfferNotification] = useState(null); // Global offer notifications
   
   // V2 BROADCAST: Perfect cache invalidation system
   const { clearEventCache } = useBroadcastCache(
@@ -423,6 +425,65 @@ const EventDetails = () => {
       setPaymentModalChecked(true);
     }
   }, [person, artworks, currentBids, paymentModalChecked]);
+
+  // Global offer notification handler for all artworks in the event
+  useEffect(() => {
+    if (!person || !eventId || !artworks.length) {
+      return;
+    }
+
+    console.log('🎯 [EVENT-OFFERS] Setting up global offer listeners for event');
+
+    // Create a channel for all artwork offers in this event
+    const channelName = `event_offers_${eventId}_${person.id}`;
+    const channel = supabase.channel(channelName);
+
+    // Listen for offer changes for any artwork in this event
+    channel.on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'artwork_offers',
+      filter: `offered_to_person_id=eq.${person.id}`
+    }, (payload) => {
+      console.log('🎯 [EVENT-OFFERS] New offer received:', payload);
+
+      const offer = payload.new;
+      const artwork = artworks.find(art => art.id === offer.art_id);
+
+      if (artwork) {
+        // Show global notification for new offers
+        setOfferNotification({
+          type: 'new_offer',
+          artwork: artwork,
+          offer: offer,
+          timestamp: Date.now()
+        });
+
+        // Auto-dismiss after 15 seconds
+        setTimeout(() => {
+          setOfferNotification(prev =>
+            prev?.timestamp === Date.now() ? null : prev
+          );
+        }, 15000);
+
+        // Also trigger auto payment modal if not already shown
+        if (artwork.status === 'sold' && !autoPaymentModal) {
+          setAutoPaymentModal(artwork);
+        }
+      }
+    });
+
+    // Subscribe to channel
+    channel.subscribe((status) => {
+      console.log(`🎯 [EVENT-OFFERS] Channel status: ${status}`);
+    });
+
+    // Cleanup
+    return () => {
+      console.log('🎯 [EVENT-OFFERS] Cleaning up global offer listeners');
+      supabase.removeChannel(channel);
+    };
+  }, [person?.id, eventId, artworks, autoPaymentModal]);
 
   const fetchEventDetails = async () => {
     try {
@@ -1390,6 +1451,65 @@ const EventDetails = () => {
           </Text>
         )}
       </Box>
+
+      {/* Global Offer Notification */}
+      {offerNotification && (
+        <Box mb="4">
+          <Card style={{
+            background: 'linear-gradient(135deg, var(--amber-3), var(--amber-4))',
+            border: '2px solid var(--amber-6)',
+            animation: 'slideInFromTop 0.4s ease-out'
+          }}>
+            <Flex direction="column" gap="3" p="3">
+              <Flex align="center" gap="2">
+                <Text size="3" weight="bold" color="amber">
+                  🎯 Special Artwork Offer!
+                </Text>
+                <Badge color="amber" size="1">NEW</Badge>
+              </Flex>
+
+              <Text size="3">
+                You've been offered <strong>{offerNotification.artwork.art_code}</strong> by{' '}
+                <strong>{offerNotification.artwork.artist_profiles?.name || 'the artist'}</strong>{' '}
+                for <strong>{formatCurrencyFromEvent(offerNotification.offer.offered_amount, event, 'display')}</strong>
+              </Text>
+
+              <Flex direction="column" gap="2">
+                <Text size="2" color="amber" style={{ fontWeight: 'bold' }}>
+                  ⚡ Payment race active! First to pay wins.
+                </Text>
+                <Text size="1" color="gray">
+                  Offer expires: {new Date(offerNotification.offer.expires_at).toLocaleString()}
+                </Text>
+              </Flex>
+
+              <Flex gap="2" justify="end">
+                <Button
+                  size="2"
+                  variant="soft"
+                  color="gray"
+                  onClick={() => setOfferNotification(null)}
+                >
+                  Dismiss
+                </Button>
+                <Button
+                  size="2"
+                  variant="solid"
+                  color="amber"
+                  onClick={() => {
+                    // Navigate to the artwork and show payment modal
+                    setSelectedArt(offerNotification.artwork);
+                    setAutoPaymentModal(offerNotification.artwork);
+                    setOfferNotification(null);
+                  }}
+                >
+                  Pay Now
+                </Button>
+              </Flex>
+            </Flex>
+          </Card>
+        </Box>
+      )}
 
       {/* Tab Controls */}
       <Tabs.Root 

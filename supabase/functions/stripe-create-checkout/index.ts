@@ -112,8 +112,32 @@ serve(async (req) => {
       throw new Error('No winning bid found')
     }
 
+    // Dual-path validation: normal winner OR offered bidder
+    let paymentAmount = maxAmount;
+    let paymentReason = 'winning_bid';
+
     if (winningBid.person_id !== person.id) {
-      throw new Error('You are not the winning bidder')
+      // Check if user has an active offer for this artwork
+      const { data: activeOffer, error: offerError } = await supabase
+        .from('artwork_offers')
+        .select('id, offered_amount, bid_id, expires_at')
+        .eq('art_id', art_id)
+        .eq('offered_to_person_id', person.id)
+        .eq('status', 'pending')
+        .gt('expires_at', new Date().toISOString())
+        .single()
+
+      if (offerError || !activeOffer) {
+        throw new Error('You are not the winning bidder and have no active offer for this artwork')
+      }
+
+      // User has valid offer - use their offered amount
+      paymentAmount = activeOffer.offered_amount;
+      paymentReason = 'artwork_offer';
+
+      console.log(`Payment race initiated: User ${person.id} paying ${paymentAmount} via offer (winning bid was ${maxAmount})`)
+    } else {
+      console.log(`Normal winner payment: User ${person.id} paying ${paymentAmount} as highest bidder`)
     }
 
     // Check if payment already exists
@@ -152,9 +176,9 @@ serve(async (req) => {
       stripeAccountRegion = 'canada'
     }
 
-    // Calculate amounts
+    // Calculate amounts using the correct payment amount (winning bid OR offer amount)
     const taxRate = event.tax || 0
-    const baseAmount = winningBid.amount
+    const baseAmount = paymentAmount
     const taxAmount = baseAmount * (taxRate / 100)
     const totalAmount = baseAmount + taxAmount
 
@@ -220,6 +244,7 @@ serve(async (req) => {
         art_id: artwork.id,
         person_id: person.id,
         event_id: event.id,
+        payment_reason: paymentReason,
       },
       payment_intent_data: {
         metadata: {
@@ -252,6 +277,9 @@ serve(async (req) => {
           buyer_name: [person.first_name, person.last_name].filter(Boolean).join(' ') || person.nickname || 'Art Buyer',
           buyer_email: person.email || null,
           buyer_phone: person.phone,
+          payment_reason: paymentReason,
+          original_winning_bid: maxAmount,
+          payment_amount: paymentAmount
         },
       })
 

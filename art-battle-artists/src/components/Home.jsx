@@ -25,6 +25,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import AuthModal from './AuthModal';
 import InvitationAcceptanceModal from './InvitationAcceptanceModal';
+import PaymentStatusBanner from './PaymentStatusBanner';
 
 
 const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
@@ -226,7 +227,7 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
       const invitationsData = [];
       if (invitationsRaw && invitationsRaw.length > 0) {
         for (const invitation of invitationsRaw) {
-          if (invitation.event_eid) {
+          if (invitation.event_eid && invitation.event_eid.trim()) {
             const { data: eventResponse, error: eventError } = await supabase.functions.invoke(
               'get-event-details-for-artist-profile',
               {
@@ -273,7 +274,7 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
       const confirmationsData = [];
       if (confirmationsRaw && confirmationsRaw.length > 0) {
         for (const confirmation of confirmationsRaw) {
-          if (confirmation.event_eid) {
+          if (confirmation.event_eid && confirmation.event_eid.trim()) {
             const { data: eventResponse, error: eventError } = await supabase.functions.invoke(
               'get-event-details-for-artist-profile',
               {
@@ -928,6 +929,13 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
           </Text>
         </Flex>
       </Flex>
+
+      {/* Payment Status Banner - shows for artists with confirmed events or event_artists entries */}
+      <PaymentStatusBanner
+        artistProfile={selectedProfile}
+        confirmations={confirmations}
+        onNavigateToTab={onNavigateToTab}
+      />
 
       {error && (
         <Callout.Root color="red">
