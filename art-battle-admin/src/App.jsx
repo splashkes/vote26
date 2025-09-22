@@ -21,7 +21,7 @@ import EmailQueueManager from './components/EmailQueueManager';
 import PromotionSystem from './components/PromotionSystem';
 import BulkArtistView from './components/BulkArtistView';
 import ContentLibrary from './components/ContentLibrary';
-import PaymentsAdmin from './components/PaymentsAdmin';
+import PaymentsAdminTabbed from './components/PaymentsAdminTabbed';
 import Welcome from './components/Welcome';
 import './App.css';
 
@@ -59,7 +59,7 @@ function App() {
                 <Route path="invitations" element={<InvitationManagement />} />
                 <Route path="email-queue" element={<EmailQueueDashboard />} />
                 <Route path="email-queue/:eventEid" element={<EmailQueueManager />} />
-                <Route path="payments" element={<PaymentsAdmin />} />
+                <Route path="payments" element={<PaymentsAdminTabbed />} />
                 <Route path="sms-marketing" element={<PromotionSystem />} />
                 <Route path="artist/:entryId" element={<ArtistsManagement />} />
                 <Route path="*" element={<Navigate to="/events" replace />} />
