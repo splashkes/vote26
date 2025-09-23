@@ -7,12 +7,12 @@
    ecec9de3-c854-44e4-9c3b-a006ff300243 | test-function                        | test-function                        | ACTIVE | 25      | 2025-07-31 17:06:04 
    ac7fe2c4-289c-47c6-9264-87610e8c3f8a | slack-webhook                        | slack-webhook                        | ACTIVE | 27      | 2025-08-04 02:16:03 
    33de40e6-8bb0-49e9-a4ff-21784739c4df | slack-channel-lookup                 | slack-channel-lookup                 | ACTIVE | 25      | 2025-09-08 03:23:23 
-   c94c954f-9582-4d33-ad06-7296aaa147c5 | stripe-create-checkout               | stripe-create-checkout               | ACTIVE | 39      | 2025-08-20 23:54:13 
+   c94c954f-9582-4d33-ad06-7296aaa147c5 | stripe-create-checkout               | stripe-create-checkout               | ACTIVE | 40      | 2025-09-18 12:59:16 
    48f36631-5a03-4684-8ebd-404abbdd54c1 | stripe-webhook-handler               | stripe-webhook-handler               | ACTIVE | 42      | 2025-09-15 15:31:13 
-   5457dcc3-222b-478c-81ec-e4389db42aa9 | stripe-payment-status                | stripe-payment-status                | ACTIVE | 28      | 2025-08-20 02:09:06 
+   5457dcc3-222b-478c-81ec-e4389db42aa9 | stripe-payment-status                | stripe-payment-status                | ACTIVE | 29      | 2025-09-18 13:18:57 
    04f714a0-8f9b-4b91-88f6-79c0da5d2270 | stripe-payment-success               | stripe-payment-success               | ACTIVE | 16      | 2025-08-07 15:12:59 
    9f46f40d-c8a2-41e1-9be9-28907854cac6 | generate-qr-code                     | generate-qr-code                     | ACTIVE | 25      | 2025-08-17 02:52:07 
-   67c32bde-f086-4e96-b93a-bf36f206ce6d | validate-qr-scan                     | validate-qr-scan                     | ACTIVE | 33      | 2025-09-07 14:53:49 
+   67c32bde-f086-4e96-b93a-bf36f206ce6d | validate-qr-scan                     | validate-qr-scan                     | ACTIVE | 34      | 2025-09-19 23:23:27 
    ac213821-da19-4780-8187-affbc3537625 | phone-validation                     | phone-validation                     | ACTIVE | 16      | 2025-08-09 06:20:36 
    9dd34012-e1bd-4866-8e05-76c245692f9c | stripe-connect-onboard               | stripe-connect-onboard               | ACTIVE | 16      | 2025-08-10 16:27:57 
    e8b2f697-7117-4f57-9479-4011cc3663d0 | stripe-connect-debug                 | stripe-connect-debug                 | ACTIVE | 14      | 2025-08-10 17:36:48 
@@ -58,7 +58,7 @@
    2fbe7ba9-3617-4208-894f-0ac34eb825a4 | test-smtp                            | test-smtp                            | ACTIVE | 11      | 2025-08-25 18:55:49 
    20c5f9e0-315b-490f-8fcb-7781eee96ec1 | process-slack-queue                  | process-slack-queue                  | ACTIVE | 12      | 2025-09-08 03:23:30 
    42de2f81-4120-4344-9362-472cb67d5b82 | cancel-confirmation                  | cancel-confirmation                  | ACTIVE | 21      | 2025-09-08 03:26:58 
-   c651f478-86e2-4718-ba98-032e11c7727e | get-event-details-for-artist-profile | get-event-details-for-artist-profile | ACTIVE | 13      | 2025-09-08 03:23:28 
+   c651f478-86e2-4718-ba98-032e11c7727e | get-event-details-for-artist-profile | get-event-details-for-artist-profile | ACTIVE | 16      | 2025-09-19 11:24:51 
    9c8a3f07-39e4-4183-83ea-532919a25a30 | accept-invitation                    | accept-invitation                    | ACTIVE | 20      | 2025-09-08 03:25:40 
    f7da6757-7229-4808-b4a3-4ca490c0a6a1 | auction-csv-export                   | auction-csv-export                   | ACTIVE | 22      | 2025-09-17 17:24:01 
    eef9e9ea-2979-4fd4-80a1-d0c8061f336c | admin-bid-history                    | admin-bid-history                    | ACTIVE | 11      | 2025-08-26 03:22:39 
@@ -94,7 +94,7 @@
    b5935c5a-1c2e-4f08-ae53-556a2b3505fe | auth-metrics                         | auth-metrics                         | ACTIVE | 11      | 2025-09-08 03:23:10 
    6555c981-b6ea-4788-ba54-1ace256c4218 | admin-artist-ai-intel                | admin-artist-ai-intel                | ACTIVE | 15      | 2025-09-08 03:23:15 
    3c8d4154-e22b-4f78-ad0b-aa1cd730cfcb | admin-artwork-ai-analysis            | admin-artwork-ai-analysis            | ACTIVE | 7       | 2025-09-03 01:40:15 
-   a08dc564-4b78-4cac-9b9e-c397a6425a5e | artist-get-my-profile                | artist-get-my-profile                | ACTIVE | 8       | 2025-09-08 03:23:07 
+   a08dc564-4b78-4cac-9b9e-c397a6425a5e | artist-get-my-profile                | artist-get-my-profile                | ACTIVE | 10      | 2025-09-19 18:07:53 
    4927b290-8901-4f50-90cd-d28b6aadb2a4 | admin-security-monitor               | admin-security-monitor               | ACTIVE | 8       | 2025-09-08 03:23:27 
    aab080f7-1d6e-4d3e-9321-c0756c8cba02 | app-feed-personalized                | app-feed-personalized                | ACTIVE | 11      | 2025-09-11 21:08:51 
    ec96fc8d-0869-461d-8bd0-45950c28a64b | app-analytics-batch                  | app-analytics-batch                  | ACTIVE | 8       | 2025-09-05 16:51:20 
@@ -118,4 +118,9 @@
    5d857ca3-a9f6-4555-a28c-5cc7e3e47742 | admin-rounds-data                    | admin-rounds-data                    | ACTIVE | 2       | 2025-09-16 15:35:28 
    3730d5c4-1d14-4ece-8a4d-b9bfb9e73bdb | admin-auction-data                   | admin-auction-data                   | ACTIVE | 2       | 2025-09-16 15:33:15 
    037384ac-91e4-4504-9800-aa3f13fdd64b | admin-event-data                     | admin-event-data                     | ACTIVE | 2       | 2025-09-16 15:35:28 
+   0b59ebf6-80a2-48c7-b82a-e1a54d75f6ba | admin-offer-to-bidder                | admin-offer-to-bidder                | ACTIVE | 14      | 2025-09-18 20:47:42 
+   af04bcb9-4dd7-4521-84dd-a9710670a3ff | send-payment-setup-reminder          | send-payment-setup-reminder          | ACTIVE | 5       | 2025-09-18 17:30:10 
+   4e6b990d-44b2-41e4-80af-d8074cdd9682 | process-artist-payment               | process-artist-payment               | ACTIVE | 1       | 2025-09-18 14:10:37 
+   47ff54ca-6957-4e24-ae5b-711dea16a87a | event-analytics-dashboard            | event-analytics-dashboard            | ACTIVE | 2       | 2025-09-20 01:25:19 
+   82bddf02-2088-4528-9e7b-985c22621593 | public-analytics                     | public-analytics                     | ACTIVE | 9       | 2025-09-20 03:19:05 
 

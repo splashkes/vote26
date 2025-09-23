@@ -30,7 +30,21 @@ serve(async (req) => {
   }
 
   try {
+    // Create client with anon key for RLS-aware operations
     const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      {
+        global: {
+          headers: {
+            Authorization: req.headers.get('Authorization') ?? ''
+          }
+        }
+      }
+    );
+
+    // Create service role client for admin operations if needed
+    const serviceClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
@@ -44,10 +58,82 @@ serve(async (req) => {
       );
     }
 
+    // Verify the user is authenticated
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Authentication required' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Check if the user is an ABHQ super admin first
+    const { data: adminCheck, error: adminError } = await supabaseClient
+      .from('abhq_admin_users')
+      .select('level, active')
+      .eq('user_id', user.id)
+      .eq('active', true)
+      .single();
+
+    let isAbhqAdmin = false;
+    if (!adminError && adminCheck) {
+      isAbhqAdmin = true;
+    }
+
+    // If not an admin, verify the user owns the artist profile
+    if (!isAbhqAdmin) {
+      // Check if the user owns this artist profile
+      const { data: profileCheck, error: profileError } = await supabaseClient
+        .from('artist_profiles')
+        .select('person_id')
+        .eq('id', artist_profile_id)
+        .single();
+
+      if (profileError || !profileCheck) {
+        return new Response(
+          JSON.stringify({ error: 'Artist profile not found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Get the person_id from JWT claims (for auth v2-http system)
+      // The person_id is stored in the JWT root level for auth v2-http
+      const authHeader = req.headers.get('Authorization') || '';
+      const token = authHeader.replace('Bearer ', '');
+
+      let personId = null;
+      try {
+        // Decode JWT payload (simple base64 decode - no verification needed as Supabase already verified)
+        const payloadBase64 = token.split('.')[1];
+        const payload = JSON.parse(atob(payloadBase64));
+        personId = payload.person_id;
+      } catch (e) {
+        // Fallback to querying people table with user.id
+        const { data: personData } = await supabaseClient
+          .from('people')
+          .select('id')
+          .eq('id', user.id)
+          .single();
+        personId = personData?.id;
+      }
+
+      if (!personId || personId !== profileCheck.person_id) {
+        return new Response(
+          JSON.stringify({ error: 'Access denied' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    // At this point, user is either:
+    // 1. An ABHQ admin (can access any artist's data), OR
+    // 2. The artist who owns this profile (can access their own data)
+
     const ledgerEntries: LedgerEntry[] = [];
 
     // 1. Get all art sales (CREDITS to artist account)
-    const { data: artSales, error: artError } = await supabaseClient
+    // Use service client for art data as it may not have RLS policies for artists
+    const { data: artSales, error: artError } = await serviceClient
       .from('art')
       .select(`
         id,
@@ -162,7 +248,8 @@ serve(async (req) => {
     }
 
     // 2. Get all artist payments (DEBITS from artist account - money paid out)
-    const { data: payments, error: paymentsError } = await supabaseClient
+    // Use service client for payment data as it may not have RLS policies for artists
+    const { data: payments, error: paymentsError } = await serviceClient
       .from('artist_payments')
       .select(`
         id,

@@ -32,22 +32,45 @@ serve(async (req) => {
 
     // Ensure phone number is in E.164 format
     const formatPhoneNumber = (phone: string): string => {
-      // Remove all non-numeric characters
-      const cleaned = phone.replace(/\D/g, '')
-      
-      // Add country code if not present (assuming US/Canada)
-      if (cleaned.length === 10) {
-        return `+1${cleaned}`
-      } else if (cleaned.length === 11 && cleaned.startsWith('1')) {
-        return `+${cleaned}`
-      } else if (cleaned.startsWith('+')) {
+      // If already properly formatted with +, return as-is
+      if (phone.startsWith('+') && phone.length >= 10) {
         return phone
       }
-      
-      return `+${cleaned}`
+
+      // Remove all non-numeric characters
+      const cleaned = phone.replace(/\D/g, '')
+
+      // Handle 10-digit numbers - check area codes to determine country
+      if (cleaned.length === 10) {
+        const areaCode = cleaned.substring(0, 3)
+
+        // Dominican Republic area codes (829, 809, 849)
+        if (['829', '809', '849'].includes(areaCode)) {
+          return `+1${cleaned}` // Dominican Republic uses +1 but different validation rules
+        }
+        // US/Canada area codes (assume everything else for now)
+        else {
+          return `+1${cleaned}`
+        }
+      }
+      // Handle 11-digit numbers starting with 1
+      else if (cleaned.length === 11 && cleaned.startsWith('1')) {
+        return `+${cleaned}`
+      }
+      // Default: assume it's international and add +
+      else {
+        return `+${cleaned}`
+      }
     }
 
     const toFormatted = formatPhoneNumber(to)
+
+    // Log phone number formatting for debugging
+    console.log('SMS Debug:', {
+      original: to,
+      formatted: toFormatted,
+      bodyLength: body.length
+    })
 
     // Create Twilio API request
     const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`
@@ -73,6 +96,12 @@ serve(async (req) => {
 
     if (!twilioResponse.ok) {
       console.error('Twilio error:', twilioData)
+
+      // Handle specific Twilio errors
+      if (twilioData.code === 21408) {
+        throw new Error(`SMS not enabled for this region (${toFormatted}). Contact Twilio support to enable messaging for this destination.`)
+      }
+
       throw new Error(twilioData.message || 'Failed to send SMS')
     }
 

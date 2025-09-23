@@ -124,10 +124,10 @@ const StripeConnectOnboarding = ({ stripeAccount, onAccountUpdate }) => {
       case 'restricted':
         return {
           status: 'restricted',
-          badge: <Badge color="red" variant="soft"><ExclamationTriangleIcon width="12" height="12" /> Restricted</Badge>,
-          message: 'Your account has restrictions that need to be resolved before you can receive payments.',
+          badge: <Badge color="orange" variant="soft"><ExclamationTriangleIcon width="12" height="12" /> Setup Incomplete</Badge>,
+          message: 'Payment account setup incomplete. Please go to Stripe to add missing information.',
           canOnboard: true,
-          buttonText: 'Resolve Issues',
+          buttonText: 'Complete Setup',
           buttonAction: handleRefreshOnboarding
         };
       

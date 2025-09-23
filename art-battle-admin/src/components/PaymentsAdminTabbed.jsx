@@ -48,6 +48,9 @@ const PaymentsAdminTabbed = () => {
   const [loadingLedger, setLoadingLedger] = useState(false);
   const [showZeroAccount, setShowZeroAccount] = useState(false);
   const [showPayNowDialog, setShowPayNowDialog] = useState(false);
+  const [processingPayments, setProcessingPayments] = useState(false);
+  const [paymentProcessResults, setPaymentProcessResults] = useState(null);
+  const [paymentLimit, setPaymentLimit] = useState(5);
   const [paymentCurrency, setPaymentCurrency] = useState('');
   const [processingPayment, setProcessingPayment] = useState(false);
   const [manualPaymentData, setManualPaymentData] = useState({
@@ -57,10 +60,42 @@ const PaymentsAdminTabbed = () => {
     payment_method: 'bank_transfer',
     reference: ''
   });
+  const [availableCurrencies, setAvailableCurrencies] = useState([]);
+  const [showInvitationHistory, setShowInvitationHistory] = useState(false);
+  const [invitationHistory, setInvitationHistory] = useState(null);
+  const [loadingInvitationHistory, setLoadingInvitationHistory] = useState(false);
 
   useEffect(() => {
     fetchEnhancedData();
+    fetchAvailableCurrencies();
   }, []);
+
+  // Fetch invitation history when reminder dialog opens
+  useEffect(() => {
+    if (showReminderDialog && selectedArtist?.artist_profiles?.id) {
+      fetchInvitationHistory(selectedArtist.artist_profiles.id);
+    }
+  }, [showReminderDialog, selectedArtist?.artist_profiles?.id]);
+
+
+  const fetchAvailableCurrencies = async () => {
+    try {
+      const { data, error } = await supabase.rpc('get_available_currencies');
+      if (error) throw error;
+      setAvailableCurrencies(data || []);
+    } catch (err) {
+      console.error('Failed to load currencies:', err);
+      // Fallback to default currencies if function fails
+      setAvailableCurrencies([
+        { currency_code: 'USD' },
+        { currency_code: 'CAD' },
+        { currency_code: 'EUR' },
+        { currency_code: 'GBP' },
+        { currency_code: 'AUD' },
+        { currency_code: 'NZD' }
+      ]);
+    }
+  };
 
   const fetchEnhancedData = async () => {
     try {
@@ -69,6 +104,43 @@ const PaymentsAdminTabbed = () => {
         .rpc('get_enhanced_payments_admin_data');
 
       if (enhancedError) throw enhancedError;
+
+      // Fetch automated payment statuses for artists with balances owing
+      if (enhancedResult?.artists_owing) {
+        console.log('🔍 Artists owing data structure:', enhancedResult.artists_owing[0]);
+
+        const artistIds = enhancedResult.artists_owing.map(artist => artist.artist_profiles?.id || artist.id);
+        console.log('🎯 Looking up payment statuses for artist IDs:', artistIds);
+
+        const { data: paymentStatuses, error: statusError } = await supabase
+          .from('artist_payments')
+          .select('artist_profile_id, status, created_at')
+          .eq('payment_type', 'automated')
+          .in('artist_profile_id', artistIds)
+          .order('created_at', { ascending: false });
+
+        console.log('💳 Found payment statuses:', paymentStatuses);
+
+        if (statusError) {
+          console.warn('Failed to fetch payment statuses:', statusError);
+        } else {
+          // Add payment status to each artist (latest payment status per artist)
+          const statusMap = {};
+          paymentStatuses?.forEach(payment => {
+            if (!statusMap[payment.artist_profile_id]) {
+              statusMap[payment.artist_profile_id] = payment.status;
+            }
+          });
+
+          console.log('📊 Status map:', statusMap);
+
+          enhancedResult.artists_owing = enhancedResult.artists_owing.map(artist => ({
+            ...artist,
+            automated_payment_status: statusMap[artist.artist_profiles?.id || artist.id] || null
+          }));
+        }
+      }
+
       setEnhancedData(enhancedResult);
     } catch (err) {
       setError('Failed to load payments data: ' + err.message);
@@ -78,10 +150,35 @@ const PaymentsAdminTabbed = () => {
   };
 
   const formatCurrency = (amount, currency = 'USD') => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency.toUpperCase()
-    }).format(amount);
+    // Validate and clean the currency code
+    let cleanCurrency = currency;
+
+    if (!cleanCurrency || typeof cleanCurrency !== 'string') {
+      cleanCurrency = 'USD';
+    }
+
+    // Remove any extra whitespace and convert to uppercase
+    cleanCurrency = cleanCurrency.trim().toUpperCase();
+
+    // List of common valid currency codes
+    const validCurrencies = ['USD', 'CAD', 'EUR', 'GBP', 'AUD', 'JPY', 'CHF', 'CNY', 'INR', 'BRL', 'MXN', 'ZAR'];
+
+    // If currency is not in our list of valid currencies, default to USD
+    if (!validCurrencies.includes(cleanCurrency)) {
+      console.warn(`Invalid currency code "${currency}", defaulting to USD`);
+      cleanCurrency = 'USD';
+    }
+
+    try {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: cleanCurrency
+      }).format(amount || 0);
+    } catch (error) {
+      console.error(`Currency formatting error with currency "${cleanCurrency}":`, error);
+      // Fallback to simple formatting
+      return `$${(amount || 0).toFixed(2)}`;
+    }
   };
 
   const filterItems = (items, searchTerm) => {
@@ -100,18 +197,34 @@ const PaymentsAdminTabbed = () => {
   };
 
   const handleViewArtist = async (artist) => {
+    // Immediately clear previous data and set loading states
     setSelectedArtist(artist);
-    setShowArtistDetail(true);
     setStripeDetails(null);
     setAccountLedger(null);
+    setLoadingStripe(false);
+    setLoadingLedger(true);
 
-    // Fetch Stripe details if account exists
-    if (artist.stripe_recipient_id) {
-      await fetchStripeDetails(artist.stripe_recipient_id, artist.artist_profiles.id);
+    // Open modal with loading state
+    setShowArtistDetail(true);
+
+    try {
+      // Fetch both Stripe details and account ledger in parallel
+      const promises = [];
+
+      // Fetch Stripe details if account exists
+      if (artist.stripe_recipient_id) {
+        promises.push(fetchStripeDetails(artist.stripe_recipient_id, artist.artist_profiles.id));
+      }
+
+      // Always fetch account ledger
+      promises.push(fetchArtistAccountLedger(false, artist.artist_profiles.id));
+
+      // Wait for all data to load
+      await Promise.all(promises);
+    } catch (error) {
+      console.error('Error loading artist details:', error);
+      setError('Failed to load artist details: ' + error.message);
     }
-
-    // Always fetch account ledger
-    await fetchArtistAccountLedger();
   };
 
   const fetchStripeDetails = async (stripeAccountId, artistProfileId) => {
@@ -135,15 +248,21 @@ const PaymentsAdminTabbed = () => {
     }
   };
 
-  const fetchArtistAccountLedger = async (includeZeroEntry = false) => {
-    if (!selectedArtist?.artist_profiles?.id) return;
+  const fetchArtistAccountLedger = async (includeZeroEntry = false, artistProfileId = null) => {
+    // Use provided artistProfileId or fall back to selectedArtist
+    const profileId = artistProfileId || selectedArtist?.artist_profiles?.id;
+
+    if (!profileId) {
+      console.error('No artist profile ID available for ledger fetch');
+      return;
+    }
 
     try {
       setLoadingLedger(true);
 
       const { data, error } = await supabase.functions.invoke('artist-account-ledger', {
         body: {
-          artist_profile_id: selectedArtist.artist_profiles.id,
+          artist_profile_id: profileId,
           include_zero_entry: includeZeroEntry
         }
       });
@@ -152,6 +271,7 @@ const PaymentsAdminTabbed = () => {
 
       setAccountLedger(data);
     } catch (err) {
+      console.error('Failed to load account ledger:', err);
       setError('Failed to load account ledger: ' + err.message);
     } finally {
       setLoadingLedger(false);
@@ -178,7 +298,7 @@ const PaymentsAdminTabbed = () => {
           description: manualPaymentData.description,
           payment_method: manualPaymentData.payment_method,
           reference: manualPaymentData.reference || null,
-          status: 'pending',
+          status: 'paid',
           payment_type: 'manual',
           created_by: createdBy,
           metadata: {
@@ -199,7 +319,8 @@ const PaymentsAdminTabbed = () => {
     }
   };
 
-  const sendPaymentReminder = async () => {
+  const sendPaymentReminder = async (e) => {
+    e?.preventDefault(); // Prevent any form submission
     try {
       setSendingReminder(true);
 
@@ -219,6 +340,51 @@ const PaymentsAdminTabbed = () => {
 
       if (error) throw error;
 
+      // Log the invitation after successful send
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      const sentBy = user?.email || 'admin@artbattle.com';
+
+      await supabase.rpc('log_payment_setup_invitation', {
+        p_artist_profile_id: selectedArtist.artist_profiles.id,
+        p_invitation_method: reminderType,
+        p_sent_by: sentBy,
+        p_recipient_email: reminderType === 'email' || reminderType === 'both' ? selectedArtist.artist_profiles.email : null,
+        p_recipient_phone: reminderType === 'sms' || reminderType === 'both' ? selectedArtist.artist_profiles.phone : null,
+        p_invitation_type: 'payment_setup',
+        p_message_content: `Payment setup reminder sent via ${reminderType}`,
+        p_delivery_metadata: { reminder_data: reminderData }
+      });
+
+      // Update the specific artist's invitation info inline without full reload
+      const updatedInvitationInfo = {
+        latest_invitation_sent_at: new Date().toISOString(),
+        latest_invitation_method: reminderType,
+        latest_invitation_status: 'sent',
+        invitation_count: (selectedArtist.invitation_info?.invitation_count || 0) + 1,
+        time_since_latest: 'just now'
+      };
+
+      // Update the artist in both arrays
+      setEnhancedData(prevData => {
+        if (!prevData) return prevData;
+
+        const updateArtist = (artist) => {
+          if (artist.artist_profiles.id === selectedArtist.artist_profiles.id) {
+            return {
+              ...artist,
+              invitation_info: updatedInvitationInfo
+            };
+          }
+          return artist;
+        };
+
+        return {
+          ...prevData,
+          artists_owing: prevData.artists_owing.map(updateArtist),
+          artists_zero_balance: prevData.artists_zero_balance.map(updateArtist)
+        };
+      });
+
       setShowReminderDialog(false);
       setError('');
     } catch (err) {
@@ -229,22 +395,16 @@ const PaymentsAdminTabbed = () => {
   };
 
   const handlePayNow = async (currency) => {
-    if (!selectedArtist || !accountLedger) return;
+    if (!selectedArtist || !selectedArtist.estimated_balance) return;
 
     try {
       setProcessingPayment(true);
-
-      const currencyBalance = accountLedger.summary.currency_breakdown?.[currency]?.balance || 0;
-
-      if (currencyBalance <= 0) {
-        setError('No balance owing in this currency');
-        return;
-      }
+      setError(''); // Clear any previous errors
 
       const { data, error } = await supabase.functions.invoke('process-artist-payment', {
         body: {
           artist_profile_id: selectedArtist.artist_profiles.id,
-          amount: currencyBalance,
+          amount: selectedArtist.estimated_balance,
           currency: currency,
           payment_type: 'automated',
           description: `Payment for artwork sales - ${currency} balance`
@@ -253,10 +413,8 @@ const PaymentsAdminTabbed = () => {
 
       if (error) throw error;
 
-      await Promise.all([
-        fetchArtistAccountLedger(),
-        fetchEnhancedData()
-      ]);
+      // Refresh the data to show updated payment status
+      await fetchEnhancedData();
 
       setShowPayNowDialog(false);
       setError('');
@@ -275,6 +433,251 @@ const PaymentsAdminTabbed = () => {
   const openPayNowDialog = (currency) => {
     setPaymentCurrency(currency);
     setShowPayNowDialog(true);
+  };
+
+  const testPaymentProcessing = async () => {
+    try {
+      setError('');
+      const { data, error } = await supabase.functions.invoke('process-pending-payments', {
+        body: {
+          dry_run: true,
+          limit: 5
+        }
+      });
+
+      if (error) throw error;
+
+      // Show results in console and as a success message
+      console.log('Payment processing test results:', data);
+      setError(`✅ Test completed: ${data.processed_count} payments processed (${data.successful_count} successful, ${data.failed_count} failed). Check console for details.`);
+
+      // Refresh data to show any status changes
+      await fetchEnhancedData();
+    } catch (err) {
+      console.error('Payment processing test error:', err);
+
+      // Parse detailed error response if available
+      if (err && err.context && err.context.text) {
+        try {
+          const responseText = await err.context.text();
+          console.log('Raw edge function response:', responseText);
+          const parsed = JSON.parse(responseText);
+
+          if (parsed.debug) {
+            console.log('Edge function debug info:', parsed.debug);
+            setError(`Payment processing failed: ${parsed.error}. Check console for detailed debug info.`);
+          } else {
+            setError('Failed to test payment processing: ' + err.message);
+          }
+        } catch (parseError) {
+          console.log('Could not parse error response:', parseError);
+          setError('Failed to test payment processing: ' + err.message);
+        }
+      } else {
+        setError('Failed to test payment processing: ' + err.message);
+      }
+    }
+  };
+
+  const handleProcessPayments = async () => {
+    console.log('🚀 Payment processing started...');
+    try {
+      setProcessingPayments(true);
+      setError('Processing payments...');
+
+      console.log('📡 Calling process-pending-payments function with:', {
+        dry_run: false,
+        limit: paymentLimit
+      });
+
+      const { data, error } = await supabase.functions.invoke('process-pending-payments', {
+        body: {
+          dry_run: false, // Always live mode now
+          limit: paymentLimit
+        }
+      });
+
+      console.log('📨 Function response:', { data, error });
+
+      if (error) throw error;
+
+      setPaymentProcessResults(data);
+
+      // Create detailed debug output for UI display
+      const debugOutput = `
+✅ Processing completed: ${data.processed_count} payments processed (${data.successful_count || 0} successful, ${data.failed_count || 0} failed)
+
+📊 FULL DEBUG OUTPUT:
+${JSON.stringify(data, null, 2)}
+      `.trim();
+
+      setError(debugOutput);
+
+      // Refresh data to show any status changes
+      await fetchEnhancedData();
+
+    } catch (err) {
+      console.error('❌ Payment processing error:', err);
+
+      let errorDebugOutput = `❌ Failed to process payments: ${err.message}`;
+
+      // Try to parse error details if available
+      if (err && err.context && err.context.text) {
+        try {
+          const responseText = await err.context.text();
+          console.log('📄 Raw edge function response:', responseText);
+          const parsed = JSON.parse(responseText);
+
+          errorDebugOutput += `
+
+📊 ERROR DEBUG OUTPUT:
+Raw Response Text:
+${responseText}
+
+Parsed Response:
+${JSON.stringify(parsed, null, 2)}`;
+
+          if (parsed.debug) {
+            console.log('🔍 Payment processing debug info:', parsed.debug);
+            errorDebugOutput += `
+
+🔍 Debug Info:
+${JSON.stringify(parsed.debug, null, 2)}`;
+          }
+        } catch (parseError) {
+          console.log('⚠️ Could not parse error response:', parseError);
+          errorDebugOutput += `
+
+⚠️ Could not parse error response: ${parseError.message}`;
+        }
+      }
+
+      setError(errorDebugOutput);
+    } finally {
+      setProcessingPayments(false);
+      console.log('🏁 Payment processing finished');
+    }
+  };
+
+  const handleResetFailedPayments = async () => {
+    console.log('🔄 Reset failed payments started...');
+    try {
+      setProcessingPayments(true);
+      setError('Looking for failed payments to reset...');
+
+      // First, get all failed payments to reset their metadata properly
+      console.log('🔍 Querying for failed payments with conditions:');
+      console.log('  payment_type = automated');
+      console.log('  status = failed');
+
+      const { data: failedPayments, error: fetchError } = await supabase
+        .from('artist_payments')
+        .select('id, metadata, artist_profile_id, gross_amount, currency, status, payment_type')
+        .eq('payment_type', 'automated')
+        .eq('status', 'failed');
+
+      console.log('📊 Query result - failed payments:', failedPayments);
+      console.log('📊 Query error:', fetchError);
+
+      // Also check what payments actually exist
+      const { data: allPayments, error: allError } = await supabase
+        .from('artist_payments')
+        .select('id, status, payment_type, gross_amount, currency')
+        .eq('payment_type', 'automated')
+        .limit(10);
+
+      console.log('📋 All automated payments in database:', allPayments);
+
+      if (fetchError) throw fetchError;
+
+      if (!failedPayments || failedPayments.length === 0) {
+        setError('No failed payments found to reset.');
+        console.log('⚠️ No failed payments found');
+        return;
+      }
+
+      // Update each payment individually to clean metadata
+      const updates = failedPayments.map(payment => {
+        const cleanMetadata = { ...payment.metadata };
+        delete cleanMetadata.error_message;
+        delete cleanMetadata.failed_at;
+        delete cleanMetadata.processed_by;
+        delete cleanMetadata.stripe_response;
+
+        console.log(`🔧 Resetting payment ${payment.id}:`, cleanMetadata);
+
+        return supabase
+          .from('artist_payments')
+          .update({
+            status: 'processing',
+            stripe_transfer_id: null,
+            metadata: cleanMetadata
+          })
+          .eq('id', payment.id);
+      });
+
+      // Execute all updates
+      const results = await Promise.all(updates);
+
+      // Check for any errors
+      const errors = results.filter(result => result.error);
+      if (errors.length > 0) {
+        console.error('❌ Reset errors:', errors);
+        throw new Error(`Failed to reset some payments: ${errors.map(e => e.error.message).join(', ')}`);
+      }
+
+      const resetCount = failedPayments.length;
+
+      const resetDebugOutput = `
+✅ Successfully reset ${resetCount} failed payments back to processing status.
+
+📊 RESET DEBUG OUTPUT:
+Reset Payments:
+${failedPayments.map(p => `  - ${p.id}: ${p.currency} ${p.gross_amount}`).join('\n')}
+
+Full Results:
+${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
+      `.trim();
+
+      setError(resetDebugOutput);
+      console.log(`✅ Successfully reset ${resetCount} payments`);
+
+      // Refresh data to show updated status
+      await fetchEnhancedData();
+
+      // Clear results if any
+      setPaymentProcessResults(null);
+
+    } catch (err) {
+      console.error('❌ Failed to reset payments:', err);
+      setError('Failed to reset failed payments: ' + err.message);
+    } finally {
+      setProcessingPayments(false);
+      console.log('🏁 Reset process finished');
+    }
+  };
+
+  const fetchInvitationHistory = async (artistProfileId) => {
+    try {
+      setLoadingInvitationHistory(true);
+      const { data, error } = await supabase.rpc('get_artist_invitation_history', {
+        p_artist_profile_id: artistProfileId
+      });
+
+      if (error) throw error;
+      setInvitationHistory(data || []);
+    } catch (err) {
+      console.error('Failed to load invitation history:', err);
+      setError('Failed to load invitation history: ' + err.message);
+    } finally {
+      setLoadingInvitationHistory(false);
+    }
+  };
+
+  const handleViewInvitationHistory = async (artist) => {
+    await fetchInvitationHistory(artist.artist_profiles.id);
+    setSelectedArtist(artist);
+    setShowInvitationHistory(true);
   };
 
   const getStatusBadge = (status) => {
@@ -352,14 +755,37 @@ const PaymentsAdminTabbed = () => {
   const filteredZero = filterItems(enhancedData?.artists_zero_balance || [], searchFilter);
   const filteredPayments = filterItems(enhancedData?.recent_payments || [], searchFilter);
 
+  // Calculate ready to pay artists (those with payment setup and balance owing OR processing payments)
+  const readyToPayArtists = filteredOwing.filter(artist =>
+    artist.payment_status === 'ready' &&
+    artist.stripe_recipient_id &&
+    (artist.estimated_balance > 0.01 || artist.automated_payment_status === 'processing' || artist.automated_payment_status === 'failed')
+  );
+
+  // Calculate total amount ready to pay by currency
+  const totalsByCurrency = readyToPayArtists.reduce((totals, artist) => {
+    const currency = artist.currency_info?.primary_currency || 'USD';
+    // Use estimated balance if available, otherwise show that there are processing payments
+    const amount = artist.estimated_balance || 0;
+    totals[currency] = (totals[currency] || 0) + amount;
+    return totals;
+  }, {});
+
+  const totalReadyToPay = readyToPayArtists.reduce((sum, artist) => sum + artist.estimated_balance, 0);
+
   return (
     <Box>
       <Flex justify="between" align="center" mb="4">
         <Heading size="6">Artist Payments & Account Setup</Heading>
-        <Button onClick={fetchEnhancedData} variant="soft">
-          <UpdateIcon width="16" height="16" />
-          Refresh Data
-        </Button>
+        <Flex gap="2">
+          <Button onClick={testPaymentProcessing} variant="soft" color="orange">
+            Test Payment Processing (Dry Run)
+          </Button>
+          <Button onClick={fetchEnhancedData} variant="soft">
+            <UpdateIcon width="16" height="16" />
+            Refresh Data
+          </Button>
+        </Flex>
       </Flex>
 
       {error && (
@@ -427,6 +853,9 @@ const PaymentsAdminTabbed = () => {
           <Tabs.Trigger value="zero">
             Zero Balance ({filteredZero.length})
           </Tabs.Trigger>
+          <Tabs.Trigger value="ready-to-pay">
+            Ready to Pay ({readyToPayArtists.length})
+          </Tabs.Trigger>
           <Tabs.Trigger value="payments">
             Recent Payments ({filteredPayments.length})
           </Tabs.Trigger>
@@ -450,6 +879,7 @@ const PaymentsAdminTabbed = () => {
                     <Table.ColumnHeaderCell>Balance</Table.ColumnHeaderCell>
                     <Table.ColumnHeaderCell>Payment Status</Table.ColumnHeaderCell>
                     <Table.ColumnHeaderCell>Recent City</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Last Invite</Table.ColumnHeaderCell>
                     <Table.ColumnHeaderCell>Actions</Table.ColumnHeaderCell>
                   </Table.Row>
                 </Table.Header>
@@ -476,6 +906,32 @@ const PaymentsAdminTabbed = () => {
                         <Text size="2" color="gray">{artist.recent_city || 'Unknown'}</Text>
                       </Table.Cell>
                       <Table.Cell>
+                        {artist.invitation_info && artist.invitation_info.time_since_latest ? (
+                          <Button
+                            size="1"
+                            variant="ghost"
+                            onClick={() => handleViewInvitationHistory(artist)}
+                            style={{ padding: '2px', height: 'auto' }}
+                          >
+                            <Flex direction="column" gap="1" align="start">
+                              <Text size="1" color="gray">{artist.invitation_info.time_since_latest}</Text>
+                              <Badge
+                                size="1"
+                                variant="soft"
+                                color={artist.invitation_info.latest_invitation_method === 'email' ? 'blue' : 'orange'}
+                              >
+                                {artist.invitation_info.latest_invitation_method}
+                              </Badge>
+                              {artist.invitation_info.invitation_count > 1 && (
+                                <Text size="1" color="gray">({artist.invitation_info.invitation_count} total)</Text>
+                              )}
+                            </Flex>
+                          </Button>
+                        ) : (
+                          <Text size="1" color="gray">None sent</Text>
+                        )}
+                      </Table.Cell>
+                      <Table.Cell>
                         <Flex gap="2" wrap="wrap">
                           <Button
                             size="1"
@@ -487,7 +943,24 @@ const PaymentsAdminTabbed = () => {
                             View
                           </Button>
 
-                          {/* Pay Now buttons for each currency if account is ready */}
+                          {/* Pay Now buttons */}
+                          {artist.payment_status === 'ready' && artist.stripe_recipient_id && artist.estimated_balance > 0.01 && (
+                            <Button
+                              size="1"
+                              variant="solid"
+                              color="green"
+                              onClick={() => {
+                                setSelectedArtist(artist);
+                                const currency = artist.currency_info?.primary_currency || 'USD';
+                                openPayNowDialog(currency);
+                              }}
+                              title={`Pay ${formatCurrency(artist.estimated_balance, artist.currency_info?.primary_currency || 'USD')} now`}
+                            >
+                              Pay Now
+                            </Button>
+                          )}
+
+                          {/* Detailed Pay buttons for each currency if breakdown exists */}
                           {artist.payment_status === 'ready' && artist.stripe_recipient_id && artist.currency_info?.currency_breakdown && (
                             <Flex gap="1" wrap="wrap">
                               {Object.entries(artist.currency_info.currency_breakdown).map(([currency, info]) => (
@@ -512,17 +985,28 @@ const PaymentsAdminTabbed = () => {
 
                           {/* Setup payment button for accounts without setup */}
                           {!artist.payment_status && artist.artist_profiles.email && (
-                            <Button
-                              size="1"
-                              variant="soft"
-                              color="orange"
-                              onClick={() => {
-                                setSelectedArtist(artist);
-                                setShowReminderDialog(true);
-                              }}
-                            >
-                              Setup Payment
-                            </Button>
+                            <Flex direction="column" gap="1">
+                              <Button
+                                size="1"
+                                variant="soft"
+                                color="orange"
+                                onClick={() => {
+                                  setSelectedArtist(artist);
+                                  setShowReminderDialog(true);
+                                }}
+                              >
+                                Setup Payment
+                              </Button>
+                              {!artist.invitation_info || !artist.invitation_info.time_since_latest ? (
+                                <Text size="1" color="gray" style={{ fontSize: '10px' }}>
+                                  (no invite sent yet)
+                                </Text>
+                              ) : (
+                                <Text size="1" color="gray" style={{ fontSize: '10px' }}>
+                                  Last: {artist.invitation_info.time_since_latest} via {artist.invitation_info.latest_invitation_method}
+                                </Text>
+                              )}
+                            </Flex>
                           )}
                         </Flex>
                       </Table.Cell>
@@ -552,6 +1036,7 @@ const PaymentsAdminTabbed = () => {
                     <Table.ColumnHeaderCell>Payment Status</Table.ColumnHeaderCell>
                     <Table.ColumnHeaderCell>Recent City</Table.ColumnHeaderCell>
                     <Table.ColumnHeaderCell>Recent Events</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Last Invite</Table.ColumnHeaderCell>
                     <Table.ColumnHeaderCell>Actions</Table.ColumnHeaderCell>
                   </Table.Row>
                 </Table.Header>
@@ -576,6 +1061,32 @@ const PaymentsAdminTabbed = () => {
                         <Text size="2" color="gray">{artist.recent_contests || 0}</Text>
                       </Table.Cell>
                       <Table.Cell>
+                        {artist.invitation_info && artist.invitation_info.time_since_latest ? (
+                          <Button
+                            size="1"
+                            variant="ghost"
+                            onClick={() => handleViewInvitationHistory(artist)}
+                            style={{ padding: '2px', height: 'auto' }}
+                          >
+                            <Flex direction="column" gap="1" align="start">
+                              <Text size="1" color="gray">{artist.invitation_info.time_since_latest}</Text>
+                              <Badge
+                                size="1"
+                                variant="soft"
+                                color={artist.invitation_info.latest_invitation_method === 'email' ? 'blue' : 'orange'}
+                              >
+                                {artist.invitation_info.latest_invitation_method}
+                              </Badge>
+                              {artist.invitation_info.invitation_count > 1 && (
+                                <Text size="1" color="gray">({artist.invitation_info.invitation_count} total)</Text>
+                              )}
+                            </Flex>
+                          </Button>
+                        ) : (
+                          <Text size="1" color="gray">None sent</Text>
+                        )}
+                      </Table.Cell>
+                      <Table.Cell>
                         <Flex gap="2">
                           <Button
                             size="1"
@@ -587,17 +1098,28 @@ const PaymentsAdminTabbed = () => {
                             View
                           </Button>
                           {!artist.payment_status && artist.artist_profiles.email && (
-                            <Button
-                              size="1"
-                              variant="soft"
-                              color="orange"
-                              onClick={() => {
-                                setSelectedArtist(artist);
-                                setShowReminderDialog(true);
-                              }}
-                            >
-                              Setup Payment
-                            </Button>
+                            <Flex direction="column" gap="1">
+                              <Button
+                                size="1"
+                                variant="soft"
+                                color="orange"
+                                onClick={() => {
+                                  setSelectedArtist(artist);
+                                  setShowReminderDialog(true);
+                                }}
+                              >
+                                Setup Payment
+                              </Button>
+                              {!artist.invitation_info || !artist.invitation_info.time_since_latest ? (
+                                <Text size="1" color="gray" style={{ fontSize: '10px' }}>
+                                  (no invite sent yet)
+                                </Text>
+                              ) : (
+                                <Text size="1" color="gray" style={{ fontSize: '10px' }}>
+                                  Last: {artist.invitation_info.time_since_latest} via {artist.invitation_info.latest_invitation_method}
+                                </Text>
+                              )}
+                            </Flex>
                           )}
                         </Flex>
                       </Table.Cell>
@@ -605,6 +1127,328 @@ const PaymentsAdminTabbed = () => {
                   ))}
                 </Table.Body>
               </Table.Root>
+            )}
+          </Card>
+        </Tabs.Content>
+
+        {/* Ready to Pay Tab */}
+        <Tabs.Content value="ready-to-pay">
+          <Card mt="4">
+            <Flex justify="between" align="center" mb="4">
+              <Heading size="3" color="green">
+                Ready to Pay ({readyToPayArtists.length} artists)
+              </Heading>
+              <Flex gap="3" align="center">
+                <Box style={{ textAlign: 'right' }}>
+                  <Text size="2" color="gray">Total Amount by Currency</Text>
+                  <Flex direction="column" gap="1">
+                    {Object.entries(totalsByCurrency).map(([currency, amount]) => (
+                      <Text key={currency} size="3" weight="bold" color="green">
+                        {formatCurrency(amount, currency)}
+                      </Text>
+                    ))}
+                    {Object.keys(totalsByCurrency).length > 1 && (
+                      <Text size="2" color="gray" style={{ borderTop: '1px solid #ccc', paddingTop: '4px' }}>
+                        {Object.keys(totalsByCurrency).length} currencies
+                      </Text>
+                    )}
+                  </Flex>
+                </Box>
+                <Flex direction="column" gap="2">
+                  <Flex gap="2" align="center">
+                    <Box>
+                      <Text size="1" color="gray" mb="1">Payment Limit</Text>
+                      <TextField.Root
+                        type="number"
+                        min="1"
+                        max="50"
+                        value={paymentLimit}
+                        onChange={(e) => setPaymentLimit(parseInt(e.target.value) || 5)}
+                        placeholder="5"
+                        style={{ width: '80px' }}
+                      />
+                    </Box>
+
+                    <Button
+                      size="3"
+                      variant="solid"
+                      color="green"
+                      onClick={handleProcessPayments}
+                      disabled={processingPayments || readyToPayArtists.length === 0}
+                      loading={processingPayments}
+                    >
+                      💰 Process {Math.min(paymentLimit, readyToPayArtists.length)} Payment{Math.min(paymentLimit, readyToPayArtists.length) !== 1 ? 's' : ''}
+                    </Button>
+                  </Flex>
+
+                  <Button
+                    onClick={handleResetFailedPayments}
+                    disabled={processingPayments}
+                    variant="soft"
+                    color="orange"
+                    size="2"
+                  >
+                    🔄 Reset Failed to Processing
+                  </Button>
+                </Flex>
+              </Flex>
+            </Flex>
+
+            <Callout.Root color="orange" mb="4">
+              <Callout.Icon>
+                <ExclamationTriangleIcon />
+              </Callout.Icon>
+              <Callout.Text>
+                <strong>LIVE PAYMENT PROCESSING:</strong> This will immediately transfer funds to artist Stripe accounts.
+                Insufficient funds will block transfers, but processing will show detailed error information.
+              </Callout.Text>
+            </Callout.Root>
+
+            {/* Error/Status Display */}
+            {error && (
+              <Callout.Root color={error.startsWith('✅') ? 'green' : 'red'} mb="4">
+                <Callout.Icon>
+                  {error.startsWith('✅') ? <CheckCircledIcon /> : <ExclamationTriangleIcon />}
+                </Callout.Icon>
+                <Callout.Text>
+                  <Text
+                    size="2"
+                    style={{
+                      whiteSpace: 'pre-wrap',
+                      fontFamily: 'monospace',
+                      wordBreak: 'break-word',
+                      maxHeight: '400px',
+                      overflowY: 'auto'
+                    }}
+                  >
+                    {error}
+                  </Text>
+                </Callout.Text>
+              </Callout.Root>
+            )}
+
+            {readyToPayArtists.length === 0 ? (
+              <Text color="gray" style={{ textAlign: 'center', padding: '2rem' }}>
+                No artists ready to pay found. Artists need payment accounts set up and balances owing.
+              </Text>
+            ) : (
+              <Table.Root>
+                <Table.Header>
+                  <Table.Row>
+                    <Table.ColumnHeaderCell>Artist</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Balance Owing</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Payment Status</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Recent City</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Recent Events</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Actions</Table.ColumnHeaderCell>
+                  </Table.Row>
+                </Table.Header>
+                <Table.Body>
+                  {readyToPayArtists.map((artist, index) => (
+                    <Table.Row key={`${artist.artist_profiles.id}-${index}`}>
+                      <Table.Cell>
+                        <Flex direction="column" gap="1">
+                          <Text size="2" weight="medium">{artist.artist_profiles.name}</Text>
+                          <Badge variant="soft" size="1">#{artist.artist_profiles.entry_id}</Badge>
+                        </Flex>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Text size="2" weight="bold" color="green">
+                          {formatCurrency(artist.estimated_balance, artist.currency_info?.primary_currency)}
+                        </Text>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Badge color={
+                          artist.automated_payment_status === 'processing' ? 'blue' :
+                          artist.automated_payment_status === 'failed' ? 'red' :
+                          artist.automated_payment_status === 'completed' ? 'green' :
+                          artist.automated_payment_status === 'pending' ? 'orange' :
+                          artist.payment_status === 'ready' ? 'gray' : 'gray'
+                        }>
+                          {artist.automated_payment_status ?
+                            artist.automated_payment_status.charAt(0).toUpperCase() + artist.automated_payment_status.slice(1) :
+                            'No Payment Record'
+                          }
+                        </Badge>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Text size="2" color="gray">{artist.recent_city || 'Unknown'}</Text>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Text size="2" color="gray">{artist.recent_contests || 0}</Text>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Flex gap="2">
+                          <Button
+                            size="1"
+                            variant="soft"
+                            onClick={() => handleViewArtist(artist)}
+                            title="View Account Details"
+                          >
+                            <EyeOpenIcon width="12" height="12" />
+                            View
+                          </Button>
+                          <Button
+                            size="1"
+                            variant="solid"
+                            color="green"
+                            onClick={() => {
+                              setSelectedArtist(artist);
+                              const currency = artist.currency_info?.primary_currency || 'USD';
+                              openPayNowDialog(currency);
+                            }}
+                            title={`Pay ${formatCurrency(artist.estimated_balance, artist.currency_info?.primary_currency || 'USD')} now`}
+                          >
+                            Pay Now
+                          </Button>
+                        </Flex>
+                      </Table.Cell>
+                    </Table.Row>
+                  ))}
+                </Table.Body>
+              </Table.Root>
+            )}
+
+            {/* Processing Results */}
+            {paymentProcessResults && (
+              <Card variant="ghost" mt="4">
+                <Flex direction="column" gap="4">
+                  <Heading size="2">Processing Results</Heading>
+
+                  {/* Summary */}
+                  <Flex gap="4" align="center">
+                    <Badge
+                      size="2"
+                      color={paymentProcessResults.success ? 'green' : 'red'}
+                      variant="solid"
+                    >
+                      {paymentProcessResults.success ? '✅ Success' : '❌ Failed'}
+                    </Badge>
+
+                    <Text size="2" color="gray">
+                      {new Date(paymentProcessResults.timestamp).toLocaleString()}
+                    </Text>
+                  </Flex>
+
+                  <Card>
+                    <Flex justify="between" align="center" mb="3">
+                      <Text size="3" weight="medium">{paymentProcessResults.message}</Text>
+                    </Flex>
+
+                    <Flex gap="6">
+                      <Box>
+                        <Text size="1" color="gray">Processed</Text>
+                        <Text size="4" weight="bold">{paymentProcessResults.processed_count}</Text>
+                      </Box>
+                      <Box>
+                        <Text size="1" color="gray">Successful</Text>
+                        <Text size="4" weight="bold" color="green">{paymentProcessResults.successful_count}</Text>
+                      </Box>
+                      <Box>
+                        <Text size="1" color="gray">Failed</Text>
+                        <Text size="4" weight="bold" color="red">{paymentProcessResults.failed_count}</Text>
+                      </Box>
+                      <Box>
+                        <Text size="1" color="gray">Total Amount</Text>
+                        <Text size="4" weight="bold" color="green">${paymentProcessResults.total_amount?.toFixed(2) || '0.00'}</Text>
+                      </Box>
+                    </Flex>
+                  </Card>
+
+                  {/* Payment Details */}
+                  {paymentProcessResults.payments && paymentProcessResults.payments.length > 0 && (
+                    <Box>
+                      <Text size="2" weight="medium" mb="3">Payment Details</Text>
+                      <Table.Root>
+                        <Table.Header>
+                          <Table.Row>
+                            <Table.ColumnHeaderCell>Artist</Table.ColumnHeaderCell>
+                            <Table.ColumnHeaderCell>Amount</Table.ColumnHeaderCell>
+                            <Table.ColumnHeaderCell>Status</Table.ColumnHeaderCell>
+                            <Table.ColumnHeaderCell>Stripe Transfer ID</Table.ColumnHeaderCell>
+                            <Table.ColumnHeaderCell>Error</Table.ColumnHeaderCell>
+                          </Table.Row>
+                        </Table.Header>
+                        <Table.Body>
+                          {paymentProcessResults.payments.map((payment, index) => (
+                            <Table.Row key={`${payment.payment_id}-${index}`}>
+                              <Table.Cell>
+                                <Text size="2" weight="medium">{payment.artist_name}</Text>
+                              </Table.Cell>
+                              <Table.Cell>
+                                <Text size="2" weight="medium" color="green">
+                                  {payment.currency} {payment.amount}
+                                </Text>
+                              </Table.Cell>
+                              <Table.Cell>
+                                <Badge
+                                  color={payment.status === 'success' ? 'green' : 'red'}
+                                  variant="soft"
+                                >
+                                  {payment.status === 'success' ? '✅ Success' : '❌ Failed'}
+                                </Badge>
+                              </Table.Cell>
+                              <Table.Cell>
+                                {payment.stripe_transfer_id ? (
+                                  <Text size="1" color="gray" style={{ fontFamily: 'monospace' }}>
+                                    {payment.stripe_transfer_id}
+                                  </Text>
+                                ) : (
+                                  <Text size="1" color="gray">—</Text>
+                                )}
+                              </Table.Cell>
+                              <Table.Cell>
+                                {payment.error ? (
+                                  <Text size="1" color="red" style={{ maxWidth: '200px', wordBreak: 'break-word' }}>
+                                    {payment.error}
+                                  </Text>
+                                ) : (
+                                  <Text size="1" color="gray">—</Text>
+                                )}
+                              </Table.Cell>
+                            </Table.Row>
+                          ))}
+                        </Table.Body>
+                      </Table.Root>
+                    </Box>
+                  )}
+
+                  {/* Blocked Payments */}
+                  {paymentProcessResults.blocked_payments && paymentProcessResults.blocked_payments.length > 0 && (
+                    <Box>
+                      <Text size="2" weight="medium" mb="3" color="orange">Blocked Payments (No Account Setup)</Text>
+                      <Table.Root>
+                        <Table.Header>
+                          <Table.Row>
+                            <Table.ColumnHeaderCell>Artist</Table.ColumnHeaderCell>
+                            <Table.ColumnHeaderCell>Amount</Table.ColumnHeaderCell>
+                            <Table.ColumnHeaderCell>Issue</Table.ColumnHeaderCell>
+                          </Table.Row>
+                        </Table.Header>
+                        <Table.Body>
+                          {paymentProcessResults.blocked_payments.map((payment, index) => (
+                            <Table.Row key={`blocked-${payment.payment_id}-${index}`}>
+                              <Table.Cell>
+                                <Text size="2">{payment.artist_name}</Text>
+                              </Table.Cell>
+                              <Table.Cell>
+                                <Text size="2" color="orange">
+                                  {payment.currency} {payment.amount}
+                                </Text>
+                              </Table.Cell>
+                              <Table.Cell>
+                                <Badge color="orange" variant="soft">
+                                  {payment.issue}
+                                </Badge>
+                              </Table.Cell>
+                            </Table.Row>
+                          ))}
+                        </Table.Body>
+                      </Table.Root>
+                    </Box>
+                  )}
+                </Flex>
+              </Card>
             )}
           </Card>
         </Tabs.Content>
@@ -669,7 +1513,7 @@ const PaymentsAdminTabbed = () => {
                       </Table.Cell>
                       <Table.Cell>
                         <Badge
-                          color={payment.payment_status === 'completed' ? 'green' : payment.payment_status === 'pending' ? 'orange' : 'gray'}
+                          color={payment.payment_status === 'paid' ? 'green' : payment.payment_status === 'pending' ? 'orange' : payment.payment_status === 'processing' ? 'blue' : 'gray'}
                           size="1"
                         >
                           {payment.payment_status}
@@ -712,6 +1556,7 @@ const PaymentsAdminTabbed = () => {
             )}
           </Card>
         </Tabs.Content>
+
       </Tabs.Root>
 
       {/* Artist Detail Modal */}
@@ -1021,11 +1866,11 @@ const PaymentsAdminTabbed = () => {
                 >
                   <Select.Trigger />
                   <Select.Content>
-                    <Select.Item value="USD">USD</Select.Item>
-                    <Select.Item value="CAD">CAD</Select.Item>
-                    <Select.Item value="EUR">EUR</Select.Item>
-                    <Select.Item value="GBP">GBP</Select.Item>
-                    <Select.Item value="AUD">AUD</Select.Item>
+                    {availableCurrencies.map(currency => (
+                      <Select.Item key={currency.currency_code} value={currency.currency_code}>
+                        {currency.currency_code}
+                      </Select.Item>
+                    ))}
                   </Select.Content>
                 </Select.Root>
               </Box>
@@ -1043,6 +1888,7 @@ const PaymentsAdminTabbed = () => {
                   <Select.Item value="check">Check</Select.Item>
                   <Select.Item value="cash">Cash</Select.Item>
                   <Select.Item value="paypal">PayPal</Select.Item>
+                  <Select.Item value="zelle">Zelle</Select.Item>
                   <Select.Item value="other">Other</Select.Item>
                 </Select.Content>
               </Select.Root>
@@ -1121,6 +1967,43 @@ const PaymentsAdminTabbed = () => {
               </Card>
             </Box>
 
+            {/* Invitation History */}
+            <Box>
+              <Text size="2" weight="medium" mb="2">Invitation History</Text>
+              <Card variant="ghost">
+                {loadingInvitationHistory ? (
+                  <Skeleton height="60px" />
+                ) : invitationHistory && invitationHistory.length > 0 ? (
+                  <Flex direction="column" gap="2">
+                    {invitationHistory.map((invite, idx) => (
+                      <Flex key={idx} justify="between" align="center">
+                        <Flex gap="2" align="center">
+                          <Badge
+                            size="1"
+                            variant="soft"
+                            color={invite.invitation_method === 'email' ? 'blue' : 'orange'}
+                          >
+                            {invite.invitation_method}
+                          </Badge>
+                          <Text size="1" color="gray">{invite.time_since_latest}</Text>
+                        </Flex>
+                        <Flex direction="column" align="end">
+                          <Text size="1" color="gray">by {invite.sent_by}</Text>
+                          <Badge size="1" variant="outline" color={invite.status === 'sent' ? 'green' : 'gray'}>
+                            {invite.status}
+                          </Badge>
+                        </Flex>
+                      </Flex>
+                    ))}
+                  </Flex>
+                ) : (
+                  <Text size="2" color="gray" style={{ textAlign: 'center', padding: '1rem' }}>
+                    No invitation history found
+                  </Text>
+                )}
+              </Card>
+            </Box>
+
             <Box>
               <Text size="2" weight="medium" mb="2">Reminder Method</Text>
               <Select.Root value={reminderType} onValueChange={setReminderType}>
@@ -1152,7 +2035,8 @@ const PaymentsAdminTabbed = () => {
               <Button variant="soft" color="gray">Cancel</Button>
             </Dialog.Close>
             <Button
-              onClick={sendPaymentReminder}
+              type="button"
+              onClick={(e) => sendPaymentReminder(e)}
               disabled={sendingReminder || !selectedArtist?.artist_profiles?.email}
               color="orange"
             >
@@ -1165,7 +2049,12 @@ const PaymentsAdminTabbed = () => {
       {/* Pay Now Confirmation Dialog */}
       <Dialog.Root open={showPayNowDialog} onOpenChange={setShowPayNowDialog}>
         <Dialog.Content style={{ maxWidth: '500px' }}>
-          <Dialog.Title>Process Payment Now</Dialog.Title>
+          <Dialog.Title>
+            Process Payment: {selectedArtist?.estimated_balance ?
+              formatCurrency(selectedArtist.estimated_balance, paymentCurrency) :
+              'Payment'
+            }
+          </Dialog.Title>
           <Dialog.Description>
             Process payment to {selectedArtist?.artist_profiles?.name} via Stripe
           </Dialog.Description>
@@ -1188,12 +2077,10 @@ const PaymentsAdminTabbed = () => {
                 </Flex>
                 <Flex justify="between">
                   <Text size="2" color="gray">Amount:</Text>
-                  <Text size="3" weight="bold" color="green">
-                    {accountLedger?.summary?.currency_breakdown?.[paymentCurrency] &&
-                      formatCurrency(
-                        accountLedger.summary.currency_breakdown[paymentCurrency].balance,
-                        paymentCurrency
-                      )
+                  <Text size="4" weight="bold" color="green">
+                    {selectedArtist?.estimated_balance ?
+                      formatCurrency(selectedArtist.estimated_balance, paymentCurrency) :
+                      'Loading...'
                     }
                   </Text>
                 </Flex>
@@ -1225,7 +2112,11 @@ const PaymentsAdminTabbed = () => {
               color="green"
               loading={processingPayment}
             >
-              {processingPayment ? 'Processing...' : 'Process Payment Now'}
+              {processingPayment ? 'Processing...' :
+                selectedArtist?.estimated_balance ?
+                  `Pay ${formatCurrency(selectedArtist.estimated_balance, paymentCurrency)} Now` :
+                  'Process Payment Now'
+              }
             </Button>
           </Flex>
         </Dialog.Content>
@@ -1295,6 +2186,112 @@ const PaymentsAdminTabbed = () => {
             >
               Add Zero Entry
             </Button>
+          </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
+
+      {/* Invitation History Modal */}
+      <Dialog.Root open={showInvitationHistory} onOpenChange={setShowInvitationHistory}>
+        <Dialog.Content style={{ maxWidth: '800px', maxHeight: '90vh', overflow: 'auto' }}>
+          <Dialog.Title>
+            {selectedArtist?.artist_profiles?.name} - Payment Setup Invitation History
+          </Dialog.Title>
+
+          <Box mt="4">
+            {loadingInvitationHistory ? (
+              <Skeleton height="200px" />
+            ) : invitationHistory && invitationHistory.length > 0 ? (
+              <Flex direction="column" gap="3">
+                <Text size="2" color="gray">
+                  {invitationHistory.length} invitation{invitationHistory.length !== 1 ? 's' : ''} sent
+                </Text>
+
+                <Table.Root>
+                  <Table.Header>
+                    <Table.Row>
+                      <Table.ColumnHeaderCell>Date Sent</Table.ColumnHeaderCell>
+                      <Table.ColumnHeaderCell>Method</Table.ColumnHeaderCell>
+                      <Table.ColumnHeaderCell>Recipient</Table.ColumnHeaderCell>
+                      <Table.ColumnHeaderCell>Type</Table.ColumnHeaderCell>
+                      <Table.ColumnHeaderCell>Status</Table.ColumnHeaderCell>
+                      <Table.ColumnHeaderCell>Sent By</Table.ColumnHeaderCell>
+                    </Table.Row>
+                  </Table.Header>
+                  <Table.Body>
+                    {invitationHistory.map((invitation, index) => (
+                      <Table.Row key={invitation.id || index}>
+                        <Table.Cell>
+                          <Flex direction="column" gap="1">
+                            <Text size="2" weight="medium">
+                              {new Date(invitation.sent_at).toLocaleDateString()}
+                            </Text>
+                            <Text size="1" color="gray">
+                              {new Date(invitation.sent_at).toLocaleTimeString()}
+                            </Text>
+                            <Badge size="1" variant="soft" color="blue">
+                              {invitation.time_since_sent}
+                            </Badge>
+                          </Flex>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <Badge
+                            size="1"
+                            color={invitation.invitation_method === 'email' ? 'blue' : invitation.invitation_method === 'sms' ? 'orange' : 'purple'}
+                          >
+                            {invitation.invitation_method.toUpperCase()}
+                          </Badge>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <Flex direction="column" gap="1">
+                            {invitation.recipient_email && (
+                              <Text size="1" color="gray">
+                                📧 {invitation.recipient_email}
+                              </Text>
+                            )}
+                            {invitation.recipient_phone && (
+                              <Text size="1" color="gray">
+                                📱 {invitation.recipient_phone}
+                              </Text>
+                            )}
+                          </Flex>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <Badge size="1" variant="soft" color="gray">
+                            {invitation.invitation_type.replace('_', ' ')}
+                          </Badge>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <Badge
+                            size="1"
+                            color={invitation.status === 'sent' ? 'green' : invitation.status === 'failed' ? 'red' : 'orange'}
+                          >
+                            {invitation.status}
+                          </Badge>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <Text size="1" color="gray">
+                            {invitation.sent_by}
+                          </Text>
+                        </Table.Cell>
+                      </Table.Row>
+                    ))}
+                  </Table.Body>
+                </Table.Root>
+              </Flex>
+            ) : (
+              <Flex direction="column" align="center" gap="3" py="6">
+                <Text size="3" color="gray">No payment setup invitations sent yet</Text>
+                <Text size="2" color="gray">
+                  Use the "Setup Payment" button to send the first invitation to {selectedArtist?.artist_profiles?.name}
+                </Text>
+              </Flex>
+            )}
+          </Box>
+
+          <Flex gap="3" mt="4" justify="end">
+            <Dialog.Close>
+              <Button variant="soft" color="gray">Close</Button>
+            </Dialog.Close>
           </Flex>
         </Dialog.Content>
       </Dialog.Root>

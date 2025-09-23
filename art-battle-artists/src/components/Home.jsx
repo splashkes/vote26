@@ -36,10 +36,10 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
   const [candidateProfiles, setCandidateProfiles] = useState([]);
   const [showProfilePicker, setShowProfilePicker] = useState(false);
   const [showCreateNewProfile, setShowCreateNewProfile] = useState(false);
-  const [sampleWorks, setSampleWorks] = useState([]);
   const [applications, setApplications] = useState([]);
   const [invitations, setInvitations] = useState([]);
   const [confirmations, setConfirmations] = useState([]);
+  const [hasRecentActivity, setHasRecentActivity] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [selectedConfirmation, setSelectedConfirmation] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
@@ -123,7 +123,8 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
             city: candidate.city,
             instagram: candidate.instagram,
             sampleWorksCount: candidate.sampleWorks?.length || 0,
-            artworkCount: candidate.artworkCount || 0
+            artworkCount: candidate.artworkCount || 0,
+            outstandingBalance: candidate.outstandingBalance || 0
           });
         });
 
@@ -183,134 +184,36 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
     if (!profile) return;
     
     try {
-      // Load sample works using unified function (combines modern + legacy)
-      const { data: worksData, error: worksError } = await supabase
-        .rpc('get_unified_sample_works', { profile_id: profile.id });
-
-      if (worksError) throw worksError;
-      setSampleWorks(worksData || []);
-
-      // Load applications for selected profile
-      const { data: appsData, error: appsError } = await supabase
-        .from('artist_applications')
-        .select(`
-          *,
-          event:events(
-            id,
-            name,
-            event_start_datetime,
-            venue,
-            city:cities(name)
-          )
-        `)
-        .eq('artist_profile_id', profile.id)
-        .order('applied_at', { ascending: false })
-        .limit(5);
-
-      if (appsError) throw appsError;
-      setApplications(appsData || []);
-
-      // Load invitations for selected profile
-      // Since there's no direct foreign key between artist_invitations.event_eid and events.eid,
-      // we need to fetch invitations first, then get event details separately
-      const { data: invitationsRaw, error: invitationsError } = await supabase
-        .from('artist_invitations')
-        .select('*')
-        .eq('artist_profile_id', profile.id)
-        .eq('status', 'pending')
-        .is('accepted_at', null)
-        .order('created_at', { ascending: false });
-
-      if (invitationsError) throw invitationsError;
-
-      // Get event details for each invitation
-      const invitationsData = [];
-      if (invitationsRaw && invitationsRaw.length > 0) {
-        for (const invitation of invitationsRaw) {
-          if (invitation.event_eid && invitation.event_eid.trim()) {
-            const { data: eventResponse, error: eventError } = await supabase.functions.invoke(
-              'get-event-details-for-artist-profile',
-              {
-                body: { event_eid: invitation.event_eid }
-              }
-            );
-
-            let eventData = null;
-            if (eventResponse && eventResponse.success) {
-              eventData = eventResponse.event;
-            } else {
-              console.error('Failed to get event details for invitation:', eventError || eventResponse?.error);
-            }
-
-            invitationsData.push({
-              ...invitation,
-              event: eventData
-            });
-          }
+      // Load all profile data through single edge function
+      const { data: profileDataResponse, error: profileDataError } = await supabase.functions.invoke(
+        'get-artist-profile-data',
+        {
+          body: { artist_profile_id: profile.id }
         }
+      );
+
+      if (profileDataError) {
+        throw new Error('Failed to load profile data: ' + profileDataError.message);
       }
 
-      if (invitationsError) throw invitationsError;
-      setInvitations(invitationsData || []);
-
-      // Load confirmations for selected profile (excluding withdrawn)
-      const { data: confirmationsRaw, error: confirmationsError } = await supabase
-        .from('artist_confirmations')
-        .select('*')
-        .eq('artist_profile_id', profile.id)
-        .eq('confirmation_status', 'confirmed')
-        .order('created_at', { ascending: false });
-
-      console.log('DEBUG: Confirmations query result:', {
-        profile_id: profile.id,
-        confirmationsRaw,
-        confirmationsError,
-        query_url: 'artist_confirmations filtered by profile_id and confirmed status'
-      });
-
-      if (confirmationsError) throw confirmationsError;
-
-      // Get event details for each confirmation
-      const confirmationsData = [];
-      if (confirmationsRaw && confirmationsRaw.length > 0) {
-        for (const confirmation of confirmationsRaw) {
-          if (confirmation.event_eid && confirmation.event_eid.trim()) {
-            const { data: eventResponse, error: eventError } = await supabase.functions.invoke(
-              'get-event-details-for-artist-profile',
-              {
-                body: { event_eid: confirmation.event_eid }
-              }
-            );
-
-            let eventData = null;
-            if (eventResponse && eventResponse.success) {
-              eventData = eventResponse.event;
-            } else {
-              console.error('Failed to get event details for confirmation:', eventError || eventResponse?.error);
-            }
-
-            confirmationsData.push({
-              ...confirmation,
-              event: eventData
-            });
-          }
-        }
+      if (!profileDataResponse || !profileDataResponse.success) {
+        throw new Error('Failed to load profile data: ' + (profileDataResponse?.error || 'Unknown error'));
       }
 
-      console.log('DEBUG: Setting confirmations state:', {
-        confirmationsData_length: (confirmationsData || []).length,
-        confirmationsData: confirmationsData,
-        current_confirmations_state: confirmations.length
+      const profileData = profileDataResponse.data;
+
+      // Set all the state from the comprehensive response
+      setApplications(profileData.applications);
+      setInvitations(profileData.invitations);
+      setConfirmations(profileData.confirmations);
+      setHasRecentActivity(profileData.hasRecentActivity);
+
+      console.log('DEBUG: Profile data loaded:', {
+        applications: profileData.stats.future_applications + '/' + profileData.stats.total_applications,
+        invitations: profileData.stats.future_invitations + '/' + profileData.stats.total_invitations,
+        confirmations: profileData.stats.future_confirmations + '/' + profileData.stats.total_confirmations,
+        hasRecentActivity: profileData.hasRecentActivity
       });
-      setConfirmations(confirmationsData || []);
-      
-      // Force a complete state refresh for debugging
-      setTimeout(() => {
-        console.log('DEBUG: Confirmations state after setState:', {
-          confirmations_length: confirmations.length,
-          confirmations_content: confirmations
-        });
-      }, 100);
     } catch (err) {
       console.error('Home: Error in loadProfileData:', err);
       setError('Failed to load profile data: ' + err.message);
@@ -710,10 +613,23 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
                           {candidate.artworkCount} paintings
                         </Badge>
                       )}
+                      {(candidate.outstandingBalance || 0) > 0 && (
+                        <Badge color="orange" variant="solid" size="2">
+                          💰 ${candidate.outstandingBalance.toFixed(2)} owed
+                        </Badge>
+                      )}
                     </Flex>
                     
-                    <Button size="2" variant="solid" color="crimson" onClick={() => handleCandidateSelect(candidate)}>
-                      Use This Profile
+                    <Button
+                      size="2"
+                      variant="solid"
+                      color={(candidate.outstandingBalance || 0) > 0 ? "green" : "crimson"}
+                      onClick={() => handleCandidateSelect(candidate)}
+                    >
+                      {(candidate.outstandingBalance || 0) > 0
+                        ? `Get My $${candidate.outstandingBalance.toFixed(2)}`
+                        : "Use This Profile"
+                      }
                     </Button>
                   </Flex>
 
@@ -934,6 +850,7 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
       <PaymentStatusBanner
         artistProfile={selectedProfile}
         confirmations={confirmations}
+        hasRecentActivity={hasRecentActivity}
         onNavigateToTab={onNavigateToTab}
       />
 
@@ -1205,112 +1122,6 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
 
               </Flex>
 
-              {/* Right Column - Sample Works */}
-              {sampleWorks.length > 0 && (
-                <Box>
-                  <Text size="2" weight="medium" color="gray" mb="3" display="block">Sample Works</Text>
-                  <Grid columns="3" gap="2">
-                    {sampleWorks.slice(0, 9).map((work, index) => {
-                      return (
-                        <Box 
-                          key={work.id} 
-                          style={{ 
-                            position: 'relative', 
-                            aspectRatio: '1',
-                            overflow: 'hidden',
-                            borderRadius: '6px',
-                            border: '2px solid var(--gray-6)',
-                            transition: 'all 0.2s ease'
-                          }}
-                          className="sample-work-thumb"
-                        >
-                          <img
-                            src={work.image_url}
-                            alt={work.title || "Sample work"}
-                            style={{
-                              width: '100%',
-                              height: '100%',
-                              objectFit: 'cover',
-                              transition: 'transform 0.2s ease'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.target.style.transform = 'scale(1.05)';
-                              e.target.parentElement.style.borderColor = 'var(--crimson-8)';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.target.style.transform = 'scale(1)';
-                              e.target.parentElement.style.borderColor = 'var(--gray-6)';
-                            }}
-                            onError={(e) => {
-                              console.error('Home: Dashboard image failed to load:', {
-                                src: e.target.src,
-                                work_id: work.id,
-                                media_file: work.media_file
-                              });
-                            }}
-                          />
-                          {work.title && (
-                            <Box
-                              style={{
-                                position: 'absolute',
-                                bottom: '0',
-                                left: '0',
-                                right: '0',
-                                background: 'linear-gradient(transparent, rgba(0,0,0,0.7))',
-                                color: 'white',
-                                padding: '8px 4px 4px',
-                                fontSize: '10px',
-                                fontWeight: '500',
-                                opacity: '0',
-                                transition: 'opacity 0.2s ease'
-                              }}
-                              className="work-title-overlay"
-                            >
-                              {work.title}
-                            </Box>
-                          )}
-                        </Box>
-                      );
-                    })}
-                  </Grid>
-                  {sampleWorks.length > 9 && (
-                    <Text size="1" color="gray" mt="2" display="block" align="center">
-                      +{sampleWorks.length - 9} more works
-                    </Text>
-                  )}
-                </Box>
-              )}
-
-              {/* Empty state for sample works */}
-              {sampleWorks.length === 0 && (
-                <Box>
-                  <Text size="2" weight="medium" color="gray" mb="3" display="block">Sample Works</Text>
-                  <Flex 
-                    direction="column" 
-                    align="center" 
-                    justify="center" 
-                    gap="2" 
-                    style={{ 
-                      height: '120px',
-                      backgroundColor: 'var(--gray-3)',
-                      borderRadius: '8px',
-                      border: '1px dashed var(--gray-7)'
-                    }}
-                  >
-                    <ImageIcon width="24" height="24" color="var(--gray-9)" />
-                    <Text size="2" color="gray" align="center">
-                      No sample works yet
-                    </Text>
-                    <Button 
-                      size="1" 
-                      variant="soft" 
-                      onClick={() => onNavigateToTab('profile')}
-                    >
-                      Add Works
-                    </Button>
-                  </Flex>
-                </Box>
-              )}
             </Grid>
           </Flex>
         </Card>

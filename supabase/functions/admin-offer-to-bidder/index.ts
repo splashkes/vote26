@@ -17,11 +17,51 @@ serve(async (req) => {
   }
 
   try {
-    // Initialize Supabase client using service role key for full access (no JWT required)
-    const supabase = createClient(
+    // Create client with anon key for RLS-aware operations
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      {
+        global: {
+          headers: {
+            Authorization: req.headers.get('Authorization') ?? ''
+          }
+        }
+      }
+    );
+
+    // Create service role client for admin operations
+    const serviceClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
+    );
+
+    // Verify the user is authenticated by parsing JWT directly
+    const authHeader = req.headers.get('Authorization') || '';
+    if (!authHeader.startsWith('Bearer ')) {
+      return new Response(
+        JSON.stringify({ error: 'Authentication required' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    let user, jwtPayload;
+    try {
+      const token = authHeader.replace('Bearer ', '');
+      const payloadBase64 = token.split('.')[1];
+      jwtPayload = JSON.parse(atob(payloadBase64));
+
+      // Extract user info from JWT
+      user = {
+        id: jwtPayload.sub,
+        phone: jwtPayload.phone
+      };
+    } catch (e) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid authentication token' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Parse request body
     let requestBody;
@@ -66,8 +106,8 @@ serve(async (req) => {
       )
     }
 
-    // Get artwork details
-    const { data: artwork, error: artError } = await supabase
+    // Get artwork details (search by art_code if not UUID)
+    let artworkQuery = serviceClient
       .from('art')
       .select(`
         id,
@@ -83,9 +123,16 @@ serve(async (req) => {
           eid,
           name
         )
-      `)
-      .eq('id', art_id)
-      .single()
+      `);
+
+    // Check if art_id looks like a UUID or art_code
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(art_id)) {
+      artworkQuery = artworkQuery.eq('id', art_id);
+    } else {
+      artworkQuery = artworkQuery.eq('art_code', art_id);
+    }
+
+    const { data: artwork, error: artError } = await artworkQuery.single()
 
     if (artError || !artwork) {
       return new Response(
@@ -107,8 +154,42 @@ serve(async (req) => {
       )
     }
 
+    // Check if user is ABHQ super admin OR event admin with producer/super level
+    let hasPermission = false;
+
+    // Check ABHQ super admin
+    const { data: abhqAdmin } = await serviceClient
+      .from('abhq_admin_users')
+      .select('level, active')
+      .eq('user_id', user.id)
+      .eq('active', true)
+      .single();
+
+    if (abhqAdmin) {
+      hasPermission = true;
+    } else {
+      // Check event admin permissions from JWT admin_events
+      const adminEvents = jwtPayload.admin_events || {};
+
+      // Get event EID from artwork
+      const eventEid = artwork.events?.eid;
+      if (eventEid && adminEvents[eventEid]) {
+        const adminLevel = adminEvents[eventEid];
+        if (adminLevel === 'producer' || adminLevel === 'super') {
+          hasPermission = true;
+        }
+      }
+    }
+
+    if (!hasPermission) {
+      return new Response(
+        JSON.stringify({ error: 'Access denied' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Get bid details and verify it exists
-    const { data: bid, error: bidError } = await supabase
+    const { data: bid, error: bidError } = await serviceClient
       .from('bids')
       .select(`
         id,
@@ -128,7 +209,7 @@ serve(async (req) => {
         )
       `)
       .eq('id', bid_id)
-      .eq('art_id', art_id)
+      .eq('art_id', artwork.id)
       .single()
 
     if (bidError || !bid) {
@@ -153,10 +234,10 @@ serve(async (req) => {
     }
 
     // Check if bidder already has an active offer
-    const { data: existingOffer, error: offerCheckError } = await supabase
+    const { data: existingOffer, error: offerCheckError } = await serviceClient
       .from('artwork_offers')
       .select('id, status, expires_at')
-      .eq('art_id', art_id)
+      .eq('art_id', artwork.id)
       .eq('offered_to_person_id', bid.person_id)
       .eq('status', 'pending')
       .gt('expires_at', new Date().toISOString())
@@ -194,16 +275,16 @@ serve(async (req) => {
     }
 
     // Create the artwork offer
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000) // 15 minutes from now
+    const expiresAt = new Date(Date.now() + 6 * 60 * 60 * 1000) // 6 hours from now
 
-    const { data: newOffer, error: createError } = await supabase
+    const { data: newOffer, error: createError } = await serviceClient
       .from('artwork_offers')
       .insert({
-        art_id: art_id,
+        art_id: artwork.id,
         offered_to_person_id: bid.person_id,
         bid_id: bid_id,
         offered_amount: bid.amount,
-        offered_by_admin: 'admin-function-no-auth',
+        offered_by_admin: user.id,
         expires_at: expiresAt.toISOString(),
         admin_note: admin_note || null,
         metadata: {
@@ -267,11 +348,42 @@ serve(async (req) => {
 
     const bidderPhone = bid.people.phone || bid.people.phone_number || bid.people.auth_phone
 
+    // Send SMS notification to the bidder about the offer
+    let smsResult = null;
+    if (bidderPhone) {
+      try {
+        const bidderFirstName = bid.people.first_name || bid.people.name?.split(' ')[0] || 'Bidder';
+        const offerMessage = `${bidderFirstName}, great news! You have been offered artwork ${artwork.art_code} from ${artwork.events.eid} (${artwork.events.name}) for $${bid.amount}. This is a limited-time payment race - pay first to secure it! Log in at https://artb.art/event/${artwork.events.eid} to pay now.`;
+
+        const smsResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-sms`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+          },
+          body: JSON.stringify({
+            to: bidderPhone,
+            body: offerMessage
+          })
+        });
+
+        if (smsResponse.ok) {
+          smsResult = await smsResponse.json();
+          console.log('Offer SMS sent successfully:', smsResult);
+        } else {
+          console.error('Failed to send offer SMS:', await smsResponse.text());
+        }
+      } catch (smsError) {
+        console.error('Error sending offer SMS:', smsError);
+        // Don't fail the whole function if SMS fails
+      }
+    }
+
     // Return success response with expected format
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Artwork offered to ${bidderName} for $${bid.amount}`,
+        message: `Artwork offered to ${bidderName} for $${bid.amount}${smsResult ? ' (SMS sent)' : bidderPhone ? ' (SMS failed)' : ' (no phone)'}`,
         offer: {
           id: newOffer.id,
           art_id: art_id,
@@ -282,7 +394,7 @@ serve(async (req) => {
           offered_amount: bid.amount,
           current_winning_bid: artwork.current_bid,
           expires_at: expiresAt.toISOString(),
-          minutes_until_expiry: 15,
+          minutes_until_expiry: 360,
           admin_note: admin_note
         },
         race_info: {

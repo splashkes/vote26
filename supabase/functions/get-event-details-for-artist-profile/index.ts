@@ -47,13 +47,13 @@ serve(async (req)=>{
       throw new Error('Invalid JSON in request body');
     }
 
-    const { event_eid } = requestBody;
+    const { event_eid, filter_future_only = false } = requestBody;
     if (!event_eid) {
       console.error('Missing event_eid in request:', requestBody);
       throw new Error('event_eid is required');
     }
     // Get event details with proper joins (handle NULL city_id)
-    const { data: eventData, error: eventError } = await supabase.from('events').select(`
+    let query = supabase.from('events').select(`
         id,
         eid,
         name,
@@ -63,7 +63,14 @@ serve(async (req)=>{
         city_id,
         applications_open,
         cities(name)
-      `).eq('eid', event_eid).single();
+      `).eq('eid', event_eid);
+
+    // If filtering for future events only, add date filter
+    if (filter_future_only) {
+      query = query.gte('event_start_datetime', new Date().toISOString());
+    }
+
+    const { data: eventData, error: eventError } = await query.single();
     if (eventError) {
       console.error('Event query error:', eventError);
       if (eventError.code === 'PGRST116') {

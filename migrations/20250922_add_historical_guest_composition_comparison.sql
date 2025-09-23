@@ -23,14 +23,22 @@ BEGIN
     END IF;
 
     RETURN QUERY
-    WITH recent_city_events AS (
-        SELECT e.id
+    WITH events_with_participants_city AS (
+        SELECT DISTINCT e.id, e.event_start_datetime
         FROM events e
         WHERE e.venue = event_venue
           AND e.id != p_event_id
           AND e.event_start_datetime IS NOT NULL
+          AND (
+            EXISTS(SELECT 1 FROM people_qr_scans pqs WHERE pqs.event_id = e.id)
+            OR EXISTS(SELECT 1 FROM votes v WHERE v.event_id = e.id)
+            OR EXISTS(SELECT 1 FROM bids b JOIN art a ON b.art_id = a.id WHERE a.event_id = e.id)
+          )
         ORDER BY e.event_start_datetime DESC
-        LIMIT 10
+        LIMIT 20  -- Look at more events to find ones with data
+    ),
+    recent_city_events AS (
+        SELECT id FROM events_with_participants_city LIMIT 10
     ),
     city_compositions AS (
         SELECT
@@ -43,7 +51,11 @@ BEGIN
     )
     SELECT
         cc.guest_category::text,
-        AVG(cc.guest_pct)::numeric as avg_guest_pct
+        CASE
+            WHEN SUM(cc.guests) > 0 THEN
+                ROUND(SUM(cc.guests) * 100.0 / SUM(SUM(cc.guests)) OVER (), 1)
+            ELSE 0
+        END::numeric as avg_guest_pct
     FROM city_compositions cc
     GROUP BY cc.guest_category
     ORDER BY
@@ -67,13 +79,21 @@ LANGUAGE plpgsql
 AS $function$
 BEGIN
     RETURN QUERY
-    WITH recent_global_events AS (
-        SELECT e.id
+    WITH events_with_participants AS (
+        SELECT DISTINCT e.id, e.event_start_datetime
         FROM events e
         WHERE e.id != p_event_id
           AND e.event_start_datetime IS NOT NULL
+          AND (
+            EXISTS(SELECT 1 FROM people_qr_scans pqs WHERE pqs.event_id = e.id)
+            OR EXISTS(SELECT 1 FROM votes v WHERE v.event_id = e.id)
+            OR EXISTS(SELECT 1 FROM bids b JOIN art a ON b.art_id = a.id WHERE a.event_id = e.id)
+          )
         ORDER BY e.event_start_datetime DESC
-        LIMIT 10
+        LIMIT 50  -- Look at more events to find ones with data
+    ),
+    recent_global_events AS (
+        SELECT id FROM events_with_participants LIMIT 10
     ),
     global_compositions AS (
         SELECT
@@ -86,7 +106,11 @@ BEGIN
     )
     SELECT
         gc.guest_category::text,
-        AVG(gc.guest_pct)::numeric as avg_guest_pct
+        CASE
+            WHEN SUM(gc.guests) > 0 THEN
+                ROUND(SUM(gc.guests) * 100.0 / SUM(SUM(gc.guests)) OVER (), 1)
+            ELSE 0
+        END::numeric as avg_guest_pct
     FROM global_compositions gc
     GROUP BY gc.guest_category
     ORDER BY

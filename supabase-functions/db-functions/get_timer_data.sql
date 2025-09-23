@@ -85,7 +85,14 @@
          (r.closing_time < now() AND r.closing_time > (now() - interval '1 minute'))                       +
        );                                                                                                  +
                                                                                                            +
-     -- Get upcoming rounds (no closing time but have contestants)                                         +
+     -- Get upcoming rounds (no closing time but have contestants AND no higher round has completed)       +
+     WITH highest_completed_round AS (                                                                     +
+         SELECT COALESCE(MAX(r.round_number), 0) as max_completed_round                                    +
+         FROM rounds r                                                                                     +
+         WHERE r.event_id = event_record.id                                                                +
+           AND r.closing_time IS NOT NULL                                                                  +
+           AND r.closing_time < now()                                                                      +
+     )                                                                                                     +
      SELECT jsonb_agg(                                                                                     +
          jsonb_build_object(                                                                               +
              'round', r.round_number,                                                                      +
@@ -115,9 +122,11 @@
          JOIN artist_profiles ap ON round_contestants.artist_id = ap.id                                    +
          GROUP BY round_id                                                                                 +
      ) artist_list ON r.id = artist_list.round_id                                                          +
+     CROSS JOIN highest_completed_round hcr                                                                +
      WHERE r.event_id = event_record.id                                                                    +
        AND r.closing_time IS NULL                                                                          +
-       AND rc.contestant_count > 1;                                                                        +
+       AND rc.contestant_count > 1                                                                         +
+       AND r.round_number > hcr.max_completed_round;                                                       +
                                                                                                            +
      -- Get champion data from highest round with a winner                                                 +
      WITH round_winners AS (                                                                               +

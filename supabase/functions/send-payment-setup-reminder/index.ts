@@ -64,6 +64,8 @@ To receive payments for your artwork sales, please complete your payment account
 
 This secure process takes just a few minutes and allows us to send payments directly to your bank account.
 
+THIS IS A NEW SYSTEM to get artists paid faster. If you go in and DON'T see a balance owing to you, please email artists@artbattle.com for assistance and please include your phone number you are logging in with and the city of your recent event.
+
 Questions? Reply to this email or contact support.
 
 Best regards,
@@ -122,7 +124,7 @@ Art Battle Team
 
     } else if (reminder_type === 'sms') {
       // Use existing SMS system via message_queue
-      const smsMessage = `Hi ${artist_name}! Complete your Art Battle payment setup to receive payments for your artwork sales: ${setupUrl}`;
+      const smsMessage = `Hi ${artist_name}! Complete your Art Battle payment setup to receive payments for your artwork sales: ${setupUrl} THIS IS A NEW SYSTEM to get artists paid faster. If you don't see a balance owing, email artists@artbattle.com with your phone number and recent event city.`;
 
       const { error: smsError } = await supabaseClient
         .from('message_queue')

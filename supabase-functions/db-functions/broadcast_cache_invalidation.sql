@@ -15,7 +15,7 @@
    v_cache_version BIGINT;                                                                                                              +
    v_artist_id UUID;                                                                                                                    +
  BEGIN                                                                                                                                  +
-   -- Add support for event_artists and round_contestants tables                                                                        +
+   -- Add support for payment_processing table                                                                                          +
    IF TG_TABLE_NAME = 'art' THEN                                                                                                        +
      SELECT e.eid, NEW.round, NEW.easel INTO v_event_eid, v_round, v_easel                                                              +
      FROM events e WHERE e.id = NEW.event_id;                                                                                           +
@@ -28,6 +28,11 @@
      FROM art a JOIN events e ON e.id = a.event_id                                                                                      +
      WHERE a.id = NEW.art_id;                                                                                                           +
    ELSIF TG_TABLE_NAME = 'art_media' THEN                                                                                               +
+     SELECT e.eid, a.round, a.easel INTO v_event_eid, v_round, v_easel                                                                  +
+     FROM art a JOIN events e ON e.id = a.event_id                                                                                      +
+     WHERE a.id = NEW.art_id;                                                                                                           +
+   ELSIF TG_TABLE_NAME = 'payment_processing' THEN                                                                                      +
+     -- NEW: Handle payment_processing table                                                                                            +
      SELECT e.eid, a.round, a.easel INTO v_event_eid, v_round, v_easel                                                                  +
      FROM art a JOIN events e ON e.id = a.event_id                                                                                      +
      WHERE a.id = NEW.art_id;                                                                                                           +
@@ -58,6 +63,9 @@
        PERFORM update_endpoint_cache_version('/live/event/' || v_event_eid || '-' || v_round || '-' || v_easel || '/bids', v_event_eid);+
      WHEN 'art_media' THEN                                                                                                              +
        PERFORM update_endpoint_cache_version('/live/event/' || v_event_eid || '/media', v_event_eid);                                   +
+     WHEN 'payment_processing' THEN                                                                                                     +
+       -- NEW: Update main event endpoint for payment status changes                                                                    +
+       PERFORM update_endpoint_cache_version('/live/event/' || v_event_eid, v_event_eid);                                               +
      WHEN 'event_artists' THEN                                                                                                          +
        PERFORM update_endpoint_cache_version('/live/event/' || v_event_eid, v_event_eid);                                               +
        PERFORM update_endpoint_cache_version('/live/event/' || v_event_eid || '/artists', v_event_eid);                                 +
@@ -68,7 +76,7 @@
                                                                                                                                         +
    v_cache_version := EXTRACT(EPOCH FROM NOW()) * 1000;                                                                                 +
                                                                                                                                         +
-   -- Build payload (FIXED: bid_placed only sends specific bid endpoint)                                                                +
+   -- Build payload (adding payment_processing case)                                                                                    +
    CASE TG_TABLE_NAME                                                                                                                   +
      WHEN 'art' THEN                                                                                                                    +
        v_notification_payload := jsonb_build_object(                                                                                    +
@@ -94,6 +102,20 @@
          'timestamp', EXTRACT(EPOCH FROM NOW()),                                                                                        +
          'cache_version', v_cache_version                                                                                               +
        );                                                                                                                               +
+     WHEN 'payment_processing' THEN                                                                                                     +
+       -- NEW: Handle payment status changes                                                                                            +
+       v_notification_payload := jsonb_build_object(                                                                                    +
+         'type', 'payment_status_changed',                                                                                              +
+         'event_eid', v_event_eid,                                                                                                      +
+         'endpoints', jsonb_build_array('/live/event/' || v_event_eid),                                                                 +
+         'art_id', NEW.art_id,                                                                                                          +
+         'payment_status', NEW.status,                                                                                                  +
+         'payment_amount', NEW.amount_with_tax,                                                                                         +
+         'round', v_round,                                                                                                              +
+         'easel', v_easel,                                                                                                              +
+         'timestamp', EXTRACT(EPOCH FROM NOW()),                                                                                        +
+         'cache_version', v_cache_version                                                                                               +
+       );                                                                                                                               +
      WHEN 'art_media' THEN                                                                                                              +
        v_notification_payload := jsonb_build_object(                                                                                    +
          'type', 'media_updated',                                                                                                       +
@@ -103,16 +125,24 @@
          'timestamp', EXTRACT(EPOCH FROM NOW()),                                                                                        +
          'cache_version', v_cache_version                                                                                               +
        );                                                                                                                               +
+     WHEN 'votes' THEN                                                                                                                  +
+       v_notification_payload := jsonb_build_object(                                                                                    +
+         'type', 'vote_cast',                                                                                                           +
+         'event_eid', v_event_eid,                                                                                                      +
+         'endpoints', jsonb_build_array('/live/event/' || v_event_eid),                                                                 +
+         'art_id', NEW.art_uuid,                                                                                                        +
+         'timestamp', EXTRACT(EPOCH FROM NOW()),                                                                                        +
+         'cache_version', v_cache_version                                                                                               +
+       );                                                                                                                               +
      WHEN 'event_artists' THEN                                                                                                          +
        v_notification_payload := jsonb_build_object(                                                                                    +
-         'type', 'artists_updated',                                                                                                     +
+         'type', 'event_artists_updated',                                                                                               +
          'event_eid', v_event_eid,                                                                                                      +
          'endpoints', jsonb_build_array(                                                                                                +
            '/live/event/' || v_event_eid,                                                                                               +
            '/live/event/' || v_event_eid || '/artists'                                                                                  +
          ),                                                                                                                             +
          'artist_id', v_artist_id,                                                                                                      +
-         'operation', TG_OP,                                                                                                            +
          'timestamp', EXTRACT(EPOCH FROM NOW()),                                                                                        +
          'cache_version', v_cache_version                                                                                               +
        );                                                                                                                               +
@@ -126,21 +156,25 @@
          ),                                                                                                                             +
          'artist_id', v_artist_id,                                                                                                      +
          'round', v_round,                                                                                                              +
-         'operation', TG_OP,                                                                                                            +
          'timestamp', EXTRACT(EPOCH FROM NOW()),                                                                                        +
          'cache_version', v_cache_version                                                                                               +
        );                                                                                                                               +
-     ELSE                                                                                                                               +
-       v_notification_payload := jsonb_build_object('type', 'unknown');                                                                 +
    END CASE;                                                                                                                            +
                                                                                                                                         +
-   -- Send realtime broadcast (now with SECURITY DEFINER privileges)                                                                    +
-   PERFORM realtime.send(                                                                                                               +
-     v_notification_payload,                                                                                                            +
-     'cache_invalidation',                                                                                                              +
-     'cache_invalidate_' || v_event_eid,                                                                                                +
-     false                                                                                                                              +
-   );                                                                                                                                   +
+   -- Send the realtime notification                                                                                                    +
+   BEGIN                                                                                                                                +
+     PERFORM realtime.send(                                                                                                             +
+       jsonb_build_object(                                                                                                              +
+         'channel', 'cache_invalidate_' || v_event_eid,                                                                                 +
+         'event', 'cache_invalidation',                                                                                                 +
+         'payload', v_notification_payload                                                                                              +
+       )                                                                                                                                +
+     );                                                                                                                                 +
+   EXCEPTION                                                                                                                            +
+     WHEN OTHERS THEN                                                                                                                   +
+       -- Log error but don't fail the trigger                                                                                          +
+       RAISE NOTICE 'Cache invalidation broadcast failed: %', SQLERRM;                                                                  +
+   END;                                                                                                                                 +
                                                                                                                                         +
    RETURN COALESCE(NEW, OLD);                                                                                                           +
  END;                                                                                                                                   +

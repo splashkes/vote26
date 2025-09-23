@@ -1,0 +1,32 @@
+                                                                                                     pg_get_functiondef                                                                                                     
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ CREATE OR REPLACE FUNCTION public.get_active_offers_for_artwork(p_art_id uuid)                                                                                                                                            +
+  RETURNS TABLE(offer_id uuid, offered_to_person_id uuid, person_name text, person_phone text, offered_amount numeric, bid_amount numeric, expires_at timestamp with time zone, minutes_remaining integer, admin_name text)+
+  LANGUAGE plpgsql                                                                                                                                                                                                         +
+  SECURITY DEFINER                                                                                                                                                                                                         +
+ AS $function$                                                                                                                                                                                                             +
+ BEGIN                                                                                                                                                                                                                     +
+   RETURN QUERY                                                                                                                                                                                                            +
+   SELECT                                                                                                                                                                                                                  +
+     ao.id as offer_id,                                                                                                                                                                                                    +
+     ao.offered_to_person_id,                                                                                                                                                                                              +
+     COALESCE(p.first_name || ' ' || p.last_name, p.name, 'Unknown') as person_name,                                                                                                                                       +
+     COALESCE(p.phone, p.phone_number, p.auth_phone) as person_phone,                                                                                                                                                      +
+     ao.offered_amount,                                                                                                                                                                                                    +
+     b.amount as bid_amount,                                                                                                                                                                                               +
+     ao.expires_at,                                                                                                                                                                                                        +
+     EXTRACT(EPOCH FROM (ao.expires_at - NOW()))/60 as minutes_remaining,                                                                                                                                                  +
+     COALESCE(u.email, 'Admin') as admin_name                                                                                                                                                                              +
+   FROM artwork_offers ao                                                                                                                                                                                                  +
+   JOIN people p ON ao.offered_to_person_id = p.id                                                                                                                                                                         +
+   JOIN bids b ON ao.bid_id = b.id                                                                                                                                                                                         +
+   LEFT JOIN auth.users u ON ao.offered_by_admin = u.id                                                                                                                                                                    +
+   WHERE ao.art_id = p_art_id                                                                                                                                                                                              +
+     AND ao.status = 'pending'                                                                                                                                                                                             +
+     AND ao.expires_at > NOW()                                                                                                                                                                                             +
+   ORDER BY ao.created_at ASC;                                                                                                                                                                                             +
+ END;                                                                                                                                                                                                                      +
+ $function$                                                                                                                                                                                                                +
+ 
+(1 row)
+

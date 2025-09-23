@@ -34,8 +34,11 @@ const PaymentDashboard = () => {
     pendingPayments: 0,
     paidAmount: 0,
     artworksSold: 0,
-    awaitingPayment: 0,
-    recentPayments: []
+    potentialEarnings: 0,
+    primaryCurrency: 'USD',
+    currencyBreakdown: {},
+    ledgerEntries: [],
+    summary: null
   });
   const [stripeAccount, setStripeAccount] = useState(null);
   const [globalPaymentAccount, setGlobalPaymentAccount] = useState(null);
@@ -60,140 +63,66 @@ const PaymentDashboard = () => {
 
   const loadPaymentData = async () => {
     try {
-      // Use the same edge function as other components for consistency
-      const { data, error } = await supabase.functions.invoke('artist-get-my-profile');
+      // Get the artist profile first
+      const { data: profileData, error: profileError } = await supabase.functions.invoke('artist-get-my-profile');
 
-      if (error) {
-        console.error('PaymentDashboard: Secure profile lookup failed:', error);
-        setError(`Failed to get your profile: ${error.message || error}`);
+      if (profileError) {
+        console.error('PaymentDashboard: Secure profile lookup failed:', profileError);
+        setError(`Failed to get your profile: ${profileError.message || profileError}`);
         return;
       }
 
-      let artistProfileIds = [];
-
-      if (data.profile) {
-        // Single authoritative profile
-        artistProfileIds = [data.profile.id];
-      } else if (data.candidateProfiles && data.candidateProfiles.length > 0) {
-        // Multiple profiles - include all for payment tracking
-        artistProfileIds = data.candidateProfiles.map(p => p.id);
-      } else {
-        // No profiles found
-        setError('No artist profiles found. Please create your profile first.');
+      const artistProfile = profileData.profile;
+      if (!artistProfile) {
+        setError('No artist profile found. Please create your profile first.');
         return;
       }
 
-      // Get artworks for ALL artist profiles
-      const { data: artworks, error: artworkError } = await supabase
-        .from('art')
-        .select('id')
-        .in('artist_id', artistProfileIds);
-      
-      if (artworkError) {
-        console.error('Artwork query error:', artworkError);
-        setError('Failed to load artwork data: ' + artworkError.message);
-        return;
-      }
-      
-      const artworkIds = artworks?.map(art => art.id) || [];
-      
-      // Get ACTUAL payment data - only from completed payments for this artist's artworks
-      const { data: paymentProcessingData, error: paymentError } = await supabase
-        .from('payment_processing')
-        .select(`
-          id,
-          art_id,
-          amount,
-          currency,
-          status,
-          completed_at,
-          art:art!payment_processing_art_id_fkey(
-            id,
-            art_code,
-            artist_id,
-            event:events(eid, name)
-          )
-        `)
-        .in('art_id', artworkIds)
-        .eq('status', 'completed');
+      // Get current session for authentication
+      const { data: sessionData } = await supabase.auth.getSession();
 
-      if (paymentError) {
-        console.error('Payment query error:', paymentError);
-        setError('Failed to load payment data: ' + paymentError.message);
+      // Load ledger data using the standardized function
+      const { data: ledgerData, error: ledgerError } = await supabase.functions.invoke('artist-account-ledger', {
+        body: {
+          artist_profile_id: artistProfile.id
+        },
+        headers: sessionData?.session?.access_token ? {
+          Authorization: `Bearer ${sessionData.session.access_token}`
+        } : {}
+      });
+
+      if (ledgerError) {
+        console.error('PaymentDashboard: Ledger data failed:', ledgerError);
+        setError(`Failed to load payment data: ${ledgerError.message || ledgerError}`);
         return;
       }
 
-      // Get artist payment records
-      const { data: artistPaymentsData, error: artistPaymentError } = await supabase
-        .from('artist_payments')
-        .select(`
-          id,
-          art_id,
-          gross_amount,
-          net_amount,
-          currency,
-          status,
-          paid_at,
-          art:art!artist_payments_art_id_fkey(
-            id,
-            art_code,
-            event:events(eid, name)
-          )
-        `)
-        .in('artist_profile_id', artistProfileIds);
+      const { ledger, summary } = ledgerData;
 
-      if (artistPaymentError) {
-        console.warn('Artist payments query failed:', artistPaymentError);
-      }
+      // Extract different types of entries
+      const artSales = ledger.filter(entry => entry.type === 'credit' && entry.category === 'Art Sale');
+      const payments = ledger.filter(entry => entry.type === 'debit' && (entry.category === 'Manual Payment' || entry.category === 'Stripe Payment'));
+      const potentialEarnings = ledger.filter(entry => entry.type === 'event' && entry.metadata?.lost_opportunity);
 
-      // Get all artworks to check for ones awaiting payment
-      const { data: allArtworkData, error: allArtworkError } = await supabase
-        .from('art')
-        .select('id, current_bid')
-        .in('artist_id', artistProfileIds);
-
-      // Calculate earnings from ACTUAL completed payments only
-      const completedPayments = paymentProcessingData || [];
-      const artistPayments = artistPaymentsData || [];
-      const allArtworks = allArtworkData || [];
-
-      // Count artworks with bids but no completed payment
-      const artworksWithPayments = new Set(completedPayments.map(p => p.art_id));
-      const awaitingPayment = allArtworks.filter(art => 
-        art.current_bid > 0 && !artworksWithPayments.has(art.id)
-      ).length;
-
-      // Total earnings = 50% of actually collected payments
-      const totalEarnings = completedPayments.reduce((sum, payment) => 
-        sum + (payment.amount * 0.5), 0
+      // Calculate summary stats
+      const totalEarnings = summary.total_credits || 0;
+      const totalPaid = summary.total_debits || 0;
+      const pendingPayments = summary.current_balance || 0;
+      const artworksSold = artSales.length;
+      const potentialEarningsAmount = potentialEarnings.reduce((sum, entry) =>
+        sum + (entry.metadata?.potential_artist_earnings || 0), 0
       );
 
-      // Paid amount = sum of artist payments that are actually paid
-      const paidAmount = artistPayments
-        .filter(payment => payment.status === 'paid' && payment.paid_at)
-        .reduce((sum, payment) => sum + (payment.net_amount || 0), 0);
-
-      // Pending = earnings from completed buyer payments minus what's already paid to artist
-      const pendingAmount = totalEarnings - paidAmount;
-
       setPaymentData({
-        totalEarnings: totalEarnings,
-        pendingPayments: Math.max(0, pendingAmount), // Never negative
-        paidAmount: paidAmount,
-        artworksSold: completedPayments.length,
-        awaitingPayment: awaitingPayment, // New field
-        recentPayments: artistPayments
-          .filter(payment => payment.paid_at)
-          .sort((a, b) => new Date(b.paid_at) - new Date(a.paid_at))
-          .slice(0, 5)
-          .map(payment => ({
-            art_code: payment.art?.art_code,
-            title: payment.art?.art_code,
-            event_title: payment.art?.event?.name || payment.art?.event?.eid,
-            artist_paid_at: payment.paid_at,
-            artist_net_amount: payment.net_amount,
-            currency: payment.currency
-          }))
+        totalEarnings,
+        pendingPayments: Math.max(0, pendingPayments),
+        paidAmount: totalPaid,
+        artworksSold,
+        potentialEarnings: potentialEarningsAmount,
+        primaryCurrency: summary.primary_currency || 'USD',
+        currencyBreakdown: summary.currency_breakdown || {},
+        ledgerEntries: ledger,
+        summary
       });
     } catch (err) {
       setError('Failed to load payment data: ' + err.message);
@@ -303,9 +232,9 @@ const PaymentDashboard = () => {
         );
       case 'restricted':
         return (
-          <Badge color="red" variant="soft">
+          <Badge color="orange" variant="soft">
             <ExclamationTriangleIcon width="12" height="12" />
-            Restricted
+            Setup Incomplete
           </Badge>
         );
       default:
@@ -383,7 +312,7 @@ const PaymentDashboard = () => {
               <Text size="2" color="gray">Total Earnings</Text>
             </Flex>
             <Text size="6" weight="bold" color="green">
-              {formatAmount(paymentData.totalEarnings)}
+              {formatAmount(paymentData.totalEarnings, paymentData.primaryCurrency)}
             </Text>
             <Text size="1" color="gray">
               From {paymentData.artworksSold} artwork{paymentData.artworksSold !== 1 ? 's' : ''} sold
@@ -391,21 +320,20 @@ const PaymentDashboard = () => {
           </Flex>
         </Card>
 
-        {/* HIDDEN: Pending Payments Card */}
-        {/* <Card size="3">
+        <Card size="3">
           <Flex direction="column" gap="2">
             <Flex align="center" gap="2">
               <ClockIcon width="16" height="16" />
-              <Text size="2" color="gray">Pending Payments</Text>
+              <Text size="2" color="gray">Outstanding Balance</Text>
             </Flex>
             <Text size="6" weight="bold" color="orange">
-              {formatAmount(paymentData.pendingPayments)}
+              {formatAmount(paymentData.pendingPayments, paymentData.primaryCurrency)}
             </Text>
             <Text size="1" color="gray">
-              Waiting to be transferred
+              Available for withdrawal
             </Text>
           </Flex>
-        </Card> */}
+        </Card>
 
         <Card size="3">
           <Flex direction="column" gap="2">
@@ -414,7 +342,7 @@ const PaymentDashboard = () => {
               <Text size="2" color="gray">Paid Out</Text>
             </Flex>
             <Text size="6" weight="bold">
-              {formatAmount(paymentData.paidAmount)}
+              {formatAmount(paymentData.paidAmount, paymentData.primaryCurrency)}
             </Text>
             <Text size="1" color="gray">
               Transferred to your account
@@ -422,21 +350,20 @@ const PaymentDashboard = () => {
           </Flex>
         </Card>
 
-        {/* HIDDEN: Awaiting Buyer Payment Card */}
-        {/* <Card size="3">
+        <Card size="3">
           <Flex direction="column" gap="2">
             <Flex align="center" gap="2">
               <ExclamationTriangleIcon width="16" height="16" />
-              <Text size="2" color="gray">Awaiting Buyer Payment</Text>
+              <Text size="2" color="gray">Potential Lost Earnings</Text>
             </Flex>
-            <Text size="6" weight="bold" color="orange">
-              {paymentData.awaitingPayment || 0}
+            <Text size="6" weight="bold" color="amber">
+              {formatAmount(paymentData.potentialEarnings, paymentData.primaryCurrency)}
             </Text>
             <Text size="1" color="gray">
-              Artwork{(paymentData.awaitingPayment || 0) !== 1 ? 's' : ''} sold but not paid
+              From unpaid sales
             </Text>
           </Flex>
-        </Card> */}
+        </Card>
       </Grid>
 
       {/* Payment System Switcher */}
@@ -504,28 +431,62 @@ const PaymentDashboard = () => {
         />
       )}
 
-      {/* Recent Payments */}
-      {paymentData.recentPayments.length > 0 && (
+      {/* Payment Ledger */}
+      {paymentData.ledgerEntries.length > 0 && (
         <Card size="3">
           <Flex direction="column" gap="4">
-            <Heading size="4">Recent Payments</Heading>
+            <Heading size="4">Payment History</Heading>
             <Separator />
             <Flex direction="column" gap="3">
-              {paymentData.recentPayments.map((payment, index) => (
-                <Flex key={index} justify="between" align="center">
-                  <Flex direction="column" gap="1">
-                    <Text size="2" weight="medium">
-                      {payment.art_code || payment.title}
-                    </Text>
+              {paymentData.ledgerEntries.slice(0, 10).map((entry, index) => (
+                <Flex key={entry.id || index} justify="between" align="start">
+                  <Flex direction="column" gap="1" style={{ flex: 1 }}>
+                    <Flex align="center" gap="2">
+                      <Badge
+                        color={entry.type === 'credit' ? 'green' : entry.type === 'debit' ? 'blue' : 'gray'}
+                        variant="soft"
+                        size="1"
+                      >
+                        {entry.category}
+                      </Badge>
+                      <Text size="2" weight="medium">
+                        {entry.description}
+                      </Text>
+                    </Flex>
                     <Text size="1" color="gray">
-                      {payment.event_title} • {formatDate(payment.artist_paid_at)}
+                      {entry.art_info?.event_name && `${entry.art_info.event_name} • `}
+                      {formatDate(entry.date)}
                     </Text>
+                    {entry.metadata?.lost_opportunity && (
+                      <Text size="1" color="amber">
+                        Potential earnings: {formatAmount(entry.metadata.potential_artist_earnings, entry.currency)}
+                      </Text>
+                    )}
                   </Flex>
-                  <Text size="2" weight="bold" color="green">
-                    {formatAmount(payment.artist_net_amount, payment.currency)}
-                  </Text>
+                  <Flex direction="column" align="end" gap="1">
+                    {entry.amount !== undefined && (
+                      <Text
+                        size="3"
+                        weight="bold"
+                        color={entry.type === 'credit' ? 'green' : entry.type === 'debit' ? 'red' : 'gray'}
+                      >
+                        {entry.type === 'credit' ? '+' : entry.type === 'debit' ? '-' : ''}
+                        {formatAmount(entry.amount, entry.currency)}
+                      </Text>
+                    )}
+                    {entry.balance_after !== undefined && (
+                      <Text size="1" color="gray">
+                        Balance: {formatAmount(entry.balance_after, entry.currency)}
+                      </Text>
+                    )}
+                  </Flex>
                 </Flex>
               ))}
+              {paymentData.ledgerEntries.length > 10 && (
+                <Text size="1" color="gray" style={{ textAlign: 'center' }}>
+                  Showing 10 most recent entries of {paymentData.ledgerEntries.length} total
+                </Text>
+              )}
             </Flex>
           </Flex>
         </Card>

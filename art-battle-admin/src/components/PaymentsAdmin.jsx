@@ -16,7 +16,8 @@ import {
   TextArea,
   Select,
   Separator,
-  ScrollArea
+  ScrollArea,
+  Tabs
 } from '@radix-ui/themes';
 import {
   UpdateIcon,
@@ -642,14 +643,43 @@ const PaymentsAdmin = () => {
         )}
       </Card>
 
-      <Card>
-        <Heading size="4" mb="3">
-          Recent Event Artists ({searchFilter ? `${filteredArtistBalances.owing.length + filteredArtistBalances.zero.length} of ${artists.length}` : artists.length})
-        </Heading>
-        <Text size="2" color="gray" mb="4">
-          Artists who participated in events within the last 90 days, grouped by account balance
-          {searchFilter && <Text as="span" color="blue"> • Filtered by: "{searchFilter}"</Text>}
-        </Text>
+      {/* Summary Stats */}
+      {enhancedData?.summary && (
+        <Card mb="4">
+          <Flex gap="6" wrap="wrap">
+            <Box>
+              <Text size="3" weight="bold" color="blue">{enhancedData.summary.total_artists}</Text>
+              <Text size="2" color="gray" style={{ display: 'block' }}>Total Artists</Text>
+            </Box>
+            <Box>
+              <Text size="3" weight="bold" color="green">{enhancedData.summary.artists_owing_count}</Text>
+              <Text size="2" color="gray" style={{ display: 'block' }}>With Balance Owing</Text>
+            </Box>
+            <Box>
+              <Text size="3" weight="bold" color="gray">{enhancedData.summary.artists_zero_count}</Text>
+              <Text size="2" color="gray" style={{ display: 'block' }}>Zero Balance</Text>
+            </Box>
+            <Box>
+              <Text size="3" weight="bold" color="purple">{enhancedData.summary.recent_payments_count}</Text>
+              <Text size="2" color="gray" style={{ display: 'block' }}>Recent Payments (30d)</Text>
+            </Box>
+          </Flex>
+        </Card>
+      )}
+
+      {/* Tabbed Interface */}
+      <Tabs.Root defaultValue="owing">
+        <Tabs.List>
+          <Tabs.Trigger value="owing">
+            Artists Owing ({filteredArtistBalances.owing.length})
+          </Tabs.Trigger>
+          <Tabs.Trigger value="zero">
+            Zero Balance ({filteredArtistBalances.zero.length})
+          </Tabs.Trigger>
+          <Tabs.Trigger value="payments">
+            Recent Payments ({filteredRecentPayments.length})
+          </Tabs.Trigger>
+        </Tabs.List>
 
         {loadingBalances ? (
           <Skeleton height="200px" />

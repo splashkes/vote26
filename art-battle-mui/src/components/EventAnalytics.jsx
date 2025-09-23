@@ -21,6 +21,7 @@ import {
   Gavel,
   TrendingUp,
   Refresh,
+  PersonAdd,
 } from '@mui/icons-material'
 import { LineChart } from '@mui/x-charts/LineChart'
 import { PieChart } from '@mui/x-charts/PieChart'
@@ -104,38 +105,46 @@ function EventAnalytics() {
     // Convert time_bucket to Date objects for proper time scale
     const timeData = analytics.time_series.map(point => new Date(point.time_bucket))
 
+    // Get latest values for legend labels
+    const latestPoint = analytics.time_series[analytics.time_series.length - 1]
+    const latestQR = latestPoint?.qr_scans_cumulative || 0
+    const latestVotes = latestPoint?.votes_cumulative || 0
+    const latestBids = latestPoint?.bids_cumulative || 0
+    // Use summary value for auction since it's more current than timeline
+    const latestValue = analytics.summary.total_bid_amount || 0
+
     const series = [
       {
         data: analytics.time_series.map(point => point.qr_scans_cumulative),
-        label: 'QR Scans',
-        color: '#90caf9',
+        label: `QR Scans (${latestQR})`,
+        color: '#1976d2', // Blue to match QR scanner icon
         curve: 'linear',
         showMark: false,
-        yAxisKey: 'left',
+        yAxisId: 'leftAxisId',
       },
       {
         data: analytics.time_series.map(point => point.votes_cumulative),
-        label: 'Votes',
-        color: '#ff9800',
+        label: `Votes (${latestVotes})`,
+        color: '#f57c00', // Orange/yellow to match vote icon
         curve: 'linear',
         showMark: false,
-        yAxisKey: 'left',
+        yAxisId: 'leftAxisId',
       },
       {
         data: analytics.time_series.map(point => point.bids_cumulative),
-        label: 'Bids',
-        color: '#f44336',
+        label: `Bids (${latestBids})`,
+        color: '#d32f2f', // Red to match bid icon
         curve: 'linear',
         showMark: false,
-        yAxisKey: 'left',
+        yAxisId: 'leftAxisId',
       },
       {
         data: analytics.time_series.map(point => point.auction_value_cumulative),
-        label: 'Auction Value',
-        color: '#4caf50',
+        label: `Auction Value ($${Math.round(latestValue)})`,
+        color: '#388e3c', // Green for auction value
         curve: 'linear',
         showMark: false,
-        yAxisKey: 'right',
+        yAxisId: 'rightAxisId',
       },
     ]
 
@@ -187,15 +196,6 @@ function EventAnalytics() {
     ]
   }
 
-  const prepareEngagementData = () => {
-    if (!analytics?.guest_composition) return []
-
-    return analytics.guest_composition.map(item => ({
-      category: item.guest_category.replace('QR Scan', 'In-Person'),
-      'Vote Rate': item.vote_rate,
-      'Bid Rate': item.bid_rate,
-    }))
-  }
 
   if (loading && !analytics) {
     return (
@@ -245,34 +245,48 @@ function EventAnalytics() {
   const status = getEventStatus()
   const { timeData, series: timeSeriesSeries } = prepareTimeSeriesData()
   const guestCompositionData = prepareGuestCompositionData()
-  const engagementData = prepareEngagementData()
 
   return (
-    <Box>
+    <Box sx={{ p: { xs: 1, sm: 2 }, maxWidth: '100vw', overflow: 'hidden' }}>
       {/* Header */}
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+      <Box sx={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        mb: { xs: 1.5, sm: 2 },
+        flexDirection: { xs: 'column', sm: 'row' },
+        gap: { xs: 1, sm: 0 }
+      }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', width: { xs: '100%', sm: 'auto' } }}>
           <Button
             startIcon={<ArrowBack />}
             onClick={() => navigate('/')}
-            sx={{ mr: 2 }}
+            sx={{ mr: { xs: 1, sm: 2 } }}
+            size="small"
           >
             Back
           </Button>
-          <Box>
-            <Typography variant="h4" component="h1">
+          <Box sx={{ flex: 1 }}>
+            <Typography variant={{ xs: 'h5', sm: 'h4' }} component="h1" sx={{ fontSize: { xs: '1.5rem', sm: '2rem' } }}>
               {analytics.event_info.name}
             </Typography>
-            <Typography variant="subtitle1" color="text.secondary">
+            <Typography variant="subtitle1" color="text.secondary" sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}>
               {analytics.event_info.eid} • {analytics.event_info.venue}
             </Typography>
           </Box>
         </Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        <Box sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: { xs: 1, sm: 2 },
+          width: { xs: '100%', sm: 'auto' },
+          justifyContent: { xs: 'space-between', sm: 'flex-end' }
+        }}>
           <Chip
             label={status.label}
             color={status.color}
             variant={status.color === 'success' ? 'filled' : 'outlined'}
+            size="small"
           />
           <Button
             startIcon={<Refresh />}
@@ -287,16 +301,16 @@ function EventAnalytics() {
 
       {/* Last Update */}
       {lastUpdate && (
-        <Typography variant="caption" color="text.secondary" sx={{ mb: 3, display: 'block' }}>
+        <Typography variant="caption" color="text.secondary" sx={{ mb: { xs: 1, sm: 2 }, display: 'block' }}>
           Last updated: {lastUpdate.toLocaleTimeString()}
         </Typography>
       )}
 
       {/* Summary Cards */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={3}>
+      <Grid container spacing={{ xs: 1, sm: 2, md: 3 }} sx={{ mb: { xs: 2, sm: 3 } }}>
+        <Grid item xs={6} sm={6} md={2}>
           <Card>
-            <CardContent sx={{ textAlign: 'center' }}>
+            <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, sm: 2 } }}>
               <People sx={{ fontSize: 40, color: 'primary.main', mb: 1 }} />
               <Typography variant="h4" sx={{ fontWeight: 600 }}>
                 {analytics.summary.total_participants}
@@ -308,10 +322,10 @@ function EventAnalytics() {
           </Card>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={6} sm={6} md={2}>
           <Card>
-            <CardContent sx={{ textAlign: 'center' }}>
-              <QrCodeScanner sx={{ fontSize: 40, color: 'success.main', mb: 1 }} />
+            <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, sm: 2 } }}>
+              <QrCodeScanner sx={{ fontSize: 40, color: '#1976d2', mb: 1 }} />
               <Typography variant="h4" sx={{ fontWeight: 600 }}>
                 {analytics.summary.total_qr_scans}
               </Typography>
@@ -322,10 +336,10 @@ function EventAnalytics() {
           </Card>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={6} sm={6} md={2}>
           <Card>
-            <CardContent sx={{ textAlign: 'center' }}>
-              <HowToVote sx={{ fontSize: 40, color: 'warning.main', mb: 1 }} />
+            <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, sm: 2 } }}>
+              <HowToVote sx={{ fontSize: 40, color: '#f57c00', mb: 1 }} />
               <Typography variant="h4" sx={{ fontWeight: 600 }}>
                 {analytics.summary.total_votes}
               </Typography>
@@ -336,15 +350,43 @@ function EventAnalytics() {
           </Card>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={6} sm={6} md={2}>
           <Card>
-            <CardContent sx={{ textAlign: 'center' }}>
-              <Gavel sx={{ fontSize: 40, color: 'error.main', mb: 1 }} />
+            <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, sm: 2 } }}>
+              <Gavel sx={{ fontSize: 40, color: '#d32f2f', mb: 1 }} />
               <Typography variant="h4" sx={{ fontWeight: 600 }}>
-                {analytics.summary.total_bids} / ${analytics.summary.total_bid_amount?.toLocaleString() || '0'}
+                {analytics.summary.total_bids}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Auction Bids / Total
+                Auction Bids
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={6} sm={6} md={2}>
+          <Card>
+            <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, sm: 2 } }}>
+              <TrendingUp sx={{ fontSize: 40, color: '#388e3c', mb: 1 }} />
+              <Typography variant="h4" sx={{ fontWeight: 600 }}>
+                ${analytics.summary.total_bid_amount?.toLocaleString() || '0'}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Auction Value
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={6} sm={6} md={2}>
+          <Card>
+            <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, sm: 2 } }}>
+              <PersonAdd sx={{ fontSize: 40, color: '#7b1fa2', mb: 1 }} />
+              <Typography variant="h4" sx={{ fontWeight: 600 }}>
+                {Math.round(analytics.summary.new_guest_percentage || 0)}%
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                New Guests
               </Typography>
             </CardContent>
           </Card>
@@ -352,11 +394,11 @@ function EventAnalytics() {
       </Grid>
 
       {/* Charts Row */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
+      <Grid container spacing={{ xs: 1, sm: 2, md: 3 }} sx={{ mb: { xs: 2, sm: 3 } }}>
         {/* Time Series Chart */}
         <Grid item xs={12} lg={8}>
           <Card>
-            <CardContent>
+            <CardContent sx={{ p: { xs: 1.5, sm: 2 } }}>
               <Typography variant="h6" gutterBottom>
                 Activity Timeline
               </Typography>
@@ -373,20 +415,35 @@ function EventAnalytics() {
                     ]}
                     yAxis={[
                       {
-                        id: 'left',
+                        id: 'leftAxisId',
                         scaleType: 'linear',
+                        position: 'left',
+                        min: 0
                       },
                       {
-                        id: 'right',
+                        id: 'rightAxisId',
                         scaleType: 'linear',
                         position: 'right',
-                        valueFormatter: (value) => `$${value}`,
-                      },
+                        min: 0,
+                        valueFormatter: (value) => `$${Math.round(value)}`
+                      }
                     ]}
                     series={timeSeriesSeries}
                     height={360}
-                    margin={{ left: 60, right: 80, top: 20, bottom: 60 }}
+                    margin={{ left: 50, right: 90, top: 40, bottom: 40 }}
                     grid={{ horizontal: true, vertical: true }}
+                    slotProps={{
+                      legend: {
+                        direction: 'row',
+                        position: { vertical: 'top', horizontal: 'middle' },
+                        padding: 0,
+                        labelStyle: { fontSize: 12 },
+                        itemMarkWidth: 10,
+                        itemMarkHeight: 10,
+                        markGap: 6,
+                        itemGap: 12,
+                      },
+                    }}
                     sx={{
                       '& .MuiLineElement-root': {
                         strokeWidth: 3,
@@ -410,34 +467,71 @@ function EventAnalytics() {
         {/* Guest Composition Stacked Bar Chart */}
         <Grid item xs={12} lg={4}>
           <Card>
-            <CardContent>
+            <CardContent sx={{ p: { xs: 1.5, sm: 2 } }}>
               <Typography variant="h6" gutterBottom>
                 Guest Composition Comparison
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: { xs: 1, sm: 2 } }}>
                 Current vs City Average vs Global Average
               </Typography>
-              <Box sx={{ height: 350, mt: 2 }}>
+              <Box sx={{ height: 420, mt: 2 }}>
                 {guestCompositionData.length > 0 ? (
                   <BarChart
                     dataset={guestCompositionData}
                     xAxis={[{ scaleType: 'band', dataKey: 'name' }]}
                     yAxis={[{ max: 100 }]}
                     series={[
-                      { dataKey: 'QR Scan (New)', label: 'QR Scan (New)', color: '#1976d2', stack: 'composition' },
-                      { dataKey: 'QR Scan (Return)', label: 'QR Scan (Return)', color: '#42a5f5', stack: 'composition' },
-                      { dataKey: 'Online (New)', label: 'Online (New)', color: '#f57c00', stack: 'composition' },
-                      { dataKey: 'Online (Return)', label: 'Online (Return)', color: '#ffb74d', stack: 'composition' },
+                      {
+                        dataKey: 'QR Scan (New)',
+                        label: 'QR Scan (New)',
+                        color: '#1976d2',
+                        stack: 'composition'
+                      },
+                      {
+                        dataKey: 'QR Scan (Return)',
+                        label: 'QR Scan (Return)',
+                        color: '#42a5f5',
+                        stack: 'composition'
+                      },
+                      {
+                        dataKey: 'Online (New)',
+                        label: 'Online (New)',
+                        color: '#f57c00',
+                        stack: 'composition'
+                      },
+                      {
+                        dataKey: 'Online (Return)',
+                        label: 'Online (Return)',
+                        color: '#ffb74d',
+                        stack: 'composition'
+                      },
                     ]}
-                    height={300}
-                    margin={{ left: 50, right: 20, top: 40, bottom: 80 }}
+                    height={380}
+                    margin={{ left: 50, right: 20, top: 40, bottom: 60 }}
                     slotProps={{
                       legend: {
-                        direction: 'column',
-                        position: { vertical: 'bottom', horizontal: 'middle' },
+                        direction: 'row',
+                        position: { vertical: 'top', horizontal: 'middle' },
                         padding: 0,
+                        labelStyle: { fontSize: 10 },
+                        itemMarkWidth: 8,
+                        itemMarkHeight: 8,
+                        markGap: 4,
+                        itemGap: 8,
+                      },
+                      barLabel: {
+                        style: {
+                          fontSize: '11px',
+                          fontWeight: 'bold',
+                          fill: 'white',
+                          textAnchor: 'middle',
+                        },
+                        formatter: (value, context) => {
+                          return value >= 5 ? `${Math.round(value * 10) / 10}%` : '';
+                        },
                       },
                     }}
+                    barLabel="value"
                   />
                 ) : (
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'text.secondary' }}>
@@ -451,138 +545,6 @@ function EventAnalytics() {
         </Grid>
       </Grid>
 
-      {/* Engagement Rates and Recent Activity */}
-      <Grid container spacing={3}>
-        {/* Engagement Rates */}
-        <Grid item xs={12} md={8}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Engagement Rates by Guest Type
-              </Typography>
-              <Box sx={{ height: 300, mt: 2 }}>
-                {engagementData.length > 0 && (engagementData.some(d => d['Vote Rate'] > 0 || d['Bid Rate'] > 0)) ? (
-                  <BarChart
-                    xAxis={[{ scaleType: 'band', dataKey: 'category' }]}
-                    series={[
-                      { dataKey: 'Vote Rate', label: 'Vote Rate (%)', color: '#ff9800' },
-                      { dataKey: 'Bid Rate', label: 'Bid Rate (%)', color: '#f44336' },
-                    ]}
-                    dataset={engagementData}
-                    height={260}
-                    margin={{ left: 60, right: 50, top: 20, bottom: 60 }}
-                  />
-                ) : (
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'text.secondary' }}>
-                    <TrendingUp sx={{ mr: 1 }} />
-                    <Typography>Engagement data will appear when voting/bidding begins</Typography>
-                  </Box>
-                )}
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Recent Activity */}
-        <Grid item xs={12} md={4}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Recent Activity
-              </Typography>
-
-              <Box sx={{ mt: 2 }}>
-                <Paper elevation={0} sx={{
-                  p: 3,
-                  mb: 2,
-                  background: 'linear-gradient(135deg, rgba(144, 202, 249, 0.1) 0%, rgba(244, 143, 177, 0.1) 100%)',
-                  border: '1px solid rgba(144, 202, 249, 0.2)',
-                  borderRadius: 2,
-                }}>
-                  <Typography variant="subtitle2" color="primary.main" gutterBottom sx={{ fontWeight: 600 }}>
-                    Last 10 Minutes
-                  </Typography>
-                  <Grid container spacing={2}>
-                    <Grid item xs={4}>
-                      <Box sx={{ textAlign: 'center' }}>
-                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                          {analytics.recent_activity.last_10_minutes.qr_scans}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          QR Scans
-                        </Typography>
-                      </Box>
-                    </Grid>
-                    <Grid item xs={4}>
-                      <Box sx={{ textAlign: 'center' }}>
-                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                          {analytics.recent_activity.last_10_minutes.votes}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Votes
-                        </Typography>
-                      </Box>
-                    </Grid>
-                    <Grid item xs={4}>
-                      <Box sx={{ textAlign: 'center' }}>
-                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                          {analytics.recent_activity.last_10_minutes.bids}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Bids
-                        </Typography>
-                      </Box>
-                    </Grid>
-                  </Grid>
-                </Paper>
-
-                <Paper elevation={0} sx={{
-                  p: 3,
-                  background: 'linear-gradient(135deg, rgba(255, 152, 0, 0.1) 0%, rgba(244, 67, 54, 0.1) 100%)',
-                  border: '1px solid rgba(255, 152, 0, 0.2)',
-                  borderRadius: 2,
-                }}>
-                  <Typography variant="subtitle2" color="warning.main" gutterBottom sx={{ fontWeight: 600 }}>
-                    Last Hour
-                  </Typography>
-                  <Grid container spacing={2}>
-                    <Grid item xs={4}>
-                      <Box sx={{ textAlign: 'center' }}>
-                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                          {analytics.recent_activity.last_hour.qr_scans}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          QR Scans
-                        </Typography>
-                      </Box>
-                    </Grid>
-                    <Grid item xs={4}>
-                      <Box sx={{ textAlign: 'center' }}>
-                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                          {analytics.recent_activity.last_hour.votes}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Votes
-                        </Typography>
-                      </Box>
-                    </Grid>
-                    <Grid item xs={4}>
-                      <Box sx={{ textAlign: 'center' }}>
-                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                          {analytics.recent_activity.last_hour.bids}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Bids
-                        </Typography>
-                      </Box>
-                    </Grid>
-                  </Grid>
-                </Paper>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
     </Box>
   )
 }

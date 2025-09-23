@@ -1,0 +1,56 @@
+-- Fix the invitation summary function to handle correct data types
+
+CREATE OR REPLACE FUNCTION get_latest_invitations_summary()
+RETURNS TABLE (
+    artist_profile_id UUID,
+    latest_invitation_sent_at TIMESTAMP WITH TIME ZONE,
+    latest_invitation_method VARCHAR(20),
+    latest_invitation_status VARCHAR(20),
+    invitation_count BIGINT,  -- Changed from INTEGER to BIGINT
+    time_since_latest TEXT
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+BEGIN
+    RETURN QUERY
+    WITH latest_invitations AS (
+        SELECT
+            psi.artist_profile_id,
+            psi.sent_at,
+            psi.invitation_method,
+            psi.status,
+            ROW_NUMBER() OVER (PARTITION BY psi.artist_profile_id ORDER BY psi.sent_at DESC) as rn
+        FROM payment_setup_invitations psi
+    ),
+    invitation_counts AS (
+        SELECT
+            psi.artist_profile_id,
+            COUNT(*) as total_invitations
+        FROM payment_setup_invitations psi
+        GROUP BY psi.artist_profile_id
+    )
+    SELECT
+        li.artist_profile_id,
+        li.sent_at as latest_invitation_sent_at,
+        li.invitation_method as latest_invitation_method,
+        li.status as latest_invitation_status,
+        ic.total_invitations as invitation_count,
+        CASE
+            WHEN AGE(NOW(), li.sent_at) < INTERVAL '1 hour' THEN
+                EXTRACT(epoch FROM AGE(NOW(), li.sent_at))::INTEGER / 60 || 'm ago'
+            WHEN AGE(NOW(), li.sent_at) < INTERVAL '1 day' THEN
+                EXTRACT(epoch FROM AGE(NOW(), li.sent_at))::INTEGER / 3600 || 'h ago'
+            WHEN AGE(NOW(), li.sent_at) < INTERVAL '7 days' THEN
+                EXTRACT(epoch FROM AGE(NOW(), li.sent_at))::INTEGER / 86400 || 'd ago'
+            ELSE
+                TO_CHAR(li.sent_at, 'MM/DD/YYYY')
+        END as time_since_latest
+    FROM latest_invitations li
+    JOIN invitation_counts ic ON li.artist_profile_id = ic.artist_profile_id
+    WHERE li.rn = 1;
+END;
+$function$;
+
+GRANT EXECUTE ON FUNCTION get_latest_invitations_summary() TO authenticated;

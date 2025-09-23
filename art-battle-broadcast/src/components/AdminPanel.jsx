@@ -27,6 +27,180 @@ import { getArtworkImageUrls } from '../lib/imageHelpers';
 import { injectFlashStyles, applyFlashClass } from '../utils/realtimeFlash';
 import { useVoteAnalytics } from '../hooks/useVoteAnalytics';
 
+// PDF Preview Component
+const PDFPreviewPanel = ({ eid }) => {
+  const [pdfUrl, setPdfUrl] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [copySuccess, setCopySuccess] = useState(false);
+
+  // Generate the PDF URL
+  const paperworkUrl = `https://paperwork-service-4nama.ondigitalocean.app/api/v1/event-pdf/${eid}`;
+
+  const loadPdf = async () => {
+    if (!eid) {
+      setError('No event ID available');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Test if the PDF URL is accessible
+      const response = await fetch(paperworkUrl, { method: 'HEAD' });
+      if (response.ok) {
+        setPdfUrl(paperworkUrl);
+      } else {
+        setError(`PDF not available (HTTP ${response.status})`);
+      }
+    } catch (err) {
+      setError('Failed to connect to PDF service');
+      console.error('PDF load error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(paperworkUrl);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (eid) {
+      loadPdf();
+    }
+  }, [eid]);
+
+  return (
+    <Flex direction="column" gap="4">
+      <Card size="2">
+        <Heading size="3" mb="3">Event PDF Document</Heading>
+
+        <Flex direction="column" gap="3">
+          <Flex align="center" gap="2">
+            <Text size="2" color="gray">Event ID:</Text>
+            <Badge variant="soft">{eid || 'Not available'}</Badge>
+          </Flex>
+
+          <Flex align="center" gap="2">
+            <Button
+              size="2"
+              onClick={copyToClipboard}
+              variant={copySuccess ? "soft" : "outline"}
+              color={copySuccess ? "green" : "blue"}
+            >
+              {copySuccess ? "Copied!" : "Copy PDF Link"}
+            </Button>
+            <Button size="2" onClick={loadPdf} disabled={loading}>
+              {loading ? "Loading..." : "Refresh PDF"}
+            </Button>
+          </Flex>
+
+          <Box>
+            <Text size="2" color="gray">PDF URL:</Text>
+            <Text size="1" style={{
+              fontFamily: 'monospace',
+              wordBreak: 'break-all',
+              background: 'var(--gray-3)',
+              padding: '8px',
+              borderRadius: '4px',
+              display: 'block',
+              marginTop: '4px'
+            }}>
+              {paperworkUrl}
+            </Text>
+          </Box>
+
+          {error && (
+            <Callout.Root color="red">
+              <Callout.Icon>
+                <ExclamationTriangleIcon />
+              </Callout.Icon>
+              <Callout.Text>{error}</Callout.Text>
+            </Callout.Root>
+          )}
+
+          {loading && (
+            <Flex align="center" gap="2">
+              <Spinner size="1" />
+              <Text size="2" color="gray">Loading PDF...</Text>
+            </Flex>
+          )}
+
+          {pdfUrl && !loading && (
+            <Card size="1" style={{ border: '1px solid var(--gray-6)' }}>
+              <Heading size="2" mb="2">PDF Preview (Thumbnail)</Heading>
+              <Flex direction="column" gap="2">
+                <Box style={{
+                  width: '400px',
+                  height: '310px', // 8.5:11 ratio scaled down (approx. landscape 8.5x11)
+                  border: '1px solid var(--gray-6)',
+                  borderRadius: '4px',
+                  overflow: 'hidden',
+                  background: 'var(--gray-2)',
+                  position: 'relative'
+                }}>
+                  <iframe
+                    src={pdfUrl}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      border: 'none'
+                    }}
+                    title={`Event PDF for ${eid}`}
+                    onError={() => setError('PDF preview failed to load')}
+                  />
+                  {/* Fallback message overlay */}
+                  <Box style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    textAlign: 'center',
+                    pointerEvents: 'none',
+                    color: 'var(--gray-10)',
+                    fontSize: '12px'
+                  }}>
+                    <Text size="1">PDF preview may not load in some browsers</Text>
+                  </Box>
+                </Box>
+                <Flex gap="2">
+                  <Button
+                    size="2"
+                    variant="outline"
+                    onClick={() => window.open(pdfUrl, '_blank')}
+                  >
+                    Open Full PDF in New Tab
+                  </Button>
+                  <Button
+                    size="2"
+                    variant="soft"
+                    onClick={() => {
+                      const link = document.createElement('a');
+                      link.href = pdfUrl;
+                      link.download = `event-${eid}.pdf`;
+                      link.click();
+                    }}
+                  >
+                    Download PDF
+                  </Button>
+                </Flex>
+              </Flex>
+            </Card>
+          )}
+        </Flex>
+      </Card>
+    </Flex>
+  );
+};
+
 const AdminPanel = ({ 
   eventId,
   eid,
@@ -88,6 +262,19 @@ const AdminPanel = ({
   // Offer functionality state
   const [showOfferConfirm, setShowOfferConfirm] = useState(null); // { bid, bidder }
   const [offerLoading, setOfferLoading] = useState(false);
+
+  // Payment reminder functionality state
+  const [paymentReminderLoading, setPaymentReminderLoading] = useState(false);
+
+  // History modals state
+  const [showReminderHistory, setShowReminderHistory] = useState(null); // art_id when open
+  const [showOfferHistory, setShowOfferHistory] = useState(null); // art_id when open
+  const [reminderHistory, setReminderHistory] = useState(null);
+  const [offerHistory, setOfferHistory] = useState(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [lastReminderSent, setLastReminderSent] = useState({}); // artId -> timestamp
+  const [lastOfferCreated, setLastOfferCreated] = useState({}); // artId -> timestamp
+  const [activeOffers, setActiveOffers] = useState({}); // artId -> { expires_at, bidder_name, bidder_id }
 
   // Helper function to show temporary messages
   const showAdminMessage = (type, text) => {
@@ -377,6 +564,17 @@ const AdminPanel = ({
     // DISABLED - Realtime subscriptions cause page reload issue
     // TODO: Investigate why realtime subscriptions crash the AdminPanel
   }, [eventId, adminMode]);
+
+  // Real-time timer updates for button text
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Force re-render to update button text with current timestamps
+      // This will trigger getButtonText to recalculate time differences
+      setLastReminderSent(prev => ({ ...prev }));
+    }, 1000); // Update every second
+
+    return () => clearInterval(interval);
+  }, []);
 
   const fetchEventData = async () => {
     try {
@@ -740,117 +938,145 @@ const AdminPanel = ({
                   const timeDisplay = getTimeDisplay();
                   
                   return (
-                    <Card 
-                      key={artwork.id} 
+                    <Card
+                      key={artwork.id}
                       size="2"
                       style={{ cursor: 'pointer' }}
                       onClick={() => setSelectedAuctionItem(artwork)}
                       data-admin-bid={artwork.id}
                     >
-                      <Flex justify="between" align="center">
-                        <Box>
-                          <Text size="3" weight="medium" style={{ display: 'block' }}>
-                            {artwork.artist_profiles?.name || 'Unknown Artist'}
-                          </Text>
-                          <Text size="2" color="gray" style={{ display: 'block', marginTop: '4px' }}>
-                            Round {artwork.round}, Easel {artwork.easel}
-                          </Text>
-                          {bidder && (
-                            <Box mt="1">
-                              <Text size="2" weight="medium" style={{ display: 'block' }}>
-                                {bidder.first_name ? 
-                                  `${bidder.first_name} ${bidder.last_name ? bidder.last_name.charAt(0) : ''}` : 
-                                  'Anonymous'}
+                      <Flex direction="column" gap="2">
+                        {/* Top row: Thumbnail + Artist Name + Bid Amount */}
+                        <Flex justify="between" align="center" gap="3">
+                          <Flex align="center" gap="3" style={{ minWidth: 0, flex: 1 }}>
+                            {/* Artwork Thumbnail */}
+                            {artwork.media && artwork.media.length > 0 && (() => {
+                              const imageUrls = getArtworkImageUrls(artwork, artwork.media[0]?.media_files);
+                              const thumbnailUrl = imageUrls.compressed || imageUrls.original;
+
+                              return thumbnailUrl ? (
+                                <Box style={{
+                                  width: '50px',
+                                  height: '50px',
+                                  overflow: 'hidden',
+                                  borderRadius: '6px',
+                                  flexShrink: 0,
+                                  background: 'var(--gray-3)'
+                                }}>
+                                  <img
+                                    src={thumbnailUrl}
+                                    alt={`Artwork by ${artwork.artist_profiles?.name || 'Unknown Artist'}`}
+                                    style={{
+                                      width: '100%',
+                                      height: '100%',
+                                      objectFit: 'cover',
+                                      display: 'block'
+                                    }}
+                                    onError={(e) => {
+                                      e.target.style.display = 'none';
+                                    }}
+                                  />
+                                </Box>
+                              ) : null;
+                            })()}
+
+                            {/* Artist name and artwork info */}
+                            <Box style={{ minWidth: 0, flex: 1 }}>
+                              <Text size="3" weight="medium" style={{ display: 'block' }}>
+                                {artwork.artist_profiles?.name || 'Unknown Artist'}
                               </Text>
+                              <Text size="2" color="gray" style={{ display: 'block', marginTop: '2px' }}>
+                                {artwork.events?.eid || 'EID'}-{artwork.round}-{artwork.easel}
+                              </Text>
+                            </Box>
+                          </Flex>
+                          {/* Right side: Bid amount and payment status */}
+                          <Box style={{ textAlign: 'right', flexShrink: 0 }}>
+                            <Text size="4" weight="bold" style={{ display: 'block' }}>
+                              ${Math.round(currentBid)}
+                            </Text>
+                            {bidInfo && (
+                              <Text size="1" color="gray" style={{ display: 'block', marginTop: '2px' }}>
+                                {bidInfo.bidCount} bid{bidInfo.bidCount !== 1 ? 's' : ''}
+                              </Text>
+                            )}
+                            {/* Payment status badges */}
+                            {status === 'paid' && (
+                              <Badge
+                                color={(() => {
+                                  // Stripe payments get green
+                                  if (artwork.payment_statuses?.code === 'stripe_paid' ||
+                                      (artwork.status === 'paid' && !artwork.buyer_pay_recent_status_id)) {
+                                    return 'green';
+                                  }
+                                  // Admin payments get blue
+                                  else {
+                                    return 'blue';
+                                  }
+                                })()}
+                                size="1"
+                                style={{ marginTop: '4px' }}
+                              >
+                                {(() => {
+                                  // Check if this is a Stripe payment first
+                                  if (artwork.payment_statuses?.code === 'stripe_paid') {
+                                    return '✓ STRIPE';
+                                  }
+                                  // For Stripe payments where status='paid' but no payment_statuses data
+                                  else if (artwork.status === 'paid' && !artwork.buyer_pay_recent_status_id) {
+                                    return '✓ STRIPE';
+                                  }
+                                  // Then check for admin payments with payment logs
+                                  else if (artwork.payment_statuses?.code === 'admin_paid') {
+                                    const adminPayment = artwork.payment_logs?.find(log => log.payment_type === 'admin_marked');
+                                    if (adminPayment) {
+                                      const paymentMethod = adminPayment.payment_method?.toUpperCase() || 'CASH';
+                                      return `✓ ${paymentMethod}`;
+                                    } else {
+                                      return '✓ ADMIN';
+                                    }
+                                  }
+                                  else {
+                                    return '✓ PAID';
+                                  }
+                                })()}
+                              </Badge>
+                            )}
+                            {status === 'sold' && !artwork.buyer_pay_recent_status_id && (
+                              <Badge color="orange" size="1" style={{ marginTop: '4px' }}>
+                                UNPAID
+                              </Badge>
+                            )}
+                            {timeDisplay && (
+                              <Text size="1" color={status === 'active' ? 'red' : 'gray'} style={{ display: 'block', marginTop: '2px' }}>
+                                {timeDisplay}
+                              </Text>
+                            )}
+                          </Box>
+                        </Flex>
+
+                        {/* Bottom row: Bidder information */}
+                        {bidder && (
+                          <Box style={{ borderTop: '1px solid var(--gray-6)', paddingTop: '8px' }}>
+                            <Text size="2" weight="medium" style={{ display: 'block' }}>
+                              Bidder: {bidder.first_name ?
+                                `${bidder.first_name} ${bidder.last_name ? bidder.last_name.charAt(0) : ''}` :
+                                'Anonymous'}
+                            </Text>
+                            <Flex gap="4" style={{ marginTop: '4px' }}>
                               {bidder.email && (
-                                <Text size="1" color="gray" style={{ display: 'block', marginTop: '2px' }}>
-                                  {bidder.email}
+                                <Text size="1" color="gray">
+                                  📧 {bidder.email}
                                 </Text>
                               )}
                               {bidder.phone && (
-                                <Text size="1" color="gray" style={{ display: 'block', marginTop: '2px' }}>
-                                  {bidder.phone}
+                                <Text size="1" color="gray">
+                                  📱 {bidder.phone}
                                 </Text>
                               )}
-                            </Box>
-                          )}
-                        </Box>
-                        <Box style={{ textAlign: 'right' }}>
-                          <Text size="4" weight="bold" style={{ display: 'block' }}>
-                            ${Math.round(currentBid)}
-                          </Text>
-                          {bidInfo && (
-                            <Text size="1" color="gray" style={{ display: 'block', marginTop: '4px' }}>
-                              {bidInfo.bidCount} bid{bidInfo.bidCount !== 1 ? 's' : ''}
-                            </Text>
-                          )}
-                          {/* Payment status badges */}
-                          {status === 'paid' && (
-                            <Badge 
-                              color={(() => {
-                                // Stripe payments get green
-                                if (artwork.payment_statuses?.code === 'stripe_paid' || 
-                                    (artwork.status === 'paid' && !artwork.buyer_pay_recent_status_id)) {
-                                  return 'green';
-                                }
-                                // Admin payments get blue
-                                else {
-                                  return 'blue';
-                                }
-                              })()} 
-                              size="1" 
-                              style={{ marginTop: '4px' }}
-                            >
-                              {(() => {
-                                // Debug logging
-                                if (artwork.art_code === 'AB3019-2-5') {
-                                  console.log('Badge logic for AB3019-2-5:', {
-                                    status: artwork.status,
-                                    buyer_pay_recent_status_id: artwork.buyer_pay_recent_status_id,
-                                    payment_statuses_code: artwork.payment_statuses?.code,
-                                    payment_logs_length: artwork.payment_logs?.length
-                                  });
-                                }
-                                
-                                // Check if this is a Stripe payment first
-                                if (artwork.payment_statuses?.code === 'stripe_paid') {
-                                  return '✓ PAID - STRIPE';
-                                } 
-                                // For Stripe payments where status='paid' but no payment_statuses data
-                                else if (artwork.status === 'paid' && !artwork.buyer_pay_recent_status_id) {
-                                  return '✓ PAID - STRIPE';
-                                }
-                                // Then check for admin payments with payment logs
-                                else if (artwork.payment_statuses?.code === 'admin_paid') {
-                                  const adminPayment = artwork.payment_logs?.find(log => log.payment_type === 'admin_marked');
-                                  if (adminPayment) {
-                                    const paymentMethod = adminPayment.payment_method?.toUpperCase() || 'CASH';
-                                    const adminPhone = adminPayment.admin_phone || 'ADMIN';
-                                    const amountText = adminPayment.actual_amount_collected ? 
-                                      ` $${adminPayment.actual_amount_collected}` : '';
-                                    return `✓ PAID - ${paymentMethod} by ${adminPhone}${amountText}`;
-                                  } else {
-                                    // Admin payment but no log entry (legacy data)
-                                    return '✓ PAID - ADMIN MARKED';
-                                  }
-                                } 
-                                else {
-                                  return '✓ PAID';
-                                }
-                              })()}
-                            </Badge>
-                          )}
-                          {status === 'sold' && !artwork.buyer_pay_recent_status_id && (
-                            <Badge color="orange" size="1" style={{ marginTop: '4px' }}>
-                              AWAITING PAYMENT
-                            </Badge>
-                          )}
-                          {timeDisplay && (
-                            <Text size="1" color={status === 'active' ? 'red' : 'gray'}>
-                              {timeDisplay}
-                            </Text>
-                          )}
-                        </Box>
+                            </Flex>
+                          </Box>
+                        )}
                       </Flex>
                     </Card>
                   );
@@ -1273,7 +1499,9 @@ const AdminPanel = ({
 
     setOfferLoading(true);
     try {
-      const response = await fetch('https://db.artb.art/functions/v1/admin-offer-to-bidder', {
+      let response;
+      try {
+        response = await fetch('https://db.artb.art/functions/v1/admin-offer-to-bidder', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1286,15 +1514,62 @@ const AdminPanel = ({
           admin_note: `Offer created via admin panel for ${showOfferConfirm.bidder.first_name || 'bidder'}`
         })
       });
+      } catch (networkError) {
+        if (networkError.name === 'TypeError' && networkError.message.includes('fetch')) {
+          throw new Error('Network error - check connection');
+        } else if (networkError.name === 'AbortError') {
+          throw new Error('Request timed out');
+        } else {
+          throw new Error('Network error');
+        }
+      }
 
-      const result = await response.json();
+      let result;
+      try {
+        result = await response.json();
+      } catch (parseError) {
+        throw new Error('Invalid server response');
+      }
 
       if (!response.ok || !result.success) {
-        throw new Error(result.error || 'Failed to create offer');
+        // Handle specific error cases
+        if (response.status === 409 && result.error?.includes('already has an active offer')) {
+          const existingOffer = result.existing_offer;
+          const expiresAt = new Date(existingOffer.expires_at);
+          const timeRemaining = Math.max(0, Math.ceil((expiresAt.getTime() - Date.now()) / (1000 * 60)));
+          throw new Error(`Active offer exists (expires in ${timeRemaining}m)`);
+        } else if (response.status === 400 && result.error?.includes('already the current winner')) {
+          throw new Error('Bidder is already the current winner');
+        } else if (response.status === 401) {
+          throw new Error('Authentication failed - please refresh and try again');
+        } else if (response.status === 403) {
+          throw new Error('Access denied - insufficient permissions');
+        } else if (response.status === 404) {
+          throw new Error('Artwork or bid not found');
+        } else {
+          throw new Error(result.error || `Server error (${response.status})`);
+        }
       }
 
       // Success
       showAdminMessage('success', `Offer created for ${result.offer.bidder_name} at $${result.offer.offered_amount}`);
+
+      // Track the active offer for countdown display
+      setActiveOffers(prev => ({
+        ...prev,
+        [selectedAuctionItem.id]: {
+          expires_at: result.offer.expires_at,
+          bidder_name: result.offer.bidder_name,
+          bidder_id: result.offer.offered_to_person_id
+        }
+      }));
+
+      // Update last offer created timestamp for other bidders
+      setLastOfferCreated(prev => ({
+        ...prev,
+        [selectedAuctionItem.id]: new Date().toISOString()
+      }));
+
       setShowOfferConfirm(null);
 
       // Optionally refresh auction data to show any updates
@@ -1307,6 +1582,283 @@ const AdminPanel = ({
       setOfferLoading(false);
     }
   };
+
+  // Send payment reminder function
+  const handleSendPaymentReminder = async (artId, bidder) => {
+    setPaymentReminderLoading(true);
+    try {
+      let response;
+      try {
+        response = await fetch('https://db.artb.art/functions/v1/admin-send-payment-reminder', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcWRrdWJneXF3cHl2Zmx0bnJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ1MDM5NjIsImV4cCI6MjA1MDA3OTk2Mn0.dBR_kWN0YCKkUrBKlMGJJkXO31g4CmMg4WZD6U-JMG0'
+        },
+        body: JSON.stringify({
+          art_id: artId,
+          admin_note: `Payment reminder sent via admin panel to ${bidder.first_name || bidder.name || 'bidder'}`
+        })
+      });
+      } catch (networkError) {
+        if (networkError.name === 'TypeError' && networkError.message.includes('fetch')) {
+          throw new Error('Network error - check connection');
+        } else if (networkError.name === 'AbortError') {
+          throw new Error('Request timed out');
+        } else {
+          throw new Error('Network error');
+        }
+      }
+
+      let result;
+      try {
+        result = await response.json();
+      } catch (parseError) {
+        throw new Error('Invalid server response');
+      }
+
+      if (!response.ok || !result.success) {
+        // Handle specific error cases
+        if (response.status === 400 && result.error?.includes('No winner found')) {
+          throw new Error('No winning bidder found');
+        } else if (response.status === 400 && result.error?.includes('already paid')) {
+          throw new Error('Already paid - no reminder needed');
+        } else if (response.status === 400 && result.error?.includes('No phone number')) {
+          throw new Error('No phone number on file - cannot send SMS');
+        } else if (response.status === 401) {
+          throw new Error('Authentication failed - please refresh and try again');
+        } else if (response.status === 403) {
+          throw new Error('Access denied - insufficient permissions');
+        } else if (response.status === 404) {
+          throw new Error('Artwork not found');
+        } else if (response.status === 500 && result.error?.includes('Failed to send SMS')) {
+          throw new Error('SMS service error - please try again');
+        } else {
+          throw new Error(result.error || `Server error (${response.status})`);
+        }
+      }
+
+      // Success
+      const bidderName = bidder.first_name && bidder.last_name
+        ? `${bidder.first_name} ${bidder.last_name}`
+        : bidder.name || bidder.nickname || 'bidder';
+
+      showAdminMessage('success', `Payment reminder sent to ${bidderName}`);
+      // Update last reminder sent timestamp
+      setLastReminderSent(prev => ({
+        ...prev,
+        [artId]: new Date().toISOString()
+      }));
+
+    } catch (error) {
+      console.error('Error sending payment reminder:', error);
+      showAdminMessage('error', 'Failed to send payment reminder: ' + error.message);
+    } finally {
+      setPaymentReminderLoading(false);
+    }
+  };
+
+  // History functions
+  const fetchReminderHistory = async (artId) => {
+    setHistoryLoading(true);
+    try {
+      let response;
+      try {
+        response = await fetch('https://db.artb.art/functions/v1/admin-get-payment-reminder-history', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcWRrdWJneXF3cHl2Zmx0bnJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ1MDM5NjIsImV4cCI6MjA1MDA3OTk2Mn0.dBR_kWN0YCKkUrBKlMGJJkXO31g4CmMg4WZD6U-JMG0'
+          },
+          body: JSON.stringify({ art_id: artId })
+        });
+      } catch (networkError) {
+        if (networkError.name === 'TypeError' && networkError.message.includes('fetch')) {
+          throw new Error('Network error - please check your internet connection and try again');
+        } else {
+          throw new Error('Network error: ' + networkError.message);
+        }
+      }
+
+      let result;
+      try {
+        result = await response.json();
+      } catch (parseError) {
+        throw new Error('Server returned invalid response - please try again');
+      }
+
+      if (!response.ok || !result.success) {
+        if (response.status === 401) {
+          throw new Error('Authentication failed - please refresh and try again');
+        } else if (response.status === 403) {
+          throw new Error('Access denied - insufficient permissions');
+        } else if (response.status === 404) {
+          throw new Error('Artwork not found');
+        } else {
+          throw new Error(result.error || `Server error (${response.status})`);
+        }
+      }
+
+      setReminderHistory(result);
+
+      // Update last reminder sent timestamp
+      if (result.last_reminder_sent) {
+        setLastReminderSent(prev => ({
+          ...prev,
+          [artId]: result.last_reminder_sent
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching reminder history:', error);
+      showAdminMessage('error', 'Failed to load reminder history: ' + error.message);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const fetchOfferHistory = async (artId) => {
+    setHistoryLoading(true);
+    try {
+      let response;
+      try {
+        response = await fetch('https://db.artb.art/functions/v1/admin-get-offer-history', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcWRrdWJneXF3cHl2Zmx0bnJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ1MDM5NjIsImV4cCI6MjA1MDA3OTk2Mn0.dBR_kWN0YCKkUrBKlMGJJkXO31g4CmMg4WZD6U-JMG0'
+          },
+          body: JSON.stringify({ art_id: artId })
+        });
+      } catch (networkError) {
+        if (networkError.name === 'TypeError' && networkError.message.includes('fetch')) {
+          throw new Error('Network error - please check your internet connection and try again');
+        } else {
+          throw new Error('Network error: ' + networkError.message);
+        }
+      }
+
+      let result;
+      try {
+        result = await response.json();
+      } catch (parseError) {
+        throw new Error('Server returned invalid response - please try again');
+      }
+
+      if (!response.ok || !result.success) {
+        if (response.status === 401) {
+          throw new Error('Authentication failed - please refresh the page and try again');
+        } else if (response.status === 403) {
+          throw new Error('Access denied - you do not have permission to view this history');
+        } else if (response.status === 404) {
+          throw new Error('Artwork not found');
+        } else {
+          throw new Error(result.error || `Server error (${response.status}): Failed to fetch offer history`);
+        }
+      }
+
+      setOfferHistory(result);
+
+      // Update last offer created timestamp
+      if (result.last_offer_created) {
+        setLastOfferCreated(prev => ({
+          ...prev,
+          [artId]: result.last_offer_created
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching offer history:', error);
+      showAdminMessage('error', 'Failed to load offer history: ' + error.message);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const openReminderHistory = async (artId) => {
+    setShowReminderHistory(artId);
+    await fetchReminderHistory(artId);
+  };
+
+  const openOfferHistory = async (artId) => {
+    setShowOfferHistory(artId);
+    await fetchOfferHistory(artId);
+  };
+
+  const formatTimestamp = (timestamp) => {
+    if (!timestamp) return '';
+    return new Date(timestamp).toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
+
+  // Helper functions for button status text
+  function getTimeAgo(timestamp) {
+    if (!timestamp) return '';
+    const now = Date.now();
+    const diff = now - new Date(timestamp).getTime();
+    const minutes = Math.floor(diff / (1000 * 60));
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (days > 0) return `${days}d ago`;
+    if (hours > 0) return `${hours}h ago`;
+    if (minutes > 0) return `${minutes}m ago`;
+    return 'just now';
+  }
+
+  function getTimeRemaining(timestamp) {
+    if (!timestamp) return '';
+    const now = Date.now();
+    const diff = new Date(timestamp).getTime() - now;
+
+    if (diff <= 0) return 'expired';
+
+    const minutes = Math.floor(diff / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+    if (minutes > 0) {
+      return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+    return `${seconds}s`;
+  }
+
+  function getButtonText(type, artId, bidderId = null) {
+    if (type === 'reminder') {
+      const lastSent = lastReminderSent[artId];
+      if (lastSent) {
+        return `Sent ${getTimeAgo(lastSent)}`;
+      }
+      return 'Send Payment Reminder';
+    }
+
+    if (type === 'offer') {
+      const activeOffer = activeOffers[artId];
+      // Only show countdown if the offer is for this specific bidder
+      if (activeOffer && activeOffer.bidder_id === bidderId && new Date(activeOffer.expires_at).getTime() > Date.now()) {
+        const remaining = getTimeRemaining(activeOffer.expires_at);
+        if (remaining === 'expired') {
+          return 'Create Offer';
+        }
+        return `Expires ${remaining}`;
+      }
+
+      // For other bidders, show "Sent X ago" if an offer was recently created
+      const lastSent = lastOfferCreated[artId];
+      if (lastSent) {
+        return `Offer sent ${getTimeAgo(lastSent)}`;
+      }
+
+      return 'Offer to This Bidder';
+    }
+
+    return '';
+  }
 
   // Timer functions
   const startRoundTimer = async (roundId, roundNumber) => {
@@ -1378,6 +1930,7 @@ const AdminPanel = ({
           <Tabs.Trigger value="voting" style={{ color: 'var(--purple-11)' }}>Voting</Tabs.Trigger>
           <Tabs.Trigger value="auction">Auction</Tabs.Trigger>
           <Tabs.Trigger value="qr">QR Codes</Tabs.Trigger>
+          <Tabs.Trigger value="pdf">PDF</Tabs.Trigger>
           {adminLevel === 'super' && (
             <Tabs.Trigger value="event">Event</Tabs.Trigger>
           )}
@@ -2323,6 +2876,11 @@ const AdminPanel = ({
           </Tabs.Content>
         )}
 
+        {/* PDF Tab */}
+        <Tabs.Content value="pdf">
+          <PDFPreviewPanel eid={eid} />
+        </Tabs.Content>
+
         {/* QR Codes Tab */}
         <Tabs.Content value="qr">
           <QRAdminPanel eventId={eventId} />
@@ -3140,7 +3698,7 @@ const AdminPanel = ({
 
       {/* Auction Item Detail Dialog */}
       <Dialog.Root open={!!selectedAuctionItem} onOpenChange={() => setSelectedAuctionItem(null)}>
-        <Dialog.Content style={{ maxWidth: '90vw', width: 550 }}>
+        <Dialog.Content style={{ maxWidth: '90vw', width: 650 }}>
           <Dialog.Title>
             <Flex justify="between" align="center">
               <Text>Artwork Details</Text>
@@ -3154,21 +3712,26 @@ const AdminPanel = ({
           {selectedAuctionItem && (
             <Box>
               <Flex direction="column" gap="3">
-                {/* Artwork Image */}
+                {/* Artwork Image - Larger Display */}
                 {selectedAuctionItem.media && selectedAuctionItem.media.length > 0 && (() => {
                   const imageUrls = getArtworkImageUrls(selectedAuctionItem, selectedAuctionItem.media[0]?.media_files);
-                  const imageUrl = imageUrls.compressed || imageUrls.original || '/placeholder.jpg';
-                  
+                  const imageUrl = imageUrls.original || imageUrls.compressed || '/placeholder.jpg';
+
                   return (
-                    <Box style={{ width: '100%', maxHeight: '400px', overflow: 'hidden', borderRadius: '8px' }}>
-                      <img 
+                    <Box style={{ width: '100%', maxHeight: '500px', overflow: 'hidden', borderRadius: '8px', marginBottom: '1rem' }}>
+                      <img
                         src={imageUrl}
                         alt={`Artwork by ${selectedAuctionItem.artist_profiles?.name || 'Unknown Artist'}`}
                         style={{
                           width: '100%',
                           height: 'auto',
-                          maxHeight: '400px',
-                          objectFit: 'contain'
+                          maxHeight: '500px',
+                          objectFit: 'contain',
+                          display: 'block',
+                          borderRadius: '8px'
+                        }}
+                        onError={(e) => {
+                          e.target.src = '/placeholder.jpg';
                         }}
                       />
                     </Box>
@@ -3580,59 +4143,127 @@ const AdminPanel = ({
                     <Heading size="3" mb="3">Bid History</Heading>
                     <Flex direction="column" gap="2">
                       {auctionBids[selectedAuctionItem.id].history.slice(0, 10).map((bid, index) => (
-                        <Flex key={index} justify="between" align="center">
-                          <Box>
-                            <Text size="2" style={{ display: 'block' }}>
-                              {(adminLevel === 'producer' || adminLevel === 'super') ? (
-                                // Producer+ sees full names from any available field
-                                bid.bidder?.first_name ?
-                                  `${bid.bidder.first_name} ${bid.bidder.last_name || ''}` :
-                                  bid.bidder?.name || bid.bidder?.nickname || bid.bidder?.email?.split('@')[0] || bid.bidder?.phone_number || bid.bidder?.auth_phone || bid.bidder?.phone || 'Unknown Bidder'
-                              ) : (
-                                // Other admin levels see abbreviated names
-                                bid.bidder?.first_name ?
-                                  `${bid.bidder.first_name} ${bid.bidder.last_name ? bid.bidder.last_name.charAt(0) + '.' : ''}` :
-                                  bid.bidder?.nickname || 'Anonymous'
-                              )}
-                            </Text>
-                            {bid.bidder?.email && (
-                              <Text size="1" color="gray" style={{ display: 'block', marginTop: '2px' }}>
-                                {bid.bidder.email}
+                        <Card key={index} size="1" style={{ padding: '12px' }}>
+                          <Flex direction="column" gap="2">
+                            {/* Top row: Bidder name and bid amount */}
+                            <Flex justify="between" align="center">
+                              <Box style={{ minWidth: 0, flex: 1 }}>
+                                <Text size="2" weight="medium" style={{ display: 'block' }}>
+                                  {(adminLevel === 'producer' || adminLevel === 'super') ? (
+                                    // Producer+ sees full names from any available field
+                                    bid.bidder?.first_name ?
+                                      `${bid.bidder.first_name} ${bid.bidder.last_name || ''}` :
+                                      bid.bidder?.name || bid.bidder?.nickname || bid.bidder?.email?.split('@')[0] || bid.bidder?.phone_number || bid.bidder?.auth_phone || bid.bidder?.phone || 'Unknown Bidder'
+                                  ) : (
+                                    // Other admin levels see abbreviated names
+                                    bid.bidder?.first_name ?
+                                      `${bid.bidder.first_name} ${bid.bidder.last_name ? bid.bidder.last_name.charAt(0) + '.' : ''}` :
+                                      bid.bidder?.nickname || 'Anonymous'
+                                  )}
+                                </Text>
+                                <Text size="1" color="gray">
+                                  {new Date(bid.created_at).toLocaleString()}
+                                </Text>
+                              </Box>
+                              <Box style={{ textAlign: 'right', flexShrink: 0 }}>
+                                <Text size="3" weight="bold" style={{ display: 'block' }}>
+                                  ${Math.round(bid.amount)}
+                                </Text>
+                                {index === 0 && (
+                                  <Badge size="1" color="green" style={{ marginTop: '2px' }}>
+                                    WINNING
+                                  </Badge>
+                                )}
+                              </Box>
+                            </Flex>
+
+                            {/* Contact info row (only for producer+ levels) */}
+                            {(adminLevel === 'producer' || adminLevel === 'super') && (bid.bidder?.email || bid.bidder?.phone) && (
+                              <Flex gap="4" style={{ flexWrap: 'wrap' }}>
+                                {bid.bidder?.email && (
+                                  <Text size="1" color="gray">
+                                    📧 {bid.bidder.email}
+                                  </Text>
+                                )}
+                                {bid.bidder?.phone && (
+                                  <Text size="1" color="gray">
+                                    📱 {bid.bidder.phone}
+                                  </Text>
+                                )}
+                              </Flex>
+                            )}
+
+                            {/* Action buttons row */}
+                            {((index !== 0 && ['sold', 'closed'].includes(selectedAuctionItem.status) && !selectedAuctionItem.buyer_pay_recent_status_id && selectedAuctionItem.status !== 'paid') ||
+                              (index === 0 && ['sold', 'closed'].includes(selectedAuctionItem.status) && !selectedAuctionItem.buyer_pay_recent_status_id && selectedAuctionItem.status !== 'paid')) && (
+                              <Flex gap="2" style={{ flexWrap: 'wrap' }}>
+                                {/* Offer button for non-winning bidders */}
+                                {index !== 0 && (
+                                  <>
+                                    <Button
+                                      size="1"
+                                      variant="soft"
+                                      color="orange"
+                                      onClick={() => setShowOfferConfirm({
+                                        bid: { id: bid.id, amount: bid.amount },
+                                        bidder: bid.bidder
+                                      })}
+                                      style={{ fontSize: '11px', padding: '6px 12px' }}
+                                    >
+                                      {getButtonText('offer', selectedAuctionItem.id, bid.bidder?.id)}
+                                    </Button>
+                                    <Button
+                                      size="1"
+                                      variant="ghost"
+                                      color="gray"
+                                      onClick={() => openOfferHistory(selectedAuctionItem.id)}
+                                      style={{ fontSize: '10px', padding: '4px 8px' }}
+                                    >
+                                      Offer History
+                                    </Button>
+                                  </>
+                                )}
+
+                                {/* Payment reminder button for winning bidder */}
+                                {index === 0 && (
+                                  <>
+                                    <Button
+                                      size="1"
+                                      variant="soft"
+                                      color="blue"
+                                      onClick={() => handleSendPaymentReminder(selectedAuctionItem.id, bid.bidder)}
+                                      style={{ fontSize: '11px', padding: '6px 12px' }}
+                                      disabled={paymentReminderLoading}
+                                    >
+                                      {paymentReminderLoading ? 'Sending...' : getButtonText('reminder', selectedAuctionItem.id)}
+                                    </Button>
+                                    <Button
+                                      size="1"
+                                      variant="ghost"
+                                      color="gray"
+                                      onClick={() => openReminderHistory(selectedAuctionItem.id)}
+                                      style={{ fontSize: '10px', padding: '4px 8px' }}
+                                    >
+                                      Reminder History
+                                    </Button>
+                                  </>
+                                )}
+                              </Flex>
+                            )}
+
+                            {/* Status messages below buttons */}
+                            {index !== 0 && lastOfferCreated[selectedAuctionItem.id] && (
+                              <Text size="1" color="gray" style={{ fontSize: '10px' }}>
+                                Last offer: {formatTimestamp(lastOfferCreated[selectedAuctionItem.id])}
                               </Text>
                             )}
-                            {bid.bidder?.phone && (
-                              <Text size="1" color="gray" style={{ display: 'block', marginTop: '2px' }}>
-                                {bid.bidder.phone}
+                            {index === 0 && lastReminderSent[selectedAuctionItem.id] && (
+                              <Text size="1" color="gray" style={{ fontSize: '10px' }}>
+                                Last reminder: {formatTimestamp(lastReminderSent[selectedAuctionItem.id])}
                               </Text>
-                            )}
-                            <Text size="1" color="gray">
-                              {new Date(bid.created_at).toLocaleString()}
-                            </Text>
-                          </Box>
-                          <Flex align="center" gap="2">
-                            <Text size="2" weight="medium">
-                              ${Math.round(bid.amount)}
-                            </Text>
-                            {/* Only show offer button if not the highest bidder and artwork is sold/closed */}
-                            {index !== 0 &&
-                             ['sold', 'closed'].includes(selectedAuctionItem.status) &&
-                             !selectedAuctionItem.buyer_pay_recent_status_id &&
-                             selectedAuctionItem.status !== 'paid' && (
-                              <Button
-                                size="1"
-                                variant="soft"
-                                color="orange"
-                                onClick={() => setShowOfferConfirm({
-                                  bid: { id: bid.id, amount: bid.amount },
-                                  bidder: bid.bidder
-                                })}
-                                style={{ fontSize: '11px', padding: '4px 8px' }}
-                              >
-                                Offer to This Bidder
-                              </Button>
                             )}
                           </Flex>
-                        </Flex>
+                        </Card>
                       ))}
                     </Flex>
                   </Card>
@@ -4083,6 +4714,195 @@ const AdminPanel = ({
           </Flex>
         </AlertDialog.Content>
       </AlertDialog.Root>
+
+      {/* Payment Reminder History Modal */}
+      <Dialog.Root open={!!showReminderHistory} onOpenChange={(open) => !open && setShowReminderHistory(null)}>
+        <Dialog.Content style={{ maxWidth: 800, maxHeight: '80vh', overflow: 'auto' }}>
+          <Dialog.Title>Payment Reminder History</Dialog.Title>
+          <Dialog.Description size="2" mb="4">
+            {reminderHistory && (
+              <Text>
+                {reminderHistory.artwork.art_code} • {reminderHistory.artwork.event_eid}
+              </Text>
+            )}
+          </Dialog.Description>
+
+          {historyLoading ? (
+            <Flex align="center" justify="center" gap="2" py="6">
+              <Spinner size="2" />
+              <Text>Loading history...</Text>
+            </Flex>
+          ) : reminderHistory ? (
+            <Flex direction="column" gap="4">
+              {reminderHistory.total_reminders === 0 ? (
+                <Card size="3">
+                  <Flex align="center" justify="center" py="4">
+                    <Text color="gray">No payment reminders sent yet</Text>
+                  </Flex>
+                </Card>
+              ) : (
+                <Flex direction="column" gap="3">
+                  <Text size="2" weight="medium">
+                    {reminderHistory.total_reminders} reminder{reminderHistory.total_reminders !== 1 ? 's' : ''} sent
+                  </Text>
+
+                  {reminderHistory.reminders.map((reminder) => (
+                    <Card key={reminder.id} size="2">
+                      <Flex direction="column" gap="2">
+                        <Flex justify="between" align="start">
+                          <Flex direction="column" gap="1">
+                            <Text size="2" weight="medium">
+                              Sent to: {reminder.people.first_name && reminder.people.last_name
+                                ? `${reminder.people.first_name} ${reminder.people.last_name}`
+                                : reminder.people.name || reminder.people.nickname || 'Unknown'}
+                            </Text>
+                            <Text size="1" color="gray">
+                              {reminder.phone_number} • {formatTimestamp(reminder.created_at)}
+                            </Text>
+                          </Flex>
+                          <Badge
+                            color={reminder.sms_status === 'delivered' ? 'green' :
+                                  reminder.sms_status === 'failed' ? 'red' : 'blue'}
+                            variant="soft"
+                          >
+                            {reminder.sms_status || 'sent'}
+                          </Badge>
+                        </Flex>
+
+                        <Box style={{ backgroundColor: 'var(--gray-2)', padding: '8px', borderRadius: '6px' }}>
+                          <Text size="1" style={{ fontFamily: 'monospace' }}>
+                            {reminder.message_content}
+                          </Text>
+                        </Box>
+
+                        {reminder.admin_note && (
+                          <Text size="1" color="gray" style={{ fontStyle: 'italic' }}>
+                            Note: {reminder.admin_note}
+                          </Text>
+                        )}
+                      </Flex>
+                    </Card>
+                  ))}
+                </Flex>
+              )}
+            </Flex>
+          ) : null}
+
+          <Flex gap="3" mt="4" justify="end">
+            <Dialog.Close>
+              <Button variant="soft" color="gray">
+                Close
+              </Button>
+            </Dialog.Close>
+          </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
+
+      {/* Offer History Modal */}
+      <Dialog.Root open={!!showOfferHistory} onOpenChange={(open) => !open && setShowOfferHistory(null)}>
+        <Dialog.Content style={{ maxWidth: 800, maxHeight: '80vh', overflow: 'auto' }}>
+          <Dialog.Title>Offer History</Dialog.Title>
+          <Dialog.Description size="2" mb="4">
+            {offerHistory && (
+              <Text>
+                {offerHistory.artwork.art_code} • {offerHistory.artwork.event_eid}
+              </Text>
+            )}
+          </Dialog.Description>
+
+          {historyLoading ? (
+            <Flex align="center" justify="center" gap="2" py="6">
+              <Spinner size="2" />
+              <Text>Loading history...</Text>
+            </Flex>
+          ) : offerHistory ? (
+            <Flex direction="column" gap="4">
+              {/* Stats Summary */}
+              <Grid columns="4" gap="2">
+                <Card size="1">
+                  <Flex direction="column" align="center" gap="1">
+                    <Text size="3" weight="bold">{offerHistory.stats.total_offers}</Text>
+                    <Text size="1" color="gray">Total</Text>
+                  </Flex>
+                </Card>
+                <Card size="1">
+                  <Flex direction="column" align="center" gap="1">
+                    <Text size="3" weight="bold" color="green">{offerHistory.stats.active_offers}</Text>
+                    <Text size="1" color="gray">Active</Text>
+                  </Flex>
+                </Card>
+                <Card size="1">
+                  <Flex direction="column" align="center" gap="1">
+                    <Text size="3" weight="bold" color="blue">{offerHistory.stats.paid_offers}</Text>
+                    <Text size="1" color="gray">Paid</Text>
+                  </Flex>
+                </Card>
+                <Card size="1">
+                  <Flex direction="column" align="center" gap="1">
+                    <Text size="3" weight="bold" color="gray">{offerHistory.stats.expired_offers}</Text>
+                    <Text size="1" color="gray">Expired</Text>
+                  </Flex>
+                </Card>
+              </Grid>
+
+              {offerHistory.stats.total_offers === 0 ? (
+                <Card size="3">
+                  <Flex align="center" justify="center" py="4">
+                    <Text color="gray">No offers created yet</Text>
+                  </Flex>
+                </Card>
+              ) : (
+                <Flex direction="column" gap="3">
+                  {offerHistory.offers.map((offer) => (
+                    <Card key={offer.id} size="2">
+                      <Flex direction="column" gap="2">
+                        <Flex justify="between" align="start">
+                          <Flex direction="column" gap="1">
+                            <Text size="2" weight="medium">
+                              Offered to: {offer.people.first_name && offer.people.last_name
+                                ? `${offer.people.first_name} ${offer.people.last_name}`
+                                : offer.people.name || offer.people.nickname || 'Unknown'}
+                            </Text>
+                            <Text size="2" weight="bold" color="green">
+                              ${offer.offered_amount}
+                            </Text>
+                            <Text size="1" color="gray">
+                              Created: {formatTimestamp(offer.created_at)}
+                              {offer.expires_at && ` • Expires: ${formatTimestamp(offer.expires_at)}`}
+                            </Text>
+                          </Flex>
+                          <Badge
+                            color={offer.status === 'paid' ? 'green' :
+                                  offer.status === 'pending' ? 'blue' :
+                                  offer.status === 'expired' ? 'gray' : 'red'}
+                            variant="soft"
+                          >
+                            {offer.status}
+                          </Badge>
+                        </Flex>
+
+                        {offer.admin_note && (
+                          <Text size="1" color="gray" style={{ fontStyle: 'italic' }}>
+                            Note: {offer.admin_note}
+                          </Text>
+                        )}
+                      </Flex>
+                    </Card>
+                  ))}
+                </Flex>
+              )}
+            </Flex>
+          ) : null}
+
+          <Flex gap="3" mt="4" justify="end">
+            <Dialog.Close>
+              <Button variant="soft" color="gray">
+                Close
+              </Button>
+            </Dialog.Close>
+          </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
     </Box>
   );
 };

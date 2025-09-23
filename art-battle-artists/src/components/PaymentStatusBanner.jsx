@@ -22,7 +22,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
-const PaymentStatusBanner = ({ artistProfile, confirmations, onNavigateToTab }) => {
+const PaymentStatusBanner = ({ artistProfile, confirmations, hasRecentActivity, onNavigateToTab }) => {
   const { person } = useAuth();
   const [paymentData, setPaymentData] = useState(null);
   const [paymentAccount, setPaymentAccount] = useState(null);
@@ -33,38 +33,17 @@ const PaymentStatusBanner = ({ artistProfile, confirmations, onNavigateToTab }) 
   const [redirecting, setRedirecting] = useState(false);
 
   useEffect(() => {
-    if (artistProfile && confirmations?.length > 0) {
+    if (artistProfile) {
       checkIfShouldShowBanner();
     } else {
       setLoading(false);
     }
-  }, [artistProfile, confirmations]);
+  }, [artistProfile, hasRecentActivity]);
 
   const checkIfShouldShowBanner = async () => {
     try {
-      // Check if artist has confirmations with entry_id OR appears in event_artists in last 120 days
-      const oneHundredTwentyDaysAgo = new Date();
-      oneHundredTwentyDaysAgo.setDate(oneHundredTwentyDaysAgo.getDate() - 120);
-
-      // Check confirmations with artist_number in last 120 days
-      const recentConfirmationsWithEntry = confirmations?.filter(conf =>
-        conf.artist_number && new Date(conf.created_at) >= oneHundredTwentyDaysAgo
-      ) || [];
-
-      // Check event_artists table for this artist in last 120 days
-      const { data: recentEventArtists, error: eventArtistsError } = await supabase
-        .from('event_artists')
-        .select('id, added_at')
-        .eq('artist_id', artistProfile.id)
-        .gte('added_at', oneHundredTwentyDaysAgo.toISOString());
-
-      if (eventArtistsError) {
-        console.warn('Error checking event_artists:', eventArtistsError);
-      }
-
-      const hasRecentEventArtists = recentEventArtists && recentEventArtists.length > 0;
-
-      if (recentConfirmationsWithEntry.length === 0 && !hasRecentEventArtists) {
+      // Use the hasRecentActivity flag passed from parent (already calculated in edge function)
+      if (!hasRecentActivity) {
         setShowBanner(false);
         setLoading(false);
         return;
@@ -118,16 +97,18 @@ const PaymentStatusBanner = ({ artistProfile, confirmations, onNavigateToTab }) 
 
   const loadPaymentData = async () => {
     try {
-      console.log('PaymentStatusBanner: Loading payment data for artist:', artistProfile.id);
+      // Get current session for authentication
+      const { data: sessionData } = await supabase.auth.getSession();
 
-      // Use the same artist-account-ledger function as the admin system
+      // Use the same artist-account-ledger function as the admin system with auth
       const { data, error } = await supabase.functions.invoke('artist-account-ledger', {
         body: {
           artist_profile_id: artistProfile.id
-        }
+        },
+        headers: sessionData?.session?.access_token ? {
+          Authorization: `Bearer ${sessionData.session.access_token}`
+        } : {}
       });
-
-      console.log('PaymentStatusBanner: artist-account-ledger response:', { data, error });
 
       if (error) {
         console.error('Artist account ledger error:', error);
@@ -136,7 +117,6 @@ const PaymentStatusBanner = ({ artistProfile, confirmations, onNavigateToTab }) 
       }
 
       if (!data || !data.summary) {
-        console.log('PaymentStatusBanner: No data or summary in response');
         setPaymentData({ pendingPayments: 0, unpaidBids: 0, currency: 'USD', hasEarnings: false, hasPotentialEarnings: false });
         return;
       }
@@ -170,14 +150,6 @@ const PaymentStatusBanner = ({ artistProfile, confirmations, onNavigateToTab }) 
         ?.filter((entry) => entry.type === 'event' && entry.metadata?.lost_opportunity)
         ?.reduce((sum, entry) => sum + (entry.metadata?.potential_artist_earnings || 0), 0) || 0;
 
-      console.log('PaymentStatusBanner: Final calculations:', {
-        totalPendingPayments,
-        unpaidBidsFromLedger,
-        primaryCurrency,
-        currencyBreakdown,
-        ledgerEntries: data.entries?.length || 0
-      });
-
       setPaymentData({
         pendingPayments: totalPendingPayments,
         unpaidBids: unpaidBidsFromLedger,
@@ -205,7 +177,7 @@ const PaymentStatusBanner = ({ artistProfile, confirmations, onNavigateToTab }) 
         case 'pending':
           return { status: 'pending', text: 'Pending Verification', color: 'orange' };
         case 'restricted':
-          return { status: 'restricted', text: 'Needs Attention', color: 'red' };
+          return { status: 'restricted', text: 'Setup Incomplete', color: 'orange' };
         default:
           return { status: 'not_started', text: 'Setup Required', color: 'gray' };
       }
@@ -218,7 +190,7 @@ const PaymentStatusBanner = ({ artistProfile, confirmations, onNavigateToTab }) 
         case 'pending':
           return { status: 'pending', text: 'Pending', color: 'orange' };
         case 'restricted':
-          return { status: 'restricted', text: 'Restricted', color: 'red' };
+          return { status: 'restricted', text: 'Setup Incomplete', color: 'orange' };
         default:
           return { status: 'not_started', text: 'Setup Required', color: 'gray' };
       }
@@ -358,11 +330,11 @@ const PaymentStatusBanner = ({ artistProfile, confirmations, onNavigateToTab }) 
           <Button
             size="2"
             variant="solid"
-            color="red"
+            color="orange"
             disabled={isDisabled}
             onClick={handleStartOnboarding}
           >
-            {redirecting ? 'Redirecting...' : 'Fix Issues'}
+            {redirecting ? 'Redirecting...' : 'Complete Setup'}
             {!redirecting && <ArrowRightIcon width="16" height="16" />}
           </Button>
         );

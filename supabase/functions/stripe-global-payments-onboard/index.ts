@@ -67,22 +67,61 @@ serve(async (req) => {
       throw new Error('Unauthorized');
     }
 
-    // Get person record and verify it matches the authenticated user
-    console.log('Looking up person with auth_user_id:', user.id, 'and person_id:', person_id);
-    const { data: person, error: personError } = await supabase
-      .from('people')
-      .select('id, first_name, last_name, name, email, phone')
-      .eq('auth_user_id', user.id)
-      .single();
+    // Extract person data from JWT claims (V2 auth system support)
+    let authenticatedPersonId = null;
+    try {
+      const tokenParts = token.split('.');
+      if (tokenParts.length === 3) {
+        const payload = JSON.parse(atob(tokenParts[1]));
+        console.log('JWT payload extracted:', {
+          auth_version: payload.auth_version,
+          person_id: payload.person_id,
+          user_id: user.id
+        });
 
-    if (personError || !person) {
-      console.error('Person lookup error:', personError);
-      throw new Error('Person not found for authenticated user: ' + (personError?.message || 'No person found'));
+        if (payload.auth_version === 'v2-http') {
+          if (payload.person_pending === true) {
+            throw new Error('User profile not fully initialized - person pending');
+          }
+          if (!payload.person_id) {
+            throw new Error('No person data found in authentication token');
+          }
+          authenticatedPersonId = payload.person_id;
+        } else {
+          // Fallback to V1 auth system - lookup by auth_user_id
+          const { data: person, error: personError } = await supabase
+            .from('people')
+            .select('id, first_name, last_name, name, email, phone')
+            .eq('auth_user_id', user.id)
+            .single();
+
+          if (personError || !person) {
+            console.error('Person lookup error:', personError);
+            throw new Error('Person not found for authenticated user: ' + (personError?.message || 'No person found'));
+          }
+          authenticatedPersonId = person.id;
+        }
+      }
+    } catch (jwtError) {
+      console.error('Failed to extract person data from JWT:', jwtError);
+      throw new Error('Authentication token invalid: ' + jwtError.message);
     }
 
     // Verify the person_id matches (security check)
-    if (person.id !== person_id) {
+    if (authenticatedPersonId !== person_id) {
       throw new Error('Person ID mismatch - access denied');
+    }
+
+    // Get the person record for the authenticated person
+    const { data: person, error: personError } = await supabase
+      .from('people')
+      .select('id, first_name, last_name, name, email, phone')
+      .eq('id', authenticatedPersonId)
+      .single();
+
+    if (personError || !person) {
+      console.error('Person record lookup error:', personError);
+      throw new Error('Person record not found: ' + (personError?.message || 'No person found'));
     }
 
     console.log('Person verified:', person);

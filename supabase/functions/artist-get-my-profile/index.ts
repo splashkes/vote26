@@ -202,10 +202,26 @@ serve(async (req) => {
             .select('*', { count: 'exact', head: true })
             .eq('artist_id', candidate.id)
 
+          // Calculate outstanding balance using artist-account-ledger logic
+          const { data: artSales } = await supabase
+            .from('art')
+            .select('final_price, current_bid, status')
+            .eq('artist_id', candidate.id)
+            .in('status', ['sold', 'paid', 'closed'])
+
+          const outstandingBalance = artSales?.reduce((sum, art) => {
+            if (art.status === 'sold' || art.status === 'paid') {
+              const salePrice = art.final_price || art.current_bid || 0;
+              return sum + (salePrice * 0.5); // 50% artist commission
+            }
+            return sum;
+          }, 0) || 0;
+
           return {
             ...candidate,
             sampleWorks: sampleWorks || [],
             artworkCount: artworkCount || 0,
+            outstandingBalance: outstandingBalance,
           }
         })
       )

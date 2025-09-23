@@ -151,7 +151,7 @@ BEGIN
             estimated_balance DESC,
             recent_contests DESC,
             ap.name
-        LIMIT 200  -- Increased limit significantly
+        LIMIT 500  -- Increased limit for comprehensive view
     LOOP
         -- Determine if they belong in owing or zero balance group
         IF artist_record.estimated_balance > 0.01 THEN

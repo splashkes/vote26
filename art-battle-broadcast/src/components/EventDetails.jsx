@@ -39,7 +39,6 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import publicDataManager from '../lib/PublicDataManager';
 import { useBroadcastCache } from '../hooks/useBroadcastCache';
-import { useOfferNotifications } from '../hooks/useOfferNotifications';
 import LoadingScreen from './LoadingScreen';
 import { getImageUrl, getArtworkImageUrls } from '../lib/imageHelpers';
 // V2 BROADCAST: Perfect cache invalidation system
@@ -86,6 +85,7 @@ const EventDetails = () => {
   // Bidder info modal state
   const [showBidderInfoModal, setShowBidderInfoModal] = useState(false);
   const [bidderInfoModalData, setBidderInfoModalData] = useState(null);
+  // Removed session-based bidderInfoCompleted - now checks server each time
   const [voteSuccess, setVoteSuccess] = useState(false);
   const [voteFactor, setVoteFactor] = useState(null);
   const [currentTime, setCurrentTime] = useState(Date.now());
@@ -1087,6 +1087,46 @@ const EventDetails = () => {
     }
   };
 
+  // Check server for current user info and show modal if needed
+  const checkAndShowBuyerInfoModal = async (artId, amount, artwork) => {
+    if (!user?.id) return false; // No user logged in
+
+    try {
+      // Fetch fresh user data from server
+      const { data: freshPersonData, error } = await supabase
+        .from('people')
+        .select('first_name, last_name, nickname, email, phone, phone_number, auth_phone')
+        .eq('auth_user_id', user.id)
+        .single();
+
+      if (error) {
+        console.error('Error fetching fresh user data:', error);
+        return false; // Don't block bidding if we can't check
+      }
+
+      // Check if buyer info is missing using fresh server data
+      const buyerInfoStatus = getBuyerInfoStatus(freshPersonData);
+      if (buyerInfoStatus.isMissing) {
+        // Prepare data for the modal
+        setBidderInfoModalData({
+          artId,
+          amount,
+          artwork,
+          artistName: artwork?.artist_profiles?.name || 'Unknown Artist',
+          userPhone: extractUserPhone(user, freshPersonData),
+          existingInfo: buyerInfoStatus.existingInfo
+        });
+        setShowBidderInfoModal(true);
+        return true; // Modal shown, halt bidding flow
+      }
+
+      return false; // Info complete, continue with bidding
+    } catch (err) {
+      console.error('Error in checkAndShowBuyerInfoModal:', err);
+      return false; // Don't block bidding on error
+    }
+  };
+
   const handleBid = async (artId) => {
     setBidError('');
     setBidSuccess(false);
@@ -1105,22 +1145,12 @@ const EventDetails = () => {
 
     const amount = bidAmounts[artId] || getMinimumBid(artId);
     
-    // Check if buyer info is missing - show modal if needed, but don't block bidding
-    const buyerInfoStatus = getBuyerInfoStatus(person);
-    if (buyerInfoStatus.isMissing) {
-      // Prepare data for the modal
-      setBidderInfoModalData({
-        artId,
-        amount,
-        artwork,
-        artistName: artwork?.artist_profiles?.name || 'Unknown Artist',
-        userPhone: extractUserPhone(user, person),
-        existingInfo: buyerInfoStatus.existingInfo
-      });
-      setShowBidderInfoModal(true);
-      return; // Show modal first, bid will continue after modal interaction
+    // Check if buyer info is missing by fetching fresh data from server
+    const modalShown = await checkAndShowBuyerInfoModal(artId, amount, artwork);
+    if (modalShown) {
+      return; // Stop here, bid will continue after modal interaction
     }
-    
+
     // Clear any previous errors and show confirmation dialog
     setBidError('');
     setConfirmBid({
@@ -1136,7 +1166,7 @@ const EventDetails = () => {
   // Handle bidder info modal actions
   const handleBidderInfoSuccess = (updatedInfo) => {
     console.log('Bidder info updated:', updatedInfo);
-    // The person object will be updated on next auth refresh, but we can proceed with bidding
+    // User has updated their info on the server, proceed with bidding
     proceedWithBid();
   };
 
