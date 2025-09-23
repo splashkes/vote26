@@ -100,49 +100,93 @@ const PaymentsAdminTabbed = () => {
   const fetchEnhancedData = async () => {
     try {
       setLoading(true);
-      const { data: enhancedResult, error: enhancedError } = await supabase
-        .rpc('get_enhanced_payments_admin_data');
 
-      if (enhancedError) throw enhancedError;
+      // Create a simplified query that focuses on artists with active payments
+      console.log('🔍 Fetching artists with automated payments...');
 
-      // Fetch automated payment statuses for artists with balances owing
-      if (enhancedResult?.artists_owing) {
-        console.log('🔍 Artists owing data structure:', enhancedResult.artists_owing[0]);
+      // Get artists with processing/failed automated payments
+      const { data: activePayments, error: paymentsError } = await supabase
+        .from('artist_payments')
+        .select(`
+          artist_profile_id,
+          status,
+          gross_amount,
+          currency,
+          created_at,
+          artist_profiles!inner (
+            id,
+            name,
+            email,
+            phone,
+            entry_id,
+            country
+          )
+        `)
+        .eq('payment_type', 'automated')
+        .in('status', ['processing', 'failed', 'pending'])
+        .order('created_at', { ascending: false });
 
-        const artistIds = enhancedResult.artists_owing.map(artist => artist.artist_profiles?.id || artist.id);
-        console.log('🎯 Looking up payment statuses for artist IDs:', artistIds);
+      if (paymentsError) throw paymentsError;
 
-        const { data: paymentStatuses, error: statusError } = await supabase
-          .from('artist_payments')
-          .select('artist_profile_id, status, created_at')
-          .eq('payment_type', 'automated')
-          .in('artist_profile_id', artistIds)
-          .order('created_at', { ascending: false });
+      console.log('💳 Found active payments:', activePayments);
 
-        console.log('💳 Found payment statuses:', paymentStatuses);
+      // Get their payment account status
+      const artistIds = activePayments?.map(p => p.artist_profile_id) || [];
+      const { data: paymentAccounts, error: accountsError } = await supabase
+        .from('artist_global_payments')
+        .select('artist_profile_id, status, stripe_recipient_id')
+        .in('artist_profile_id', artistIds);
 
-        if (statusError) {
-          console.warn('Failed to fetch payment statuses:', statusError);
-        } else {
-          // Add payment status to each artist (latest payment status per artist)
-          const statusMap = {};
-          paymentStatuses?.forEach(payment => {
-            if (!statusMap[payment.artist_profile_id]) {
-              statusMap[payment.artist_profile_id] = payment.status;
-            }
-          });
-
-          console.log('📊 Status map:', statusMap);
-
-          enhancedResult.artists_owing = enhancedResult.artists_owing.map(artist => ({
-            ...artist,
-            automated_payment_status: statusMap[artist.artist_profiles?.id || artist.id] || null
-          }));
-        }
+      if (accountsError) {
+        console.warn('Failed to fetch payment accounts:', accountsError);
       }
+
+      console.log('🏦 Found payment accounts:', paymentAccounts);
+
+      // Build the simplified result structure
+      const accountMap = {};
+      paymentAccounts?.forEach(acc => {
+        accountMap[acc.artist_profile_id] = acc;
+      });
+
+      const artists_owing = activePayments?.map(payment => {
+        const account = accountMap[payment.artist_profile_id] || {};
+        return {
+          artist_profiles: payment.artist_profiles,
+          payment_status: account.status === 'completed' ? 'ready' :
+                         account.status === 'pending' ? 'invited' : 'needs_setup',
+          stripe_recipient_id: account.stripe_recipient_id,
+          estimated_balance: payment.gross_amount,
+          current_balance: payment.gross_amount,
+          automated_payment_status: payment.status,
+          recent_city: 'Unknown', // Simplified for now
+          recent_contests: 0,
+          currency_info: {
+            primary_currency: payment.currency || 'USD',
+            has_mixed_currencies: false
+          },
+          invitation_info: null
+        };
+      }) || [];
+
+      console.log('🎯 Simplified artists owing:', artists_owing);
+
+      const enhancedResult = {
+        artists_owing: artists_owing,
+        artists_zero_balance: [],
+        recent_payments: [],
+        summary: {
+          total_artists: artists_owing.length,
+          artists_owing_count: artists_owing.length,
+          artists_zero_count: 0,
+          recent_payments_count: 0,
+          generated_at: new Date().toISOString()
+        }
+      };
 
       setEnhancedData(enhancedResult);
     } catch (err) {
+      console.error('❌ Enhanced data fetch error:', err);
       setError('Failed to load payments data: ' + err.message);
     } finally {
       setLoading(false);
