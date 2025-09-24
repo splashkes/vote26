@@ -202,6 +202,23 @@ const ArtUpload = ({ artwork, onUploadComplete }) => {
       setUploadedThumbnail(thumbnailUrl);
       console.log('Upload successful, thumbnail:', thumbnailUrl);
 
+      // CRITICAL FIX: Notify parent component to refresh data optimistically
+      if (onUploadComplete) {
+        console.log('🔄 Triggering optimistic photo update via onUploadComplete');
+        onUploadComplete({
+          type: 'photo_uploaded',
+          artworkId: artwork.id,
+          mediaFile: {
+            id: mediaFile.id,
+            original_url: imageUrl,
+            compressed_url: imageUrl,
+            thumbnail_url: thumbnailUrl,
+            file_type: 'image',
+            cloudflare_id: imageId
+          }
+        });
+      }
+
       // Reset file input for next use
       if (fileInputRef.current) {
         fileInputRef.current.value = '';

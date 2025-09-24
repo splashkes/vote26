@@ -27,13 +27,27 @@ export class BroadcastCacheManager {
    * @param {object} supabase - Supabase client instance
    */
   subscribeToEvent(eventId, onInvalidation, supabase) {
+    // Check if already subscribed and cleanup if channel is in error state
     if (this.subscriptions.has(eventId)) {
-      this.log(`Already subscribed to event ${eventId}`);
-      return;
+      const existingChannel = this.subscriptions.get(eventId);
+      const channelState = existingChannel?.state;
+
+      if (channelState === 'CHANNEL_ERROR' || channelState === 'CLOSED') {
+        this.log(`🔄 Resubscribing to event ${eventId} - previous channel in ${channelState} state`);
+        this.unsubscribeFromEvent(eventId, supabase);
+      } else {
+        this.log(`Already subscribed to event ${eventId} with healthy channel (${channelState})`);
+        // Just add the listener to existing subscription
+        if (!this.eventListeners.has(eventId)) {
+          this.eventListeners.set(eventId, new Set());
+        }
+        this.eventListeners.get(eventId).add(onInvalidation);
+        return;
+      }
     }
 
     this.log(`🔔 Subscribing to cache invalidation for event ${eventId}`);
-    
+
     // Create event-specific listener set
     if (!this.eventListeners.has(eventId)) {
       this.eventListeners.set(eventId, new Set());
@@ -44,10 +58,40 @@ export class BroadcastCacheManager {
     const channelName = `cache_invalidate_${eventId}`;
     const channel = supabase.channel(channelName)
       .on('broadcast', { event: 'cache_invalidation' }, (payload) => {
+        // Add dedupe check to prevent double processing
+        const eventKey = `${eventId}-${payload?.payload?.timestamp || Date.now()}`;
+        if (this.processedEvents?.has(eventKey)) {
+          this.log(`🔄 [REALTIME] Skipping duplicate broadcast for ${eventId}`, eventKey);
+          return;
+        }
+
+        // Track processed events (clean up old ones periodically)
+        if (!this.processedEvents) {
+          this.processedEvents = new Map();
+        }
+        this.processedEvents.set(eventKey, Date.now());
+
+        // Clean up old processed events (keep last 100)
+        if (this.processedEvents.size > 100) {
+          const oldestKeys = Array.from(this.processedEvents.keys()).slice(0, 50);
+          oldestKeys.forEach(key => this.processedEvents.delete(key));
+        }
+
         this.log(`📡 [REALTIME] Received broadcast for event ${eventId}`, payload);
         this.handleRealtimeBroadcast(eventId, payload);
       })
-      .subscribe();
+      .subscribe((status) => {
+        this.log(`📡 [REALTIME] Channel ${channelName} status: ${status}`);
+
+        // Handle channel errors by attempting reconnection
+        if (status === 'CHANNEL_ERROR') {
+          this.log(`❌ [REALTIME] Channel error for ${eventId}, will retry connection`);
+          setTimeout(() => {
+            this.log(`🔄 [REALTIME] Retrying connection for ${eventId}`);
+            this.subscribeToEvent(eventId, onInvalidation, supabase);
+          }, 3000); // 3 second delay before retry
+        }
+      });
 
     this.subscriptions.set(eventId, channel);
     this.log(`✅ Subscribed to pg_notify broadcasts for event ${eventId} on channel ${channelName}`);
@@ -253,30 +297,70 @@ export class BroadcastCacheManager {
   }
 
   /**
-   * Mark an endpoint as invalid in local cache
+   * Mark an endpoint as invalid in both local cache and PublicDataManager cache
    * @param {string} endpoint - Endpoint URL to invalidate (relative or full URL)
    */
   invalidateEndpoint(endpoint) {
-    // Try both relative path and full URL formats since PublicDataManager uses full URLs
+    // CRITICAL FIX: Coordinate with PublicDataManager's cache system
+    // Import PublicDataManager to invalidate its cache too
+    let publicDataManagerInvalidated = false;
+
+    try {
+      // Dynamic import to avoid circular dependencies
+      const { publicDataManager } = require('../lib/PublicDataManager');
+
+      // Map endpoint paths to PublicDataManager cache keys
+      const cacheKeyMappings = [
+        // Main event endpoint
+        { pattern: /^\/live\/event\/([^\/]+)$/, keyFn: (match) => `event-${match[1]}` },
+        { pattern: /^https:\/\/artb\.art\/live\/event\/([^\/]+)$/, keyFn: (match) => `event-${match[1]}` },
+
+        // Media endpoint
+        { pattern: /^\/live\/event\/([^\/]+)\/media$/, keyFn: (match) => `event-media-${match[1]}` },
+        { pattern: /^https:\/\/artb\.art\/live\/event\/([^\/]+)\/media$/, keyFn: (match) => `event-media-${match[1]}` },
+
+        // Bid endpoints
+        { pattern: /^\/live\/event\/([^-]+)-(\d+)-(\d+)\/bids$/, keyFn: (match) => `artwork-bids-${match[1]}-${match[2]}-${match[3]}` },
+        { pattern: /^https:\/\/artb\.art\/live\/event\/([^-]+)-(\d+)-(\d+)\/bids$/, keyFn: (match) => `artwork-bids-${match[1]}-${match[2]}-${match[3]}` }
+      ];
+
+      for (const mapping of cacheKeyMappings) {
+        const match = endpoint.match(mapping.pattern);
+        if (match) {
+          const cacheKey = mapping.keyFn(match);
+          publicDataManager.invalidateCache(cacheKey);
+          this.log(`✅ [CACHE] Invalidated PublicDataManager cache: ${cacheKey} for endpoint ${endpoint}`);
+          publicDataManagerInvalidated = true;
+          break;
+        }
+      }
+    } catch (error) {
+      this.log(`⚠️ [CACHE] Failed to invalidate PublicDataManager cache:`, error.message);
+    }
+
+    // Also invalidate local BroadcastCacheManager cache (existing logic)
     const variants = [
       endpoint,  // Original (usually relative path like "/live/event/AB3028-2-3/bids")
       `https://artb.art${endpoint}`, // Full URL variant
     ];
-    
-    let invalidated = false;
-    
+
+    let localInvalidated = false;
+
     for (const variant of variants) {
       const cacheEntry = this.endpointCache.get(variant);
       if (cacheEntry) {
         cacheEntry.isValid = false;
         cacheEntry.invalidatedAt = Date.now();
-        this.log(`❌ [CACHE] Invalidated endpoint: ${variant}`);
-        invalidated = true;
+        this.log(`❌ [CACHE] Invalidated local cache: ${variant}`);
+        localInvalidated = true;
       }
     }
-    
-    if (!invalidated) {
-      this.log(`⚠️  [CACHE] Endpoint not in cache (tried ${variants.length} variants): ${endpoint}`);
+
+    // Log results
+    if (publicDataManagerInvalidated || localInvalidated) {
+      this.log(`✅ [CACHE] Successfully invalidated endpoint ${endpoint} (PublicDataManager: ${publicDataManagerInvalidated}, Local: ${localInvalidated})`);
+    } else {
+      this.log(`⚠️  [CACHE] Endpoint not found in any cache (tried ${variants.length} variants): ${endpoint}`);
     }
   }
 

@@ -47,7 +47,8 @@ const CreateEvent = () => {
     current_round: 0,
     capacity: 200,
     eid: '',
-    eventbrite_id: ''
+    eventbrite_id: '',
+    slack_channel: ''
   });
 
   useEffect(() => {
@@ -192,7 +193,8 @@ const CreateEvent = () => {
           current_round: eventData.current_round || 0,
           capacity: eventData.capacity || 200,
           eid: eventData.eid || '',
-          eventbrite_id: eventData.eventbrite_id || ''
+          eventbrite_id: eventData.eventbrite_id || '',
+          slack_channel: eventData.slack_channel || ''
         });
       }
     } catch (err) {
@@ -479,6 +481,20 @@ const CreateEvent = () => {
                       />
                       <Text size="2" color="gray" mt="1" style={{ display: 'block' }}>
                         Optional. Enter the numeric ID from your Eventbrite event URL.
+                      </Text>
+                    </Box>
+
+                    <Box>
+                      <Text as="label" size="2" weight="medium" mb="1" style={{ display: 'block' }}>
+                        Slack Channel
+                      </Text>
+                      <TextField.Root
+                        placeholder="e.g., artist-notify or #toronto-events"
+                        value={formData.slack_channel}
+                        onChange={(e) => handleInputChange('slack_channel', e.target.value)}
+                      />
+                      <Text size="2" color="gray" mt="1" style={{ display: 'block' }}>
+                        Optional. Slack channel name for event notifications (with or without #).
                       </Text>
                     </Box>
                   </Flex>

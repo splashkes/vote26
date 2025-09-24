@@ -7,11 +7,18 @@
 
 class PublicDataManager {
   constructor() {
+    // Prevent duplicate initialization - true singleton pattern
+    if (PublicDataManager.instance) {
+      console.log('🔄 [V2-BROADCAST] PublicDataManager already exists, returning existing instance');
+      return PublicDataManager.instance;
+    }
+
     this.cache = new Map();
     this.subscribers = new Map();
     this.refreshIntervals = new Map();
     this.broadcastChannel = new BroadcastChannel('artbattle-data');
-    
+    this.initialized = true;
+
     // Listen for cache invalidation from other tabs/admin actions
     this.broadcastChannel.addEventListener('message', (event) => {
       if (event.data.type === 'invalidate') {
@@ -19,7 +26,10 @@ class PublicDataManager {
         this.invalidateCache(event.data.key);
       }
     });
-    
+
+    // Store instance reference
+    PublicDataManager.instance = this;
+
     console.log('🚀 [V2-BROADCAST] PublicDataManager initialized - Using cached endpoints instead of realtime subscriptions');
   }
 
@@ -399,21 +409,34 @@ class PublicDataManager {
   }
 
   /**
+   * Get singleton instance (static method)
+   */
+  static getInstance() {
+    if (!PublicDataManager.instance) {
+      new PublicDataManager();
+    }
+    return PublicDataManager.instance;
+  }
+
+  /**
    * Clear all caches and stop all polling
    */
   destroy() {
     console.log('🛑 [V2-BROADCAST] Destroying PublicDataManager');
-    
+
     // Clear all intervals
     this.refreshIntervals.forEach(interval => clearInterval(interval));
     this.refreshIntervals.clear();
-    
+
     // Clear cache and subscribers
     this.cache.clear();
     this.subscribers.clear();
-    
+
     // Close broadcast channel
     this.broadcastChannel.close();
+
+    // Clear singleton instance reference
+    PublicDataManager.instance = null;
   }
 }
 

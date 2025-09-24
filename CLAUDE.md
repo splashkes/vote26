@@ -1,6 +1,6 @@
 ## Supabase
 
-- Supabase Migrations - THE ONE LINE TO REMEMBER - bash PGPASSWORD='6kEtvU9n0KhTVr5' psql -h db.xsqdkubgyqwpyvfltnrf.supabase.co -p 5432 -d postgres -U postgres -f migrations/[MIGRATION_FILE].sql
+- Supabase Migrations - THE ONE LINE TO REMEMBER - bash PGPASSWORD='6kEtvU9n0KhTVr5' psql -h db.artb.art -p 5432 -d postgres -U postgres -f migrations/[MIGRATION_FILE].sql
 
 ## Application Overview
 

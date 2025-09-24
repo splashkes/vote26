@@ -23,13 +23,19 @@ const EidResolver = () => {
           return;
         }
 
-        // Redirect to the legacy route format using window.location to preserve hash
-        const targetPath = tab 
-          ? `/event/${event.id}#${tab}` 
-          : `/event/${event.id}`;
-        
-        // Use window.location.replace to ensure hash is preserved
-        window.location.replace(targetPath);
+        // Navigate using React Router to prevent component disruption
+        const targetPath = `/event/${event.id}`;
+
+        if (tab) {
+          // For tab navigation, use React Router navigate and set hash
+          navigate(targetPath, { replace: true });
+          // Set hash after navigation to preserve tab state
+          setTimeout(() => {
+            window.location.hash = tab;
+          }, 0);
+        } else {
+          navigate(targetPath, { replace: true });
+        }
         
       } catch (error) {
         console.error('Error resolving EID:', error);

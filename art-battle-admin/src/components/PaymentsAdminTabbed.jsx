@@ -1531,10 +1531,11 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                 <Table.Header>
                   <Table.Row>
                     <Table.ColumnHeaderCell>Artist</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Payment Amount</Table.ColumnHeaderCell>
                     <Table.ColumnHeaderCell>Payment Status</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell>Payment History</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Payment Method</Table.ColumnHeaderCell>
                     <Table.ColumnHeaderCell>Recent City</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell>Last Payment</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Payment Date</Table.ColumnHeaderCell>
                     <Table.ColumnHeaderCell>Actions</Table.ColumnHeaderCell>
                   </Table.Row>
                 </Table.Header>
@@ -1548,28 +1549,40 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                         </Flex>
                       </Table.Cell>
                       <Table.Cell>
-                        <Badge
-                          color={
-                            artist.latest_payment_status === 'completed' ? 'green' :
-                            artist.latest_payment_status === 'pending' ? 'yellow' : 'red'
-                          }
-                          variant="soft"
-                        >
-                          {artist.latest_payment_status || 'Unknown'}
-                        </Badge>
+                        <Flex direction="column" gap="1">
+                          <Text size="2" weight="bold" color="green">
+                            ${(artist.payment_amount || 0).toFixed(2)} {artist.payment_currency || 'USD'}
+                          </Text>
+                          {artist.stripe_transfer_id && (
+                            <Text size="1" color="gray" style={{ fontFamily: 'monospace' }}>
+                              {artist.stripe_transfer_id.substring(0, 20)}...
+                            </Text>
+                          )}
+                        </Flex>
                       </Table.Cell>
                       <Table.Cell>
                         <Flex direction="column" gap="1">
-                          {artist.payment_history_summary.completed > 0 && (
-                            <Badge color="green" size="1">✅ {artist.payment_history_summary.completed} completed</Badge>
-                          )}
-                          {artist.payment_history_summary.pending > 0 && (
-                            <Badge color="yellow" size="1">⏳ {artist.payment_history_summary.pending} pending</Badge>
-                          )}
-                          {artist.payment_history_summary.failed > 0 && (
-                            <Badge color="red" size="1">❌ {artist.payment_history_summary.failed} failed</Badge>
+                          <Badge
+                            color={
+                              artist.latest_payment_status === 'completed' ? 'green' :
+                              artist.latest_payment_status === 'pending' ? 'yellow' :
+                              artist.latest_payment_status === 'processing' ? 'blue' : 'red'
+                            }
+                            variant="soft"
+                          >
+                            {artist.latest_payment_status || 'Unknown'}
+                          </Badge>
+                          {artist.error_message && (
+                            <Text size="1" color="red">
+                              {artist.error_message.substring(0, 50)}...
+                            </Text>
                           )}
                         </Flex>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Badge variant="outline" size="1">
+                          {artist.payment_method ? artist.payment_method.replace('_', ' ').toUpperCase() : 'Unknown'}
+                        </Badge>
                       </Table.Cell>
                       <Table.Cell>
                         {artist.recent_city ? (
@@ -1579,10 +1592,15 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                         )}
                       </Table.Cell>
                       <Table.Cell>
-                        {artist.latest_payment_date ? (
-                          <Text size="1" color="gray">
-                            {new Date(artist.latest_payment_date).toLocaleDateString()}
-                          </Text>
+                        {artist.payment_date ? (
+                          <Flex direction="column" gap="1">
+                            <Text size="1" color="gray">
+                              {new Date(artist.payment_date).toLocaleDateString()}
+                            </Text>
+                            <Text size="1" color="gray">
+                              {new Date(artist.payment_date).toLocaleTimeString()}
+                            </Text>
+                          </Flex>
                         ) : (
                           <Text size="1" color="gray">—</Text>
                         )}
@@ -1623,9 +1641,10 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                 <Table.Header>
                   <Table.Row>
                     <Table.ColumnHeaderCell>Artist</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell>Payment Summary</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Payment Amount</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Payment Method</Table.ColumnHeaderCell>
                     <Table.ColumnHeaderCell>Recent City</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell>Last Payment</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Completion Date</Table.ColumnHeaderCell>
                     <Table.ColumnHeaderCell>Actions</Table.ColumnHeaderCell>
                   </Table.Row>
                 </Table.Header>
@@ -1640,15 +1659,23 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                       </Table.Cell>
                       <Table.Cell>
                         <Flex direction="column" gap="1">
-                          <Badge color="green" size="1">
-                            ✅ {artist.payment_history_summary.completed} completed
-                          </Badge>
-                          {artist.payment_history_summary.manual_count > 0 && (
-                            <Badge color="blue" size="1">
-                              👤 {artist.payment_history_summary.manual_count} manual
-                            </Badge>
+                          <Text size="2" weight="bold" color="green">
+                            ${(artist.payment_amount || 0).toFixed(2)} {artist.payment_currency || 'USD'}
+                          </Text>
+                          {artist.stripe_transfer_id && (
+                            <Text size="1" color="gray" style={{ fontFamily: 'monospace' }}>
+                              {artist.stripe_transfer_id.substring(0, 20)}...
+                            </Text>
                           )}
+                          <Badge color="green" size="1">
+                            ✅ Completed
+                          </Badge>
                         </Flex>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Badge variant="outline" size="1">
+                          {artist.payment_method ? artist.payment_method.replace('_', ' ').toUpperCase() : 'Unknown'}
+                        </Badge>
                       </Table.Cell>
                       <Table.Cell>
                         {artist.recent_city ? (
@@ -1658,10 +1685,15 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                         )}
                       </Table.Cell>
                       <Table.Cell>
-                        {artist.latest_payment_date ? (
-                          <Text size="1" color="gray">
-                            {new Date(artist.latest_payment_date).toLocaleDateString()}
-                          </Text>
+                        {artist.completion_date ? (
+                          <Flex direction="column" gap="1">
+                            <Text size="1" color="gray">
+                              {new Date(artist.completion_date).toLocaleDateString()}
+                            </Text>
+                            <Text size="1" color="gray">
+                              {new Date(artist.completion_date).toLocaleTimeString()}
+                            </Text>
+                          </Flex>
                         ) : (
                           <Text size="1" color="gray">—</Text>
                         )}

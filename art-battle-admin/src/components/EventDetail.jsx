@@ -1557,17 +1557,25 @@ The Art Battle Team`);
               <Badge color={status.color}>{status.label}</Badge>
             </Flex>
             <Text color="gray" size="2">
-              <DebugField 
-                value={event.eid} 
+              <DebugField
+                value={event.eid}
                 fieldName="event.eid"
                 fallback="No EID"
               />
               {' • '}
-              <DebugField 
-                value={event.venue} 
+              <DebugField
+                value={event.venue}
                 fieldName="event.venue"
                 fallback="No venue"
               />
+              {event.slack_channel && (
+                <>
+                  {' • '}
+                  <Text color="blue" weight="medium">
+                    #{event.slack_channel.replace(/^#/, '')}
+                  </Text>
+                </>
+              )}
             </Text>
           </Box>
           <Flex gap="2">
@@ -1606,6 +1614,9 @@ The Art Battle Team`);
                 </Text>
                 <Text size="2">
                   <strong>Eventbrite ID:</strong> <DebugField value={event.eventbrite_id} fieldName="event.eventbrite_id" fallback="Not set" />
+                </Text>
+                <Text size="2">
+                  <strong>Slack Channel:</strong> <DebugField value={event.slack_channel} fieldName="event.slack_channel" fallback="Not set" />
                 </Text>
                 <Text size="2">
                   <strong>Venue:</strong> <DebugField value={event.venue} fieldName="event.venue" />

@@ -108,6 +108,7 @@ export const AuthProvider = ({ children }) => {
         currentSession = data.session;
       } catch (sessionError) {
         console.warn('⚠️ [AUTH-V2] Session fetch failed:', sessionError.message);
+        jwtProcessingRef.current = false;
         return;
       }
     }
@@ -115,6 +116,7 @@ export const AuthProvider = ({ children }) => {
     if (!currentSession?.access_token) {
       console.log('🔄 [AUTH-V2] No access token available, person data pending');
       setPerson(null);
+      jwtProcessingRef.current = false;
       return;
     }
 
@@ -169,10 +171,15 @@ export const AuthProvider = ({ children }) => {
         // HARD CRASH: No legacy support
         const errorMsg = `🚨 [AUTH-V2] CRITICAL ERROR: Legacy auth system detected! Expected auth_version: 'v2-http' but got: '${payload.auth_version}'. Custom Access Token Hook not working properly.`;
         console.error(errorMsg);
+        jwtProcessingRef.current = false;
         throw new Error(errorMsg);
       }
+
+      // Reset processing flag on successful completion
+      jwtProcessingRef.current = false;
     } catch (error) {
       console.error('🚨 [AUTH-V2] CRITICAL ERROR: Failed to decode JWT or extract person data:', error);
+      jwtProcessingRef.current = false;
       // HARD CRASH: No legacy fallbacks supported
       throw new Error(`🚨 [AUTH-V2] JWT processing failed: ${error.message}. Auth system is broken.`);
     }

@@ -196,30 +196,6 @@ function EventAnalytics() {
     ]
   }
 
-  const prepareRoundsTimelineData = () => {
-    if (!analytics?.rounds_timeline || analytics.rounds_timeline.length === 0) return []
-
-    // Convert rounds data to timeline format showing actual start/end times
-    return analytics.rounds_timeline.map(round => {
-      const roundStart = new Date(round.round_start)
-      const roundEnd = new Date(round.round_end)
-      const auctionClose = new Date(round.auction_close)
-
-      // Auction ends 15 minutes before closing time
-      const auctionEnd = new Date(auctionClose.getTime() - 15 * 60 * 1000)
-
-      return {
-        round: `Round ${round.round_number}`,
-        round_number: round.round_number,
-        round_start: roundStart,
-        round_end: roundEnd,
-        auction_end: auctionEnd,
-        auction_close: auctionClose,
-        status: round.status,
-        is_finished: round.is_finished
-      }
-    })
-  }
 
   if (loading && !analytics) {
     return (
@@ -269,7 +245,6 @@ function EventAnalytics() {
   const status = getEventStatus()
   const { timeData, series: timeSeriesSeries } = prepareTimeSeriesData()
   const guestCompositionData = prepareGuestCompositionData()
-  const roundsTimelineData = prepareRoundsTimelineData()
 
   return (
     <Box sx={{ p: { xs: 1, sm: 2 }, maxWidth: '100vw', overflow: 'hidden' }}>
@@ -569,83 +544,6 @@ function EventAnalytics() {
           </Card>
         </Grid>
       </Grid>
-
-      {/* Event Rounds Timeline */}
-      {roundsTimelineData.length > 0 && (
-        <Grid container spacing={{ xs: 1, sm: 2, md: 3 }} sx={{ mb: { xs: 2, sm: 3 } }}>
-          <Grid item xs={12}>
-            <Card>
-              <CardContent sx={{ p: { xs: 1.5, sm: 2 } }}>
-                <Typography variant="h6" gutterBottom>
-                  Event Rounds Timeline
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: { xs: 1, sm: 2 } }}>
-                  Round durations and auction closing times
-                </Typography>
-                <Box sx={{ height: 300, mt: 2 }}>
-                  {roundsTimelineData.length > 0 ? (
-                    <Box>
-                      {roundsTimelineData.map((round, index) => (
-                        <Box key={round.round_number} sx={{ mb: 2, p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
-                          <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-                            {round.round}
-                            <Chip
-                              size="small"
-                              label={round.status}
-                              color={round.status === 'completed' ? 'success' : round.status === 'active' ? 'warning' : 'default'}
-                              sx={{ ml: 1 }}
-                            />
-                          </Typography>
-                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <Box sx={{ width: 12, height: 12, bgcolor: '#1976d2', borderRadius: '50%' }} />
-                              <Typography variant="body2">
-                                <strong>Painting:</strong> {round.round_start.toLocaleTimeString('en-US', {
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                  hour12: false
-                                })} - {round.round_end.toLocaleTimeString('en-US', {
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                  hour12: false
-                                })}
-                              </Typography>
-                            </Box>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <Box sx={{ width: 12, height: 12, bgcolor: '#f57c00', borderRadius: '50%' }} />
-                              <Typography variant="body2">
-                                <strong>Auction Ends:</strong> {round.auction_end.toLocaleTimeString('en-US', {
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                  hour12: false
-                                })}
-                              </Typography>
-                            </Box>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <Box sx={{ width: 12, height: 12, bgcolor: '#d32f2f', borderRadius: '50%' }} />
-                              <Typography variant="body2">
-                                <strong>Auction Closes:</strong> {round.auction_close.toLocaleTimeString('en-US', {
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                  hour12: false
-                                })}
-                              </Typography>
-                            </Box>
-                          </Box>
-                        </Box>
-                      ))}
-                    </Box>
-                  ) : (
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'text.secondary' }}>
-                      <Typography>No rounds data available</Typography>
-                    </Box>
-                  )}
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-      )}
 
     </Box>
   )

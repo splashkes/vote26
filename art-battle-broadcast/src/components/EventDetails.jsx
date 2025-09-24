@@ -39,6 +39,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import publicDataManager from '../lib/PublicDataManager';
 import { useBroadcastCache } from '../hooks/useBroadcastCache';
+import { useBroadcastOptimizer } from '../hooks/useBroadcastOptimizer';
 import LoadingScreen from './LoadingScreen';
 import { getImageUrl, getArtworkImageUrls } from '../lib/imageHelpers';
 // V2 BROADCAST: Perfect cache invalidation system
@@ -62,7 +63,7 @@ const EventDetails = () => {
   const { eventId, tab } = useParams();
   const navigate = useNavigate();
   
-  const { user, person, loading: authLoading } = useAuth();
+  const { user, person, session, loading: authLoading } = useAuth();
   const [event, setEvent] = useState(null);
   const [eventEid, setEventEid] = useState(null); // EID for broadcast subscription
   const [artworks, setArtworks] = useState([]);
@@ -103,12 +104,28 @@ const EventDetails = () => {
   const [bidRanges, setBidRanges] = useState({}); // V2 BROADCAST: Bid ranges from cached data
   const [offerNotification, setOfferNotification] = useState(null); // Global offer notifications
   
+  // Performance optimizer for cross-browser WebSocket issues
+  const optimizer = useBroadcastOptimizer({
+    onReconnect: () => {
+      console.log('🔄 [OPTIMIZER] Reconnecting after background tab or connection issues');
+      fetchEventDetails();
+    },
+    onFallback: async () => {
+      console.log('📡 [OPTIMIZER] Using fallback polling due to WebSocket issues');
+      await fetchEventDetails();
+    },
+    enabled: !!eventEid
+  });
+
   // V2 BROADCAST: Perfect cache invalidation system
   const { clearEventCache } = useBroadcastCache(
     eventEid, // Use EID for broadcast subscription, not UUID
     async (notificationData) => {
       console.log(`🔄 [V2-BROADCAST] Refreshing data after cache invalidation:`, notificationData);
       console.log(`🔄 [V2-BROADCAST] Invalidated endpoints:`, notificationData.endpoints);
+
+      // Track successful broadcast reception for optimizer
+      optimizer.trackRecovery?.();
       
       // Use surgical updates instead of full fetchEventDetails() to avoid constant reloading
       console.log(`🔄 [V2-BROADCAST] Processing surgical updates for invalidated endpoints`);
@@ -268,11 +285,13 @@ const EventDetails = () => {
               }
             } catch (error) {
               console.error(`❌ [V2-BROADCAST] Error fetching ${endpoint}:`, error);
+              optimizer.trackError?.(error, `broadcast-fetch-${endpoint}`);
             }
           }
         }
       } catch (error) {
         console.error(`❌ [V2-BROADCAST] Failed to refresh data:`, error);
+        optimizer.trackError?.(error, 'broadcast-refresh');
       }
     },
     {
@@ -289,17 +308,28 @@ const EventDetails = () => {
   };
   const [activeTab, setActiveTab] = useState(getInitialTab());
   const countdownInterval = useRef(null);
-  
+
+  // Track auth initialization state to prevent multiple fetches
+  const authInitialized = useRef(false);
+  const eventDataFetched = useRef(null);
 
   useEffect(() => {
-    console.log('EventDetails useEffect triggered - eventId:', eventId, 'authLoading:', authLoading);
-    // Wait for auth to finish loading before fetching event data
-    // This prevents race conditions and loading loops
-    if (!authLoading && eventId) {
-      console.log('EventDetails: Auth ready, starting event data fetch');
-      fetchEventDetails();
+    console.log('EventDetails useEffect triggered - eventId:', eventId, 'authLoading:', authLoading, 'session:', !!session);
+
+    // Only proceed if we have stable auth state (not loading) and eventId
+    if (!authLoading && eventId && session !== undefined) {
+      // Prevent multiple fetches for the same event and auth state combination
+      const eventKey = `${eventId}-${!!session}`;
+      if (!authInitialized.current || eventDataFetched.current !== eventKey) {
+        console.log('EventDetails: Auth ready, starting event data fetch for:', eventKey);
+        authInitialized.current = true;
+        eventDataFetched.current = eventKey;
+        fetchEventDetails();
+      } else {
+        console.log('EventDetails: Skipping duplicate fetch for:', eventKey);
+      }
     }
-  }, [eventId, authLoading]);
+  }, [eventId, authLoading, session]); // Add session to dependencies for proper auth state tracking
 
   // Handle tab parameter from URL hash and authentication check
   useEffect(() => {
@@ -2275,12 +2305,65 @@ const EventDetails = () => {
                           background: 'var(--gray-3)'
                         }}
                       >
-                        <ArtUpload 
-                          artwork={selectedArt} 
-                          onUploadComplete={() => {
-                            // Refresh data and go back to artwork list
-                            fetchEventDetails();
-                            setSelectedArt(null);
+                        <ArtUpload
+                          artwork={selectedArt}
+                          onUploadComplete={(uploadData) => {
+                            console.log('🔄 Handling optimistic photo upload update:', uploadData);
+
+                            if (uploadData?.type === 'photo_uploaded' && uploadData.mediaFile) {
+                              // OPTIMISTIC UPDATE: Add the new photo immediately to local state
+                              const newMedia = {
+                                media_files: uploadData.mediaFile,
+                                media_type: 'image',
+                                is_primary: false,
+                                display_order: 0
+                              };
+
+                              // Update artworks array
+                              setArtworks(prevArtworks => {
+                                return prevArtworks.map(artwork => {
+                                  if (artwork.id === uploadData.artworkId) {
+                                    return {
+                                      ...artwork,
+                                      media: [...(artwork.media || []), newMedia]
+                                    };
+                                  }
+                                  return artwork;
+                                });
+                              });
+
+                              // Update selectedArt if it's currently open
+                              if (selectedArt && selectedArt.id === uploadData.artworkId) {
+                                const updatedSelectedArt = {
+                                  ...selectedArt,
+                                  media: [...(selectedArt.media || []), newMedia]
+                                };
+                                setSelectedArt(updatedSelectedArt);
+                              }
+
+                              // Update artworksByRound for main grid display
+                              setArtworksByRound(prevRounds => {
+                                const updated = { ...prevRounds };
+                                Object.keys(updated).forEach(round => {
+                                  updated[round] = updated[round].map(artwork => {
+                                    if (artwork.id === uploadData.artworkId) {
+                                      return {
+                                        ...artwork,
+                                        media: [...(artwork.media || []), newMedia]
+                                      };
+                                    }
+                                    return artwork;
+                                  });
+                                });
+                                return updated;
+                              });
+
+                              console.log('✅ Optimistic photo update complete - user should see photo immediately');
+                            } else {
+                              // Fallback to full refresh if optimistic data is missing
+                              console.log('⚠️ Missing optimistic data, falling back to full refresh');
+                              fetchEventDetails();
+                            }
                           }}
                         />
                       </Box>

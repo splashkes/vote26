@@ -67,12 +67,11 @@ serve(async (req) => {
       const eventUuid = eventInfo.id
 
       // Get analytics data using the database functions
-      const [guestCompositionResult, guestComparisonsResult, timeSeriesResult, recentActivityResult, roundsTimelineResult] = await Promise.all([
+      const [guestCompositionResult, guestComparisonsResult, timeSeriesResult, recentActivityResult] = await Promise.all([
         client.queryObject(`SELECT * FROM get_event_guest_composition($1)`, [eventUuid]),
         client.queryObject(`SELECT * FROM get_guest_composition_with_comparisons($1)`, [eventUuid]),
         client.queryObject(`SELECT * FROM get_event_time_series($1, $2)`, [eventUuid, 5]),
-        client.queryObject(`SELECT * FROM get_event_recent_activity($1)`, [eventUuid]),
-        client.queryObject(`SELECT * FROM get_event_rounds_timeline($1)`, [eventUuid])
+        client.queryObject(`SELECT * FROM get_event_recent_activity($1)`, [eventUuid])
       ])
 
       // Get summary counts - use DISTINCT for QR scans to count unique people, not total scans
@@ -142,16 +141,6 @@ serve(async (req) => {
         }
       } : {}
 
-      // Process rounds timeline data
-      const roundsTimeline = roundsTimelineResult.rows.map(row => ({
-        round_number: Number(row.round_number || 0),
-        round_start: row.round_start,
-        round_end: row.round_end,
-        auction_close: row.auction_close,
-        is_finished: Boolean(row.is_finished),
-        duration_minutes: Number(row.duration_minutes || 20),
-        status: row.status
-      }))
 
       // Calculate summary stats - convert all BigInt values to numbers
       const totalParticipants = guestComposition.reduce((sum, category) => sum + Number(category.guests || 0), 0)
@@ -186,7 +175,6 @@ serve(async (req) => {
         guest_composition: guestComposition,
         guest_composition_comparisons: guestComparisons,
         time_series: timeSeries,
-        rounds_timeline: roundsTimeline,
         recent_activity: recentActivity || {},
         generated_at: new Date().toISOString()
       }

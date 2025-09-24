@@ -49,13 +49,21 @@ serve(async (req) => {
 
     console.log(`✅ Found ${artistsOwedMoney?.length} artists owed money`);
 
-    // 3. Get payment activity using the working simple function
-    const { data: paymentActivity, error: activityError } = await serviceClient
-      .rpc('get_payment_activity', { days_back });
+    // 3. Get payment attempts using the enhanced function
+    const { data: paymentAttempts, error: attemptsError } = await serviceClient
+      .rpc('get_payment_attempts', { days_back });
 
-    if (activityError) throw activityError;
+    if (attemptsError) throw attemptsError;
 
-    console.log(`✅ Found ${paymentActivity?.length} artists with payment activity`);
+    console.log(`✅ Found ${paymentAttempts?.length} payment attempts`);
+
+    // 4. Get completed payments using the enhanced function
+    const { data: completedPayments, error: completedError } = await serviceClient
+      .rpc('get_completed_payments', { days_back });
+
+    if (completedError) throw completedError;
+
+    console.log(`✅ Found ${completedPayments?.length} completed payments`);
 
     // Filter recent contestants who are also owed money (ready to pay candidates)
     const recentContestantIds = new Set(recentContestants?.map(rc => rc.artist_id) || []);
@@ -167,50 +175,54 @@ serve(async (req) => {
         invitation_info: null
       })),
 
-      payment_attempts: paymentActivity?.map(artist => ({
+      payment_attempts: paymentAttempts?.map(attempt => ({
         artist_profiles: {
-          id: artist.artist_id,
-          name: artist.artist_name,
-          email: artist.artist_email,
-          phone: artist.artist_phone,
-          entry_id: artist.artist_entry_id,
-          country: artist.artist_country,
+          id: attempt.artist_id,
+          name: attempt.artist_name,
+          email: attempt.artist_email,
+          phone: attempt.artist_phone,
+          entry_id: attempt.artist_entry_id,
+          country: attempt.artist_country,
           person_id: null,
           created_at: null
         },
-        payment_account_status: 'active',
+        payment_account_status: 'processing',
         stripe_recipient_id: null,
-        estimated_balance: 0, // Would need to join with owed money data
+        estimated_balance: 0,
         current_balance: 0,
-        latest_payment_status: artist.latest_payment_status,
+        latest_payment_status: attempt.payment_status,
+        payment_id: attempt.payment_id,
+        payment_amount: Number(attempt.payment_amount) || 0,
+        payment_currency: attempt.payment_currency || 'USD',
+        payment_method: attempt.payment_method,
+        payment_date: attempt.payment_date,
+        stripe_transfer_id: attempt.stripe_transfer_id,
+        error_message: attempt.error_message,
         payment_history_summary: {
-          pending: Number(artist.pending_payments),
-          processing: 0,
-          completed: Number(artist.completed_payments),
-          failed: Number(artist.failed_payments),
+          pending: 0,
+          processing: 1,
+          completed: 0,
+          failed: 0,
           manual_count: 0
         },
-        recent_city: artist.recent_city,
+        recent_city: attempt.recent_city,
         recent_contests: 0,
-        is_recent_contestant: recentContestantIds.has(artist.artist_id),
+        is_recent_contestant: recentContestantIds.has(attempt.artist_id),
         currency_info: {
-          primary_currency: 'USD',
+          primary_currency: attempt.payment_currency || 'USD',
           has_mixed_currencies: false
         },
-        invitation_info: null,
-        latest_payment_date: artist.latest_payment_date
+        invitation_info: null
       })) || [],
 
-      completed_payments: paymentActivity?.filter(artist =>
-        Number(artist.completed_payments) > 0
-      ).map(artist => ({
+      completed_payments: completedPayments?.map(completed => ({
         artist_profiles: {
-          id: artist.artist_id,
-          name: artist.artist_name,
-          email: artist.artist_email,
-          phone: artist.artist_phone,
-          entry_id: artist.artist_entry_id,
-          country: artist.artist_country,
+          id: completed.artist_id,
+          name: completed.artist_name,
+          email: completed.artist_email,
+          phone: completed.artist_phone,
+          entry_id: completed.artist_entry_id,
+          country: completed.artist_country,
           person_id: null,
           created_at: null
         },
@@ -218,31 +230,37 @@ serve(async (req) => {
         stripe_recipient_id: null,
         estimated_balance: 0,
         current_balance: 0,
-        latest_payment_status: artist.latest_payment_status,
+        latest_payment_status: completed.payment_status,
+        payment_id: completed.payment_id,
+        payment_amount: Number(completed.payment_amount) || 0,
+        payment_currency: completed.payment_currency || 'USD',
+        payment_method: completed.payment_method,
+        payment_date: completed.payment_date,
+        completion_date: completed.completion_date,
+        stripe_transfer_id: completed.stripe_transfer_id,
         payment_history_summary: {
-          pending: Number(artist.pending_payments),
+          pending: 0,
           processing: 0,
-          completed: Number(artist.completed_payments),
-          failed: Number(artist.failed_payments),
+          completed: 1,
+          failed: 0,
           manual_count: 0
         },
-        recent_city: artist.recent_city,
+        recent_city: completed.recent_city,
         recent_contests: 0,
-        is_recent_contestant: recentContestantIds.has(artist.artist_id),
+        is_recent_contestant: recentContestantIds.has(completed.artist_id),
         currency_info: {
-          primary_currency: 'USD',
+          primary_currency: completed.payment_currency || 'USD',
           has_mixed_currencies: false
         },
-        invitation_info: null,
-        latest_payment_date: artist.latest_payment_date
+        invitation_info: null
       })) || [],
 
       summary: {
         total_recent_contestants: recentContestants?.length || 0,
         artists_owed_count: artistsOwedMoney?.length || 0,
         artists_ready_count: artistsReadyToPay.length,
-        payment_attempts_count: paymentActivity?.length || 0,
-        completed_payments_count: paymentActivity?.filter(artist => Number(artist.completed_payments) > 0).length || 0,
+        payment_attempts_count: paymentAttempts?.length || 0,
+        completed_payments_count: completedPayments?.length || 0,
         generated_at: new Date().toISOString()
       }
     };
