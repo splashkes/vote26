@@ -128,11 +128,12 @@
        AND rc.contestant_count > 1                                                                         +
        AND r.round_number > hcr.max_completed_round;                                                       +
                                                                                                            +
-     -- Get champion data from highest round with a winner                                                 +
-     WITH round_winners AS (                                                                               +
+     -- Get champion data from highest round with EXACTLY ONE winner (no ties)                             +
+     WITH round_winner_counts AS (                                                                         +
          SELECT                                                                                            +
              r.round_number,                                                                               +
-             ap.name as winner_name                                                                        +
+             COUNT(rc.is_winner) as winner_count,                                                          +
+             STRING_AGG(ap.name, ', ') as winner_names                                                     +
          FROM rounds r                                                                                     +
          JOIN round_contestants rc ON r.id = rc.round_id                                                   +
          JOIN artist_profiles ap ON rc.artist_id = ap.id                                                   +
@@ -140,15 +141,17 @@
            AND r.closing_time IS NOT NULL                                                                  +
            AND r.closing_time < now()                                                                      +
            AND rc.is_winner = 1                                                                            +
+         GROUP BY r.round_number                                                                           +
+         HAVING COUNT(rc.is_winner) = 1  -- ONLY rounds with exactly 1 winner                              +
          ORDER BY r.round_number DESC                                                                      +
          LIMIT 1                                                                                           +
      )                                                                                                     +
      SELECT CASE                                                                                           +
-         WHEN EXISTS (SELECT 1 FROM round_winners) THEN                                                    +
+         WHEN EXISTS (SELECT 1 FROM round_winner_counts) THEN                                              +
              jsonb_build_object(                                                                           +
                  'has_champion', true,                                                                     +
-                 'champion_name', (SELECT winner_name FROM round_winners),                                 +
-                 'winning_round', (SELECT round_number FROM round_winners)                                 +
+                 'champion_name', (SELECT winner_names FROM round_winner_counts),                          +
+                 'winning_round', (SELECT round_number FROM round_winner_counts)                           +
              )                                                                                             +
          ELSE                                                                                              +
              jsonb_build_object('has_champion', false)                                                     +
