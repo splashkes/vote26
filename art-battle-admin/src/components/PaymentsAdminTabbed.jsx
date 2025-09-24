@@ -100,89 +100,53 @@ const PaymentsAdminTabbed = () => {
   const fetchEnhancedData = async () => {
     try {
       setLoading(true);
+      console.log('🔍 Fetching artist payment data from working-admin-payments function...');
 
-      // Create a simplified query that focuses on artists with active payments
-      console.log('🔍 Fetching artists with automated payments...');
-
-      // Get artists with processing/failed automated payments
-      const { data: activePayments, error: paymentsError } = await supabase
-        .from('artist_payments')
-        .select(`
-          artist_profile_id,
-          status,
-          gross_amount,
-          currency,
-          created_at,
-          artist_profiles!inner (
-            id,
-            name,
-            email,
-            phone,
-            entry_id,
-            country
-          )
-        `)
-        .eq('payment_type', 'automated')
-        .in('status', ['processing', 'failed', 'pending'])
-        .order('created_at', { ascending: false });
-
-      if (paymentsError) throw paymentsError;
-
-      console.log('💳 Found active payments:', activePayments);
-
-      // Get their payment account status
-      const artistIds = activePayments?.map(p => p.artist_profile_id) || [];
-      const { data: paymentAccounts, error: accountsError } = await supabase
-        .from('artist_global_payments')
-        .select('artist_profile_id, status, stripe_recipient_id')
-        .in('artist_profile_id', artistIds);
-
-      if (accountsError) {
-        console.warn('Failed to fetch payment accounts:', accountsError);
-      }
-
-      console.log('🏦 Found payment accounts:', paymentAccounts);
-
-      // Build the simplified result structure
-      const accountMap = {};
-      paymentAccounts?.forEach(acc => {
-        accountMap[acc.artist_profile_id] = acc;
+      const { data: paymentData, error: paymentError } = await supabase.functions.invoke('working-admin-payments', {
+        body: {
+          days_back: 365
+        }
       });
 
-      const artists_owing = activePayments?.map(payment => {
-        const account = accountMap[payment.artist_profile_id] || {};
-        return {
-          artist_profiles: payment.artist_profiles,
-          payment_status: account.status === 'completed' ? 'ready' :
-                         account.status === 'pending' ? 'invited' : 'needs_setup',
-          stripe_recipient_id: account.stripe_recipient_id,
-          estimated_balance: payment.gross_amount,
-          current_balance: payment.gross_amount,
-          automated_payment_status: payment.status,
-          recent_city: 'Unknown', // Simplified for now
-          recent_contests: 0,
-          currency_info: {
-            primary_currency: payment.currency || 'USD',
-            has_mixed_currencies: false
-          },
-          invitation_info: null
-        };
-      }) || [];
+      if (paymentError) {
+        console.error('❌ Edge function error:', paymentError);
+        throw paymentError;
+      }
 
-      console.log('🎯 Simplified artists owing:', artists_owing);
+      console.log('📊 Received payment data:', {
+        recent_contestants: paymentData.recent_contestants?.length,
+        artists_owed_money: paymentData.artists_owed_money?.length,
+        artists_ready_to_pay: paymentData.artists_ready_to_pay?.length,
+        payment_attempts: paymentData.payment_attempts?.length,
+        completed_payments: paymentData.completed_payments?.length
+      });
 
+      // Use the new 5-category data structure directly
       const enhancedResult = {
-        artists_owing: artists_owing,
-        artists_zero_balance: [],
-        recent_payments: [],
-        summary: {
-          total_artists: artists_owing.length,
-          artists_owing_count: artists_owing.length,
-          artists_zero_count: 0,
-          recent_payments_count: 0,
+        // Pass through all 5 categories from working function
+        recent_contestants: paymentData.recent_contestants || [],
+        artists_owed_money: paymentData.artists_owed_money || [],
+        artists_ready_to_pay: paymentData.artists_ready_to_pay || [],
+        payment_attempts: paymentData.payment_attempts || [],
+        completed_payments: paymentData.completed_payments || [],
+        summary: paymentData.summary || {
+          total_recent_contestants: 0,
+          artists_owed_count: 0,
+          artists_ready_count: 0,
+          payment_attempts_count: 0,
+          completed_payments_count: 0,
           generated_at: new Date().toISOString()
         }
       };
+
+      console.log('✅ Enhanced data prepared:', {
+        recent_contestants: enhancedResult.recent_contestants?.length,
+        artists_owed_money: enhancedResult.artists_owed_money?.length,
+        artists_ready_to_pay: enhancedResult.artists_ready_to_pay?.length,
+        payment_attempts: enhancedResult.payment_attempts?.length,
+        completed_payments: enhancedResult.completed_payments?.length,
+        summary: enhancedResult.summary
+      });
 
       setEnhancedData(enhancedResult);
     } catch (err) {
@@ -479,49 +443,6 @@ const PaymentsAdminTabbed = () => {
     setShowPayNowDialog(true);
   };
 
-  const testPaymentProcessing = async () => {
-    try {
-      setError('');
-      const { data, error } = await supabase.functions.invoke('process-pending-payments', {
-        body: {
-          dry_run: true,
-          limit: 5
-        }
-      });
-
-      if (error) throw error;
-
-      // Show results in console and as a success message
-      console.log('Payment processing test results:', data);
-      setError(`✅ Test completed: ${data.processed_count} payments processed (${data.successful_count} successful, ${data.failed_count} failed). Check console for details.`);
-
-      // Refresh data to show any status changes
-      await fetchEnhancedData();
-    } catch (err) {
-      console.error('Payment processing test error:', err);
-
-      // Parse detailed error response if available
-      if (err && err.context && err.context.text) {
-        try {
-          const responseText = await err.context.text();
-          console.log('Raw edge function response:', responseText);
-          const parsed = JSON.parse(responseText);
-
-          if (parsed.debug) {
-            console.log('Edge function debug info:', parsed.debug);
-            setError(`Payment processing failed: ${parsed.error}. Check console for detailed debug info.`);
-          } else {
-            setError('Failed to test payment processing: ' + err.message);
-          }
-        } catch (parseError) {
-          console.log('Could not parse error response:', parseError);
-          setError('Failed to test payment processing: ' + err.message);
-        }
-      } else {
-        setError('Failed to test payment processing: ' + err.message);
-      }
-    }
-  };
 
   const handleProcessPayments = async () => {
     console.log('🚀 Payment processing started...');
@@ -795,19 +716,15 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
     );
   }
 
-  const filteredOwing = filterItems(enhancedData?.artists_owing || [], searchFilter);
-  const filteredZero = filterItems(enhancedData?.artists_zero_balance || [], searchFilter);
-  const filteredPayments = filterItems(enhancedData?.recent_payments || [], searchFilter);
-
-  // Calculate ready to pay artists (those with payment setup and balance owing OR processing payments)
-  const readyToPayArtists = filteredOwing.filter(artist =>
-    artist.payment_status === 'ready' &&
-    artist.stripe_recipient_id &&
-    (artist.estimated_balance > 0.01 || artist.automated_payment_status === 'processing' || artist.automated_payment_status === 'failed')
-  );
+  // Use data from working function's 5 categories
+  const filteredRecentContestants = filterItems(enhancedData?.recent_contestants || [], searchFilter);
+  const filteredArtistsOwed = filterItems(enhancedData?.artists_owed_money || [], searchFilter);
+  const filteredReadyToPay = filterItems(enhancedData?.artists_ready_to_pay || [], searchFilter);
+  const filteredPaymentAttempts = filterItems(enhancedData?.payment_attempts || [], searchFilter);
+  const filteredCompletedPayments = filterItems(enhancedData?.completed_payments || [], searchFilter);
 
   // Calculate total amount ready to pay by currency
-  const totalsByCurrency = readyToPayArtists.reduce((totals, artist) => {
+  const totalsByCurrency = filteredReadyToPay.reduce((totals, artist) => {
     const currency = artist.currency_info?.primary_currency || 'USD';
     // Use estimated balance if available, otherwise show that there are processing payments
     const amount = artist.estimated_balance || 0;
@@ -815,21 +732,12 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
     return totals;
   }, {});
 
-  const totalReadyToPay = readyToPayArtists.reduce((sum, artist) => sum + artist.estimated_balance, 0);
+  const totalReadyToPay = filteredReadyToPay.reduce((sum, artist) => sum + artist.estimated_balance, 0);
 
   return (
     <Box>
       <Flex justify="between" align="center" mb="4">
         <Heading size="6">Artist Payments & Account Setup</Heading>
-        <Flex gap="2">
-          <Button onClick={testPaymentProcessing} variant="soft" color="orange">
-            Test Payment Processing (Dry Run)
-          </Button>
-          <Button onClick={fetchEnhancedData} variant="soft">
-            <UpdateIcon width="16" height="16" />
-            Refresh Data
-          </Button>
-        </Flex>
       </Flex>
 
       {error && (
@@ -869,51 +777,58 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
         <Card mb="4">
           <Flex gap="6" wrap="wrap">
             <Box>
-              <Text size="3" weight="bold" color="blue">{enhancedData.summary.total_artists}</Text>
-              <Text size="2" color="gray" style={{ display: 'block' }}>Total Artists</Text>
+              <Text size="3" weight="bold" color="blue">{enhancedData.summary.total_recent_contestants}</Text>
+              <Text size="2" color="gray" style={{ display: 'block' }}>Recent Contestants</Text>
             </Box>
             <Box>
-              <Text size="3" weight="bold" color="green">{enhancedData.summary.artists_owing_count}</Text>
-              <Text size="2" color="gray" style={{ display: 'block' }}>With Balance Owing</Text>
+              <Text size="3" weight="bold" color="green">{enhancedData.summary.artists_owed_count}</Text>
+              <Text size="2" color="gray" style={{ display: 'block' }}>Artists Owed Money</Text>
             </Box>
             <Box>
-              <Text size="3" weight="bold" color="gray">{enhancedData.summary.artists_zero_count}</Text>
-              <Text size="2" color="gray" style={{ display: 'block' }}>Zero Balance</Text>
+              <Text size="3" weight="bold" color="orange">{enhancedData.summary.artists_ready_count}</Text>
+              <Text size="2" color="gray" style={{ display: 'block' }}>Ready to Pay</Text>
             </Box>
             <Box>
-              <Text size="3" weight="bold" color="purple">{enhancedData.summary.recent_payments_count}</Text>
-              <Text size="2" color="gray" style={{ display: 'block' }}>Recent Payments (30d)</Text>
+              <Text size="3" weight="bold" color="purple">{enhancedData.summary.payment_attempts_count}</Text>
+              <Text size="2" color="gray" style={{ display: 'block' }}>Payment Attempts</Text>
+            </Box>
+            <Box>
+              <Text size="3" weight="bold" color="green">{enhancedData.summary.completed_payments_count}</Text>
+              <Text size="2" color="gray" style={{ display: 'block' }}>Completed Payments</Text>
             </Box>
           </Flex>
         </Card>
       )}
 
       {/* Tabbed Interface */}
-      <Tabs.Root defaultValue="owing">
+      <Tabs.Root defaultValue="recent-contestants">
         <Tabs.List>
-          <Tabs.Trigger value="owing">
-            Artists Owing ({filteredOwing.length})
+          <Tabs.Trigger value="recent-contestants">
+            Recent Contestants ({filteredRecentContestants.length})
           </Tabs.Trigger>
-          <Tabs.Trigger value="zero">
-            Zero Balance ({filteredZero.length})
+          <Tabs.Trigger value="artists-owed">
+            Artists Owed Money ({filteredArtistsOwed.length})
           </Tabs.Trigger>
           <Tabs.Trigger value="ready-to-pay">
-            Ready to Pay ({readyToPayArtists.length})
+            Ready to Pay ({filteredReadyToPay.length})
           </Tabs.Trigger>
-          <Tabs.Trigger value="payments">
-            Recent Payments ({filteredPayments.length})
+          <Tabs.Trigger value="payment-attempts">
+            Payment Attempts ({filteredPaymentAttempts.length})
+          </Tabs.Trigger>
+          <Tabs.Trigger value="completed-payments">
+            Completed Payments ({filteredCompletedPayments.length})
           </Tabs.Trigger>
         </Tabs.List>
 
-        {/* Artists Owing Tab */}
-        <Tabs.Content value="owing">
+        {/* Recent Contestants Tab */}
+        <Tabs.Content value="recent-contestants">
           <Card mt="4">
             <Heading size="3" mb="4" color="green">
-              Artists with Balance Owing ({filteredOwing.length})
+              Recent Contestants ({filteredRecentContestants.length})
             </Heading>
-            {filteredOwing.length === 0 ? (
+            {filteredRecentContestants.length === 0 ? (
               <Text color="gray" style={{ textAlign: 'center', padding: '2rem' }}>
-                No artists with balances owing found
+                No recent contestants found
               </Text>
             ) : (
               <Table.Root>
@@ -928,7 +843,7 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                   </Table.Row>
                 </Table.Header>
                 <Table.Body>
-                  {filteredOwing.map((artist, index) => (
+                  {filteredRecentContestants.map((artist, index) => (
                     <Table.Row key={`${artist.artist_profiles.id}-${index}`}>
                       <Table.Cell>
                         <Flex direction="column" gap="1">
@@ -942,8 +857,8 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                         </Text>
                       </Table.Cell>
                       <Table.Cell>
-                        <Badge color={artist.payment_status === 'ready' ? 'green' : artist.payment_status === 'invited' ? 'orange' : 'red'}>
-                          {artist.payment_status || 'No Account'}
+                        <Badge color={artist.payment_account_status === 'ready' ? 'green' : artist.payment_account_status === 'invited' ? 'orange' : 'red'}>
+                          {artist.payment_account_status || 'No Account'}
                         </Badge>
                       </Table.Cell>
                       <Table.Cell>
@@ -988,7 +903,7 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                           </Button>
 
                           {/* Pay Now buttons */}
-                          {artist.payment_status === 'ready' && artist.stripe_recipient_id && artist.estimated_balance > 0.01 && (
+                          {artist.payment_account_status === 'ready' && artist.stripe_recipient_id && artist.estimated_balance > 0.01 && (
                             <Button
                               size="1"
                               variant="solid"
@@ -1005,7 +920,7 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                           )}
 
                           {/* Detailed Pay buttons for each currency if breakdown exists */}
-                          {artist.payment_status === 'ready' && artist.stripe_recipient_id && artist.currency_info?.currency_breakdown && (
+                          {artist.payment_account_status === 'ready' && artist.stripe_recipient_id && artist.currency_info?.currency_breakdown && (
                             <Flex gap="1" wrap="wrap">
                               {Object.entries(artist.currency_info.currency_breakdown).map(([currency, info]) => (
                                 info.balance > 0.01 && (
@@ -1028,7 +943,7 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                           )}
 
                           {/* Setup payment button for accounts without setup */}
-                          {!artist.payment_status && artist.artist_profiles.email && (
+                          {!artist.payment_account_status && artist.artist_profiles.email && (
                             <Flex direction="column" gap="1">
                               <Button
                                 size="1"
@@ -1062,15 +977,15 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
           </Card>
         </Tabs.Content>
 
-        {/* Zero Balance Tab */}
-        <Tabs.Content value="zero">
+        {/* Artists Owed Money Tab */}
+        <Tabs.Content value="artists-owed">
           <Card mt="4">
             <Heading size="3" mb="4" color="gray">
-              Artists with Zero Balance ({filteredZero.length})
+              Artists Owed Money ({filteredArtistsOwed.length})
             </Heading>
-            {filteredZero.length === 0 ? (
+            {filteredArtistsOwed.length === 0 ? (
               <Text color="gray" style={{ textAlign: 'center', padding: '2rem' }}>
-                No artists with zero balance found
+                No artists owed money found
               </Text>
             ) : (
               <Table.Root>
@@ -1085,7 +1000,7 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                   </Table.Row>
                 </Table.Header>
                 <Table.Body>
-                  {filteredZero.map((artist, index) => (
+                  {filteredArtistsOwed.map((artist, index) => (
                     <Table.Row key={`${artist.artist_profiles.id}-${index}`}>
                       <Table.Cell>
                         <Flex direction="column" gap="1">
@@ -1094,8 +1009,8 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                         </Flex>
                       </Table.Cell>
                       <Table.Cell>
-                        <Badge color={artist.payment_status === 'ready' ? 'green' : artist.payment_status === 'invited' ? 'orange' : 'red'}>
-                          {artist.payment_status || 'No Account'}
+                        <Badge color={artist.payment_account_status === 'ready' ? 'green' : artist.payment_account_status === 'invited' ? 'orange' : 'red'}>
+                          {artist.payment_account_status || 'No Account'}
                         </Badge>
                       </Table.Cell>
                       <Table.Cell>
@@ -1141,7 +1056,7 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                             <EyeOpenIcon width="12" height="12" />
                             View
                           </Button>
-                          {!artist.payment_status && artist.artist_profiles.email && (
+                          {!artist.payment_account_status && artist.artist_profiles.email && (
                             <Flex direction="column" gap="1">
                               <Button
                                 size="1"
@@ -1180,7 +1095,7 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
           <Card mt="4">
             <Flex justify="between" align="center" mb="4">
               <Heading size="3" color="green">
-                Ready to Pay ({readyToPayArtists.length} artists)
+                Ready to Pay ({filteredReadyToPay.length} artists)
               </Heading>
               <Flex gap="3" align="center">
                 <Box style={{ textAlign: 'right' }}>
@@ -1218,10 +1133,10 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                       variant="solid"
                       color="green"
                       onClick={handleProcessPayments}
-                      disabled={processingPayments || readyToPayArtists.length === 0}
+                      disabled={processingPayments || filteredReadyToPay.length === 0}
                       loading={processingPayments}
                     >
-                      💰 Process {Math.min(paymentLimit, readyToPayArtists.length)} Payment{Math.min(paymentLimit, readyToPayArtists.length) !== 1 ? 's' : ''}
+                      💰 Process {Math.min(paymentLimit, filteredReadyToPay.length)} Payment{Math.min(paymentLimit, filteredReadyToPay.length) !== 1 ? 's' : ''}
                     </Button>
                   </Flex>
 
@@ -1271,7 +1186,7 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
               </Callout.Root>
             )}
 
-            {readyToPayArtists.length === 0 ? (
+            {filteredReadyToPay.length === 0 ? (
               <Text color="gray" style={{ textAlign: 'center', padding: '2rem' }}>
                 No artists ready to pay found. Artists need payment accounts set up and balances owing.
               </Text>
@@ -1288,7 +1203,7 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                   </Table.Row>
                 </Table.Header>
                 <Table.Body>
-                  {readyToPayArtists.map((artist, index) => (
+                  {filteredReadyToPay.map((artist, index) => (
                     <Table.Row key={`${artist.artist_profiles.id}-${index}`}>
                       <Table.Cell>
                         <Flex direction="column" gap="1">
@@ -1307,7 +1222,7 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                           artist.automated_payment_status === 'failed' ? 'red' :
                           artist.automated_payment_status === 'completed' ? 'green' :
                           artist.automated_payment_status === 'pending' ? 'orange' :
-                          artist.payment_status === 'ready' ? 'gray' : 'gray'
+                          artist.payment_account_status === 'ready' ? 'gray' : 'gray'
                         }>
                           {artist.automated_payment_status ?
                             artist.automated_payment_status.charAt(0).toUpperCase() + artist.automated_payment_status.slice(1) :
@@ -1501,9 +1416,9 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
         <Tabs.Content value="payments">
           <Card mt="4">
             <Heading size="3" mb="4" color="purple">
-              Recent Payments (Last 30 Days) ({filteredPayments.length})
+              Recent Payments (Last 30 Days) ({filteredCompletedPayments.length})
             </Heading>
-            {filteredPayments.length === 0 ? (
+            {filteredCompletedPayments.length === 0 ? (
               <Text color="gray" style={{ textAlign: 'center', padding: '2rem' }}>
                 No recent payments found
               </Text>
@@ -1521,7 +1436,7 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                   </Table.Row>
                 </Table.Header>
                 <Table.Body>
-                  {filteredPayments.map((payment, index) => (
+                  {filteredCompletedPayments.map((payment, index) => (
                     <Table.Row key={`${payment.artist_id}-${index}`}>
                       <Table.Cell>
                         <Flex direction="column" gap="1">
@@ -1592,6 +1507,177 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                         <Text size="1" color="gray">
                           {payment.recent_city || 'Unknown'}
                         </Text>
+                      </Table.Cell>
+                    </Table.Row>
+                  ))}
+                </Table.Body>
+              </Table.Root>
+            )}
+          </Card>
+        </Tabs.Content>
+
+        {/* Payment Attempts Tab */}
+        <Tabs.Content value="payment-attempts">
+          <Card mt="4">
+            <Heading size="3" mb="4" color="orange">
+              Payment Attempts ({filteredPaymentAttempts.length})
+            </Heading>
+            {filteredPaymentAttempts.length === 0 ? (
+              <Text color="gray" style={{ textAlign: 'center', padding: '2rem' }}>
+                No payment attempts found
+              </Text>
+            ) : (
+              <Table.Root>
+                <Table.Header>
+                  <Table.Row>
+                    <Table.ColumnHeaderCell>Artist</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Payment Status</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Payment History</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Recent City</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Last Payment</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Actions</Table.ColumnHeaderCell>
+                  </Table.Row>
+                </Table.Header>
+                <Table.Body>
+                  {filteredPaymentAttempts.map((artist, index) => (
+                    <Table.Row key={`${artist.artist_profiles.id}-${index}`}>
+                      <Table.Cell>
+                        <Flex direction="column" gap="1">
+                          <Text size="2" weight="medium">{artist.artist_profiles.name}</Text>
+                          <Badge variant="soft" size="1">#{artist.artist_profiles.entry_id}</Badge>
+                        </Flex>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Badge
+                          color={
+                            artist.latest_payment_status === 'completed' ? 'green' :
+                            artist.latest_payment_status === 'pending' ? 'yellow' : 'red'
+                          }
+                          variant="soft"
+                        >
+                          {artist.latest_payment_status || 'Unknown'}
+                        </Badge>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Flex direction="column" gap="1">
+                          {artist.payment_history_summary.completed > 0 && (
+                            <Badge color="green" size="1">✅ {artist.payment_history_summary.completed} completed</Badge>
+                          )}
+                          {artist.payment_history_summary.pending > 0 && (
+                            <Badge color="yellow" size="1">⏳ {artist.payment_history_summary.pending} pending</Badge>
+                          )}
+                          {artist.payment_history_summary.failed > 0 && (
+                            <Badge color="red" size="1">❌ {artist.payment_history_summary.failed} failed</Badge>
+                          )}
+                        </Flex>
+                      </Table.Cell>
+                      <Table.Cell>
+                        {artist.recent_city ? (
+                          <Badge variant="outline" size="1">{artist.recent_city}</Badge>
+                        ) : (
+                          <Text size="1" color="gray">—</Text>
+                        )}
+                      </Table.Cell>
+                      <Table.Cell>
+                        {artist.latest_payment_date ? (
+                          <Text size="1" color="gray">
+                            {new Date(artist.latest_payment_date).toLocaleDateString()}
+                          </Text>
+                        ) : (
+                          <Text size="1" color="gray">—</Text>
+                        )}
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Button
+                          size="1"
+                          variant="soft"
+                          onClick={() => {
+                            setSelectedArtist(artist);
+                            setShowArtistDetail(true);
+                          }}
+                        >
+                          <EyeOpenIcon width="12" height="12" />
+                          View Details
+                        </Button>
+                      </Table.Cell>
+                    </Table.Row>
+                  ))}
+                </Table.Body>
+              </Table.Root>
+            )}
+          </Card>
+        </Tabs.Content>
+
+        {/* Completed Payments Tab */}
+        <Tabs.Content value="completed-payments">
+          <Card mt="4">
+            <Heading size="3" mb="4" color="green">
+              Completed Payments ({filteredCompletedPayments.length})
+            </Heading>
+            {filteredCompletedPayments.length === 0 ? (
+              <Text color="gray" style={{ textAlign: 'center', padding: '2rem' }}>
+                No completed payments found
+              </Text>
+            ) : (
+              <Table.Root>
+                <Table.Header>
+                  <Table.Row>
+                    <Table.ColumnHeaderCell>Artist</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Payment Summary</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Recent City</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Last Payment</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Actions</Table.ColumnHeaderCell>
+                  </Table.Row>
+                </Table.Header>
+                <Table.Body>
+                  {filteredCompletedPayments.map((artist, index) => (
+                    <Table.Row key={`${artist.artist_profiles.id}-${index}`}>
+                      <Table.Cell>
+                        <Flex direction="column" gap="1">
+                          <Text size="2" weight="medium">{artist.artist_profiles.name}</Text>
+                          <Badge variant="soft" size="1">#{artist.artist_profiles.entry_id}</Badge>
+                        </Flex>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Flex direction="column" gap="1">
+                          <Badge color="green" size="1">
+                            ✅ {artist.payment_history_summary.completed} completed
+                          </Badge>
+                          {artist.payment_history_summary.manual_count > 0 && (
+                            <Badge color="blue" size="1">
+                              👤 {artist.payment_history_summary.manual_count} manual
+                            </Badge>
+                          )}
+                        </Flex>
+                      </Table.Cell>
+                      <Table.Cell>
+                        {artist.recent_city ? (
+                          <Badge variant="outline" size="1">{artist.recent_city}</Badge>
+                        ) : (
+                          <Text size="1" color="gray">—</Text>
+                        )}
+                      </Table.Cell>
+                      <Table.Cell>
+                        {artist.latest_payment_date ? (
+                          <Text size="1" color="gray">
+                            {new Date(artist.latest_payment_date).toLocaleDateString()}
+                          </Text>
+                        ) : (
+                          <Text size="1" color="gray">—</Text>
+                        )}
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Button
+                          size="1"
+                          variant="soft"
+                          onClick={() => {
+                            setSelectedArtist(artist);
+                            setShowArtistDetail(true);
+                          }}
+                        >
+                          <EyeOpenIcon width="12" height="12" />
+                          View Details
+                        </Button>
                       </Table.Cell>
                     </Table.Row>
                   ))}

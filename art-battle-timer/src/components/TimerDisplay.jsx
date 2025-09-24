@@ -304,6 +304,30 @@ export default function TimerDisplay() {
           )
         )}
 
+        {/* Round History Display - show completed rounds */}
+        {timerData.all_rounds && timerData.all_rounds.length > 0 && (
+          <div className="round-history">
+            <div className="history-grid">
+              {timerData.all_rounds.map(round => (
+                <div key={round.round} className="history-item">
+                  <Text size="2" weight="bold" color="amber">
+                    Round {round.round}
+                  </Text>
+                  <Text size="1" color="gray">
+                    {formatDateTime(round.start_time)} - {formatDateTime(round.closing_time)}
+                  </Text>
+                  <Text size="1" color="gray">
+                    {round.is_past ?
+                      formatTimeAgo(new Date(round.closing_time).getTime()) :
+                      'in progress'
+                    }
+                  </Text>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Artist Names Display */}
         {hasUpcomingRounds && (() => {
           // Collect all artist names for auto-scaling

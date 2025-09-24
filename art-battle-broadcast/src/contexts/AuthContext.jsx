@@ -14,11 +14,18 @@ export const AuthProvider = ({ children }) => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [sessionWarning, setSessionWarning] = useState(null);
   const personRef = useRef(null);
+  const authStateRef = useRef('initializing');
+  const jwtProcessingRef = useRef(false);
+  const authReadyRef = useRef(false);
 
-  // Keep ref in sync with person state
+  // Keep refs in sync with state
   useEffect(() => {
     personRef.current = person;
   }, [person]);
+
+  useEffect(() => {
+    authReadyRef.current = !loading && !!session;
+  }, [loading, session]);
 
   useEffect(() => {
     console.log('AuthContext: Initializing...');
@@ -83,8 +90,15 @@ export const AuthProvider = ({ children }) => {
   // No additional safeguards or complex fallback logic needed
 
   const extractPersonFromJWT = async (authUser, currentPerson = null, providedSession = null) => {
+    // Prevent duplicate JWT processing
+    if (jwtProcessingRef.current) {
+      console.log('🔄 [AUTH-V2] JWT processing already in progress, skipping...');
+      return;
+    }
+
+    jwtProcessingRef.current = true;
     console.log('🔄 [AUTH-V2] Extracting person data from JWT claims...');
-    
+
     let currentSession = providedSession;
     
     if (!currentSession) {
