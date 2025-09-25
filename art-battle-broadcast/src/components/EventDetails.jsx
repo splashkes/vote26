@@ -2018,9 +2018,11 @@ const EventDetails = () => {
                         {currentBids[artwork.id]?.amount ? (
                           <>
                             <Text size="1" color={
-                              artwork.status === 'sold' ? 'red' : 
-                              artwork.status === 'active' ? 'green' : 
-                              artwork.status === 'cancelled' ? 'gray' : 
+                              artwork.status === 'sold' ? 'red' :
+                              artwork.status === 'paid' ? 'blue' :
+                              artwork.status === 'closed' ? 'orange' :
+                              artwork.status === 'active' ? 'green' :
+                              artwork.status === 'cancelled' ? 'gray' :
                               'yellow'
                             } weight="medium">
                               {formatCurrencyFromEvent(currentBids[artwork.id]?.amount || 0, event, 'display')}
@@ -2062,20 +2064,23 @@ const EventDetails = () => {
                   });
                   */
                   
-                  // Group artworks by status
+                  // Group artworks by status - FIXED: Add support for 'closed' and 'paid' statuses
                   const artworksByStatus = {
                     active: [],
                     sold: [],
+                    closed: [],
+                    paid: [],
                     cancelled: [],
                     inactive: [],
                     other: []
                   };
-                  
+
                   artworks.forEach(artwork => {
                     const status = artwork.status || 'other';
                     if (artworksByStatus[status]) {
                       artworksByStatus[status].push(artwork);
                     } else {
+                      console.warn(`Unknown artwork status '${status}' for artwork ${artwork.id}, categorizing as 'other'`);
                       artworksByStatus.other.push(artwork);
                     }
                   });
@@ -2089,9 +2094,9 @@ const EventDetails = () => {
                     });
                   });
                   
-                  // Status order (active first)
+                  // Status order (active first, then sold/paid, then closed, then others)
                   const isOlderEvent = eventId && parseInt(eventId.replace('AB', '')) < 2936;
-                  const statusOrder = ['active', 'sold', 'cancelled', 'inactive', 'other'];
+                  const statusOrder = ['active', 'sold', 'paid', 'closed', 'cancelled', 'inactive', 'other'];
                   
                   return (
                     <>
@@ -2122,10 +2127,14 @@ const EventDetails = () => {
                         <Heading size="3" mb="3" color={
                           status === 'active' ? 'green' :
                           status === 'sold' ? 'red' :
+                          status === 'paid' ? 'blue' :
+                          status === 'closed' ? 'orange' :
                           status === 'cancelled' ? 'gray' :
                           'yellow'
                         }>
-                          {status.charAt(0).toUpperCase() + status.slice(1)} ({statusArtworks.length})
+                          {status === 'closed' ? 'Closed (No Bids)' :
+                           status === 'paid' ? 'Paid' :
+                           status.charAt(0).toUpperCase() + status.slice(1)} ({statusArtworks.length})
                         </Heading>
                         <Flex direction="column" gap="3">
                           {statusArtworks.map(artwork => {

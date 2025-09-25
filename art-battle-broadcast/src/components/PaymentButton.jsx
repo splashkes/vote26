@@ -1,35 +1,91 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Button, Spinner, Text, Badge, Flex, Box } from '@radix-ui/themes';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Button, Spinner, Text, Badge, Flex, Box, Dialog } from '@radix-ui/themes';
 import { CheckCircledIcon, CrossCircledIcon, LockClosedIcon } from '@radix-ui/react-icons';
 import { supabase } from '../lib/supabase';
 import { useOfferNotifications } from '../hooks/useOfferNotifications';
 
-const PaymentButton = ({ 
-  artwork, 
-  currentBid, 
+// Format amount with currency - moved to top to avoid temporal dead zone
+const formatAmount = (amount, currency = 'USD') => {
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currency,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2
+    }).format(amount);
+  } catch {
+    // Fallback for unsupported currencies
+    const symbols = {
+      'USD': '$',
+      'CAD': 'C$',
+      'GBP': '£',
+      'EUR': '€',
+      'MXN': 'MX$'
+    };
+    const symbol = symbols[currency] || '$';
+    return `${symbol}${amount?.toFixed(2) || '0.00'}`;
+  }
+};
+
+const PaymentButton = ({
+  artwork,
+  currentBid,
   isWinningBidder,
-  onPaymentComplete 
+  onPaymentComplete
 }) => {
   const [loading, setLoading] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(true);
   const [paymentStatus, setPaymentStatus] = useState(null);
   const [error, setError] = useState(null);
-  const [raceAlert, setRaceAlert] = useState(null); // For showing race notifications
+  const [raceAlert, setRaceAlert] = useState(null);
 
+  // Modal states for broadcast-triggered popups
+  const [showWinnerModal, setShowWinnerModal] = useState(false);
+  const [showOfferModal, setShowOfferModal] = useState(false);
+  const [modalData, setModalData] = useState(null);
+
+  // Ref to prevent duplicate modals
+  const lastNotificationRef = useRef(null);
+
+  // Define variables early to prevent temporal dead zone errors
+  const amount = paymentStatus?.amount || currentBid;
+  const currency = paymentStatus?.currency || 'USD';
+  const activeOfferCount = paymentStatus?.active_offer_count || 0;
+  const isWinnerInRace = activeOfferCount > 0;
+
+  // Check payment status on mount and artwork changes
   useEffect(() => {
-    checkPaymentStatus();
-  }, [artwork.id]);
+    if (artwork?.id) {
+      checkPaymentStatus();
+    }
+  }, [artwork?.id]);
 
   // Handle offer change notifications
   const handleOfferChange = useCallback((notification) => {
-    console.log('PaymentButton: Offer change notification', notification);
+    console.log('🎯 [PAYMENT-BUTTON] Offer change notification', notification);
+
+    // Prevent duplicate modals for same notification
+    const notificationKey = `${notification.type}-${notification.offer?.id}-${Date.now()}`;
+    if (lastNotificationRef.current === notificationKey) return;
+    lastNotificationRef.current = notificationKey;
 
     // Refresh payment status to get updated offer information
     checkPaymentStatus();
 
-    // Show temporary alert for offer changes
+    // Show modal for offer changes affecting current user
     if (notification.isForCurrentUser) {
       if (notification.type === 'insert') {
+        // New offer received - show modal popup
+        setModalData({
+          title: '🎯 Artwork Offer Received!',
+          message: `You have been offered this artwork for ${formatAmount(notification.offer.offered_amount)}`,
+          type: 'offer',
+          offer: notification.offer,
+          color: 'amber'
+        });
+        setShowOfferModal(true);
+
+        // Also set alert for in-component display
         setRaceAlert({
           type: 'offer_received',
           message: '🎯 New artwork offer received! You can now pay at your bid price.',
@@ -54,9 +110,22 @@ const PaymentButton = ({
     }
   }, []);
 
-  // Handle payment race updates
+  // Handle payment race updates and auction wins
   const handlePaymentRaceUpdate = useCallback((notification) => {
-    console.log('PaymentButton: Payment race update', notification);
+    console.log('🎯 [PAYMENT-BUTTON] Payment race/auction update', notification);
+
+    // Handle auction status changes (when user becomes winning bidder)
+    if (notification.type === 'auction_status_change' && notification.is_winning_bidder) {
+      // User just became the winning bidder - show winner modal
+      setModalData({
+        title: '🏆 Congratulations! You Won!',
+        message: `You are now the winning bidder for this artwork at ${formatAmount(notification.winning_amount)}`,
+        type: 'winner',
+        amount: notification.winning_amount,
+        color: 'green'
+      });
+      setShowWinnerModal(true);
+    }
 
     if (notification.type === 'payment_completed') {
       // Someone completed payment - refresh status
@@ -298,36 +367,7 @@ const PaymentButton = ({
     return null;
   }
 
-  // Show payment button for winning bidder
-  const amount = paymentStatus?.amount || currentBid;
-  const currency = paymentStatus?.currency || 'USD';
-
-  // Format amount with currency
-  const formatAmount = (amount, currency) => {
-    try {
-      return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: currency,
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 2
-      }).format(amount);
-    } catch {
-      // Fallback for unsupported currencies
-      const symbols = {
-        'USD': '$',
-        'CAD': 'C$',
-        'GBP': '£',
-        'EUR': '€',
-        'MXN': 'MX$'
-      };
-      const symbol = symbols[currency] || '$';
-      return `${symbol}${amount.toFixed(2)}`;
-    }
-  };
-
-  // Check if there are competing offers (race condition for winner)
-  const activeOfferCount = paymentStatus?.active_offer_count || 0;
-  const isWinnerInRace = activeOfferCount > 0;
+  // Show payment button for winning bidder (variables moved to top to avoid temporal dead zone)
 
   return (
     <Box py="3">
@@ -406,6 +446,74 @@ const PaymentButton = ({
           Secure payment via Stripe
         </Text>
       </Flex>
+
+      {/* Winner Modal - shows when user wins auction */}
+      <Dialog.Root open={showWinnerModal} onOpenChange={setShowWinnerModal}>
+        <Dialog.Content style={{ maxWidth: '500px' }}>
+          <Dialog.Title>{modalData?.title}</Dialog.Title>
+          <Dialog.Description size="3" style={{ marginTop: '16px', marginBottom: '24px' }}>
+            {modalData?.message}
+          </Dialog.Description>
+          <Flex gap="3" justify="end">
+            <Dialog.Close>
+              <Button variant="soft" color="gray">
+                I'll Pay Later
+              </Button>
+            </Dialog.Close>
+            <Dialog.Close>
+              <Button
+                variant="solid"
+                color="green"
+                onClick={handlePayment}
+                disabled={loading}
+              >
+                {loading ? <Spinner size="2" /> : '💰 Pay Now'}
+              </Button>
+            </Dialog.Close>
+          </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
+
+      {/* Offer Modal - shows when user receives an offer */}
+      <Dialog.Root open={showOfferModal} onOpenChange={setShowOfferModal}>
+        <Dialog.Content style={{ maxWidth: '500px' }}>
+          <Dialog.Title>{modalData?.title}</Dialog.Title>
+          <Dialog.Description size="3" style={{ marginTop: '16px', marginBottom: '24px' }}>
+            {modalData?.message}
+            <Box style={{
+              marginTop: '16px',
+              padding: '12px',
+              backgroundColor: 'var(--amber-2)',
+              borderRadius: '8px',
+              border: '1px solid var(--amber-6)'
+            }}>
+              <Text size="2" weight="bold" color="amber">
+                ⚠️ Time-Limited Offer
+              </Text>
+              <Text size="2" style={{ display: 'block', marginTop: '4px' }}>
+                This offer may expire if someone else pays first. Act quickly!
+              </Text>
+            </Box>
+          </Dialog.Description>
+          <Flex gap="3" justify="end">
+            <Dialog.Close>
+              <Button variant="soft" color="gray">
+                Maybe Later
+              </Button>
+            </Dialog.Close>
+            <Dialog.Close>
+              <Button
+                variant="solid"
+                color="amber"
+                onClick={handlePayment}
+                disabled={loading}
+              >
+                {loading ? <Spinner size="2" /> : '🎯 Accept Offer & Pay'}
+              </Button>
+            </Dialog.Close>
+          </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
     </Box>
   );
 };

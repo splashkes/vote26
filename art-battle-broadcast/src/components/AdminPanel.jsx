@@ -3749,16 +3749,29 @@ const AdminPanel = ({
                         try {
                           console.log('Closing bidding for:', selectedAuctionItem);
                           console.log('Art code:', selectedAuctionItem?.art_code);
-                          
+
                           if (!selectedAuctionItem?.art_code) {
                             throw new Error('Art code is missing');
                           }
-                          
+
+                          // FIXED: Check for bids first to determine correct status
+                          const { data: bidData, error: bidError } = await supabase
+                            .from('bids')
+                            .select('id')
+                            .eq('art_id', selectedAuctionItem.id)
+                            .limit(1);
+
+                          if (bidError) throw bidError;
+
+                          // Use bid-based status logic: 'sold' if bids exist, 'closed' if no bids
+                          const newStatus = bidData && bidData.length > 0 ? 'sold' : 'closed';
+                          console.log(`Setting status to '${newStatus}' based on bid count:`, bidData?.length || 0);
+
                           // Use the admin function to ensure notifications are sent
                           const { data, error } = await supabase
                             .rpc('admin_update_art_status', {
                               p_art_code: selectedAuctionItem.art_code,
-                              p_new_status: 'sold'
+                              p_new_status: newStatus
                             });
                           
                           console.log('RPC response:', { data, error });
@@ -3776,14 +3789,16 @@ const AdminPanel = ({
                           
                           if (data?.success) {
                             fetchAuctionData();
-                            setSelectedAuctionItem(prev => ({ ...prev, status: 'sold' }));
-                            
-                            // Show more detailed message if there's a winner
-                            if (data.winner) {
-                              const smsStatus = data.sms_sent > 0 ? '\nPayment notification sent via SMS' : '';
-                              alert(`Bidding closed successfully!\nWinner: ${data.winner.nickname || 'Winner'}\nAmount: $${data.winner.amount}\nTotal (incl tax): $${data.winner.total_with_tax}${smsStatus}`);
+                            setSelectedAuctionItem(prev => ({ ...prev, status: newStatus }));
+
+                            // Show appropriate message based on bid-based status
+                            if (newStatus === 'sold' && data.has_winner) {
+                              const smsStatus = data.notifications_sent > 0 ? '\nPayment notification sent via SMS' : '';
+                              alert(`Bidding closed as SOLD!\nWinning bid: $${data.winning_bid}\nTotal (incl tax): $${data.calculated_total}${smsStatus}`);
+                            } else if (newStatus === 'closed') {
+                              alert('Bidding closed as CLOSED (no bids received)');
                             } else {
-                              alert('Bidding closed successfully (no bids)');
+                              alert(`Bidding closed successfully (status: ${newStatus})`);
                             }
                           } else {
                             console.error('Unexpected response format:', data);
