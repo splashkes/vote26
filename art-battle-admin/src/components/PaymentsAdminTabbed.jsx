@@ -115,7 +115,7 @@ const PaymentsAdminTabbed = () => {
 
       console.log('📊 Received payment data:', {
         recent_contestants: paymentData.recent_contestants?.length,
-        artists_owed_money: paymentData.artists_owed_money?.length,
+        artists_owed_money: paymentData.artists_owing?.length,
         artists_ready_to_pay: paymentData.artists_ready_to_pay?.length,
         payment_attempts: paymentData.payment_attempts?.length,
         completed_payments: paymentData.completed_payments?.length
@@ -125,13 +125,13 @@ const PaymentsAdminTabbed = () => {
       const enhancedResult = {
         // Pass through all 5 categories from working function
         recent_contestants: paymentData.recent_contestants || [],
-        artists_owed_money: paymentData.artists_owed_money || [],
+        artists_owed_money: paymentData.artists_owing || [],
         artists_ready_to_pay: paymentData.artists_ready_to_pay || [],
         payment_attempts: paymentData.payment_attempts || [],
         completed_payments: paymentData.completed_payments || [],
         summary: paymentData.summary || {
           total_recent_contestants: 0,
-          artists_owed_count: 0,
+          artists_owing_count: 0,
           artists_ready_count: 0,
           payment_attempts_count: 0,
           completed_payments_count: 0,
@@ -388,8 +388,7 @@ const PaymentsAdminTabbed = () => {
 
         return {
           ...prevData,
-          artists_owing: prevData.artists_owing.map(updateArtist),
-          artists_zero_balance: prevData.artists_zero_balance.map(updateArtist)
+          artists_owed_money: prevData.artists_owed_money.map(updateArtist)
         };
       });
 
@@ -781,7 +780,7 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
               <Text size="2" color="gray" style={{ display: 'block' }}>Recent Contestants</Text>
             </Box>
             <Box>
-              <Text size="3" weight="bold" color="green">{enhancedData.summary.artists_owed_count}</Text>
+              <Text size="3" weight="bold" color="green">{enhancedData.summary.artists_owing_count}</Text>
               <Text size="2" color="gray" style={{ display: 'block' }}>Artists Owed Money</Text>
             </Box>
             <Box>
@@ -801,11 +800,8 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
       )}
 
       {/* Tabbed Interface */}
-      <Tabs.Root defaultValue="recent-contestants">
+      <Tabs.Root defaultValue="artists-owed">
         <Tabs.List>
-          <Tabs.Trigger value="recent-contestants">
-            Recent Contestants ({filteredRecentContestants.length})
-          </Tabs.Trigger>
           <Tabs.Trigger value="artists-owed">
             Artists Owed Money ({filteredArtistsOwed.length})
           </Tabs.Trigger>
@@ -820,162 +816,6 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
           </Tabs.Trigger>
         </Tabs.List>
 
-        {/* Recent Contestants Tab */}
-        <Tabs.Content value="recent-contestants">
-          <Card mt="4">
-            <Heading size="3" mb="4" color="green">
-              Recent Contestants ({filteredRecentContestants.length})
-            </Heading>
-            {filteredRecentContestants.length === 0 ? (
-              <Text color="gray" style={{ textAlign: 'center', padding: '2rem' }}>
-                No recent contestants found
-              </Text>
-            ) : (
-              <Table.Root>
-                <Table.Header>
-                  <Table.Row>
-                    <Table.ColumnHeaderCell>Artist</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell>Balance</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell>Payment Status</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell>Recent City</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell>Last Invite</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell>Actions</Table.ColumnHeaderCell>
-                  </Table.Row>
-                </Table.Header>
-                <Table.Body>
-                  {filteredRecentContestants.map((artist, index) => (
-                    <Table.Row key={`${artist.artist_profiles.id}-${index}`}>
-                      <Table.Cell>
-                        <Flex direction="column" gap="1">
-                          <Text size="2" weight="medium">{artist.artist_profiles.name}</Text>
-                          <Badge variant="soft" size="1">#{artist.artist_profiles.entry_id}</Badge>
-                        </Flex>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <Text size="2" weight="bold" color="green">
-                          {formatCurrency(artist.estimated_balance, artist.currency_info?.primary_currency)}
-                        </Text>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <Badge color={artist.payment_account_status === 'ready' ? 'green' : artist.payment_account_status === 'invited' ? 'orange' : 'red'}>
-                          {artist.payment_account_status || 'No Account'}
-                        </Badge>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <Text size="2" color="gray">{artist.recent_city || 'Unknown'}</Text>
-                      </Table.Cell>
-                      <Table.Cell>
-                        {artist.invitation_info && artist.invitation_info.time_since_latest ? (
-                          <Button
-                            size="1"
-                            variant="ghost"
-                            onClick={() => handleViewInvitationHistory(artist)}
-                            style={{ padding: '2px', height: 'auto' }}
-                          >
-                            <Flex direction="column" gap="1" align="start">
-                              <Text size="1" color="gray">{artist.invitation_info.time_since_latest}</Text>
-                              <Badge
-                                size="1"
-                                variant="soft"
-                                color={artist.invitation_info.latest_invitation_method === 'email' ? 'blue' : 'orange'}
-                              >
-                                {artist.invitation_info.latest_invitation_method}
-                              </Badge>
-                              {artist.invitation_info.invitation_count > 1 && (
-                                <Text size="1" color="gray">({artist.invitation_info.invitation_count} total)</Text>
-                              )}
-                            </Flex>
-                          </Button>
-                        ) : (
-                          <Text size="1" color="gray">None sent</Text>
-                        )}
-                      </Table.Cell>
-                      <Table.Cell>
-                        <Flex gap="2" wrap="wrap">
-                          <Button
-                            size="1"
-                            variant="soft"
-                            onClick={() => handleViewArtist(artist)}
-                            title="View Account Details"
-                          >
-                            <EyeOpenIcon width="12" height="12" />
-                            View
-                          </Button>
-
-                          {/* Pay Now buttons */}
-                          {artist.payment_account_status === 'ready' && artist.stripe_recipient_id && artist.estimated_balance > 0.01 && (
-                            <Button
-                              size="1"
-                              variant="solid"
-                              color="green"
-                              onClick={() => {
-                                setSelectedArtist(artist);
-                                const currency = artist.currency_info?.primary_currency || 'USD';
-                                openPayNowDialog(currency);
-                              }}
-                              title={`Pay ${formatCurrency(artist.estimated_balance, artist.currency_info?.primary_currency || 'USD')} now`}
-                            >
-                              Pay Now
-                            </Button>
-                          )}
-
-                          {/* Detailed Pay buttons for each currency if breakdown exists */}
-                          {artist.payment_account_status === 'ready' && artist.stripe_recipient_id && artist.currency_info?.currency_breakdown && (
-                            <Flex gap="1" wrap="wrap">
-                              {Object.entries(artist.currency_info.currency_breakdown).map(([currency, info]) => (
-                                info.balance > 0.01 && (
-                                  <Button
-                                    key={currency}
-                                    size="1"
-                                    variant="solid"
-                                    color="green"
-                                    onClick={() => {
-                                      setSelectedArtist(artist);
-                                      openPayNowDialog(currency);
-                                    }}
-                                    title={`Pay ${formatCurrency(info.balance, currency)} now`}
-                                  >
-                                    Pay {currency}
-                                  </Button>
-                                )
-                              ))}
-                            </Flex>
-                          )}
-
-                          {/* Setup payment button for accounts without setup */}
-                          {!artist.payment_account_status && artist.artist_profiles.email && (
-                            <Flex direction="column" gap="1">
-                              <Button
-                                size="1"
-                                variant="soft"
-                                color="orange"
-                                onClick={() => {
-                                  setSelectedArtist(artist);
-                                  setShowReminderDialog(true);
-                                }}
-                              >
-                                Setup Payment
-                              </Button>
-                              {!artist.invitation_info || !artist.invitation_info.time_since_latest ? (
-                                <Text size="1" color="gray" style={{ fontSize: '10px' }}>
-                                  (no invite sent yet)
-                                </Text>
-                              ) : (
-                                <Text size="1" color="gray" style={{ fontSize: '10px' }}>
-                                  Last: {artist.invitation_info.time_since_latest} via {artist.invitation_info.latest_invitation_method}
-                                </Text>
-                              )}
-                            </Flex>
-                          )}
-                        </Flex>
-                      </Table.Cell>
-                    </Table.Row>
-                  ))}
-                </Table.Body>
-              </Table.Root>
-            )}
-          </Card>
-        </Tabs.Content>
 
         {/* Artists Owed Money Tab */}
         <Tabs.Content value="artists-owed">
@@ -992,6 +832,7 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                 <Table.Header>
                   <Table.Row>
                     <Table.ColumnHeaderCell>Artist</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Amount Owed</Table.ColumnHeaderCell>
                     <Table.ColumnHeaderCell>Payment Status</Table.ColumnHeaderCell>
                     <Table.ColumnHeaderCell>Recent City</Table.ColumnHeaderCell>
                     <Table.ColumnHeaderCell>Recent Events</Table.ColumnHeaderCell>
@@ -1009,12 +850,23 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                         </Flex>
                       </Table.Cell>
                       <Table.Cell>
-                        <Badge color={artist.payment_account_status === 'ready' ? 'green' : artist.payment_account_status === 'invited' ? 'orange' : 'red'}>
-                          {artist.payment_account_status || 'No Account'}
+                        <Text size="2" weight="bold" color="red">
+                          ${(artist.estimated_balance || artist.current_balance || 0).toFixed(2)} {artist.currency_info?.primary_currency || 'USD'}
+                        </Text>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Badge color={
+                          artist.payment_account_status === 'ready' ? 'green' :
+                          artist.payment_account_status === 'in_progress' ? 'orange' :
+                          artist.payment_account_status === 'invited' ? 'blue' : 'red'
+                        }>
+                          {artist.payment_account_status === 'ready' ? 'Ready' :
+                           artist.payment_account_status === 'in_progress' ? 'In Progress' :
+                           artist.payment_account_status === 'invited' ? 'Invited' : 'No Account'}
                         </Badge>
                       </Table.Cell>
                       <Table.Cell>
-                        <Text size="2" color="gray">{artist.recent_city || 'Unknown'}</Text>
+                        <Text size="2" color="gray">{artist.recent_city || 'No recent events'}</Text>
                       </Table.Cell>
                       <Table.Cell>
                         <Text size="2" color="gray">{artist.recent_contests || 0}</Text>
@@ -1046,7 +898,7 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                         )}
                       </Table.Cell>
                       <Table.Cell>
-                        <Flex gap="2">
+                        <Flex gap="2" direction="column">
                           <Button
                             size="1"
                             variant="soft"
@@ -1054,31 +906,20 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                             title="View Account Details"
                           >
                             <EyeOpenIcon width="12" height="12" />
-                            View
+                            View Details
                           </Button>
-                          {!artist.payment_account_status && artist.artist_profiles.email && (
-                            <Flex direction="column" gap="1">
-                              <Button
-                                size="1"
-                                variant="soft"
-                                color="orange"
-                                onClick={() => {
-                                  setSelectedArtist(artist);
-                                  setShowReminderDialog(true);
-                                }}
-                              >
-                                Setup Payment
-                              </Button>
-                              {!artist.invitation_info || !artist.invitation_info.time_since_latest ? (
-                                <Text size="1" color="gray" style={{ fontSize: '10px' }}>
-                                  (no invite sent yet)
-                                </Text>
-                              ) : (
-                                <Text size="1" color="gray" style={{ fontSize: '10px' }}>
-                                  Last: {artist.invitation_info.time_since_latest} via {artist.invitation_info.latest_invitation_method}
-                                </Text>
-                              )}
-                            </Flex>
+                          {artist.payment_account_status !== 'ready' && artist.artist_profiles.email && (
+                            <Button
+                              size="1"
+                              variant="soft"
+                              color="orange"
+                              onClick={() => {
+                                setSelectedArtist(artist);
+                                setShowReminderDialog(true);
+                              }}
+                            >
+                              Send Invite
+                            </Button>
                           )}
                         </Flex>
                       </Table.Cell>

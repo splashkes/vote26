@@ -170,7 +170,7 @@ serve(async (req) => {
       recent_contestants: [],
 
       // Artists owed money with enhanced payment status and invitation tracking
-      artists_owed_money: artistsOwedMoney?.map(artist => ({
+      artists_owing: artistsOwedMoney?.map(artist => ({
         artist_profiles: {
           id: artist.artist_id,
           name: artist.artist_name,
@@ -324,7 +324,7 @@ serve(async (req) => {
 
       summary: {
         total_recent_contestants: 0, // Removed tab
-        artists_owed_count: artistsOwedMoney?.length || 0,
+        artists_owing_count: artistsOwedMoney?.length || 0,
         artists_ready_count: readyToPayArtists?.length || 0,
         payment_attempts_count: paymentAttempts?.length || 0,
         completed_payments_count: completedPayments?.length || 0,
