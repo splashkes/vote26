@@ -9,10 +9,12 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  // ALWAYS set CORS headers for ANY response
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  // Wrap EVERYTHING in try-catch to ensure CORS headers are always returned
   try {
     // Create service role client for admin operations
     const serviceClient = createClient(
@@ -22,93 +24,152 @@ serve(async (req) => {
 
     // Parse request parameters
     let days_back = 90;
+    let requestBody = null;
     try {
-      const body = await req.json();
-      days_back = body.days_back || 90;
+      requestBody = await req.json();
+      days_back = requestBody.days_back || 90;
     } catch {
       // Use defaults if no body
     }
 
+    const debugInfo = {
+      timestamp: new Date().toISOString(),
+      function_name: 'working-admin-payments',
+      request_method: req.method,
+      days_back,
+      has_request_body: !!requestBody,
+      supabase_url: Deno.env.get('SUPABASE_URL') ?? 'missing',
+      service_key: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ? 'present' : 'missing'
+    };
+
     console.log(`Working admin payments: Getting data for ${days_back} days`);
 
-    // Use the PROVEN simple functions that work correctly
+    // Use enhanced functions with real Stripe verification and invitation tracking
 
-    // 1. Get recent contestants using the working simple function
-    const { data: recentContestants, error: recentError } = await serviceClient
-      .rpc('get_recent_contestants_list', { days_back });
-
-    if (recentError) throw recentError;
-
-    console.log(`✅ Found ${recentContestants?.length} recent contestants`);
-
-    // 2. Get artists owed money using the working simple function
+    // 1. Get enhanced artists owed money data with payment status and invitations
     const { data: artistsOwedMoney, error: owedError } = await serviceClient
-      .rpc('get_artists_owed_money');
+      .rpc('get_enhanced_admin_artists_owed');
 
-    if (owedError) throw owedError;
+    if (owedError) {
+      return new Response(JSON.stringify({
+        error: 'Failed to get artists owed money',
+        success: false,
+        debug: {
+          ...debugInfo,
+          operation: 'get_enhanced_admin_artists_owed',
+          database_error: {
+            message: owedError.message,
+            code: owedError.code,
+            details: owedError.details,
+            hint: owedError.hint
+          }
+        }
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 500
+      });
+    }
 
+    debugInfo.artists_owed_count = artistsOwedMoney?.length || 0;
     console.log(`✅ Found ${artistsOwedMoney?.length} artists owed money`);
+
+    // 2. Get ready to pay artists (only those with verified Stripe accounts)
+    const { data: readyToPayArtists, error: readyError } = await serviceClient
+      .rpc('get_ready_to_pay_artists');
+
+    if (readyError) {
+      return new Response(JSON.stringify({
+        error: 'Failed to get ready to pay artists',
+        success: false,
+        debug: {
+          ...debugInfo,
+          operation: 'get_ready_to_pay_artists',
+          database_error: {
+            message: readyError.message,
+            code: readyError.code,
+            details: readyError.details,
+            hint: readyError.hint
+          }
+        }
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 500
+      });
+    }
+
+    debugInfo.ready_to_pay_count = readyToPayArtists?.length || 0;
+    console.log(`✅ Found ${readyToPayArtists?.length} ready to pay artists`);
 
     // 3. Get payment attempts using the enhanced function
     const { data: paymentAttempts, error: attemptsError } = await serviceClient
       .rpc('get_payment_attempts', { days_back });
 
-    if (attemptsError) throw attemptsError;
+    if (attemptsError) {
+      return new Response(JSON.stringify({
+        error: 'Failed to get payment attempts',
+        success: false,
+        debug: {
+          ...debugInfo,
+          operation: 'get_payment_attempts',
+          database_error: {
+            message: attemptsError.message,
+            code: attemptsError.code,
+            details: attemptsError.details,
+            hint: attemptsError.hint
+          }
+        }
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 500
+      });
+    }
 
+    debugInfo.payment_attempts_count = paymentAttempts?.length || 0;
     console.log(`✅ Found ${paymentAttempts?.length} payment attempts`);
 
     // 4. Get completed payments using the enhanced function
     const { data: completedPayments, error: completedError } = await serviceClient
       .rpc('get_completed_payments', { days_back });
 
-    if (completedError) throw completedError;
+    if (completedError) {
+      return new Response(JSON.stringify({
+        error: 'Failed to get completed payments',
+        success: false,
+        debug: {
+          ...debugInfo,
+          operation: 'get_completed_payments',
+          database_error: {
+            message: completedError.message,
+            code: completedError.code,
+            details: completedError.details,
+            hint: completedError.hint
+          }
+        }
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 500
+      });
+    }
 
+    debugInfo.completed_payments_count = completedPayments?.length || 0;
     console.log(`✅ Found ${completedPayments?.length} completed payments`);
 
-    // Filter recent contestants who are also owed money (ready to pay candidates)
-    const recentContestantIds = new Set(recentContestants?.map(rc => rc.artist_id) || []);
-    const artistsReadyToPay = artistsOwedMoney?.filter(artist =>
-      recentContestantIds.has(artist.artist_id)
-    ) || [];
+    console.log(`✅ Processing enhanced payment data`);
 
-    console.log(`✅ Found ${artistsReadyToPay.length} artists ready to pay (recent + owed)`);
+    // Add processing debug info
+    debugInfo.data_processing = {
+      artists_owed_sample: artistsOwedMoney?.slice(0, 1) || [],
+      ready_to_pay_sample: readyToPayArtists?.slice(0, 1) || [],
+      payment_attempts_sample: paymentAttempts?.slice(0, 1) || [],
+      completed_payments_sample: completedPayments?.slice(0, 1) || []
+    };
 
     // Format response in expected structure for frontend UI
     const response = {
-      // Keep the individual category arrays for API completeness
-      recent_contestants: recentContestants?.map(artist => ({
-        artist_profiles: {
-          id: artist.artist_id,
-          name: artist.artist_name,
-          email: artist.artist_email,
-          phone: artist.artist_phone,
-          entry_id: artist.artist_entry_id,
-          country: artist.artist_country,
-          person_id: null,
-          created_at: null
-        },
-        payment_account_status: 'pending', // Placeholder
-        stripe_recipient_id: null,
-        estimated_balance: 0,
-        current_balance: 0,
-        latest_payment_status: null,
-        payment_history_summary: {
-          pending: 0,
-          processing: 0,
-          completed: 0,
-          failed: 0,
-          manual_count: 0
-        },
-        recent_city: artist.recent_city,
-        recent_contests: Number(artist.recent_contests) || 0,
-        is_recent_contestant: true,
-        currency_info: {
-          primary_currency: 'USD',
-          has_mixed_currencies: false
-        },
-        invitation_info: null
-      })) || [],
+      // No recent contestants tab anymore - removed as requested
+      recent_contestants: [],
 
+      // Artists owed money with enhanced payment status and invitation tracking
       artists_owed_money: artistsOwedMoney?.map(artist => ({
         artist_profiles: {
           id: artist.artist_id,
@@ -120,8 +181,8 @@ serve(async (req) => {
           person_id: null,
           created_at: null
         },
-        payment_account_status: 'pending', // Placeholder
-        stripe_recipient_id: null,
+        payment_account_status: artist.payment_account_status,
+        stripe_recipient_id: artist.stripe_recipient_id,
         estimated_balance: Number(artist.estimated_balance),
         current_balance: Number(artist.estimated_balance),
         latest_payment_status: null,
@@ -133,16 +194,22 @@ serve(async (req) => {
           manual_count: 0
         },
         recent_city: artist.recent_city,
-        recent_contests: 0,
-        is_recent_contestant: recentContestantIds.has(artist.artist_id),
+        recent_contests: Number(artist.recent_contests) || 0,
+        is_recent_contestant: artist.recent_contests > 0,
         currency_info: {
           primary_currency: 'USD',
           has_mixed_currencies: false
         },
-        invitation_info: null
+        invitation_info: artist.invitation_count > 0 ? {
+          invitation_count: artist.invitation_count,
+          latest_invitation_method: artist.latest_invitation_method,
+          latest_invitation_date: artist.latest_invitation_date,
+          time_since_latest: artist.time_since_latest
+        } : null
       })) || [],
 
-      artists_ready_to_pay: artistsReadyToPay.map(artist => ({
+      // Ready to pay artists with verified Stripe accounts only
+      artists_ready_to_pay: readyToPayArtists?.map(artist => ({
         artist_profiles: {
           id: artist.artist_id,
           name: artist.artist_name,
@@ -153,8 +220,8 @@ serve(async (req) => {
           person_id: null,
           created_at: null
         },
-        payment_account_status: 'ready', // These are ready candidates
-        stripe_recipient_id: null,
+        payment_account_status: 'ready',
+        stripe_recipient_id: artist.stripe_recipient_id,
         estimated_balance: Number(artist.estimated_balance),
         current_balance: Number(artist.estimated_balance),
         latest_payment_status: null,
@@ -166,14 +233,14 @@ serve(async (req) => {
           manual_count: 0
         },
         recent_city: artist.recent_city,
-        recent_contests: 0,
-        is_recent_contestant: true,
+        recent_contests: Number(artist.recent_contests) || 0,
+        is_recent_contestant: artist.recent_contests > 0,
         currency_info: {
-          primary_currency: 'USD',
+          primary_currency: artist.default_currency || 'USD',
           has_mixed_currencies: false
         },
         invitation_info: null
-      })),
+      })) || [],
 
       payment_attempts: paymentAttempts?.map(attempt => ({
         artist_profiles: {
@@ -207,7 +274,7 @@ serve(async (req) => {
         },
         recent_city: attempt.recent_city,
         recent_contests: 0,
-        is_recent_contestant: recentContestantIds.has(attempt.artist_id),
+        is_recent_contestant: false,
         currency_info: {
           primary_currency: attempt.payment_currency || 'USD',
           has_mixed_currencies: false
@@ -247,7 +314,7 @@ serve(async (req) => {
         },
         recent_city: completed.recent_city,
         recent_contests: 0,
-        is_recent_contestant: recentContestantIds.has(completed.artist_id),
+        is_recent_contestant: false,
         currency_info: {
           primary_currency: completed.payment_currency || 'USD',
           has_mixed_currencies: false
@@ -256,9 +323,9 @@ serve(async (req) => {
       })) || [],
 
       summary: {
-        total_recent_contestants: recentContestants?.length || 0,
+        total_recent_contestants: 0, // Removed tab
         artists_owed_count: artistsOwedMoney?.length || 0,
-        artists_ready_count: artistsReadyToPay.length,
+        artists_ready_count: readyToPayArtists?.length || 0,
         payment_attempts_count: paymentAttempts?.length || 0,
         completed_payments_count: completedPayments?.length || 0,
         generated_at: new Date().toISOString()
@@ -277,9 +344,16 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         error: error.message,
+        success: false,
         debug: {
+          timestamp: new Date().toISOString(),
+          function_name: 'working-admin-payments',
+          error_type: error.constructor.name,
+          error_message: error.message,
           stack: error.stack,
-          name: error.name
+          name: error.name,
+          // Include any debug info we collected
+          ...debugInfo
         }
       }),
       {
