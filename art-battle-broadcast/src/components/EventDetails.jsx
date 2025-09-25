@@ -64,9 +64,14 @@ const EventDetails = () => {
   const navigate = useNavigate();
   
   const { user, person, session, loading: authLoading } = useAuth();
-  const [event, setEvent] = useState(null);
+
+  // GLOBAL STATE: Single source of truth for all event data
+  const [globalState, setGlobalState] = useState(null);
   const [eventEid, setEventEid] = useState(null); // EID for broadcast subscription
-  const [artworks, setArtworks] = useState([]);
+
+  // Extract values from global state (with defaults for migration)
+  const event = globalState?.event || null;
+  const artworks = globalState?.artworks || [];
 
   // CLOSURE FIX: Ref to track current artworks for broadcast callbacks
   const currentArtworksRef = useRef([]);
@@ -75,16 +80,34 @@ const EventDetails = () => {
   useEffect(() => {
     currentArtworksRef.current = artworks;
   }, [artworks]);
+
+  // GLOBAL STATE SUBSCRIPTION: Subscribe to global state changes
+  useEffect(() => {
+    if (!eventId) return;
+
+    console.log(`🎯 [GLOBAL-STATE] Subscribing to global state for event: ${eventId}`);
+
+    const unsubscribe = publicDataManager.subscribeToEventState(eventId, (newState) => {
+      console.log(`🔄 [GLOBAL-STATE] Received state update for ${eventId}:`, Object.keys(newState));
+      setGlobalState(newState);
+    });
+
+    return () => {
+      console.log(`🔇 [GLOBAL-STATE] Unsubscribing from event: ${eventId}`);
+      unsubscribe();
+    };
+  }, [eventId]);
   const [selectedArt, setSelectedArt] = useState(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [votedArtIds, setVotedArtIds] = useState(new Set());
   const [votedRounds, setVotedRounds] = useState({}); // { round: artId }
   const [bidAmounts, setBidAmounts] = useState({});
-  const [currentBids, setCurrentBids] = useState({});
-  const [bidHistory, setBidHistory] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [artworksByRound, setArtworksByRound] = useState({});
+  // More global state extractions
+  const currentBids = globalState?.currentBids || {};
+  const bidHistory = globalState?.bidHistory || {};
+  const loading = globalState?.loading ?? true;
+  const error = globalState?.error || null;
+  const artworksByRound = globalState?.artworksByRound || {};
   const [voteError, setVoteError] = useState('');
   const [bidError, setBidError] = useState('');
   const [bidSuccess, setBidSuccess] = useState(false);
@@ -98,7 +121,7 @@ const EventDetails = () => {
   const [voteSuccess, setVoteSuccess] = useState(false);
   const [voteFactor, setVoteFactor] = useState(null);
   const [currentTime, setCurrentTime] = useState(Date.now());
-  const [roundWinners, setRoundWinners] = useState({});
+  const roundWinners = globalState?.roundWinners || {};
   const [adminTabLoaded, setAdminTabLoaded] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [hasPhotoPermission, setHasPhotoPermission] = useState(false);
@@ -191,24 +214,12 @@ const EventDetails = () => {
                     if (finalArtwork) {
                       const topBid = data.bids[0]?.amount || 0;
                       console.log(`💰 Bid update: ${data.bids.length} bids, top: $${topBid}`);
-                      setBidHistory(prev => ({
-                        ...prev,
-                        [finalArtwork.id]: data.bids
-                      }));
-
-                      // Also update currentBids to reflect new highest bid
-                      console.log(`🔍 [CURRENT-BIDS] Updating currentBids for ${finalArtwork.id} to $${topBid}`);
-                      setCurrentBids(prev => {
-                        const updated = {
-                          ...prev,
-                          [finalArtwork.id]: {
-                            amount: topBid,
-                            count: data.bids.length,
-                            time: data.bids[0]?.created_at
-                          }
-                        };
-                        console.log(`🔍 [CURRENT-BIDS] New currentBids state:`, updated);
-                        return updated;
+                      // GLOBAL STATE UPDATE: Update global state instead of local
+                      publicDataManager.updateBidHistory(eventEid, finalArtwork.id, data.bids);
+                      publicDataManager.updateCurrentBids(eventEid, finalArtwork.id, {
+                        amount: topBid,
+                        count: data.bids.length,
+                        time: data.bids[0]?.created_at
                       });
                     }
                   } else {
@@ -239,23 +250,68 @@ const EventDetails = () => {
                     console.log(`📸 Updated media for ${Object.keys(mediaByArt).length} artworks`);
 
                     // Update artworks with new media data
-                    setArtworks(prevArtworks => {
-                      const updated = prevArtworks.map(artwork => ({
-                        ...artwork,
-                        media: mediaByArt[artwork.id] || artwork.media || []
-                      }));
+                    // GLOBAL STATE: Update artworks with new media data
+                    const currentState = publicDataManager.getEventState(eventEid);
+                    const updated = currentState.artworks.map(artwork => ({
+                      ...artwork,
+                      media: mediaByArt[artwork.id] || artwork.media || []
+                    }));
 
-                      // CRITICAL: Also update selectedArt if it's currently open
-                      if (selectedArt && mediaByArt[selectedArt.id]) {
-                        const updatedSelectedArt = {
-                          ...selectedArt,
-                          media: mediaByArt[selectedArt.id]
-                        };
-                        setSelectedArt(updatedSelectedArt);
+                    // CRITICAL: Also update selectedArt if it's currently open
+                    if (selectedArt && mediaByArt[selectedArt.id]) {
+                      const updatedSelectedArt = {
+                        ...selectedArt,
+                        media: mediaByArt[selectedArt.id]
+                      };
+                      setSelectedArt(updatedSelectedArt);
+                    }
+
+                    // CRITICAL: Also update artworksByRound for main grid display
+                    const regrouped = updated.reduce((acc, artwork) => {
+                      const round = artwork.round || 1;
+                      if (!acc[round]) {
+                        acc[round] = [];
                       }
+                      acc[round].push(artwork);
+                      return acc;
+                    }, {});
 
-                      // CRITICAL: Also update artworksByRound for main grid display
-                      const regrouped = updated.reduce((acc, artwork) => {
+                    publicDataManager.updateArtworks(eventEid, updated, regrouped);
+                  } else {
+                    console.log(`⚠️ [DEBUG] No media data in response:`, data);
+                  }
+                } else if (endpoint.match(/\/live\/event\/[^\/]+$/)) {
+                  // Handle main event endpoint updates (votes, artwork changes, artist assignments)
+                  console.log(`✅ [V2-BROADCAST] Updating main event data from broadcast`);
+                  console.log(`🔍 [WINNER-DEBUG] Broadcast data keys:`, Object.keys(data || {}));
+
+                  // GLOBAL STATE: Update main event data surgically instead of full reload
+                  if (data && data.event) {
+                    publicDataManager.updateEventState(eventEid, { event: data.event });
+                    console.log(`✅ [V2-BROADCAST] Updated event data surgically`);
+                  }
+
+                  // GLOBAL STATE: Update round winners from broadcast
+                  if (data && data.round_winners) {
+                    publicDataManager.updateRoundWinners(eventEid, data.round_winners);
+                    console.log(`✅ [V2-BROADCAST] Updated round winners surgically from broadcast`);
+                  }
+                  if (data && data.artworks) {
+                    // GLOBAL STATE: Preserve existing media data when updating artworks
+                    const currentState = publicDataManager.getEventState(eventEid);
+                    const updatedArtworks = data.artworks.map(newArtwork => {
+                      // Find existing artwork to preserve its media data
+                      const existingArtwork = currentState.artworks.find(prev => prev.id === newArtwork.id);
+                      return {
+                        ...newArtwork,
+                        // Preserve existing media data if it exists, otherwise use empty array
+                        media: existingArtwork?.media || []
+                      };
+                    });
+
+                    // CRITICAL: Also update artworksByRound when artworks change (for artist assignments)
+                    try {
+                      const regrouped = updatedArtworks.reduce((acc, artwork) => {
                         const round = artwork.round || 1;
                         if (!acc[round]) {
                           acc[round] = [];
@@ -263,55 +319,13 @@ const EventDetails = () => {
                         acc[round].push(artwork);
                         return acc;
                       }, {});
-                      setArtworksByRound(regrouped);
 
-                      return updated;
-                    });
-                  } else {
-                    console.log(`⚠️ [DEBUG] No media data in response:`, data);
-                  }
-                } else if (endpoint.match(/\/live\/event\/[^\/]+$/)) {
-                  // Handle main event endpoint updates (votes, artwork changes, artist assignments)
-                  console.log(`✅ [V2-BROADCAST] Updating main event data from broadcast`);
+                      publicDataManager.updateArtworks(eventEid, updatedArtworks, regrouped);
 
-                  // Update main event data surgically instead of full reload
-                  if (data && data.event) {
-                    setEvent(data.event);
-                    console.log(`✅ [V2-BROADCAST] Updated event data surgically`);
-                  }
-                  if (data && data.artworks) {
-                    // CRITICAL: Preserve existing media data when updating artworks
-                    setArtworks(prevArtworks => {
-                      const updatedArtworks = data.artworks.map(newArtwork => {
-                        // Find existing artwork to preserve its media data
-                        const existingArtwork = prevArtworks.find(prev => prev.id === newArtwork.id);
-                        return {
-                          ...newArtwork,
-                          // Preserve existing media data if it exists, otherwise use empty array
-                          media: existingArtwork?.media || []
-                        };
-                      });
-
-                      // CRITICAL: Also update artworksByRound when artworks change (for artist assignments)
-                      try {
-                        const regrouped = updatedArtworks.reduce((acc, artwork) => {
-                          const round = artwork.round || 1;
-                          if (!acc[round]) {
-                            acc[round] = [];
-                          }
-                          acc[round].push(artwork);
-                          return acc;
-                        }, {});
-
-                        setArtworksByRound(regrouped);
-
-                        console.log(`✅ [V2-BROADCAST] Updated ${updatedArtworks.length} artworks and regrouped by rounds surgically (media preserved):`, Object.keys(regrouped).map(r => `Round ${r}: ${regrouped[r].length} artworks`));
-                      } catch (error) {
-                        console.error(`❌ [V2-BROADCAST] Error during regrouping:`, error);
-                      }
-
-                      return updatedArtworks;
-                    });
+                      console.log(`✅ [V2-BROADCAST] Updated ${updatedArtworks.length} artworks and regrouped by rounds surgically (media preserved):`, Object.keys(regrouped).map(r => `Round ${r}: ${regrouped[r].length} artworks`));
+                    } catch (error) {
+                      console.error(`❌ [V2-BROADCAST] Error during regrouping:`, error);
+                    }
                   } else {
                     console.warn(`⚠️ [V2-BROADCAST] No artworks data in response or data is null:`, data);
                   }
@@ -329,7 +343,7 @@ const EventDetails = () => {
         console.error(`❌ [V2-BROADCAST] Failed to refresh data:`, error);
         optimizer.trackError?.(error, 'broadcast-refresh');
       }
-    }, [setArtworks, setArtworksByRound, setCurrentBids, setVoteSummary, setRoundWinners, setAutoPaymentModal]); // FIXED: Removed unstable optimizer dependency
+    }, [eventEid, publicDataManager]); // GLOBAL STATE: Dependencies updated for global state
 
   const { clearEventCache } = useBroadcastCache(
     eventEid, // Use EID for broadcast subscription, not UUID
@@ -679,8 +693,8 @@ const EventDetails = () => {
   const fetchEventDetails = async () => {
     try {
       console.log('EventDetails: Starting fetchEventDetails for eventId:', eventId);
-      setLoading(true);
-      setError(null);
+      // GLOBAL STATE: Set loading state
+      publicDataManager.updateEventState(eventId, { loading: true, error: null });
 
       // V2 BROADCAST VERSION: Get ALL data from cached endpoints (no direct Supabase queries)
       try {
@@ -704,8 +718,8 @@ const EventDetails = () => {
         console.log('🌐 [V2-BROADCAST] Artworks in cache:', cachedData?.artworks?.length || 0);
 
         if (cachedData?.event) {
-          // Set event data from cached endpoint
-          setEvent(cachedData.event);
+          // GLOBAL STATE: Set event data and EID
+          publicDataManager.updateEventState(eventId, { event: cachedData.event, loading: false });
           setEventEid(cachedData.event.eid); // Store EID for broadcast subscription
           console.log('🌐 [V2-BROADCAST] Event EID from cache:', cachedData.event.eid);
         }
@@ -745,8 +759,8 @@ const EventDetails = () => {
             grouped[round].push(artwork);
           });
 
-          setArtworksByRound(grouped);
-          setArtworks(enhancedArtworks);
+          // GLOBAL STATE: Update artworks and groupings
+          publicDataManager.updateArtworks(eventId, enhancedArtworks, grouped);
           
           // Set current bids from cached event data
           if (cachedData.current_bids) {
@@ -760,7 +774,8 @@ const EventDetails = () => {
                 closing_time: bid.closing_time
               };
             });
-            setCurrentBids(bidsByArt);
+            // GLOBAL STATE: Set initial current bids
+            publicDataManager.updateEventState(eventId, { currentBids: bidsByArt });
           }
           
           // Set vote summary from cached event data
@@ -776,9 +791,9 @@ const EventDetails = () => {
             }));
           }
 
-          // Set round winners from cached event data
+          // GLOBAL STATE: Set round winners from cached event data
           if (cachedData.round_winners) {
-            setRoundWinners(cachedData.round_winners);
+            publicDataManager.updateEventState(eventId, { roundWinners: cachedData.round_winners });
             console.log('✅ [V2-BROADCAST] Round winners loaded from cached endpoint');
           }
           
@@ -801,9 +816,14 @@ const EventDetails = () => {
       // No fallback database queries allowed in broadcast version
     } catch (error) {
       console.error('Error fetching event details:', error);
-      setError(error.message);
+      // GLOBAL STATE: Set error state
+      publicDataManager.updateEventState(eventId, { error: error.message, loading: false });
     } finally {
-      setLoading(false);
+      // GLOBAL STATE: Set loading complete (if no error occurred)
+      const currentState = publicDataManager.getEventState(eventId);
+      if (!currentState.error) {
+        publicDataManager.updateEventState(eventId, { loading: false });
+      }
     }
   };
 
@@ -881,8 +901,10 @@ const EventDetails = () => {
         }
       }
       
-      // Update bid history state
-      setBidHistory(prev => ({ ...prev, ...historyByArt }));
+      // GLOBAL STATE: Update bid history state
+      const currentState = publicDataManager.getEventState(eventEid || eventId);
+      const updatedBidHistory = { ...currentState.bidHistory, ...historyByArt };
+      publicDataManager.updateEventState(eventEid || eventId, { bidHistory: updatedBidHistory });
     } catch (error) {
       console.error('❌ [V2-BROADCAST] Error in fetchBidHistory:', error);
     }
@@ -931,7 +953,8 @@ const EventDetails = () => {
         }
       });
       
-      setRoundWinners(winnersByRound);
+      // GLOBAL STATE: Update round winners
+      publicDataManager.updateEventState(eventEid || eventId, { roundWinners: winnersByRound });
     } catch (error) {
       console.error('Error fetching winners from round_contestants:', error);
     }
@@ -1420,15 +1443,15 @@ const EventDetails = () => {
         throw new Error(data?.error || 'Failed to place bid');
       }
 
-      // Update current bids with the new format including currency info
-      setCurrentBids(prev => ({
-        ...prev,
-        [confirmBid.artId]: {
-          amount: data.amount || confirmBid.amount,
-          count: (prev[confirmBid.artId]?.count || 0) + 1,
-          time: new Date().toISOString()
-        }
-      }));
+      // GLOBAL STATE: Update current bids with the new format including currency info
+      const currentState = publicDataManager.getEventState(eventEid || eventId);
+      const currentBidData = currentState.currentBids[confirmBid.artId] || { count: 0 };
+
+      publicDataManager.updateCurrentBids(eventEid || eventId, confirmBid.artId, {
+        amount: data.amount || confirmBid.amount,
+        count: currentBidData.count + 1,
+        time: new Date().toISOString()
+      });
 
       // Update bid amount to new minimum bid
       const newCurrentBid = data.amount || confirmBid.amount;
@@ -1442,11 +1465,25 @@ const EventDetails = () => {
 
       // Update the artwork's closing time if it was extended
       if (data.new_closing_time) {
-        setArtworks(prev => prev.map(art => 
-          art.id === confirmBid.artId 
+        // GLOBAL STATE UPDATE: Update closing time in global state
+        const currentState = publicDataManager.getEventState(eventId);
+        const updatedArtworks = currentState.artworks.map(art =>
+          art.id === confirmBid.artId
             ? { ...art, closing_time: data.new_closing_time, auction_extended: true }
             : art
-        ));
+        );
+
+        // Update artworksByRound as well
+        const updatedArtworksByRound = {};
+        updatedArtworks.forEach(artwork => {
+          const round = artwork.round;
+          if (!updatedArtworksByRound[round]) {
+            updatedArtworksByRound[round] = [];
+          }
+          updatedArtworksByRound[round].push(artwork);
+        });
+
+        publicDataManager.updateArtworks(eventId, updatedArtworks, updatedArtworksByRound);
       }
 
       setBidSuccess(true);
@@ -1501,10 +1538,8 @@ const EventDetails = () => {
         const bidData = await publicDataManager.getArtworkBids(event.eid, artwork.round, artwork.easel);
         
         if (bidData && bidData.bids) {
-          setBidHistory(prev => ({
-            ...prev,
-            [artwork.id]: bidData.bids
-          }));
+          // GLOBAL STATE: Update bid history
+          publicDataManager.updateBidHistory(eventEid || eventId, artwork.id, bidData.bids);
           console.log(`✅ [V2-BROADCAST] Loaded ${bidData.bids.length} bids for artwork ${artwork.round}-${artwork.easel}`);
         }
       } catch (bidError) {
@@ -1554,19 +1589,29 @@ const EventDetails = () => {
 
       console.log('🗑️ Media deleted successfully');
       
-      // Immediately update local state to remove the deleted media
-      setArtworks(prevArtworks => {
-        const updated = prevArtworks.map(artwork => {
-          if (artwork.id === selectedArt?.id) {
-            return {
-              ...artwork,
-              media: artwork.media?.filter(m => m.media_files?.id !== mediaId) || []
-            };
-          }
-          return artwork;
-        });
-        return updated;
+      // GLOBAL STATE UPDATE: Remove deleted media from global state
+      const currentState = publicDataManager.getEventState(eventId);
+      const updatedArtworks = currentState.artworks.map(artwork => {
+        if (artwork.id === selectedArt?.id) {
+          return {
+            ...artwork,
+            media: artwork.media?.filter(m => m.media_files?.id !== mediaId) || []
+          };
+        }
+        return artwork;
       });
+
+      // Update artworksByRound as well
+      const updatedArtworksByRound = {};
+      updatedArtworks.forEach(artwork => {
+        const round = artwork.round;
+        if (!updatedArtworksByRound[round]) {
+          updatedArtworksByRound[round] = [];
+        }
+        updatedArtworksByRound[round].push(artwork);
+      });
+
+      publicDataManager.updateArtworks(eventId, updatedArtworks, updatedArtworksByRound);
       
       // Also update selectedArt if it's currently open
       if (selectedArt) {
@@ -1581,23 +1626,8 @@ const EventDetails = () => {
           setSelectedImageIndex(Math.max(0, updatedMedia.length - 1));
         }
       }
-      
-      // Update artworksByRound for main grid display
-      setArtworksByRound(prevRounds => {
-        const updated = { ...prevRounds };
-        Object.keys(updated).forEach(round => {
-          updated[round] = updated[round].map(artwork => {
-            if (artwork.id === selectedArt?.id) {
-              return {
-                ...artwork,
-                media: artwork.media?.filter(m => m.media_files?.id !== mediaId) || []
-              };
-            }
-            return artwork;
-          });
-        });
-        return updated;
-      });
+
+      // Note: artworksByRound is already updated via global state above
 
     } catch (error) {
       console.error('Error in handleDeleteMedia:', error);
@@ -1859,11 +1889,8 @@ const EventDetails = () => {
           <Heading size="5" mb="4">{getRoundTitle(round, artworksByRound[round])}</Heading>
           <Grid columns={{ initial: '2', sm: '3', md: '4' }} gap="4">
               {artworksByRound[round].map(artwork => {
-                // RENDER DEBUG: Log what we're rendering
+                // Get current bid amount
                 const currentBidAmount = currentBids[artwork.id]?.amount || 0;
-                if (artwork.id === '383b2754-8913-49c5-9657-317d266587bc') {
-                  console.log(`🎨 [RENDER-DEBUG] Rendering artwork ${artwork.id} with bid: $${currentBidAmount}`);
-                }
 
                 // Get primary or latest media (newest first)
                 const primaryMedia = artwork.media?.find(am => am.is_primary) || artwork.media?.[0];
@@ -2281,7 +2308,7 @@ const EventDetails = () => {
                 eid={event?.eid}
                 artworksByRound={artworksByRound}
                 roundWinners={roundWinners}
-                setRoundWinners={setRoundWinners}
+                setRoundWinners={(winners) => publicDataManager.updateEventState(eventEid || eventId, { roundWinners: winners })}
                 artworks={artworks}
                 currentTime={currentTime}
                 user={user}
@@ -2478,7 +2505,7 @@ const EventDetails = () => {
                             console.log('🔄 Handling optimistic photo upload update:', uploadData);
 
                             if (uploadData?.type === 'photo_uploaded' && uploadData.mediaFile) {
-                              // OPTIMISTIC UPDATE: Add the new photo immediately to local state
+                              // GLOBAL STATE UPDATE: Add the new photo to global state
                               const newMedia = {
                                 media_files: uploadData.mediaFile,
                                 media_type: 'image',
@@ -2486,18 +2513,29 @@ const EventDetails = () => {
                                 display_order: 0
                               };
 
-                              // Update artworks array
-                              setArtworks(prevArtworks => {
-                                return prevArtworks.map(artwork => {
-                                  if (artwork.id === uploadData.artworkId) {
-                                    return {
-                                      ...artwork,
-                                      media: [...(artwork.media || []), newMedia]
-                                    };
-                                  }
-                                  return artwork;
-                                });
+                              // Update global state
+                              const currentState = publicDataManager.getEventState(eventId);
+                              const updatedArtworks = currentState.artworks.map(artwork => {
+                                if (artwork.id === uploadData.artworkId) {
+                                  return {
+                                    ...artwork,
+                                    media: [...(artwork.media || []), newMedia]
+                                  };
+                                }
+                                return artwork;
                               });
+
+                              // Update artworksByRound as well
+                              const updatedArtworksByRound = {};
+                              updatedArtworks.forEach(artwork => {
+                                const round = artwork.round;
+                                if (!updatedArtworksByRound[round]) {
+                                  updatedArtworksByRound[round] = [];
+                                }
+                                updatedArtworksByRound[round].push(artwork);
+                              });
+
+                              publicDataManager.updateArtworks(eventId, updatedArtworks, updatedArtworksByRound);
 
                               // Update selectedArt if it's currently open
                               if (selectedArt && selectedArt.id === uploadData.artworkId) {
@@ -2508,22 +2546,7 @@ const EventDetails = () => {
                                 setSelectedArt(updatedSelectedArt);
                               }
 
-                              // Update artworksByRound for main grid display
-                              setArtworksByRound(prevRounds => {
-                                const updated = { ...prevRounds };
-                                Object.keys(updated).forEach(round => {
-                                  updated[round] = updated[round].map(artwork => {
-                                    if (artwork.id === uploadData.artworkId) {
-                                      return {
-                                        ...artwork,
-                                        media: [...(artwork.media || []), newMedia]
-                                      };
-                                    }
-                                    return artwork;
-                                  });
-                                });
-                                return updated;
-                              });
+                              // Note: artworksByRound is already updated via global state above
 
                               console.log('✅ Optimistic photo update complete - user should see photo immediately');
                             } else {

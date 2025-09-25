@@ -4,6 +4,8 @@
  * Matches /live/ endpoint URLs with perfect event scoping
  */
 
+import publicDataManager from '../lib/PublicDataManager';
+
 export class BroadcastCacheManager {
   constructor() {
     // SINGLETON PATTERN: Prevent multiple instances
@@ -397,8 +399,7 @@ export class BroadcastCacheManager {
     let publicDataManagerInvalidated = false;
 
     try {
-      // Dynamic import to avoid circular dependencies
-      const { publicDataManager } = await import('../lib/PublicDataManager');
+      // Use static import from top of file (no circular dependency - singleton handles it)
 
       // Map endpoint paths to PublicDataManager cache keys
       const cacheKeyMappings = [

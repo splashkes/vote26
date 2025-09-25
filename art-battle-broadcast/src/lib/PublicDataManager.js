@@ -9,9 +9,14 @@ class PublicDataManager {
   constructor() {
     // Prevent duplicate initialization - true singleton pattern
     if (PublicDataManager.instance) {
-      console.log('🔄 [V2-BROADCAST] PublicDataManager already exists, returning existing instance');
+      console.log('🔄 [V2-BROADCAST-DEBUG] PublicDataManager already exists, returning existing instance');
+      console.log('🔍 [V2-BROADCAST-DEBUG] Existing instance ID:', PublicDataManager.instance._instanceId);
       return PublicDataManager.instance;
     }
+
+    // DEBUG: Track instance creation
+    this._instanceId = Math.random().toString(36).substr(2, 9);
+    console.log('🆔 [V2-BROADCAST-DEBUG] Creating new PublicDataManager instance:', this._instanceId);
 
     this.cache = new Map();
     this.subscribers = new Map();
@@ -19,8 +24,9 @@ class PublicDataManager {
     this.broadcastChannel = new BroadcastChannel('artbattle-data');
     this.initialized = true;
 
-    // GLOBAL BID STATE: Single source of truth for all components
-    this.globalCurrentBids = new Map(); // eventId -> { artworkId: { amount, count, time } }
+    // GLOBAL STATE: Single source of truth for ALL components
+    this.globalState = new Map(); // eventId -> { currentBids, artworks, artworksByRound, bidHistory, event, roundWinners }
+    this.stateSubscribers = new Map(); // eventId -> Set of callback functions
 
     // Listen for cache invalidation from other tabs/admin actions
     this.broadcastChannel.addEventListener('message', (event) => {
@@ -32,6 +38,18 @@ class PublicDataManager {
 
     // Store instance reference
     PublicDataManager.instance = this;
+
+    // SINGLETON ENFORCEMENT: Store on window for absolute global uniqueness
+    if (typeof window !== 'undefined') {
+      if (window._artBattlePublicDataManager && window._artBattlePublicDataManager._instanceId !== this._instanceId) {
+        console.error('🚨 [SINGLETON-ERROR] Multiple PublicDataManager instances detected!', {
+          existing: window._artBattlePublicDataManager._instanceId,
+          new: this._instanceId
+        });
+      }
+      window._artBattlePublicDataManager = this;
+      console.log('🌍 [SINGLETON-DEBUG] PublicDataManager registered globally:', this._instanceId);
+    }
 
     console.log('🚀 [V2-BROADCAST] PublicDataManager initialized - Using cached endpoints instead of realtime subscriptions');
   }
@@ -452,6 +470,137 @@ class PublicDataManager {
     return PublicDataManager.instance;
   }
 
+  // ==================== GLOBAL STATE MANAGEMENT ====================
+
+  /**
+   * Initialize global state for an event
+   */
+  initializeEventState(eventId) {
+    if (!this.globalState.has(eventId)) {
+      this.globalState.set(eventId, {
+        currentBids: {},
+        artworks: [],
+        artworksByRound: {},
+        bidHistory: {},
+        event: null,
+        roundWinners: {},
+        loading: true,
+        error: null
+      });
+      this.stateSubscribers.set(eventId, new Set());
+      console.log(`🎯 [GLOBAL-STATE] Initialized state for event ${eventId}`);
+    }
+    return this.globalState.get(eventId);
+  }
+
+  /**
+   * Get current state for an event
+   */
+  getEventState(eventId) {
+    return this.globalState.get(eventId) || this.initializeEventState(eventId);
+  }
+
+  /**
+   * Update global state and notify all subscribers
+   */
+  updateEventState(eventId, updates) {
+    const currentState = this.getEventState(eventId);
+    const newState = { ...currentState, ...updates };
+    this.globalState.set(eventId, newState);
+
+    console.log(`🔄 [GLOBAL-STATE] Updated state for ${eventId}:`, Object.keys(updates));
+
+    // Notify all subscribed components
+    const subscribers = this.stateSubscribers.get(eventId) || new Set();
+
+    subscribers.forEach((callback, index) => {
+      try {
+        callback(newState);
+      } catch (error) {
+        console.error(`❌ [GLOBAL-STATE] Error in subscriber callback:`, error);
+      }
+    });
+  }
+
+  /**
+   * Subscribe to state changes for an event
+   */
+  subscribeToEventState(eventId, callback) {
+    const state = this.getEventState(eventId);
+    const subscribers = this.stateSubscribers.get(eventId) || new Set();
+
+    // DEBUG: Add callback tracking to identify competing components
+    const callbackId = Math.random().toString(36).substr(2, 9);
+    callback._debugId = callbackId;
+
+    subscribers.add(callback);
+    this.stateSubscribers.set(eventId, subscribers);
+
+    console.log(`📡 [GLOBAL-STATE] Component subscribed to event ${eventId} (${subscribers.size} total)`);
+
+    // Return current state immediately
+    try {
+      callback(state);
+    } catch (error) {
+      console.error(`❌ [GLOBAL-STATE] Error delivering initial state:`, error);
+    }
+
+    // Return unsubscribe function
+    return () => {
+      subscribers.delete(callback);
+      console.log(`🔇 [GLOBAL-STATE] Component unsubscribed from event ${eventId} (${subscribers.size} remaining)`);
+    };
+  }
+
+  /**
+   * Update current bids for an event
+   */
+  updateCurrentBids(eventId, artworkId, bidData) {
+    console.log(`💰 [GLOBAL-STATE] Updated bid for ${artworkId}: $${bidData.amount}`);
+
+    const currentState = this.getEventState(eventId);
+    const newCurrentBids = {
+      ...currentState.currentBids,
+      [artworkId]: bidData
+    };
+
+    this.updateEventState(eventId, { currentBids: newCurrentBids });
+  }
+
+  /**
+   * Update artworks data for an event
+   */
+  updateArtworks(eventId, artworks, artworksByRound = null) {
+    const updates = { artworks };
+    if (artworksByRound) {
+      updates.artworksByRound = artworksByRound;
+    }
+    this.updateEventState(eventId, updates);
+    console.log(`🎨 [GLOBAL-STATE] Updated ${artworks.length} artworks for ${eventId}`);
+  }
+
+  /**
+   * Update bid history for an artwork
+   */
+  updateBidHistory(eventId, artworkId, bids) {
+    const currentState = this.getEventState(eventId);
+    const newBidHistory = {
+      ...currentState.bidHistory,
+      [artworkId]: bids
+    };
+
+    this.updateEventState(eventId, { bidHistory: newBidHistory });
+    console.log(`📊 [GLOBAL-STATE] Updated bid history for ${artworkId}: ${bids.length} bids`);
+  }
+
+  /**
+   * Update round winners for an event
+   */
+  updateRoundWinners(eventId, roundWinners) {
+    this.updateEventState(eventId, { roundWinners });
+    console.log(`🏆 [GLOBAL-STATE] Updated round winners for ${eventId}:`, Object.keys(roundWinners).length, 'rounds');
+  }
+
   /**
    * Clear all caches and stop all polling
    */
@@ -465,6 +614,8 @@ class PublicDataManager {
     // Clear cache and subscribers
     this.cache.clear();
     this.subscribers.clear();
+    this.globalState.clear();
+    this.stateSubscribers.clear();
 
     // Close broadcast channel
     this.broadcastChannel.close();
@@ -474,6 +625,22 @@ class PublicDataManager {
   }
 }
 
+// SINGLETON PATTERN: Create a single instance at module load time
+// This ensures only one instance exists regardless of import patterns
+let singletonInstance = null;
+
+// Check for existing global instance first
+if (typeof window !== 'undefined' && window._artBattlePublicDataManager) {
+  console.log('♻️ [SINGLETON-DEBUG] Using existing global singleton:', window._artBattlePublicDataManager._instanceId);
+  singletonInstance = window._artBattlePublicDataManager;
+} else if (!singletonInstance) {
+  console.log('🚀 [SINGLETON-DEBUG] Creating module-level PublicDataManager singleton');
+  singletonInstance = new PublicDataManager();
+  console.log('✅ [SINGLETON-DEBUG] Module-level singleton created:', singletonInstance._instanceId);
+} else {
+  console.log('♻️ [SINGLETON-DEBUG] Using existing module-level singleton:', singletonInstance._instanceId);
+}
+
 // Export singleton instance
-export const publicDataManager = new PublicDataManager();
-export default publicDataManager;
+export const publicDataManager = singletonInstance;
+export default singletonInstance;
