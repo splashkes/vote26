@@ -285,7 +285,10 @@
          -- This is admin override - no extensions, just close everything immediately                                                                                +
          UPDATE art                                                                                                                                                  +
          SET                                                                                                                                                         +
-           status = 'closed',                                                                                                                                        +
+           status = CASE                                                                                                                                             +
+             WHEN EXISTS (SELECT 1 FROM bids WHERE bids.art_id = art.id) THEN 'sold'                                                                                +
+             ELSE 'closed'                                                                                                                                           +
+           END,                                                                                                                                                      +
            closing_time = NOW(), -- Set to now for audit trail                                                                                                       +
            updated_at = NOW()                                                                                                                                        +
          WHERE                                                                                                                                                       +

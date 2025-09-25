@@ -3932,12 +3932,6 @@ const AdminPanel = ({
                         ${auctionBids[selectedAuctionItem.id]?.highestBid || selectedAuctionItem.current_bid || 0}
                       </Text>
                     </Flex>
-                    <Flex justify="between">
-                      <Text size="2" color="gray">Total Bids:</Text>
-                      <Text size="2" weight="medium">
-                        {auctionBids[selectedAuctionItem.id]?.bidCount || selectedAuctionItem.bid_count || 0}
-                      </Text>
-                    </Flex>
                   </Flex>
                 </Card>
 

@@ -420,8 +420,33 @@ const PaymentsAdminTabbed = () => {
 
       if (error) throw error;
 
-      // Refresh the data to show updated payment status
-      await fetchEnhancedData();
+      // Update local state instead of full refresh
+      setEnhancedData(prevData => {
+        // Remove artist from ready-to-pay
+        const updatedReadyToPay = prevData.artists_ready_to_pay.filter(
+          artist => artist.artist_profiles.id !== selectedArtist.artist_profiles.id
+        );
+
+        // Add to payment attempts
+        const newPaymentAttempt = {
+          ...selectedArtist,
+          payment_amount: selectedArtist.estimated_balance,
+          payment_status: 'processing',
+          payment_date: new Date().toISOString(),
+          stripe_transfer_id: data?.stripe_transfer_id || null
+        };
+
+        return {
+          ...prevData,
+          artists_ready_to_pay: updatedReadyToPay,
+          payment_attempts: [newPaymentAttempt, ...prevData.payment_attempts],
+          summary: {
+            ...prevData.summary,
+            artists_ready_count: updatedReadyToPay.length,
+            payment_attempts_count: prevData.payment_attempts.length + 1
+          }
+        };
+      });
 
       setShowPayNowDialog(false);
       setError('');
@@ -520,6 +545,74 @@ ${JSON.stringify(parsed.debug, null, 2)}`;
     } finally {
       setProcessingPayments(false);
       console.log('🏁 Payment processing finished');
+    }
+  };
+
+  const handleProcessInProgressPayments = async () => {
+    console.log('🚀 Processing In Progress payments started...');
+    try {
+      setProcessingPayments(true);
+      setError('Processing In Progress payments...');
+
+      // Get processing status artists from the current filtered list
+      const processingArtists = filteredPaymentAttempts.filter(p => p.latest_payment_status === 'processing');
+      console.log(`📊 Found ${processingArtists.length} processing status artists to process`);
+
+      if (processingArtists.length === 0) {
+        setError('No processing status artists found to process');
+        return;
+      }
+
+      // Call the process-pending-payments function (it looks for 'processing' status)
+      const { data, error } = await supabase.functions.invoke('process-pending-payments', {
+        body: {
+          dry_run: false,
+          limit: Math.min(paymentLimit, processingArtists.length)
+        }
+      });
+
+      console.log('📨 Function response:', { data, error });
+
+      if (error) {
+        throw error;
+      }
+
+      // Display detailed results
+      let successMessage = `✅ Processing completed: ${data.processed_count} payments processed`;
+      if (data.successful_count !== undefined) {
+        successMessage += ` (${data.successful_count} successful, ${data.failed_count || 0} failed)`;
+      }
+
+      setError(successMessage);
+      setPaymentProcessResults(data);
+
+      // Refresh data to show updated statuses
+      await fetchEnhancedData();
+
+    } catch (err) {
+      let errorDebugOutput = `❌ Failed to process In Progress payments: ${err.message}`;
+
+      // Try to extract debug info from the error response
+      if (err && err.context && err.context.text) {
+        try {
+          const responseText = await err.context.text();
+          console.log('Raw edge function response:', responseText);
+          const parsed = JSON.parse(responseText);
+
+          if (parsed.debug) {
+            console.log('Edge function debug info:', parsed.debug);
+            errorDebugOutput += `\nDebug info: ${JSON.stringify(parsed.debug, null, 2)}`;
+          }
+        } catch (e) {
+          console.log('Could not parse error response:', e);
+        }
+      }
+
+      console.error(errorDebugOutput);
+      setError(errorDebugOutput);
+    } finally {
+      setProcessingPayments(false);
+      console.log('🏁 In Progress payment processing finished');
     }
   };
 
@@ -687,13 +780,20 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
       return payment.payment_method.replace('_', ' ').toUpperCase();
     }
 
-    // For automated payments (Stripe), determine the system from metadata
-    if (payment.payment_type === 'automated') {
-      // Check metadata for stripe account information
-      if (payment.metadata?.stripe_account_id) {
-        return 'STRIPE GLOBAL';
+    // For automated payments (Stripe), use same logic as process-pending-payments
+    if (payment.payment_type === 'automated' || payment.latest_payment_status === 'processing') {
+      // Determine region using same logic as payment processing
+      const currency = payment.payment_currency || payment.currency;
+      const stripeRecipientId = payment.stripe_recipient_id;
+
+      const isCanada = (stripeRecipientId && stripeRecipientId.includes('canada')) ||
+                       (currency === 'CAD');
+
+      if (isCanada) {
+        return 'STRIPE CA';
+      } else {
+        return 'STRIPE US';
       }
-      return 'STRIPE CONNECT';
     }
 
     // For manual payments
@@ -789,7 +889,7 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
             </Box>
             <Box>
               <Text size="3" weight="bold" color="purple">{enhancedData.summary.payment_attempts_count}</Text>
-              <Text size="2" color="gray" style={{ display: 'block' }}>Payment Attempts</Text>
+              <Text size="2" color="gray" style={{ display: 'block' }}>In Progress</Text>
             </Box>
             <Box>
               <Text size="3" weight="bold" color="green">{enhancedData.summary.completed_payments_count}</Text>
@@ -809,7 +909,7 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
             Ready to Pay ({filteredReadyToPay.length})
           </Tabs.Trigger>
           <Tabs.Trigger value="payment-attempts">
-            Payment Attempts ({filteredPaymentAttempts.length})
+            In Progress ({filteredPaymentAttempts.length})
           </Tabs.Trigger>
           <Tabs.Trigger value="completed-payments">
             Completed Payments ({filteredCompletedPayments.length})
@@ -954,55 +1054,9 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                     )}
                   </Flex>
                 </Box>
-                <Flex direction="column" gap="2">
-                  <Flex gap="2" align="center">
-                    <Box>
-                      <Text size="1" color="gray" mb="1">Payment Limit</Text>
-                      <TextField.Root
-                        type="number"
-                        min="1"
-                        max="50"
-                        value={paymentLimit}
-                        onChange={(e) => setPaymentLimit(parseInt(e.target.value) || 5)}
-                        placeholder="5"
-                        style={{ width: '80px' }}
-                      />
-                    </Box>
-
-                    <Button
-                      size="3"
-                      variant="solid"
-                      color="green"
-                      onClick={handleProcessPayments}
-                      disabled={processingPayments || filteredReadyToPay.length === 0}
-                      loading={processingPayments}
-                    >
-                      💰 Process {Math.min(paymentLimit, filteredReadyToPay.length)} Payment{Math.min(paymentLimit, filteredReadyToPay.length) !== 1 ? 's' : ''}
-                    </Button>
-                  </Flex>
-
-                  <Button
-                    onClick={handleResetFailedPayments}
-                    disabled={processingPayments}
-                    variant="soft"
-                    color="orange"
-                    size="2"
-                  >
-                    🔄 Reset Failed to Processing
-                  </Button>
-                </Flex>
               </Flex>
             </Flex>
 
-            <Callout.Root color="orange" mb="4">
-              <Callout.Icon>
-                <ExclamationTriangleIcon />
-              </Callout.Icon>
-              <Callout.Text>
-                <strong>LIVE PAYMENT PROCESSING:</strong> This will immediately transfer funds to artist Stripe accounts.
-                Insufficient funds will block transfers, but processing will show detailed error information.
-              </Callout.Text>
-            </Callout.Root>
 
             {/* Error/Status Display */}
             {error && (
@@ -1357,12 +1411,53 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
           </Card>
         </Tabs.Content>
 
-        {/* Payment Attempts Tab */}
+        {/* In Progress Tab */}
         <Tabs.Content value="payment-attempts">
           <Card mt="4">
-            <Heading size="3" mb="4" color="orange">
-              Payment Attempts ({filteredPaymentAttempts.length})
-            </Heading>
+            <Flex justify="between" align="center" mb="4">
+              <Heading size="3" color="orange">
+                In Progress ({filteredPaymentAttempts.length})
+              </Heading>
+
+              {/* Payment Processing Controls */}
+              <Flex gap="3" align="center">
+                <Flex gap="2" align="center">
+                  <Box>
+                    <Text size="1" color="gray" mb="1">Payment Limit</Text>
+                    <TextField.Root
+                      type="number"
+                      min="1"
+                      max="50"
+                      value={paymentLimit}
+                      onChange={(e) => setPaymentLimit(parseInt(e.target.value) || 5)}
+                      placeholder="5"
+                      style={{ width: '80px' }}
+                    />
+                  </Box>
+
+                  <Button
+                    size="3"
+                    variant="solid"
+                    color="green"
+                    onClick={handleProcessInProgressPayments}
+                    disabled={processingPayments || filteredPaymentAttempts.filter(p => p.latest_payment_status === 'processing').length === 0}
+                    loading={processingPayments}
+                  >
+                    💰 Process {Math.min(paymentLimit, filteredPaymentAttempts.filter(p => p.latest_payment_status === 'processing').length)} Processing
+                  </Button>
+                </Flex>
+
+                <Button
+                  onClick={handleResetFailedPayments}
+                  disabled={processingPayments}
+                  variant="soft"
+                  color="orange"
+                  size="2"
+                >
+                  🔄 Reset Failed to Processing
+                </Button>
+              </Flex>
+            </Flex>
             {filteredPaymentAttempts.length === 0 ? (
               <Text color="gray" style={{ textAlign: 'center', padding: '2rem' }}>
                 No payment attempts found
@@ -1422,7 +1517,7 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                       </Table.Cell>
                       <Table.Cell>
                         <Badge variant="outline" size="1">
-                          {artist.payment_method ? artist.payment_method.replace('_', ' ').toUpperCase() : 'Unknown'}
+                          {getPaymentMethodDisplay(artist)}
                         </Badge>
                       </Table.Cell>
                       <Table.Cell>
@@ -1515,7 +1610,7 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                       </Table.Cell>
                       <Table.Cell>
                         <Badge variant="outline" size="1">
-                          {artist.payment_method ? artist.payment_method.replace('_', ' ').toUpperCase() : 'Unknown'}
+                          {getPaymentMethodDisplay(artist)}
                         </Badge>
                       </Table.Cell>
                       <Table.Cell>
@@ -2094,15 +2189,6 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
               </Flex>
             </Card>
 
-            <Callout.Root color="orange">
-              <Callout.Icon>
-                <InfoCircledIcon />
-              </Callout.Icon>
-              <Callout.Text>
-                This will immediately process the payment to the artist's Stripe account.
-                The payment cannot be reversed once processed.
-              </Callout.Text>
-            </Callout.Root>
           </Flex>
 
           <Flex gap="3" mt="4" justify="end">

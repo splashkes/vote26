@@ -127,6 +127,30 @@ export const useOfferNotifications = (artId, onOfferChange, onPaymentRaceUpdate)
       }
     });
 
+    // Listen for auction winner broadcasts (when user wins an auction)
+    channel.on('broadcast', { event: 'auction_winner' }, (payload) => {
+      console.log(`🏆 [OFFER-NOTIFICATIONS] Auction winner broadcast:`, payload);
+
+      const data = payload.payload || payload;
+      if (data.art_id === artId && data.winner_person_id === person.id) {
+        console.log(`🎉 [OFFER-NOTIFICATIONS] Current user won auction for art ${artId}!`);
+
+        // Notify PaymentButton to show winner modal
+        if (onPaymentRaceUpdateRef.current) {
+          onPaymentRaceUpdateRef.current({
+            type: 'auction_status_change',
+            is_winning_bidder: true,
+            winning_amount: data.winning_amount,
+            currency: data.currency,
+            art_id: data.art_id,
+            art_code: data.art_code,
+            new_status: data.new_status,
+            timestamp: Date.now()
+          });
+        }
+      }
+    });
+
     // Subscribe and track connection status
     channel.subscribe((status) => {
       console.log(`🎯 [OFFER-NOTIFICATIONS] Channel status: ${status}`);

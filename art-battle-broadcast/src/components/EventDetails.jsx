@@ -995,11 +995,6 @@ const EventDetails = () => {
 
   const handleVoteClick = (artwork) => {
     setVoteError('');
-    
-    if (!user || !person) {
-      setVoteError('Please sign in to vote');
-      return;
-    }
 
     // Check if already voted in this round
     if (votedRounds[artwork.round]) {
@@ -1016,7 +1011,7 @@ const EventDetails = () => {
     if (!confirmVote || votingInProgress) return;
 
     setVotingInProgress(true);
-    
+
     try {
       // Add 2 second delay to simulate server processing
       await new Promise(resolve => setTimeout(resolve, 2000));
@@ -1370,11 +1365,6 @@ const EventDetails = () => {
   const handleBid = async (artId) => {
     setBidError('');
     setBidSuccess(false);
-    
-    if (!user || !person) {
-      setBidError('Please sign in to place a bid');
-      return;
-    }
 
     // Find the artwork to check its status
     const artwork = artworks.find(a => a.id === artId);
@@ -1437,7 +1427,7 @@ const EventDetails = () => {
 
   const confirmAndPlaceBid = async () => {
     if (!confirmBid) return;
-    
+
     setBiddingInProgress(true);
     setBidError('');
     

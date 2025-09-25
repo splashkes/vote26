@@ -29,6 +29,10 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  let artist_profile_id = null;
+  let include_zero_entry = false;
+  let user = null;
+
   try {
     // Create client with anon key for RLS-aware operations
     const supabaseClient = createClient(
@@ -49,7 +53,9 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { artist_profile_id, include_zero_entry = false } = await req.json();
+    const requestBody = await req.json();
+    artist_profile_id = requestBody.artist_profile_id;
+    include_zero_entry = requestBody.include_zero_entry || false;
 
     if (!artist_profile_id) {
       return new Response(
@@ -59,7 +65,8 @@ serve(async (req) => {
     }
 
     // Verify the user is authenticated
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+    const { data: { user: authUser }, error: authError } = await supabaseClient.auth.getUser();
+    user = authUser;
     if (authError || !user) {
       return new Response(
         JSON.stringify({ error: 'Authentication required' }),
@@ -345,21 +352,101 @@ serve(async (req) => {
       }
 
       if (runningBalance !== 0) {
-        const zeroAmount = -runningBalance; // Opposite to zero out the balance
-        ledgerEntries.push({
-          id: `zero-entry-${Date.now()}`,
-          date: new Date().toISOString(),
-          type: zeroAmount > 0 ? 'credit' : 'debit',
-          category: 'Account Adjustment',
-          description: `Balance adjustment for system migration (zeroing ${Math.abs(runningBalance).toFixed(2)})`,
-          amount: Math.abs(zeroAmount),
-          currency: 'USD', // Default currency for zero entries
-          metadata: {
-            is_zero_entry: true,
-            previous_balance: runningBalance,
-            adjustment_amount: zeroAmount
+        // For positive balance (artist is owed money), we create a payment (debit) to zero it out
+        // For negative balance (artist was overpaid), we can't use artist_payments table to add credit
+        if (runningBalance > 0) {
+          // Artist has positive balance - create a payment to zero it out
+          const paymentAmount = runningBalance; // Payment amount equals the balance owed
+
+          // Insert the zero entry payment into the database
+          const { data: insertedPayment, error: insertError } = await serviceClient
+            .from('artist_payments')
+            .insert({
+              artist_profile_id: artist_profile_id,
+              gross_amount: paymentAmount,
+              net_amount: paymentAmount,
+              platform_fee: 0.00,
+              stripe_fee: 0.00,
+              currency: 'USD',
+              description: `Balance adjustment for system migration (zeroing $${runningBalance.toFixed(2)} owed)`,
+              payment_method: 'Balance Adjustment',
+              payment_type: 'manual',
+              status: 'paid',
+              created_by: user.email || 'admin@artbattle.com',
+              reference: `zero-entry-${Date.now()}`
+            })
+            .select()
+            .single();
+
+          if (insertError) {
+            console.error('Error inserting zero entry payment:', insertError);
+            return new Response(
+              JSON.stringify({
+                error: 'Failed to create zero entry payment',
+                success: false,
+                debug: {
+                  timestamp: new Date().toISOString(),
+                  function_name: 'artist-account-ledger',
+                  artist_profile_id: artist_profile_id,
+                  include_zero_entry: include_zero_entry,
+                  running_balance: runningBalance,
+                  payment_amount: paymentAmount,
+                  insert_error: {
+                    message: insertError.message,
+                    details: insertError.details,
+                    hint: insertError.hint,
+                    code: insertError.code
+                  },
+                  user_info: {
+                    user_id: user?.id,
+                    user_email: user?.email
+                  }
+                }
+              }),
+              {
+                status: 500,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+              }
+            );
           }
-        });
+
+          // Add the persisted zero entry to ledger entries
+          ledgerEntries.push({
+            id: `zero-entry-${insertedPayment.id}`,
+            date: insertedPayment.created_at,
+            type: 'debit',
+            category: 'Account Adjustment',
+            description: insertedPayment.description,
+            amount: paymentAmount,
+            currency: insertedPayment.currency,
+            metadata: {
+              is_zero_entry: true,
+              previous_balance: runningBalance,
+              payment_id: insertedPayment.id,
+              payment_method: insertedPayment.payment_method,
+              reference: insertedPayment.reference,
+              created_by: insertedPayment.created_by
+            }
+          });
+        } else {
+          // Artist has negative balance (was overpaid) - just add a virtual entry for display
+          // We can't create actual credits in artist_payments table
+          ledgerEntries.push({
+            id: `zero-entry-${Date.now()}`,
+            date: new Date().toISOString(),
+            type: 'credit',
+            category: 'Account Adjustment',
+            description: `Balance adjustment for system migration (correcting $${Math.abs(runningBalance).toFixed(2)} overpayment)`,
+            amount: Math.abs(runningBalance),
+            currency: 'USD',
+            metadata: {
+              is_zero_entry: true,
+              previous_balance: runningBalance,
+              is_virtual_entry: true,
+              note: 'Virtual entry - negative balances cannot be adjusted via payments table'
+            }
+          });
+        }
       }
     }
 
@@ -384,16 +471,17 @@ serve(async (req) => {
 
     // Group by currency
     for (const entry of finalEntries) {
-      if (entry.amount !== undefined) {
+      if (entry.amount !== undefined && entry.amount !== null) {
         const currency = entry.currency || 'USD';
         if (!currencyTotals[currency]) {
           currencyTotals[currency] = { credits: 0, debits: 0, balance: 0 };
         }
 
+        const amount = entry.amount || 0;
         if (entry.type === 'credit') {
-          currencyTotals[currency].credits += entry.amount;
+          currencyTotals[currency].credits += amount;
         } else if (entry.type === 'debit') {
-          currencyTotals[currency].debits += entry.amount;
+          currencyTotals[currency].debits += amount;
         }
         currencyTotals[currency].balance = currencyTotals[currency].credits - currencyTotals[currency].debits;
       }
@@ -412,9 +500,16 @@ serve(async (req) => {
 
     // Determine primary currency (most used currency)
     const currencies = Object.keys(currencyTotals);
-    const primaryCurrency = currencies.length === 1 ? currencies[0] :
-      currencies.reduce((a, b) =>
-        (Math.abs(currencyTotals[a].balance) > Math.abs(currencyTotals[b].balance)) ? a : b, 'USD');
+    let primaryCurrency = 'USD';
+    if (currencies.length === 1) {
+      primaryCurrency = currencies[0];
+    } else if (currencies.length > 1) {
+      primaryCurrency = currencies.reduce((a, b) => {
+        const aBalance = currencyTotals[a] && currencyTotals[a].balance !== undefined ? Math.abs(currencyTotals[a].balance) : 0;
+        const bBalance = currencyTotals[b] && currencyTotals[b].balance !== undefined ? Math.abs(currencyTotals[b].balance) : 0;
+        return aBalance > bBalance ? a : b;
+      }, currencies[0] || 'USD');
+    }
 
     const summary = {
       current_balance: currentBalance,
@@ -440,7 +535,24 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in artist-account-ledger:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({
+        error: error.message,
+        success: false,
+        debug: {
+          timestamp: new Date().toISOString(),
+          function_name: 'artist-account-ledger',
+          error_type: error.constructor.name,
+          stack: error.stack,
+          request_data: {
+            artist_profile_id: artist_profile_id,
+            include_zero_entry: include_zero_entry
+          },
+          auth_info: {
+            has_auth_header: !!req.headers.get('Authorization'),
+            user_available: !!user
+          }
+        }
+      }),
       {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }

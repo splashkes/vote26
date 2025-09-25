@@ -42,6 +42,7 @@ const PaymentButton = ({
   // Modal states for broadcast-triggered popups
   const [showWinnerModal, setShowWinnerModal] = useState(false);
   const [showOfferModal, setShowOfferModal] = useState(false);
+  const [showPayLaterWarning, setShowPayLaterWarning] = useState(false);
   const [modalData, setModalData] = useState(null);
 
   // Ref to prevent duplicate modals
@@ -455,11 +456,15 @@ const PaymentButton = ({
             {modalData?.message}
           </Dialog.Description>
           <Flex gap="3" justify="end">
-            <Dialog.Close>
-              <Button variant="soft" color="gray">
-                I'll Pay Later
-              </Button>
-            </Dialog.Close>
+            <Button
+              variant="soft"
+              color="gray"
+              onClick={() => {
+                setShowPayLaterWarning(true);
+              }}
+            >
+              I'll Pay Later
+            </Button>
             <Dialog.Close>
               <Button
                 variant="solid"
@@ -509,6 +514,56 @@ const PaymentButton = ({
                 disabled={loading}
               >
                 {loading ? <Spinner size="2" /> : '🎯 Accept Offer & Pay'}
+              </Button>
+            </Dialog.Close>
+          </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
+
+      {/* Pay Later Warning Dialog */}
+      <Dialog.Root open={showPayLaterWarning} onOpenChange={setShowPayLaterWarning}>
+        <Dialog.Content style={{ maxWidth: '500px' }}>
+          <Dialog.Title>⚠️ Payment Reminder</Dialog.Title>
+          <Dialog.Description size="3" style={{ marginTop: '16px', marginBottom: '24px' }}>
+            <Box style={{
+              marginBottom: '16px',
+              padding: '16px',
+              backgroundColor: 'var(--amber-2)',
+              borderRadius: '8px',
+              border: '1px solid var(--amber-6)'
+            }}>
+              <Text size="3" weight="medium" style={{ display: 'block', marginBottom: '8px' }}>
+                Important Notice:
+              </Text>
+              <Text size="2">
+                Auctions not settled within a few minutes of the end of the auction may trigger an automatic offer to other collectors. Please pay promptly to avoid disappointment.
+              </Text>
+            </Box>
+            <Text size="2" color="gray">
+              We recommend completing your payment now to secure your artwork purchase.
+            </Text>
+          </Dialog.Description>
+          <Flex gap="3" justify="end">
+            <Button
+              variant="solid"
+              color="green"
+              onClick={() => {
+                setShowPayLaterWarning(false);
+                handlePayment();
+              }}
+              disabled={loading}
+            >
+              {loading ? <Spinner size="2" /> : '💰 Pay Now Instead'}
+            </Button>
+            <Dialog.Close>
+              <Button
+                variant="soft"
+                color="gray"
+                onClick={() => {
+                  setShowWinnerModal(false);
+                }}
+              >
+                I Understand, Close
               </Button>
             </Dialog.Close>
           </Flex>
