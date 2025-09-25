@@ -23,62 +23,61 @@ export default defineConfig(({ mode }) => {
           assetFileNames: `assets/[name]-${timestamp}-[hash].[ext]`
         }
       },
-      // Terser options for production obfuscation
+      // Terser options for production - BROADCAST-SAFE CONFIGURATION
       ...(isProduction && {
         terserOptions: {
           compress: {
-            // Remove console statements
-            drop_console: true,
+            // KEEP console.log for broadcast system debugging/monitoring
+            drop_console: false,
             drop_debugger: true,
-            // Remove comments
-            passes: 2,
-            // More aggressive optimizations
-            unsafe: true,
-            unsafe_comps: true,
-            unsafe_Function: true,
-            unsafe_math: true,
-            unsafe_symbols: true,
-            unsafe_methods: true,
-            unsafe_proto: true,
-            unsafe_regexp: true,
-            unsafe_undefined: true,
-            // Dead code elimination
+            // Safe optimizations only
+            passes: 1,
+            // DISABLE unsafe optimizations that could break WebSocket/Supabase
+            unsafe: false,
+            unsafe_comps: false,
+            unsafe_Function: false,
+            unsafe_math: false,
+            unsafe_symbols: false,
+            unsafe_methods: false,
+            unsafe_proto: false,
+            unsafe_regexp: false,
+            unsafe_undefined: false,
+            // Safe dead code elimination
             dead_code: true,
-            // Constant folding
+            // Safe constant folding
             evaluate: true,
-            // Function inlining
-            inline: true,
-            // Join variable declarations
+            // DISABLE function inlining (could break callbacks)
+            inline: false,
+            // Safe variable joining
             join_vars: true,
-            // Loop optimizations
+            // Safe loop optimizations
             loops: true,
-            // Remove unused code
-            pure_getters: true,
+            // DISABLE pure_getters (could break Supabase properties)
+            pure_getters: false,
+            // Safe variable reduction
             reduce_vars: true,
-            // Collapse single-use variables
+            // Safe variable collapsing
             collapse_vars: true,
           },
           mangle: {
-            // Obfuscate variable names
-            toplevel: true,
-            // Obfuscate function names
-            keep_fnames: false,
-            // Obfuscate class names
-            keep_classnames: false,
-            // More aggressive obfuscation
-            properties: {
-              regex: /^_/
-            }
+            // PRESERVE top-level names (WebSocket channels, Supabase client)
+            toplevel: false,
+            // PRESERVE function names (callbacks, event handlers)
+            keep_fnames: true,
+            // PRESERVE class names (Supabase classes)
+            keep_classnames: true,
+            // DISABLE property mangling (could break Supabase API calls)
+            properties: false
           },
           format: {
-            // Remove all comments
+            // Remove comments for size
             comments: false,
-            // Compact output
+            // Compact but readable output
             beautify: false,
-            // Remove unnecessary semicolons
+            // Keep semicolons for safety
             semicolons: true,
-            // Shorten property access
-            quote_style: 1
+            // Conservative quote style
+            quote_style: 0
           }
         }
       })

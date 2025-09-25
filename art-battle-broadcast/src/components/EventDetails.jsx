@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { 
   getCurrencyFromEvent, 
   formatCurrencyFromEvent, 
@@ -67,6 +67,14 @@ const EventDetails = () => {
   const [event, setEvent] = useState(null);
   const [eventEid, setEventEid] = useState(null); // EID for broadcast subscription
   const [artworks, setArtworks] = useState([]);
+
+  // CLOSURE FIX: Ref to track current artworks for broadcast callbacks
+  const currentArtworksRef = useRef([]);
+
+  // Update ref whenever artworks changes
+  useEffect(() => {
+    currentArtworksRef.current = artworks;
+  }, [artworks]);
   const [selectedArt, setSelectedArt] = useState(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [votedArtIds, setVotedArtIds] = useState(new Set());
@@ -117,10 +125,8 @@ const EventDetails = () => {
     enabled: !!eventEid
   });
 
-  // V2 BROADCAST: Perfect cache invalidation system
-  const { clearEventCache } = useBroadcastCache(
-    eventEid, // Use EID for broadcast subscription, not UUID
-    async (notificationData) => {
+  // V2 BROADCAST: Perfect cache invalidation system - Memoized callback to prevent infinite renders
+  const handleCacheInvalidation = useCallback(async (notificationData) => {
       console.log(`🔄 [V2-BROADCAST] Refreshing data after cache invalidation:`, notificationData);
       console.log(`🔄 [V2-BROADCAST] Invalidated endpoints:`, notificationData.endpoints);
 
@@ -128,66 +134,99 @@ const EventDetails = () => {
       optimizer.trackRecovery?.();
       
       // Use surgical updates instead of full fetchEventDetails() to avoid constant reloading
-      console.log(`🔄 [V2-BROADCAST] Processing surgical updates for invalidated endpoints`);
+      // PERFORMANCE: Reduce surgical update noise
       
       try {
         // Only re-fetch specific endpoints that were invalidated with coordinated cache-busting
         if (notificationData.endpoints && notificationData.endpoints.length > 0) {
           const cacheVersion = notificationData.cache_version || Date.now();
-          
-          for (const endpoint of notificationData.endpoints) {
-            console.log(`🎯 [V2-BROADCAST] Re-fetching invalidated endpoint: ${endpoint}`);
-            
+
+          // CRITICAL FIX: Process endpoints in correct order
+          // 1. Main event data first (to update artworks state)
+          // 2. Then bid/media endpoints (which depend on artworks being available)
+          const mainEventEndpoints = notificationData.endpoints.filter(ep => ep.match(/\/live\/event\/[^\/]+$/));
+          const otherEndpoints = notificationData.endpoints.filter(ep => !ep.match(/\/live\/event\/[^\/]+$/));
+          const orderedEndpoints = [...mainEventEndpoints, ...otherEndpoints];
+
+          console.log(`🔧 [ORDER-FIX] Processing ${orderedEndpoints.length} endpoints in order:`, orderedEndpoints.map(ep => ep.includes('/bids') ? 'BID' : ep.includes('/media') ? 'MEDIA' : 'EVENT'));
+
+          for (const endpoint of orderedEndpoints) {
             try {
               // Use coordinated cache-busting from broadcast payload for ALL endpoints
               const fullUrl = `https://artb.art${endpoint}?v=${cacheVersion}`;
-              console.log(`🔄 [V2-BROADCAST] Cache-busting with version: ${cacheVersion}`);
               const response = await fetch(fullUrl);
-              
+
               if (response.ok) {
                 const data = await response.json();
-                
+
                 // Handle different endpoint types
                 if (endpoint.includes('/bids')) {
+                  console.log(`🔍 [BID-DEBUG] Processing bid endpoint: ${endpoint}`);
+                  console.log(`🔍 [BID-DEBUG] Artworks available (stale): ${artworks.length}`);
+                  console.log(`🔍 [BID-DEBUG] Artworks available (current): ${currentArtworksRef.current.length}`);
+                  console.log(`🔍 [BID-DEBUG] Bid data received:`, data);
+
                   // Handle bid endpoint updates
                   const match = endpoint.match(/\/live\/event\/[^-]+-(\d+)-(\d+)\/bids/);
-                  if (match && artworks.length > 0) {
+                  console.log(`🔍 [BID-DEBUG] Regex match result:`, match);
+
+                  // CLOSURE FIX: Use current artworks from ref instead of stale closure variable
+                  const freshArtworks = currentArtworksRef.current;
+                  if (match && freshArtworks.length > 0) {
                     const round = parseInt(match[1]);
                     const easel = parseInt(match[2]);
-                    const targetArtwork = artworks.find(art => art.round === round && art.easel === easel);
-                    
-                    if (targetArtwork) {
+                    console.log(`🔍 [BID-DEBUG] Looking for artwork: round ${round}, easel ${easel}`);
+
+                    const targetArtwork = freshArtworks.find(art => art.round === round && art.easel === easel);
+                    console.log(`🔍 [BID-DEBUG] Target artwork found:`, targetArtwork ? `${targetArtwork.id}` : 'NOT FOUND');
+                    console.log(`🔍 [BID-DEBUG] Available artworks:`, freshArtworks.map(art => `${art.round}-${art.easel} (id: ${art.id})`));
+
+                    // ADDITIONAL: Try matching by artwork_id from bid data if round/easel fails
+                    let finalArtwork = targetArtwork;
+                    if (!finalArtwork && data.artwork_id) {
+                      finalArtwork = freshArtworks.find(art => art.id === data.artwork_id);
+                      console.log(`🔍 [BID-DEBUG] Fallback UUID match found:`, finalArtwork ? `${finalArtwork.id}` : 'NOT FOUND');
+                    }
+
+                    if (finalArtwork) {
                       const topBid = data.bids[0]?.amount || 0;
                       console.log(`💰 Bid update: ${data.bids.length} bids, top: $${topBid}`);
                       setBidHistory(prev => ({
                         ...prev,
-                        [targetArtwork.id]: data.bids
+                        [finalArtwork.id]: data.bids
                       }));
-                      
+
                       // Also update currentBids to reflect new highest bid
-                      setCurrentBids(prev => ({
-                        ...prev,
-                        [targetArtwork.id]: {
-                          amount: topBid,
-                          count: data.bids.length,
-                          time: data.bids[0]?.created_at
-                        }
-                      }));
+                      console.log(`🔍 [CURRENT-BIDS] Updating currentBids for ${finalArtwork.id} to $${topBid}`);
+                      setCurrentBids(prev => {
+                        const updated = {
+                          ...prev,
+                          [finalArtwork.id]: {
+                            amount: topBid,
+                            count: data.bids.length,
+                            time: data.bids[0]?.created_at
+                          }
+                        };
+                        console.log(`🔍 [CURRENT-BIDS] New currentBids state:`, updated);
+                        return updated;
+                      });
                     }
+                  } else {
+                    console.warn(`⚠️ [BID-DEBUG] Bid processing failed - match: ${!!match}, artworks: ${freshArtworks.length}`);
                   }
                 } else if (endpoint.includes('/media')) {
                   // Handle media endpoint updates
                   console.log(`📸 Refreshing media data for event ${eventEid}`);
-                  
+
                   // Update media data specifically when media endpoint is invalidated
                   if (data && data.media && Array.isArray(data.media)) {
                     console.log(`📸 Media update: ${data.media.length} artworks`);
-                    
+
                     // Process media data by artwork (same logic as in fetchEventDetails)
                     const mediaByArt = {};
                     data.media.forEach((item, index) => {
                       const artId = item.artwork_id;
-                      
+
                       if (item.media && Array.isArray(item.media)) {
                         // Convert media format to match initial load format
                         mediaByArt[artId] = item.media.map(mediaItem => ({
@@ -196,16 +235,16 @@ const EventDetails = () => {
                         }));
                       }
                     });
-                    
+
                     console.log(`📸 Updated media for ${Object.keys(mediaByArt).length} artworks`);
-                    
+
                     // Update artworks with new media data
                     setArtworks(prevArtworks => {
                       const updated = prevArtworks.map(artwork => ({
                         ...artwork,
                         media: mediaByArt[artwork.id] || artwork.media || []
                       }));
-                      
+
                       // CRITICAL: Also update selectedArt if it's currently open
                       if (selectedArt && mediaByArt[selectedArt.id]) {
                         const updatedSelectedArt = {
@@ -214,7 +253,7 @@ const EventDetails = () => {
                         };
                         setSelectedArt(updatedSelectedArt);
                       }
-                      
+
                       // CRITICAL: Also update artworksByRound for main grid display
                       const regrouped = updated.reduce((acc, artwork) => {
                         const round = artwork.round || 1;
@@ -225,7 +264,7 @@ const EventDetails = () => {
                         return acc;
                       }, {});
                       setArtworksByRound(regrouped);
-                      
+
                       return updated;
                     });
                   } else {
@@ -234,7 +273,7 @@ const EventDetails = () => {
                 } else if (endpoint.match(/\/live\/event\/[^\/]+$/)) {
                   // Handle main event endpoint updates (votes, artwork changes, artist assignments)
                   console.log(`✅ [V2-BROADCAST] Updating main event data from broadcast`);
-                  
+
                   // Update main event data surgically instead of full reload
                   if (data && data.event) {
                     setEvent(data.event);
@@ -252,9 +291,7 @@ const EventDetails = () => {
                           media: existingArtwork?.media || []
                         };
                       });
-                      
-                      console.log(`🔄 [V2-BROADCAST] About to regroup ${updatedArtworks.length} artworks by rounds (preserving media)...`);
-                      
+
                       // CRITICAL: Also update artworksByRound when artworks change (for artist assignments)
                       try {
                         const regrouped = updatedArtworks.reduce((acc, artwork) => {
@@ -265,15 +302,14 @@ const EventDetails = () => {
                           acc[round].push(artwork);
                           return acc;
                         }, {});
-                        
-                        console.log(`🔄 [V2-BROADCAST] Regrouping complete, setting artworksByRound...`);
+
                         setArtworksByRound(regrouped);
-                        
+
                         console.log(`✅ [V2-BROADCAST] Updated ${updatedArtworks.length} artworks and regrouped by rounds surgically (media preserved):`, Object.keys(regrouped).map(r => `Round ${r}: ${regrouped[r].length} artworks`));
                       } catch (error) {
                         console.error(`❌ [V2-BROADCAST] Error during regrouping:`, error);
                       }
-                      
+
                       return updatedArtworks;
                     });
                   } else {
@@ -293,7 +329,11 @@ const EventDetails = () => {
         console.error(`❌ [V2-BROADCAST] Failed to refresh data:`, error);
         optimizer.trackError?.(error, 'broadcast-refresh');
       }
-    },
+    }, [setArtworks, setArtworksByRound, setCurrentBids, setVoteSummary, setRoundWinners, setAutoPaymentModal]); // FIXED: Removed unstable optimizer dependency
+
+  const { clearEventCache } = useBroadcastCache(
+    eventEid, // Use EID for broadcast subscription, not UUID
+    handleCacheInvalidation,
     {
       autoRefresh: true,
       refreshDelay: 2000, // 2 second delay to batch multiple notifications
@@ -307,29 +347,116 @@ const EventDetails = () => {
     return tab || hash || 'vote';
   };
   const [activeTab, setActiveTab] = useState(getInitialTab());
+
   const countdownInterval = useRef(null);
 
   // Track auth initialization state to prevent multiple fetches
   const authInitialized = useRef(false);
   const eventDataFetched = useRef(null);
 
+  // STABILITY REFS: Prevent infinite loops by tracking actual vs render changes
+  const stableEventId = useRef(eventId);
+  const stableAuthLoading = useRef(authLoading);
+  const stableSession = useRef(session);
+  const effectRunning = useRef(false);
+
   useEffect(() => {
+    // ANTI-INFINITE-LOOP: Check if this is a real change or just a React render artifact
+    const hasRealChange = (
+      stableEventId.current !== eventId ||
+      stableAuthLoading.current !== authLoading ||
+      (stableSession.current === undefined) !== (session === undefined) ||
+      (!stableSession.current && session) ||
+      (stableSession.current && !session)
+    );
+
+    // GUARD: Prevent overlapping executions
+    if (effectRunning.current) {
+      console.log('🔄 [STABILITY] Effect already running, skipping duplicate trigger');
+      return;
+    }
+
+    // GUARD: Only run on real changes, not render artifacts
+    if (!hasRealChange) {
+      // PERFORMANCE: Stability check working - reduce log noise
+      return;
+    }
+
     console.log('EventDetails useEffect triggered - eventId:', eventId, 'authLoading:', authLoading, 'session:', !!session);
+    console.log('🔍 [ID-DEBUG] URL eventId type check:', {
+      eventId,
+      isUUID: eventId && eventId.length === 36 && eventId.includes('-'),
+      isEID: eventId && eventId.length < 36 && !eventId.includes('-'),
+      currentEventEid: eventEid
+    });
+
+    // Update stable refs BEFORE processing
+    stableEventId.current = eventId;
+    stableAuthLoading.current = authLoading;
+    stableSession.current = session;
 
     // Only proceed if we have stable auth state (not loading) and eventId
     if (!authLoading && eventId && session !== undefined) {
+      effectRunning.current = true; // Set flag to prevent overlapping
       // Prevent multiple fetches for the same event and auth state combination
       const eventKey = `${eventId}-${!!session}`;
-      if (!authInitialized.current || eventDataFetched.current !== eventKey) {
+      const timeSinceLastFetch = Date.now() - (eventDataFetched.current?.timestamp || 0);
+
+      // Allow fetch if:
+      // 1. First time (not initialized)
+      // 2. Event changed
+      // 3. Auth state changed
+      // 4. More than 5 seconds since last fetch (allows for legitimate updates)
+      const shouldFetch = !authInitialized.current ||
+                          eventDataFetched.current?.key !== eventKey ||
+                          timeSinceLastFetch > 5000;
+
+      if (shouldFetch) {
         console.log('EventDetails: Auth ready, starting event data fetch for:', eventKey);
         authInitialized.current = true;
-        eventDataFetched.current = eventKey;
+        eventDataFetched.current = { key: eventKey, timestamp: Date.now() };
         fetchEventDetails();
       } else {
-        console.log('EventDetails: Skipping duplicate fetch for:', eventKey);
+        console.log('EventDetails: Skipping duplicate fetch for:', eventKey, `(${Math.round(timeSinceLastFetch/1000)}s ago)`);
+
+        // CRITICAL FIX: Even if we skip the full fetch, we need eventEid for broadcast subscription
+        if (!eventEid && eventId) {
+          console.log('🔧 [BROADCAST-FIX] EventEid not set, getting EID for broadcast subscription');
+          console.log('🔍 [ID-DEBUG] Fetching EID from eventId:', eventId);
+          const getEventEid = async () => {
+            try {
+              const response = await fetch(`https://artb.art/live/event/${eventId}`);
+              if (response.ok) {
+                const data = await response.json();
+                console.log('🔍 [ID-DEBUG] Event data response:', {
+                  hasEvent: !!data.event,
+                  eventEid: data.event?.eid,
+                  eventId: data.event?.id
+                });
+                if (data.event?.eid) {
+                  console.log('🔧 [BROADCAST-FIX] Got EID for broadcast:', data.event.eid);
+                  console.log('🔍 [ID-DEBUG] Setting eventEid state:', data.event.eid);
+                  setEventEid(data.event.eid);
+                } else {
+                  console.warn('🔧 [BROADCAST-FIX] No EID in event data');
+                }
+              } else {
+                console.warn('🔧 [BROADCAST-FIX] Failed to fetch event for EID:', response.status);
+              }
+            } catch (error) {
+              console.warn('🔧 [BROADCAST-FIX] Error fetching EID:', error);
+            }
+          };
+          getEventEid();
+        } else if (eventEid) {
+          console.log('🔍 [ID-DEBUG] EventEid already set:', eventEid);
+        }
       }
     }
-  }, [eventId, authLoading, session]); // Add session to dependencies for proper auth state tracking
+
+    // CLEANUP: Always clear the flag when effect completes
+    effectRunning.current = false;
+  }, [eventId, authLoading, session]); // FIXED: Removed eventEid to prevent infinite loop
 
   // Handle tab parameter from URL hash and authentication check
   useEffect(() => {
@@ -377,20 +504,52 @@ const EventDetails = () => {
 
   // V2 BROADCAST: Data loads on demand via cached endpoints - no subscriptions needed
 
+  // ADMIN PERMISSION STABILITY REFS: Prevent excessive admin checks from render artifacts
+  const stableUserForAdmin = useRef(user);
+  const stableEventIdForAdmin = useRef(eventId);
+  const adminCheckRunning = useRef(false);
+
   useEffect(() => {
+    // ANTI-SPAM: Check if this is a real change or just a React render artifact
+    const hasRealAdminChange = (
+      stableUserForAdmin.current !== user ||
+      stableEventIdForAdmin.current !== eventId ||
+      // Handle user object changes (check key properties instead of reference)
+      (stableUserForAdmin.current?.phone !== user?.phone) ||
+      (stableUserForAdmin.current?.id !== user?.id)
+    );
+
+    // GUARD: Only run on real changes, not render artifacts
+    if (!hasRealAdminChange) {
+      return;
+    }
+
+    // GUARD: Prevent overlapping admin checks
+    if (adminCheckRunning.current) {
+      console.log('🔄 [ADMIN-STABILITY] Admin check already running, skipping duplicate trigger');
+      return;
+    }
+
+    // Update stable refs BEFORE processing
+    stableUserForAdmin.current = user;
+    stableEventIdForAdmin.current = eventId;
+
     // Check admin permissions from database
     const checkAdminStatus = async () => {
+      adminCheckRunning.current = true; // Set flag to prevent overlapping
+
       if (!user || !eventId) {
         setIsAdmin(false);
         setHasPhotoPermission(false);
+        adminCheckRunning.current = false;
         return;
       }
-      
+
       try {
         const { isEventAdmin, checkEventAdminPermission } = await import('../lib/adminHelpers');
         const adminStatus = await isEventAdmin(eventId, user);
         setIsAdmin(adminStatus);
-        
+
         // Check if user has photo permission or higher (photo, producer, super)
         const photoPermission = await checkEventAdminPermission(eventId, 'photo', user?.phone);
         setHasPhotoPermission(photoPermission);
@@ -399,8 +558,10 @@ const EventDetails = () => {
         setIsAdmin(false);
         setHasPhotoPermission(false);
       }
+
+      adminCheckRunning.current = false; // Clear flag
     };
-    
+
     checkAdminStatus();
   }, [user, eventId]);
 
@@ -1698,6 +1859,12 @@ const EventDetails = () => {
           <Heading size="5" mb="4">{getRoundTitle(round, artworksByRound[round])}</Heading>
           <Grid columns={{ initial: '2', sm: '3', md: '4' }} gap="4">
               {artworksByRound[round].map(artwork => {
+                // RENDER DEBUG: Log what we're rendering
+                const currentBidAmount = currentBids[artwork.id]?.amount || 0;
+                if (artwork.id === '383b2754-8913-49c5-9657-317d266587bc') {
+                  console.log(`🎨 [RENDER-DEBUG] Rendering artwork ${artwork.id} with bid: $${currentBidAmount}`);
+                }
+
                 // Get primary or latest media (newest first)
                 const primaryMedia = artwork.media?.find(am => am.is_primary) || artwork.media?.[0];
                 const mediaFile = primaryMedia?.media_files;
@@ -1709,8 +1876,8 @@ const EventDetails = () => {
                 const isFinalist = status === 'finalist';
                 
                 return (
-                  <Card 
-                    key={artwork.id} 
+                  <Card
+                    key={`${artwork.id}-${currentBids[artwork.id]?.amount || 0}-${currentBids[artwork.id]?.time || Date.now()}`} 
                     size="2" 
                     style={{ 
                       cursor: 'pointer',

@@ -6,7 +6,12 @@
 
 import { useEffect, useRef, useCallback } from 'react';
 import { broadcastCacheManager } from '../utils/BroadcastCacheManager';
-import { supabase } from '../lib/supabase'; // Use existing Supabase client
+import { supabase } from '../lib/supabase';
+
+// PERFORMANCE: Global deduplication across ALL useBroadcastCache instances using window object
+if (!window.__broadcastDeduplication) {
+  window.__broadcastDeduplication = new Set();
+} // Use existing Supabase client
 
 /**
  * Hook for managing broadcast cache invalidation
@@ -34,12 +39,26 @@ export const useBroadcastCache = (eventId, onCacheInvalidation, options = {}) =>
   // Handle cache invalidation with optional auto-refresh
   const handleCacheInvalidation = useCallback((notificationData) => {
     const { type, endpoints, timestamp } = notificationData;
-    
-    console.log(`🌐 [V2-BROADCAST] Cache invalidated for event ${currentEventIdRef.current}:`, {
-      type,
-      endpoints,
-      timestamp: new Date(timestamp).toISOString()
-    });
+
+    // PERFORMANCE: Create unique key for this broadcast to prevent duplicate processing
+    const broadcastKey = `${type}-${timestamp}-${endpoints?.join(',') || ''}`;
+
+    if (window.__broadcastDeduplication.has(broadcastKey)) {
+      // This exact broadcast already processed by ANY component instance, skip
+      return;
+    }
+
+    window.__broadcastDeduplication.add(broadcastKey);
+
+    // Cleanup old entries to prevent memory leak
+    if (window.__broadcastDeduplication.size > 100) {
+      const entries = Array.from(window.__broadcastDeduplication);
+      window.__broadcastDeduplication.clear();
+      entries.slice(50).forEach(key => window.__broadcastDeduplication.add(key)); // Keep last 50
+    }
+
+    // PERFORMANCE: Reduced logging - only show simplified cache invalidation message
+    console.log(`[INFO] 🌐 [V2-BROADCAST] Cache invalidated: ${type} (${endpoints?.length || 0} endpoints)`);
 
     // Clear any pending refresh
     if (refreshTimeoutRef.current) {
@@ -49,7 +68,7 @@ export const useBroadcastCache = (eventId, onCacheInvalidation, options = {}) =>
     if (autoRefresh && callbackRef.current) {
       // Delay refresh slightly to batch multiple rapid notifications
       refreshTimeoutRef.current = setTimeout(() => {
-        console.log(`🔄 [V2-BROADCAST] Auto-refreshing after cache invalidation`);
+        // PERFORMANCE: Simplified refresh logging
         callbackRef.current(notificationData);
       }, refreshDelay);
     } else if (callbackRef.current) {
@@ -67,12 +86,12 @@ export const useBroadcastCache = (eventId, onCacheInvalidation, options = {}) =>
 
     // If we're subscribed to a different event, clean up first
     if (isSubscribedRef.current && currentEventIdRef.current !== eventId) {
-      console.log(`🔇 [V2-BROADCAST] Switching events: unsubscribing from ${currentEventIdRef.current}`);
+      // PERFORMANCE: Reduce log noise for event switching
       broadcastCacheManager.unsubscribeFromEvent(currentEventIdRef.current, supabase);
       isSubscribedRef.current = false;
     }
 
-    console.log(`🔔 [V2-BROADCAST] Setting up cache invalidation for event ${eventId}`);
+    // PERFORMANCE: Reduce setup logging noise
     
     // Enable debug mode if requested
     if (debugMode) {
@@ -86,7 +105,7 @@ export const useBroadcastCache = (eventId, onCacheInvalidation, options = {}) =>
 
     // Cleanup on unmount or event change
     return () => {
-      console.log(`🔇 [V2-BROADCAST] Cleaning up cache invalidation for event ${eventId}`);
+      // PERFORMANCE: Reduce cleanup logging noise
       
       if (refreshTimeoutRef.current) {
         clearTimeout(refreshTimeoutRef.current);

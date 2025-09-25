@@ -19,6 +19,9 @@ class PublicDataManager {
     this.broadcastChannel = new BroadcastChannel('artbattle-data');
     this.initialized = true;
 
+    // GLOBAL BID STATE: Single source of truth for all components
+    this.globalCurrentBids = new Map(); // eventId -> { artworkId: { amount, count, time } }
+
     // Listen for cache invalidation from other tabs/admin actions
     this.broadcastChannel.addEventListener('message', (event) => {
       if (event.data.type === 'invalidate') {
@@ -144,6 +147,10 @@ class PublicDataManager {
       });
       
       console.log(`✅ [V2-BROADCAST] Media data for ${eventEid} loaded from cached endpoint`);
+
+      // CRITICAL: Notify subscribers that fresh media data is available
+      this.notifySubscribers(cacheKey, data);
+
       return data;
     } catch (error) {
       console.error(`❌ [V2-BROADCAST] Failed to fetch media for ${eventEid}:`, error);
@@ -169,6 +176,11 @@ class PublicDataManager {
       
       const data = await response.json();
       console.log(`✅ [V2-BROADCAST] Bid data for ${eventEid}-${round}-${easel} loaded with cache version`);
+
+      // CRITICAL: Notify subscribers that fresh bid data is available
+      const cacheKey = `artwork-bids-${eventEid}-${round}-${easel}`;
+      this.notifySubscribers(cacheKey, data);
+
       return data;
     } catch (error) {
       console.warn(`⚠️ [V2-BROADCAST] Versioned bid fetch failed, falling back to basic method:`, error);
@@ -205,6 +217,10 @@ class PublicDataManager {
       });
       
       console.log(`✅ [V2-BROADCAST] Bid data for ${eventEid}-${round}-${easel} loaded from cached endpoint`);
+
+      // CRITICAL: Notify subscribers that fresh bid data is available
+      this.notifySubscribers(cacheKey, data);
+
       return data;
     } catch (error) {
       console.error(`❌ [V2-BROADCAST] Failed to fetch bids for ${eventEid}-${round}-${easel}:`, error);
@@ -364,7 +380,25 @@ class PublicDataManager {
     try {
       if (key === 'events') {
         await this.getEvents();
+      } else if (key.startsWith('event-media-')) {
+        // Handle media cache keys: event-media-AB6091 -> getEventMedia(AB6091)
+        const eventEid = key.replace('event-media-', '');
+        await this.getEventMedia(eventEid);
+      } else if (key.startsWith('event-artists-')) {
+        // Handle artist cache keys: event-artists-AB6091 -> getEvent(AB6091)
+        const eventEid = key.replace('event-artists-', '');
+        await this.getEvent(eventEid);
+      } else if (key.startsWith('artwork-bids-')) {
+        // Handle bid cache keys: artwork-bids-AB6091-2-1 -> getArtworkBids(AB6091, 2, 1)
+        const parts = key.replace('artwork-bids-', '').split('-');
+        if (parts.length >= 3) {
+          const eventEid = parts[0];
+          const round = parseInt(parts[1]);
+          const easel = parseInt(parts[2]);
+          await this.getArtworkBids(eventEid, round, easel);
+        }
       } else if (key.startsWith('event-')) {
+        // Handle main event cache keys: event-AB6091 -> getEvent(AB6091)
         const eventId = key.replace('event-', '');
         await this.getEvent(eventId);
       }

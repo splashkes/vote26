@@ -6,11 +6,27 @@
 
 export class BroadcastCacheManager {
   constructor() {
+    // SINGLETON PATTERN: Prevent multiple instances
+    if (BroadcastCacheManager.instance) {
+      console.log('🔄 [BCM] BroadcastCacheManager already exists, returning existing instance');
+      return BroadcastCacheManager.instance;
+    }
+
     this.subscriptions = new Map(); // eventId -> channel
     this.endpointCache = new Map(); // endpoint -> {data, timestamp, isValid}
     this.eventListeners = new Map(); // eventId -> Set of callbacks
     this.debugMode = false;
-    
+    this.instanceId = `BCM-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    // PERFORMANCE: Global broadcast deduplication - prevent multiple components from processing same broadcast
+    if (!window.__broadcastManagerDeduplication) {
+      window.__broadcastManagerDeduplication = new Set();
+    }
+
+    // Store singleton instance
+    BroadcastCacheManager.instance = this;
+    console.log(`🚀 [BCM] BroadcastCacheManager initialized as singleton: ${this.instanceId}`);
+
     // Endpoint patterns for URL matching
     this.endpointPatterns = {
       event: (eid) => `/live/event/${eid}`,
@@ -18,6 +34,35 @@ export class BroadcastCacheManager {
       artists: (eid) => `/live/event/${eid}/artists`,
       bids: (eid, round, easel) => `/live/event/${eid}-${round}-${easel}/bids`
     };
+  }
+
+  /**
+   * Check if broadcast has already been processed globally (across all components)
+   * @param {string} type - Broadcast type
+   * @param {string} eventId - Event ID
+   * @param {number} timestamp - Broadcast timestamp
+   * @param {Array} endpoints - Affected endpoints
+   * @returns {boolean} - True if already processed
+   */
+  isGloballyProcessed(type, eventId, timestamp, endpoints) {
+    const broadcastKey = `${type}-${eventId}-${timestamp}-${endpoints?.join(',') || ''}`;
+
+    if (window.__broadcastManagerDeduplication.has(broadcastKey)) {
+      this.log(`🔄 [DEDUPLICATION] Broadcast already processed globally: ${type} for ${eventId}`, null, 'DEBUG');
+      return true;
+    }
+
+    // Add to processed set
+    window.__broadcastManagerDeduplication.add(broadcastKey);
+
+    // Cleanup old entries to prevent memory leak
+    if (window.__broadcastManagerDeduplication.size > 100) {
+      const entries = Array.from(window.__broadcastManagerDeduplication);
+      window.__broadcastManagerDeduplication.clear();
+      entries.slice(50).forEach(key => window.__broadcastManagerDeduplication.add(key)); // Keep last 50
+    }
+
+    return false;
   }
 
   /**
@@ -42,6 +87,7 @@ export class BroadcastCacheManager {
           this.eventListeners.set(eventId, new Set());
         }
         this.eventListeners.get(eventId).add(onInvalidation);
+        console.log(`📡 [BCM] Added additional listener for ${eventId}. Total listeners: ${this.eventListeners.get(eventId).size}`);
         return;
       }
     }
@@ -61,7 +107,7 @@ export class BroadcastCacheManager {
         // Add dedupe check to prevent double processing
         const eventKey = `${eventId}-${payload?.payload?.timestamp || Date.now()}`;
         if (this.processedEvents?.has(eventKey)) {
-          this.log(`🔄 [REALTIME] Skipping duplicate broadcast for ${eventId}`, eventKey);
+          this.log(`🔄 [REALTIME] Skipping duplicate broadcast for ${eventId}`, eventKey, 'DEBUG');
           return;
         }
 
@@ -77,15 +123,18 @@ export class BroadcastCacheManager {
           oldestKeys.forEach(key => this.processedEvents.delete(key));
         }
 
-        this.log(`📡 [REALTIME] Received broadcast for event ${eventId}`, payload);
-        this.handleRealtimeBroadcast(eventId, payload);
+        // PERFORMANCE: Reduce log noise - only log broadcast reception in debug mode
+        this.log(`📡 [REALTIME] Received broadcast for event ${eventId}`, payload, 'DEBUG');
+        this.handleRealtimeBroadcast(eventId, payload).catch(error => {
+          console.error('Error in handleRealtimeBroadcast:', error);
+        });
       })
       .subscribe((status) => {
-        this.log(`📡 [REALTIME] Channel ${channelName} status: ${status}`);
+        this.log(`📡 [REALTIME] Channel ${channelName} status: ${status}`, null, 'DEBUG');
 
         // Handle channel errors by attempting reconnection
         if (status === 'CHANNEL_ERROR') {
-          this.log(`❌ [REALTIME] Channel error for ${eventId}, will retry connection`);
+          this.log(`❌ [REALTIME] Channel error for ${eventId}, will retry connection`, null, 'ERROR');
           setTimeout(() => {
             this.log(`🔄 [REALTIME] Retrying connection for ${eventId}`);
             this.subscribeToEvent(eventId, onInvalidation, supabase);
@@ -94,7 +143,7 @@ export class BroadcastCacheManager {
       });
 
     this.subscriptions.set(eventId, channel);
-    this.log(`✅ Subscribed to pg_notify broadcasts for event ${eventId} on channel ${channelName}`);
+    this.log(`✅ Subscribed to pg_notify broadcasts for event ${eventId} on channel ${channelName}`, null, 'DEBUG');
   }
 
   /**
@@ -118,28 +167,32 @@ export class BroadcastCacheManager {
    * @param {string} eventId - Event ID
    * @param {object} payload - Postgres changes payload
    */
-  handlePostgresChange(type, eventId, payload) {
+  async handlePostgresChange(type, eventId, payload) {
     this.log(`📡 [POSTGRES_CHANGES] ${type} notification for event ${eventId}`, payload);
 
     // Determine which endpoints to invalidate based on the change type
     const endpointsToInvalidate = this.getEndpointsToInvalidate(type, eventId, payload);
-    
+
     this.log(`🔄 [CACHE] Invalidating ${endpointsToInvalidate.length} endpoints for ${type}`);
 
     // Invalidate cache for each endpoint
-    endpointsToInvalidate.forEach(endpoint => {
-      this.invalidateEndpoint(endpoint);
-    });
+    await Promise.all(endpointsToInvalidate.map(endpoint => this.invalidateEndpoint(endpoint)));
 
     // Notify all listeners for this event
     const listeners = this.eventListeners.get(eventId);
     if (listeners) {
+      const timestamp = Date.now();
       const callbackData = {
         type,
         eventId,
         endpoints: endpointsToInvalidate,
-        timestamp: Date.now()
+        timestamp
       };
+
+      // PERFORMANCE: Check global deduplication before notifying any listeners
+      if (this.isGloballyProcessed(type, eventId, timestamp, endpointsToInvalidate)) {
+        return; // Skip if already processed by another component
+      }
 
       listeners.forEach(callback => {
         try {
@@ -156,7 +209,7 @@ export class BroadcastCacheManager {
    * @param {string} eventId - Event ID
    * @param {object} payload - Broadcast payload from realtime.broadcast_changes()
    */
-  handleRealtimeBroadcast(eventId, payload) {
+  async handleRealtimeBroadcast(eventId, payload) {
     this.log(`📡 [REALTIME] Broadcast notification for event ${eventId}`, payload);
 
     try {
@@ -180,12 +233,18 @@ export class BroadcastCacheManager {
       // Notify all listeners for this event
       const listeners = this.eventListeners.get(eventId);
       if (listeners) {
+        const callbackTimestamp = timestamp || Date.now();
         const callbackData = {
           type,
           eventId,
           endpoints: endpoints || [],
-          timestamp: timestamp || Date.now()
+          timestamp: callbackTimestamp
         };
+
+        // PERFORMANCE: Check global deduplication before notifying any listeners
+        if (this.isGloballyProcessed(type, eventId, callbackTimestamp, endpoints || [])) {
+          return; // Skip if already processed by another component
+        }
 
         listeners.forEach(callback => {
           try {
@@ -206,27 +265,31 @@ export class BroadcastCacheManager {
    * @param {string} eventId - Event ID
    * @param {object} payload - Broadcast payload
    */
-  handleBroadcastNotification(type, eventId, payload) {
+  async handleBroadcastNotification(type, eventId, payload) {
     this.log(`📡 [BROADCAST] ${type} notification for event ${eventId}`, payload);
 
     // Determine which endpoints to invalidate based on notification type
     const endpointsToInvalidate = this.getEndpointsToInvalidate(type, eventId, payload);
-    
+
     // Invalidate cache for each endpoint
-    endpointsToInvalidate.forEach(endpoint => {
-      this.invalidateEndpoint(endpoint);
-    });
+    await Promise.all(endpointsToInvalidate.map(endpoint => this.invalidateEndpoint(endpoint)));
 
     // Notify all listeners for this event
     const listeners = this.eventListeners.get(eventId);
     if (listeners) {
+      const timestamp = Date.now();
       const notificationData = {
         type,
         eventId,
         endpoints: endpointsToInvalidate,
         payload,
-        timestamp: Date.now()
+        timestamp
       };
+
+      // PERFORMANCE: Check global deduplication before notifying any listeners
+      if (this.isGloballyProcessed(type, eventId, timestamp, endpointsToInvalidate)) {
+        return; // Skip if already processed by another component
+      }
 
       listeners.forEach(callback => {
         try {
@@ -287,7 +350,35 @@ export class BroadcastCacheManager {
         endpoints.push(this.endpointPatterns.event(eventId));
         endpoints.push(this.endpointPatterns.artists(eventId));
         break;
-        
+
+      case 'payment_made':
+      case 'artwork_purchased':
+      case 'deposit_paid':
+        // Payment changes affect main event endpoint
+        endpoints.push(this.endpointPatterns.event(eventId));
+        break;
+
+      case 'auction_opened':
+      case 'auction_closed':
+      case 'auction_extended':
+      case 'timer_updated':
+        // Auction status changes affect main event endpoint
+        endpoints.push(this.endpointPatterns.event(eventId));
+        break;
+
+      case 'winner_announced':
+      case 'winner_updated':
+      case 'round_winner_set':
+        // Winner announcements affect main event endpoint
+        endpoints.push(this.endpointPatterns.event(eventId));
+        break;
+
+      case 'round_changed':
+      case 'event_status_updated':
+        // Event-level changes affect main event endpoint
+        endpoints.push(this.endpointPatterns.event(eventId));
+        break;
+
       default:
         // Unknown type, invalidate main event endpoint as fallback
         endpoints.push(this.endpointPatterns.event(eventId));
@@ -300,14 +391,14 @@ export class BroadcastCacheManager {
    * Mark an endpoint as invalid in both local cache and PublicDataManager cache
    * @param {string} endpoint - Endpoint URL to invalidate (relative or full URL)
    */
-  invalidateEndpoint(endpoint) {
+  async invalidateEndpoint(endpoint) {
     // CRITICAL FIX: Coordinate with PublicDataManager's cache system
     // Import PublicDataManager to invalidate its cache too
     let publicDataManagerInvalidated = false;
 
     try {
       // Dynamic import to avoid circular dependencies
-      const { publicDataManager } = require('../lib/PublicDataManager');
+      const { publicDataManager } = await import('../lib/PublicDataManager');
 
       // Map endpoint paths to PublicDataManager cache keys
       const cacheKeyMappings = [
@@ -318,6 +409,10 @@ export class BroadcastCacheManager {
         // Media endpoint
         { pattern: /^\/live\/event\/([^\/]+)\/media$/, keyFn: (match) => `event-media-${match[1]}` },
         { pattern: /^https:\/\/artb\.art\/live\/event\/([^\/]+)\/media$/, keyFn: (match) => `event-media-${match[1]}` },
+
+        // Artists endpoint (CRITICAL FIX: Missing pattern for round_contestants updates)
+        { pattern: /^\/live\/event\/([^\/]+)\/artists$/, keyFn: (match) => `event-artists-${match[1]}` },
+        { pattern: /^https:\/\/artb\.art\/live\/event\/([^\/]+)\/artists$/, keyFn: (match) => `event-artists-${match[1]}` },
 
         // Bid endpoints
         { pattern: /^\/live\/event\/([^-]+)-(\d+)-(\d+)\/bids$/, keyFn: (match) => `artwork-bids-${match[1]}-${match[2]}-${match[3]}` },
@@ -335,7 +430,7 @@ export class BroadcastCacheManager {
         }
       }
     } catch (error) {
-      this.log(`⚠️ [CACHE] Failed to invalidate PublicDataManager cache:`, error.message);
+      this.log(`⚠️ [CACHE] Failed to invalidate PublicDataManager cache:`, error.message, 'WARN');
     }
 
     // Also invalidate local BroadcastCacheManager cache (existing logic)
@@ -351,16 +446,16 @@ export class BroadcastCacheManager {
       if (cacheEntry) {
         cacheEntry.isValid = false;
         cacheEntry.invalidatedAt = Date.now();
-        this.log(`❌ [CACHE] Invalidated local cache: ${variant}`);
+        this.log(`❌ [CACHE] Invalidated local cache: ${variant}`, null, 'DEBUG');
         localInvalidated = true;
       }
     }
 
     // Log results
     if (publicDataManagerInvalidated || localInvalidated) {
-      this.log(`✅ [CACHE] Successfully invalidated endpoint ${endpoint} (PublicDataManager: ${publicDataManagerInvalidated}, Local: ${localInvalidated})`);
+      this.log(`✅ [CACHE] Successfully invalidated endpoint ${endpoint} (PublicDataManager: ${publicDataManagerInvalidated}, Local: ${localInvalidated})`, null, 'DEBUG');
     } else {
-      this.log(`⚠️  [CACHE] Endpoint not found in any cache (tried ${variants.length} variants): ${endpoint}`);
+      this.log(`⚠️  [CACHE] Endpoint not found in any cache (tried ${variants.length} variants): ${endpoint}`, null, 'DEBUG');
     }
   }
 
@@ -455,18 +550,46 @@ export class BroadcastCacheManager {
   }
 
   /**
-   * Internal logging method
+   * Internal logging method with log levels
    * @param {string} message - Log message
    * @param {any} data - Optional data to log
+   * @param {string} level - Log level: DEBUG, INFO, WARN, ERROR
    */
-  log(message, data = null) {
-    if (this.debugMode) {
+  log(message, data = null, level = 'DEBUG') {
+    const levelTag = `[${level}]`;
+    const fullMessage = `${levelTag} [BroadcastCacheManager] ${message}`;
+
+    if (level === 'ERROR') {
       if (data) {
-        console.log(`[BroadcastCacheManager] ${message}`, data);
+        console.error(fullMessage, data);
       } else {
-        console.log(`[BroadcastCacheManager] ${message}`);
+        console.error(fullMessage);
+      }
+    } else if (level === 'WARN') {
+      if (data) {
+        console.warn(fullMessage, data);
+      } else {
+        console.warn(fullMessage);
+      }
+    } else if (level === 'INFO') {
+      // PRODUCTION: Only show INFO logs for critical broadcast events
+      if (data) {
+        console.log(fullMessage, data);
+      } else {
+        console.log(fullMessage);
       }
     }
+    // PRODUCTION: DEBUG logs disabled to reduce console spam
+  }
+
+  /**
+   * Get singleton instance (static method)
+   */
+  static getInstance() {
+    if (!BroadcastCacheManager.instance) {
+      new BroadcastCacheManager();
+    }
+    return BroadcastCacheManager.instance;
   }
 }
 
