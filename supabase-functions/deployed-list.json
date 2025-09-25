@@ -122,7 +122,7 @@
    af04bcb9-4dd7-4521-84dd-a9710670a3ff | send-payment-setup-reminder          | send-payment-setup-reminder          | ACTIVE | 6       | 2025-09-23 00:17:15 
    4e6b990d-44b2-41e4-80af-d8074cdd9682 | process-artist-payment               | process-artist-payment               | ACTIVE | 1       | 2025-09-18 14:10:37 
    47ff54ca-6957-4e24-ae5b-711dea16a87a | event-analytics-dashboard            | event-analytics-dashboard            | ACTIVE | 2       | 2025-09-20 01:25:19 
-   82bddf02-2088-4528-9e7b-985c22621593 | public-analytics                     | public-analytics                     | ACTIVE | 12      | 2025-09-24 04:48:07 
+   82bddf02-2088-4528-9e7b-985c22621593 | public-analytics                     | public-analytics                     | ACTIVE | 13      | 2025-09-24 13:53:57 
    590bcfc7-8f42-498b-ae16-a5e6fbe3d945 | admin-send-payment-reminder          | admin-send-payment-reminder          | ACTIVE | 10      | 2025-09-23 00:06:14 
    a79530b6-dfef-4845-b044-49f4eecd4075 | admin-get-payment-reminder-history   | admin-get-payment-reminder-history   | ACTIVE | 1       | 2025-09-22 19:51:18 
    3d9457fe-ce19-464e-9495-3f77b3306ace | admin-get-offer-history              | admin-get-offer-history              | ACTIVE | 1       | 2025-09-22 19:51:18 
@@ -136,6 +136,6 @@
    6e086973-bf11-40f2-85ab-e308576d5cde | fresh-admin-payments                 | fresh-admin-payments                 | ACTIVE | 1       | 2025-09-24 00:40:58 
    6fcf0435-665e-4e09-a8ba-f262620a5a1d | echo-admin-data                      | echo-admin-data                      | ACTIVE | 2       | 2025-09-24 01:18:26 
    6ff4ff79-d399-4d24-9fec-5a7d38c8922f | test-owed-money                      | test-owed-money                      | ACTIVE | 1       | 2025-09-24 01:39:37 
-   70373f00-ed0c-4ad3-ada8-3da67feb6827 | working-admin-payments               | working-admin-payments               | ACTIVE | 4       | 2025-09-24 02:41:28 
+   70373f00-ed0c-4ad3-ada8-3da67feb6827 | working-admin-payments               | working-admin-payments               | ACTIVE | 19      | 2025-09-25 02:16:54 
    4a3dfe00-4856-4356-b90b-92d3227fcaf1 | admin-send-payment-invite            | admin-send-payment-invite            | ACTIVE | 1       | 2025-09-24 02:26:17 
 
