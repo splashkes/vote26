@@ -113,7 +113,7 @@ const InternationalPhoneInput = forwardRef(({
         
         // Update display with Twilio's formatted version
         if (data.nationalFormat && data.valid) {
-          console.log('📱 Updating display from', phone, 'to', data.nationalFormat);
+          // console.log('📱 Updating display from', phone, 'to', data.nationalFormat); // REMOVED: Too verbose
           setPhone(data.nationalFormat);
         }
         
@@ -141,7 +141,7 @@ const InternationalPhoneInput = forwardRef(({
 
   // Handle phone input changes - LET TWILIO DO THE WORK
   const handlePhoneInput = (inputValue, overrideCountry = null) => {
-    console.log('📱 Phone input:', inputValue);
+    // console.log('📱 Phone input:', inputValue); // REMOVED: Too verbose for debugging
     
     // Clean input but keep basic formatting chars
     const cleanedInput = inputValue.replace(/[^\d\s\-\(\)\+]/g, '');
@@ -158,12 +158,12 @@ const InternationalPhoneInput = forwardRef(({
       validationTimeoutRef.current = setTimeout(() => {
         let phoneForTwilio;
         const countryToUse = overrideCountry || selectedCountry;
-        console.log('📱 Using country for validation:', countryToUse, 'override:', overrideCountry, 'selected:', selectedCountry);
+        // console.log('📱 Using country for validation:', countryToUse, 'override:', overrideCountry, 'selected:', selectedCountry); // REMOVED: Too verbose
         
         if (cleanedInput.startsWith('+')) {
           // User entered +, send raw and ignore country dropdown
           phoneForTwilio = cleanedInput;
-          console.log('📱 User entered +, sending RAW to Twilio:', phoneForTwilio);
+          // console.log('📱 User entered +, sending RAW to Twilio:', phoneForTwilio); // REMOVED: Too verbose
         } else {
           // No +, use country dropdown with smart duplicate detection
           const selectedCountryData = countryData.find(c => c.code === countryToUse);
@@ -173,16 +173,16 @@ const InternationalPhoneInput = forwardRef(({
             if (cleanedInput.startsWith(countryDialCode)) {
               // Number already starts with country code, just add +
               phoneForTwilio = '+' + cleanedInput;
-              console.log('📱 Duplicate detected, adding + to:', cleanedInput, '→', phoneForTwilio);
+              // console.log('📱 Duplicate detected, adding + to:', cleanedInput, '→', phoneForTwilio); // REMOVED: Too verbose
             } else {
               // Add country dial code
               phoneForTwilio = selectedCountryData.dialCode + cleanedInput;
-              console.log('📱 Adding country code', selectedCountryData.dialCode, 'to:', cleanedInput, '→', phoneForTwilio);
+              // console.log('📱 Adding country code', selectedCountryData.dialCode, 'to:', cleanedInput, '→', phoneForTwilio); // REMOVED: Too verbose
             }
           } else {
             // No country selected, send raw
             phoneForTwilio = cleanedInput;
-            console.log('📱 No country selected, sending RAW:', phoneForTwilio);
+            // console.log('📱 No country selected, sending RAW:', phoneForTwilio); // REMOVED: Too verbose
           }
         }
         

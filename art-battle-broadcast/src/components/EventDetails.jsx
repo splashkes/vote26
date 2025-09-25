@@ -88,6 +88,7 @@ const EventDetails = () => {
     console.log(`🎯 [GLOBAL-STATE] Subscribing to global state for event: ${eventId}`);
 
     const unsubscribe = publicDataManager.subscribeToEventState(eventId, (newState) => {
+      // Only log state keys, not the full state (which contains arrays like artworks)
       console.log(`🔄 [GLOBAL-STATE] Received state update for ${eventId}:`, Object.keys(newState));
       setGlobalState(newState);
     });
@@ -369,9 +370,9 @@ const EventDetails = () => {
   const eventDataFetched = useRef(null);
 
   // STABILITY REFS: Prevent infinite loops by tracking actual vs render changes
-  const stableEventId = useRef(eventId);
-  const stableAuthLoading = useRef(authLoading);
-  const stableSession = useRef(session);
+  const stableEventId = useRef(undefined);
+  const stableAuthLoading = useRef(undefined);
+  const stableSession = useRef(undefined);
   const effectRunning = useRef(false);
 
   useEffect(() => {
@@ -384,6 +385,8 @@ const EventDetails = () => {
       (stableSession.current && !session)
     );
 
+    // Stability check for preventing unnecessary re-renders
+
     // GUARD: Prevent overlapping executions
     if (effectRunning.current) {
       console.log('🔄 [STABILITY] Effect already running, skipping duplicate trigger');
@@ -392,7 +395,6 @@ const EventDetails = () => {
 
     // GUARD: Only run on real changes, not render artifacts
     if (!hasRealChange) {
-      // PERFORMANCE: Stability check working - reduce log noise
       return;
     }
 
@@ -419,10 +421,11 @@ const EventDetails = () => {
       // Allow fetch if:
       // 1. First time (not initialized)
       // 2. Event changed
-      // 3. Auth state changed
+      // 3. Auth state changed AND enough time passed (prevent auth loops)
       // 4. More than 5 seconds since last fetch (allows for legitimate updates)
+      const authStateChanged = eventDataFetched.current?.key !== eventKey;
       const shouldFetch = !authInitialized.current ||
-                          eventDataFetched.current?.key !== eventKey ||
+                          (authStateChanged && timeSinceLastFetch > 1000) || // AUTH LOOP FIX: 1s debounce for auth changes
                           timeSinceLastFetch > 5000;
 
       if (shouldFetch) {
@@ -470,7 +473,7 @@ const EventDetails = () => {
 
     // CLEANUP: Always clear the flag when effect completes
     effectRunning.current = false;
-  }, [eventId, authLoading, session]); // FIXED: Removed eventEid to prevent infinite loop
+  }, [eventId, authLoading, session]); // LOADING LOOP FIX: Keep dependencies but improve logic
 
   // Handle tab parameter from URL hash and authentication check
   useEffect(() => {
@@ -519,22 +522,44 @@ const EventDetails = () => {
   // V2 BROADCAST: Data loads on demand via cached endpoints - no subscriptions needed
 
   // ADMIN PERMISSION STABILITY REFS: Prevent excessive admin checks from render artifacts
-  const stableUserForAdmin = useRef(user);
-  const stableEventIdForAdmin = useRef(eventId);
+  const stableUserForAdmin = useRef(undefined);
+  const stableEventIdForAdmin = useRef(undefined);
+  const stablePersonForAdmin = useRef(undefined);
   const adminCheckRunning = useRef(false);
 
   useEffect(() => {
+    console.log('🔍 [ADMIN-DEBUG] Admin useEffect triggered:', {
+      user: !!user,
+      eventId,
+      person: !!person,
+      userPhone: user?.phone,
+      personId: person?.id
+    });
+
     // ANTI-SPAM: Check if this is a real change or just a React render artifact
     const hasRealAdminChange = (
       stableUserForAdmin.current !== user ||
       stableEventIdForAdmin.current !== eventId ||
+      stablePersonForAdmin.current !== person ||
       // Handle user object changes (check key properties instead of reference)
       (stableUserForAdmin.current?.phone !== user?.phone) ||
-      (stableUserForAdmin.current?.id !== user?.id)
+      (stableUserForAdmin.current?.id !== user?.id) ||
+      // Handle person object changes (JWT claims availability)
+      (stablePersonForAdmin.current?.id !== person?.id)
     );
+
+    console.log('🔍 [ADMIN-DEBUG] hasRealAdminChange:', hasRealAdminChange, {
+      userChanged: stableUserForAdmin.current !== user,
+      eventIdChanged: stableEventIdForAdmin.current !== eventId,
+      personChanged: stablePersonForAdmin.current !== person,
+      userPhoneChanged: stableUserForAdmin.current?.phone !== user?.phone,
+      userIdChanged: stableUserForAdmin.current?.id !== user?.id,
+      personIdChanged: stablePersonForAdmin.current?.id !== person?.id
+    });
 
     // GUARD: Only run on real changes, not render artifacts
     if (!hasRealAdminChange) {
+      console.log('🔍 [ADMIN-DEBUG] Skipping admin check - no real changes detected');
       return;
     }
 
@@ -547,6 +572,7 @@ const EventDetails = () => {
     // Update stable refs BEFORE processing
     stableUserForAdmin.current = user;
     stableEventIdForAdmin.current = eventId;
+    stablePersonForAdmin.current = person;
 
     // Check admin permissions from database
     const checkAdminStatus = async () => {
@@ -577,7 +603,7 @@ const EventDetails = () => {
     };
 
     checkAdminStatus();
-  }, [user, eventId]);
+  }, [user, eventId, person]); // ADMIN FIX: Also trigger when person data (JWT claims) is available
 
   useEffect(() => {
     if (person) {
@@ -690,7 +716,7 @@ const EventDetails = () => {
     };
   }, [person?.id, eventId, artworks, autoPaymentModal]);
 
-  const fetchEventDetails = async () => {
+  const fetchEventDetails = useCallback(async () => {
     try {
       console.log('EventDetails: Starting fetchEventDetails for eventId:', eventId);
       // GLOBAL STATE: Set loading state
@@ -825,7 +851,7 @@ const EventDetails = () => {
         publicDataManager.updateEventState(eventId, { loading: false });
       }
     }
-  };
+  }, [eventId, setEventEid]); // MEMOIZATION: Dependencies for fetchEventDetails
 
   // V2 BROADCAST: Background refresh function removed - V2 broadcast system handles all real-time updates automatically
 

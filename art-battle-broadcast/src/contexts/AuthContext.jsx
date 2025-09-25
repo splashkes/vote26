@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useRef } from 'react';
+import { createContext, useContext, useEffect, useState, useRef, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 
 const AuthContext = createContext({});
@@ -57,6 +57,7 @@ export const AuthProvider = ({ children }) => {
         setUser(null);
         setPerson(null);
       } finally {
+        console.log('✅ [AUTH-V2] Setting loading to false after initialization');
         setLoading(false);
       }
     };
@@ -71,19 +72,42 @@ export const AuthProvider = ({ children }) => {
       }
       setSession(session);
       setUser(session?.user ?? null);
-      
+
       if (session?.user) {
         // Only extract person data for initial session and token refresh to prevent loops
         if (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
           console.log('🔄 [AUTH-V2] Extracting person data for event:', event, 'person:', !!personRef.current);
-          await extractPersonFromJWT(session.user, personRef.current, session);
+          try {
+            await extractPersonFromJWT(session.user, personRef.current, session);
+          } catch (error) {
+            console.error('🚨 [AUTH-V2] JWT processing failed in auth state change:', error);
+            // Set person to null and continue - don't let JWT errors break auth flow
+            setPerson(null);
+          }
         }
       } else {
         setPerson(null);
       }
+
+      // LOADING LOOP FIX: Ensure loading is always cleared after auth state changes
+      // This prevents infinite loading when JWT processing fails
+      if (event === 'INITIAL_SESSION') {
+        console.log('✅ [AUTH-V2] Setting loading to false after INITIAL_SESSION event');
+        setLoading(false);
+      }
     });
 
-    return () => subscription.unsubscribe();
+    // LOADING LOOP FIX: Fallback timeout to ensure loading is cleared
+    // This prevents infinite loading if auth events don't fire properly
+    const loadingTimeout = setTimeout(() => {
+      console.log('⏰ [AUTH-V2] Loading timeout reached, clearing loading state');
+      setLoading(false);
+    }, 10000); // 10 second timeout
+
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(loadingTimeout);
+    };
   }, []); // Empty dependency array is safe now with personRef
 
   // Simplified: Auth state is managed by onAuthStateChange only
@@ -168,20 +192,24 @@ export const AuthProvider = ({ children }) => {
           setPerson(null);
         }
       } else {
-        // HARD CRASH: No legacy support
+        // ERROR HANDLING: Don't crash the app, just log and set person to null
         const errorMsg = `🚨 [AUTH-V2] CRITICAL ERROR: Legacy auth system detected! Expected auth_version: 'v2-http' but got: '${payload.auth_version}'. Custom Access Token Hook not working properly.`;
         console.error(errorMsg);
+        setPerson(null);
         jwtProcessingRef.current = false;
-        throw new Error(errorMsg);
+        // Don't throw - let the auth flow complete normally
+        return;
       }
 
       // Reset processing flag on successful completion
       jwtProcessingRef.current = false;
     } catch (error) {
       console.error('🚨 [AUTH-V2] CRITICAL ERROR: Failed to decode JWT or extract person data:', error);
+      // ERROR HANDLING: Set person to null instead of crashing the app
+      setPerson(null);
       jwtProcessingRef.current = false;
-      // HARD CRASH: No legacy fallbacks supported
-      throw new Error(`🚨 [AUTH-V2] JWT processing failed: ${error.message}. Auth system is broken.`);
+      // Don't throw - let the auth flow complete normally even on JWT errors
+      return;
     }
   };
 
@@ -266,7 +294,9 @@ export const AuthProvider = ({ children }) => {
     
   }, [session]);
 
-  const value = {
+  // STABILITY FIX: Memoize context value to prevent unnecessary re-renders of child components
+  // This prevents rapid auth state changes from causing duplicate EventDetails component instances
+  const value = useMemo(() => ({
     user,
     person,
     session,
@@ -277,7 +307,7 @@ export const AuthProvider = ({ children }) => {
     verifyOtp,
     signOut,
     refreshSessionIfNeeded,
-  };
+  }), [user, person, session, loading, isRefreshing, sessionWarning]);
 
   return (
     <AuthContext.Provider value={value}>

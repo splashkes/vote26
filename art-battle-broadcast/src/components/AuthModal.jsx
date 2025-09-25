@@ -129,26 +129,15 @@ const AuthModal = ({ open, onOpenChange, redirectTo = null }) => {
 
   // Handle phone input changes from international phone component
   const handlePhoneChange = (data) => {
-    console.log('📞 AuthModal: Phone change data received:', {
-      inputValue: data.inputValue,
-      phone: data.phone,
-      nationalFormat: data.nationalFormat,
-      e164Format: data.e164Format,
-      isValid: data.isValid,
-      validationResult: data.validationResult
-    });
-    console.log('📞 AuthModal: Current phoneValid state:', phoneValid);
-    
+    // console.log('📞 AuthModal: Phone change data received:', data); // REMOVED: Too verbose for debugging
+
     // Use formatted national version for display (like "(416) 302-5959")
     setPhone(data.nationalFormat || data.inputValue || data.phone || ''); // Formatted display value
     setRawPhone(data.e164Format || data.phone || ''); // E.164 for backend (+14163025959)
     const newValid = data.isValid || false;
     setPhoneValid(newValid);
-    
-    console.log('📞 AuthModal: Setting phoneValid to:', newValid);
-    console.log('📞 AuthModal: Display phone:', data.nationalFormat);
-    console.log('📞 AuthModal: Backend phone:', data.e164Format);
-    console.log('📞 AuthModal: Button should be enabled:', !loading && newValid);
+
+    // console.log('📞 AuthModal: Phone state updated:', { phoneValid: newValid, display: data.nationalFormat, backend: data.e164Format }); // REMOVED: Too verbose
   };
 
   return (

@@ -27,6 +27,7 @@ class PublicDataManager {
     // GLOBAL STATE: Single source of truth for ALL components
     this.globalState = new Map(); // eventId -> { currentBids, artworks, artworksByRound, bidHistory, event, roundWinners }
     this.stateSubscribers = new Map(); // eventId -> Set of callback functions
+    this.updateCounter = new Map(); // eventId -> update count for debugging
 
     // Listen for cache invalidation from other tabs/admin actions
     this.broadcastChannel.addEventListener('message', (event) => {
@@ -505,10 +506,28 @@ class PublicDataManager {
    */
   updateEventState(eventId, updates) {
     const currentState = this.getEventState(eventId);
+
+    // DEBUG: Check for array corruption
+    if (Array.isArray(currentState)) {
+      console.error('🚨 [GLOBAL-STATE] currentState is unexpectedly an array:', currentState);
+    }
+    if (Array.isArray(updates)) {
+      console.error('🚨 [GLOBAL-STATE] updates is unexpectedly an array:', updates);
+    }
+
     const newState = { ...currentState, ...updates };
     this.globalState.set(eventId, newState);
 
-    console.log(`🔄 [GLOBAL-STATE] Updated state for ${eventId}:`, Object.keys(updates));
+    // DEBUG: Track update frequency
+    const currentCount = (this.updateCounter.get(eventId) || 0) + 1;
+    this.updateCounter.set(eventId, currentCount);
+
+    console.log(`🔄 [GLOBAL-STATE] Updated state for ${eventId} (${currentCount}):`, Array.isArray(updates) ? `ARRAY (${updates.length})` : Object.keys(updates));
+
+    // DEBUG: Show call stack for excessive updates
+    if (currentCount > 10) {
+      console.trace('📍 [STATE-DEBUG] EXCESSIVE UPDATES - called from:');
+    }
 
     // Notify all subscribed components
     const subscribers = this.stateSubscribers.get(eventId) || new Set();
