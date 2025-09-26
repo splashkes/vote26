@@ -214,11 +214,22 @@ const AdminImageUpload = ({
       setUploadProgress(100);
       setUploadStatus('success');
       
-      // Notify parent component
+      // Notify parent component with optimistic update data
       if (onUploadComplete) {
+        console.log('🔄 Triggering optimistic photo update via onUploadComplete (AdminImageUpload)');
         onUploadComplete({
-          url: imageUrl,
-          cloudflareId: imageId
+          type: 'photo_uploaded',
+          artworkId: artworkId,
+          mediaFile: {
+            id: mediaFile.id,
+            original_url: imageUrl,
+            compressed_url: imageUrl,
+            thumbnail_url: cloudflareConfig
+              ? `${cloudflareConfig.deliveryUrl}/${imageId}/thumbnail`
+              : imageUrl,
+            file_type: 'image',
+            cloudflare_id: imageId
+          }
         });
       }
 

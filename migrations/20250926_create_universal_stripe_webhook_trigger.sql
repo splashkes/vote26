@@ -125,23 +125,13 @@ BEGIN
                     webhook_event_type, TG_TABLE_NAME);
         END CASE;
 
-        -- Queue Slack notification (non-blocking)
-        INSERT INTO slack_notifications (
-            channel_name,
-            message_type,
-            text,
-            blocks,
-            event_id,
-            created_at,
-            status
-        ) VALUES (
-            'stripe-flood',
-            webhook_event_type,
-            slack_message,
-            COALESCE(slack_blocks, jsonb_build_array()),
-            webhook_event_data->>'id',
-            NOW(),
-            'pending'
+        -- Queue Slack notification using the proper system function
+        PERFORM queue_slack_notification(
+            'stripe-flood',                              -- p_channel_name
+            webhook_event_type,                          -- p_message_type
+            slack_message,                              -- p_text
+            COALESCE(slack_blocks, jsonb_build_array()), -- p_blocks
+            NULL                                        -- p_event_id
         );
 
     EXCEPTION WHEN OTHERS THEN
