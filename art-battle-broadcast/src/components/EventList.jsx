@@ -314,7 +314,7 @@ const EventList = () => {
                 <Flex align="center" justify="center" gap="2">
                   <PersonIcon />
                   <Text size="2" color="gray">
-                    {person?.name || 'CRITICAL ERROR: No person data in JWT'}
+                    {person?.name || user?.phone || 'User'}
                   </Text>
                   <Button 
                     size="1" 

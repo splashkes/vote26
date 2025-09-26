@@ -64,6 +64,10 @@ const PaymentsAdminTabbed = () => {
   const [showInvitationHistory, setShowInvitationHistory] = useState(false);
   const [invitationHistory, setInvitationHistory] = useState(null);
   const [loadingInvitationHistory, setLoadingInvitationHistory] = useState(false);
+  const [showApiConversations, setShowApiConversations] = useState(false);
+  const [apiConversations, setApiConversations] = useState([]);
+  const [loadingApiConversations, setLoadingApiConversations] = useState(false);
+  const [selectedPaymentForApi, setSelectedPaymentForApi] = useState(null);
 
   useEffect(() => {
     fetchEnhancedData();
@@ -577,16 +581,20 @@ ${JSON.stringify(parsed.debug, null, 2)}`;
         throw error;
       }
 
-      // Display detailed results
-      let successMessage = `✅ Processing completed: ${data.processed_count} payments processed`;
+      // Display detailed results with appropriate icon and direct API log links
+      const hasFailures = data.failed_count > 0;
+      const statusIcon = hasFailures ? '❌' : '✅';
+      let resultMessage = `${statusIcon} Processing completed: ${data.processed_count} payments processed`;
       if (data.successful_count !== undefined) {
-        successMessage += ` (${data.successful_count} successful, ${data.failed_count || 0} failed)`;
+        resultMessage += ` (${data.successful_count} successful, ${data.failed_count || 0} failed)`;
       }
 
-      setError(successMessage);
+      // Keep message clean - API buttons will appear right below
+
+      setError(resultMessage);
       setPaymentProcessResults(data);
 
-      // Refresh data to show updated statuses
+      // Refresh data to show updated statuses - this is NEEDED for payment methods and button counts
       await fetchEnhancedData();
 
     } catch (err) {
@@ -735,6 +743,31 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
     await fetchInvitationHistory(artist.artist_profiles.id);
     setSelectedArtist(artist);
     setShowInvitationHistory(true);
+  };
+
+  const fetchApiConversations = async (paymentId) => {
+    try {
+      setLoadingApiConversations(true);
+      const { data, error } = await supabase
+        .from('stripe_api_conversations')
+        .select('*')
+        .eq('payment_id', paymentId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setApiConversations(data || []);
+    } catch (err) {
+      console.error('Failed to load API conversations:', err);
+      setApiConversations([]);
+    } finally {
+      setLoadingApiConversations(false);
+    }
+  };
+
+  const handleViewApiConversations = async (paymentId) => {
+    setSelectedPaymentForApi(paymentId);
+    await fetchApiConversations(paymentId);
+    setShowApiConversations(true);
   };
 
   const getStatusBadge = (status) => {
@@ -1065,18 +1098,26 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                   {error.startsWith('✅') ? <CheckCircledIcon /> : <ExclamationTriangleIcon />}
                 </Callout.Icon>
                 <Callout.Text>
-                  <Text
-                    size="2"
-                    style={{
-                      whiteSpace: 'pre-wrap',
-                      fontFamily: 'monospace',
-                      wordBreak: 'break-word',
-                      maxHeight: '400px',
-                      overflowY: 'auto'
-                    }}
-                  >
-                    {error}
-                  </Text>
+                  <Flex direction="column" gap="3">
+                    <Text
+                      size="2"
+                      style={{
+                        whiteSpace: 'pre-wrap',
+                        fontFamily: 'monospace',
+                        wordBreak: 'break-word',
+                        maxHeight: '400px',
+                        overflowY: 'auto'
+                      }}
+                    >
+                      {error}
+                    </Text>
+                    {/* Show instruction for accessing API logs */}
+                    {paymentProcessResults && paymentProcessResults.failed_count > 0 && (
+                      <Text size="2" color="gray" style={{ fontStyle: 'italic', marginTop: '8px' }}>
+                        💡 Click any "❌ Failed - View Details" badge below to see complete Stripe API error logs
+                      </Text>
+                    )}
+                  </Flex>
                 </Callout.Text>
               </Callout.Root>
             )}
@@ -1235,12 +1276,21 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                                 </Text>
                               </Table.Cell>
                               <Table.Cell>
-                                <Badge
-                                  color={payment.status === 'success' ? 'green' : 'red'}
-                                  variant="soft"
-                                >
-                                  {payment.status === 'success' ? '✅ Success' : '❌ Failed'}
-                                </Badge>
+                                {payment.status === 'success' ? (
+                                  <Badge color="green" variant="soft">
+                                    ✅ Success
+                                  </Badge>
+                                ) : (
+                                  <Badge
+                                    color="red"
+                                    variant="soft"
+                                    style={{ cursor: 'pointer' }}
+                                    onClick={() => handleViewApiConversations(payment.payment_id)}
+                                    title="Click to view API error details"
+                                  >
+                                    ❌ Failed - View Details
+                                  </Badge>
+                                )}
                               </Table.Cell>
                               <Table.Cell>
                                 {payment.stripe_transfer_id ? (
@@ -1498,16 +1548,28 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                       </Table.Cell>
                       <Table.Cell>
                         <Flex direction="column" gap="1">
-                          <Badge
-                            color={
-                              artist.latest_payment_status === 'completed' ? 'green' :
-                              artist.latest_payment_status === 'pending' ? 'yellow' :
-                              artist.latest_payment_status === 'processing' ? 'blue' : 'red'
-                            }
-                            variant="soft"
-                          >
-                            {artist.latest_payment_status || 'Unknown'}
-                          </Badge>
+                          {artist.latest_payment_status === 'failed' ? (
+                            <Badge
+                              color="red"
+                              variant="soft"
+                              style={{ cursor: 'pointer' }}
+                              onClick={() => handleViewApiConversations(artist.payment_id)}
+                              title="Click to view API error details"
+                            >
+                              ❌ Failed - View Details
+                            </Badge>
+                          ) : (
+                            <Badge
+                              color={
+                                artist.latest_payment_status === 'completed' ? 'green' :
+                                artist.latest_payment_status === 'pending' ? 'yellow' :
+                                artist.latest_payment_status === 'processing' ? 'blue' : 'red'
+                              }
+                              variant="soft"
+                            >
+                              {artist.latest_payment_status || 'Unknown'}
+                            </Badge>
+                          )}
                           {artist.error_message && (
                             <Text size="1" color="red">
                               {artist.error_message.substring(0, 50)}...
@@ -2372,6 +2434,174 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                 <Text size="3" color="gray">No payment setup invitations sent yet</Text>
                 <Text size="2" color="gray">
                   Use the "Setup Payment" button to send the first invitation to {selectedArtist?.artist_profiles?.name}
+                </Text>
+              </Flex>
+            )}
+          </Box>
+
+          <Flex gap="3" mt="4" justify="end">
+            <Dialog.Close>
+              <Button variant="soft" color="gray">Close</Button>
+            </Dialog.Close>
+          </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
+
+      {/* API Conversations Modal */}
+      <Dialog.Root open={showApiConversations} onOpenChange={setShowApiConversations}>
+        <Dialog.Content style={{ maxWidth: '900px', maxHeight: '80vh' }}>
+          <Dialog.Title>
+            <Flex align="center" gap="2">
+              <MagnifyingGlassIcon />
+              Stripe API Conversations
+            </Flex>
+          </Dialog.Title>
+          <Dialog.Description>
+            Complete API request and response details for payment: {selectedPaymentForApi}
+          </Dialog.Description>
+
+          <Box mt="4">
+            {loadingApiConversations ? (
+              <Skeleton height="200px" />
+            ) : apiConversations.length > 0 ? (
+              <ScrollArea style={{ height: '400px' }}>
+                {apiConversations.map((conversation, index) => (
+                  <Card key={conversation.id} mb="4" p="4">
+                    <Flex justify="between" align="center" mb="3">
+                      <Heading size="3">
+                        API Call #{index + 1}
+                      </Heading>
+                      <Flex gap="2" align="center">
+                        <Badge
+                          color={conversation.response_status === 200 ? 'green' : 'red'}
+                          variant="soft"
+                        >
+                          HTTP {conversation.response_status}
+                        </Badge>
+                        <Badge variant="outline">
+                          {conversation.stripe_account_id === 'canada' ? 'STRIPE CA' : 'STRIPE US'}
+                        </Badge>
+                        <Text size="1" color="gray">
+                          {conversation.processing_duration_ms}ms
+                        </Text>
+                      </Flex>
+                    </Flex>
+
+                    {conversation.error_message && (
+                      <Callout.Root color="red" mb="3">
+                        <Callout.Icon>
+                          <ExclamationTriangleIcon />
+                        </Callout.Icon>
+                        <Callout.Text>
+                          <Text size="3" weight="bold" color="red" mb="2">
+                            🚨 STRIPE ERROR: {conversation.error_message}
+                          </Text>
+                        </Callout.Text>
+                      </Callout.Root>
+                    )}
+
+                    {conversation.response_body?.error?.message && (
+                      <Callout.Root color="orange" mb="3">
+                        <Callout.Icon>
+                          <ExclamationTriangleIcon />
+                        </Callout.Icon>
+                        <Callout.Text>
+                          <Text size="3" weight="bold" color="orange" mb="2">
+                            📄 DETAILED ERROR: {conversation.response_body.error.message}
+                          </Text>
+                          {conversation.response_body.error.code && (
+                            <Text size="2" color="gray">
+                              Error Code: {conversation.response_body.error.code}
+                            </Text>
+                          )}
+                        </Callout.Text>
+                      </Callout.Root>
+                    )}
+
+                    <Tabs.Root defaultValue="request">
+                      <Tabs.List>
+                        <Tabs.Trigger value="request">Request</Tabs.Trigger>
+                        <Tabs.Trigger value="response">Response</Tabs.Trigger>
+                        <Tabs.Trigger value="headers">Headers</Tabs.Trigger>
+                        <Tabs.Trigger value="metadata">Metadata</Tabs.Trigger>
+                      </Tabs.List>
+
+                      <Box mt="3">
+                        <Tabs.Content value="request">
+                          <Box>
+                            <Text size="2" weight="bold" mb="2">
+                              {conversation.request_method} {conversation.api_endpoint}
+                            </Text>
+                            <Card p="3" style={{ backgroundColor: '#f8f9fa' }}>
+                              <pre style={{
+                                fontSize: '12px',
+                                margin: 0,
+                                whiteSpace: 'pre-wrap',
+                                overflow: 'auto',
+                                maxHeight: '200px'
+                              }}>
+                                {JSON.stringify(conversation.request_body, null, 2)}
+                              </pre>
+                            </Card>
+                          </Box>
+                        </Tabs.Content>
+
+                        <Tabs.Content value="response">
+                          <Card p="3" style={{ backgroundColor: '#f8f9fa' }}>
+                            <pre style={{
+                              fontSize: '12px',
+                              margin: 0,
+                              whiteSpace: 'pre-wrap',
+                              overflow: 'auto',
+                              maxHeight: '200px'
+                            }}>
+                              {JSON.stringify(conversation.response_body, null, 2)}
+                            </pre>
+                          </Card>
+                        </Tabs.Content>
+
+                        <Tabs.Content value="headers">
+                          <Flex direction="column" gap="2">
+                            <Box>
+                              <Text size="2" weight="bold" mb="1">Request Headers:</Text>
+                              <Card p="2" style={{ backgroundColor: '#f8f9fa' }}>
+                                <pre style={{ fontSize: '11px', margin: 0 }}>
+                                  {JSON.stringify(conversation.request_headers, null, 2)}
+                                </pre>
+                              </Card>
+                            </Box>
+                            <Box>
+                              <Text size="2" weight="bold" mb="1">Response Headers:</Text>
+                              <Card p="2" style={{ backgroundColor: '#f8f9fa' }}>
+                                <pre style={{ fontSize: '11px', margin: 0 }}>
+                                  {JSON.stringify(conversation.response_headers, null, 2)}
+                                </pre>
+                              </Card>
+                            </Box>
+                          </Flex>
+                        </Tabs.Content>
+
+                        <Tabs.Content value="metadata">
+                          <Box>
+                            <Flex direction="column" gap="2">
+                              <Text size="2"><strong>Created:</strong> {new Date(conversation.created_at).toLocaleString()}</Text>
+                              <Text size="2"><strong>Created By:</strong> {conversation.created_by}</Text>
+                              <Text size="2"><strong>Processing Duration:</strong> {conversation.processing_duration_ms}ms</Text>
+                              <Text size="2"><strong>Artist Profile ID:</strong> {conversation.artist_profile_id}</Text>
+                              <Text size="2"><strong>Stripe Account:</strong> {conversation.stripe_account_id}</Text>
+                            </Flex>
+                          </Box>
+                        </Tabs.Content>
+                      </Box>
+                    </Tabs.Root>
+                  </Card>
+                ))}
+              </ScrollArea>
+            ) : (
+              <Flex direction="column" align="center" gap="3" py="6">
+                <Text size="3" color="gray">No API conversations found</Text>
+                <Text size="2" color="gray">
+                  This payment hasn't made any Stripe API calls yet
                 </Text>
               </Flex>
             )}

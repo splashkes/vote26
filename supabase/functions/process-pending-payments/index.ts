@@ -157,47 +157,107 @@ serve(async (req) => {
 
       try {
         let stripe_response = null;
-        let payment_status = 'completed';
+        let payment_status = 'paid';
 
         if (!dry_run) {
           // Determine which Stripe key to use based on account type/region
           let stripeApiKey;
+          let stripeAccountType;
 
           // Check if this is a Canadian account (account ID starts with acct_ and has CA characteristics)
           // For now, we'll use international by default and add logic to detect Canadian accounts
-          if (paymentData.stripe_recipient_id && paymentData.stripe_recipient_id.includes('canada') ||
-              paymentData.currency === 'CAD') {
+          const isCanadian = (paymentData.stripe_recipient_id && paymentData.stripe_recipient_id.includes('canada')) ||
+              (paymentData.currency === 'CAD');
+
+          if (isCanadian) {
             stripeApiKey = Deno.env.get('stripe_canada_secret_key');
+            stripeAccountType = 'canada';
           } else {
-            stripeApiKey = Deno.env.get('stripe_intl_secret_key');
+            stripeApiKey = Deno.env.get('stripe_intl_secret_key_2');
+            stripeAccountType = 'international';
           }
+
+          // DEBUG: Log key selection for troubleshooting insufficient funds
+          console.log(`🔑 Payment ${payment.id} (${artistProfile.name}):`, {
+            stripe_recipient_id: paymentData.stripe_recipient_id,
+            currency: paymentData.currency,
+            detected_region: stripeAccountType,
+            has_stripe_key: !!stripeApiKey,
+            key_length: stripeApiKey ? stripeApiKey.length : 0
+          });
 
           if (!stripeApiKey) {
             throw new Error(`Stripe API key not configured for ${paymentData.currency === 'CAD' ? 'Canada' : 'International'}`);
           }
 
+          // Prepare request data
+          const requestBody = new URLSearchParams({
+            amount: Math.round(paymentData.amount * 100).toString(), // Convert to cents
+            currency: paymentData.currency.toLowerCase(),
+            destination: paymentData.stripe_recipient_id,
+            description: paymentData.description || `Payment to ${paymentData.artist_name}`,
+            'metadata[artist_profile_id]': paymentData.artist_profile_id,
+            'metadata[payment_id]': paymentData.id,
+            'metadata[artist_name]': paymentData.artist_name,
+            'metadata[processed_by]': 'automated-cron'
+          });
+
+          const requestHeaders = {
+            'Authorization': `Bearer ${stripeApiKey}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          };
+
+          // Track API call timing
+          const apiCallStart = Date.now();
+
           // Create Stripe transfer
           const stripeTransferResponse = await fetch('https://api.stripe.com/v1/transfers', {
             method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${stripeApiKey}`,
-              'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: new URLSearchParams({
-              amount: Math.round(paymentData.amount * 100).toString(), // Convert to cents
-              currency: paymentData.currency.toLowerCase(),
-              destination: paymentData.stripe_recipient_id,
-              description: paymentData.description || `Payment to ${paymentData.artist_name}`,
-              'metadata[artist_profile_id]': paymentData.artist_profile_id,
-              'metadata[payment_id]': paymentData.id,
-              'metadata[artist_name]': paymentData.artist_name,
-              'metadata[processed_by]': 'automated-cron'
-            }),
+            headers: requestHeaders,
+            body: requestBody,
           });
 
+          const apiCallDuration = Date.now() - apiCallStart;
           stripe_response = await stripeTransferResponse.json();
 
+          // Log the complete API conversation to database
+          await supabaseClient
+            .from('stripe_api_conversations')
+            .insert({
+              payment_id: payment.id,
+              artist_profile_id: paymentData.artist_profile_id,
+              stripe_account_id: stripeAccountType,
+              api_endpoint: 'https://api.stripe.com/v1/transfers',
+              request_method: 'POST',
+              request_headers: {
+                'Content-Type': requestHeaders['Content-Type'],
+                'stripe_account': stripeAccountType
+              },
+              request_body: {
+                amount: Math.round(paymentData.amount * 100),
+                currency: paymentData.currency.toLowerCase(),
+                destination: paymentData.stripe_recipient_id,
+                description: paymentData.description || `Payment to ${paymentData.artist_name}`,
+                metadata: {
+                  artist_profile_id: paymentData.artist_profile_id,
+                  payment_id: paymentData.id,
+                  artist_name: paymentData.artist_name,
+                  processed_by: 'automated-cron'
+                }
+              },
+              response_status: stripeTransferResponse.status,
+              response_headers: {
+                'content-type': stripeTransferResponse.headers.get('content-type'),
+                'request-id': stripeTransferResponse.headers.get('request-id')
+              },
+              response_body: stripe_response,
+              error_message: !stripeTransferResponse.ok ? (stripe_response.error?.message || 'API call failed') : null,
+              processing_duration_ms: apiCallDuration,
+              created_by: 'process-pending-payments'
+            });
+
           if (!stripeTransferResponse.ok) {
+            // Error response was already logged above, now throw the error
             throw new Error(`Stripe API error: ${stripe_response.error?.message || 'Unknown error'}`);
           }
 
@@ -243,7 +303,9 @@ serve(async (req) => {
           currency: paymentData.currency,
           status: 'success',
           stripe_transfer_id: stripe_response.id,
-          dry_run: dry_run
+          dry_run: dry_run,
+          // Include API conversation logged flag for all real payments
+          api_conversation_logged: true
         });
 
       } catch (error) {
@@ -271,7 +333,9 @@ serve(async (req) => {
           currency: paymentData.currency,
           status: 'failed',
           error: error.message,
-          dry_run: dry_run
+          dry_run: dry_run,
+          // Include API conversation ID if one was logged
+          api_conversation_logged: true
         });
       }
     }

@@ -88,7 +88,7 @@ RETURNS TABLE (
   artist_id uuid, artist_name text, artist_email text, artist_phone text,
   artist_entry_id integer, artist_country text, estimated_balance numeric,
   payment_id uuid, payment_amount numeric, payment_currency text, payment_status text,
-  payment_method text, payment_created_at timestamp with time zone, payment_updated_at timestamp with time zone,
+  payment_method text, payment_type text, payment_created_at timestamp with time zone, payment_updated_at timestamp with time zone,
   stripe_recipient_id text, recent_city text, is_recent_contestant boolean
 )
 SECURITY DEFINER
@@ -119,6 +119,7 @@ BEGIN
     apt.currency::text as payment_currency,
     apt.status::text as payment_status,
     apt.payment_method::text as payment_method,
+    apt.payment_type::text as payment_type,
     apt.created_at as payment_created_at,
     apt.updated_at as payment_updated_at,
     agp.stripe_recipient_id::text,

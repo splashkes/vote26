@@ -254,7 +254,7 @@ serve(async (req) => {
           created_at: null
         },
         payment_account_status: 'processing',
-        stripe_recipient_id: null,
+        stripe_recipient_id: attempt.stripe_recipient_id,
         estimated_balance: 0,
         current_balance: 0,
         latest_payment_status: attempt.payment_status,
@@ -262,6 +262,7 @@ serve(async (req) => {
         payment_amount: Number(attempt.payment_amount) || 0,
         payment_currency: attempt.payment_currency || 'USD',
         payment_method: attempt.payment_method,
+        payment_type: attempt.payment_type,
         payment_date: attempt.payment_date,
         stripe_transfer_id: attempt.stripe_transfer_id,
         error_message: attempt.error_message,
@@ -294,7 +295,7 @@ serve(async (req) => {
           created_at: null
         },
         payment_account_status: 'completed',
-        stripe_recipient_id: null,
+        stripe_recipient_id: completed.stripe_recipient_id,
         estimated_balance: 0,
         current_balance: 0,
         latest_payment_status: completed.payment_status,
@@ -302,6 +303,7 @@ serve(async (req) => {
         payment_amount: Number(completed.payment_amount) || 0,
         payment_currency: completed.payment_currency || 'USD',
         payment_method: completed.payment_method,
+        payment_type: completed.payment_type,
         payment_date: completed.payment_date,
         completion_date: completed.completion_date,
         stripe_transfer_id: completed.stripe_transfer_id,

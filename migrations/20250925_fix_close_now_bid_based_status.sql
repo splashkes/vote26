@@ -169,8 +169,8 @@ AS $function$
         UPDATE art
         SET
           status = CASE
-            WHEN EXISTS (SELECT 1 FROM bids WHERE bids.art_id = art.id) THEN 'sold'
-            ELSE 'closed'
+            WHEN EXISTS (SELECT 1 FROM bids WHERE bids.art_id = art.id) THEN 'sold'::art_status
+            ELSE 'closed'::art_status
           END,
           closing_time = NOW(), -- Set to now for audit trail
           updated_at = NOW()
