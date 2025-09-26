@@ -524,6 +524,65 @@ serve(async (req)=>{
           }
           break;
         }
+      // Transfer Events (when payments are sent to artists)
+      case 'transfer.created':
+      case 'transfer.updated':
+      case 'transfer.paid':
+      case 'transfer.failed':
+      case 'transfer.canceled':
+        {
+          const transfer = event.data.object;
+          console.log(`Processing ${event.type}:`, transfer.id, 'amount:', transfer.amount, 'destination:', transfer.destination);
+
+          // Extract artist information from transfer metadata
+          const artistProfileId = transfer.metadata?.artist_profile_id;
+          const paymentId = transfer.metadata?.payment_id;
+          const artistName = transfer.metadata?.artist_name;
+
+          if (artistProfileId) {
+            // Store transfer event in artist_global_payments metadata to trigger our processing
+            const { error: updateError } = await supabase
+              .from('artist_global_payments')
+              .update({
+                updated_at: new Date().toISOString(),
+                metadata: {
+                  stripe_transfer_response: transfer,
+                  last_webhook_update: new Date().toISOString(),
+                  webhook_event_type: event.type,
+                  transfer_event_processed: true
+                }
+              })
+              .eq('artist_profile_id', artistProfileId);
+
+            if (updateError) {
+              console.error(`Error storing transfer event for artist ${artistProfileId}:`, updateError);
+            } else {
+              console.log(`Transfer event ${event.type} stored for artist ${artistName} (${artistProfileId})`);
+            }
+          } else {
+            // Log transfer events without artist metadata for debugging
+            console.log(`Transfer ${transfer.id} has no artist_profile_id in metadata:`, transfer.metadata);
+
+            // Store in system_logs for manual review
+            const { error: logError } = await supabase
+              .from('system_logs')
+              .insert({
+                event_type: 'unlinked_transfer_event',
+                event_data: {
+                  transfer_id: transfer.id,
+                  event_type: event.type,
+                  transfer_data: transfer,
+                  reason: 'no_artist_profile_id_in_metadata'
+                },
+                created_at: new Date().toISOString()
+              });
+
+            if (logError) {
+              console.error('Error logging unlinked transfer event:', logError);
+            }
+          }
+          break;
+        }
       default:
         console.log('Unhandled event type:', event.type);
     }

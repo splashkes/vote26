@@ -120,6 +120,7 @@ const EventDetails = () => {
   const [bidderInfoModalData, setBidderInfoModalData] = useState(null);
   // Removed session-based bidderInfoCompleted - now checks server each time
   const [voteSuccess, setVoteSuccess] = useState(false);
+  const [voteSuccessMessage, setVoteSuccessMessage] = useState('');
   const [voteFactor, setVoteFactor] = useState(null);
   const [currentTime, setCurrentTime] = useState(Date.now());
   const roundWinners = globalState?.roundWinners || {};
@@ -995,15 +996,10 @@ const EventDetails = () => {
 
   const handleVoteClick = (artwork) => {
     setVoteError('');
+    setVoteSuccess(false);
+    setVoteSuccessMessage('');
 
-    // Check if already voted in this round
-    if (votedRounds[artwork.round]) {
-      const votedArtwork = artworks.find(a => a.id === votedRounds[artwork.round]);
-      setVoteError(`You already voted for ${votedArtwork?.artist_profiles?.name || 'another artist'}\nin Round ${artwork.round}`);
-      return;
-    }
-
-    // Show confirmation dialog
+    // Show confirmation dialog (server will handle vote validation)
     setConfirmVote(artwork);
   };
 
@@ -1053,6 +1049,9 @@ const EventDetails = () => {
           setVoteFactor(data.vote_factor);
         }
         
+        // Store success message from server
+        setVoteSuccessMessage(data.message || 'Vote registered successfully');
+
         if (data.action === 'voted') {
           setVoteSuccess(true);
           setVotedArtIds(prev => new Set([...prev, confirmVote.id]));
@@ -1060,8 +1059,20 @@ const EventDetails = () => {
             ...prev,
             [confirmVote.round]: confirmVote.id
           }));
+        } else if (data.action === 'changed') {
+          // Handle vote change - update state to reflect new vote
+          setVoteSuccess(true);
+          setVotedArtIds(prev => new Set([...prev, confirmVote.id]));
+          setVotedRounds(prev => ({
+            ...prev,
+            [confirmVote.round]: confirmVote.id
+          }));
+        } else if (data.action === 'already_voted') {
+          // Handle case where user tries to vote for same artist again
+          setVoteSuccess(true);
+          // State already correct, just show the message
         } else if (data.action === 'unvoted') {
-          // Handle unvote case
+          // Handle unvote case (legacy - should not happen with new function)
           setVotedArtIds(prev => {
             const newSet = new Set(prev);
             newSet.delete(confirmVote.id);
@@ -2833,13 +2844,13 @@ const EventDetails = () => {
                 <Text size="4" weight="medium" style={{ display: 'block' }}>
                   Round {confirmVote?.round}, Easel {confirmVote?.easel}
                 </Text>
-                {voteSuccess && voteFactor && (
-                  <Text size="3" weight="bold" style={{ 
-                    color: 'white', 
-                    display: 'block', 
-                    marginTop: '12px' 
+                {voteSuccess && voteSuccessMessage && (
+                  <Text size="3" weight="bold" style={{
+                    color: 'white',
+                    display: 'block',
+                    marginTop: '12px'
                   }}>
-                    VOTE CAST AT {voteFactor}x WEIGHT
+                    {voteSuccessMessage}
                   </Text>
                 )}
               </Box>
