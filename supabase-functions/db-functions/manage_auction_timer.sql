@@ -281,13 +281,14 @@
          );                                                                                                                                                          +
                                                                                                                                                                      +
        WHEN 'close_now' THEN                                                                                                                                         +
-         -- FIXED: Force immediate closure of ALL active auctions regardless of recent bids                                                                          +
-         -- This is admin override - no extensions, just close everything immediately                                                                                +
+         -- FIXED: Use bid-based status logic instead of always setting 'closed'                                                                                     +
+         -- If artwork has bids: status = 'sold' (winner exists, awaiting payment)                                                                                   +
+         -- If artwork has no bids: status = 'closed' (no winner)                                                                                                    +
          UPDATE art                                                                                                                                                  +
          SET                                                                                                                                                         +
            status = CASE                                                                                                                                             +
-             WHEN EXISTS (SELECT 1 FROM bids WHERE bids.art_id = art.id) THEN 'sold'                                                                                +
-             ELSE 'closed'                                                                                                                                           +
+             WHEN EXISTS (SELECT 1 FROM bids WHERE bids.art_id = art.id) THEN 'sold'::art_status                                                                     +
+             ELSE 'closed'::art_status                                                                                                                               +
            END,                                                                                                                                                      +
            closing_time = NOW(), -- Set to now for audit trail                                                                                                       +
            updated_at = NOW()                                                                                                                                        +
@@ -347,7 +348,7 @@
                                                                                                                                                                      +
          RETURN jsonb_build_object(                                                                                                                                  +
            'success', true,                                                                                                                                          +
-           'message', format('Force closed %s auctions immediately', v_updated_count),                                                                               +
+           'message', format('Force closed %s auctions with bid-based statuses', v_updated_count),                                                                   +
            'artworks_closed', v_updated_count,                                                                                                                       +
            'participants_notified', v_participant_count,                                                                                                             +
            'sms_sent', v_sms_count                                                                                                                                   +

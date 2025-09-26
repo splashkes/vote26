@@ -113,7 +113,7 @@
    0175fbad-a7ad-47b0-abfa-eea8833d964e | update-bidder-info                   | update-bidder-info                   | ACTIVE | 7       | 2025-09-16 22:39:33 
    42bc7ead-dcc4-46fc-8ed3-ea3fb8d8eebe | stripe-onboarding-return             | stripe-onboarding-return             | ACTIVE | 4       | 2025-09-12 18:52:52 
    ade1b8a6-df81-43bd-bbf8-66c8381cdff1 | stripe-account-details               | stripe-account-details               | ACTIVE | 1       | 2025-09-15 15:59:58 
-   80a57da3-9d77-4172-af63-f9a25928ba30 | artist-account-ledger                | artist-account-ledger                | ACTIVE | 12      | 2025-09-22 18:47:12 
+   80a57da3-9d77-4172-af63-f9a25928ba30 | artist-account-ledger                | artist-account-ledger                | ACTIVE | 19      | 2025-09-25 17:50:59 
    61fc7641-2bb1-4b72-9826-db4932bf0a99 | admin-qr-data                        | admin-qr-data                        | ACTIVE | 3       | 2025-09-16 15:39:01 
    5d857ca3-a9f6-4555-a28c-5cc7e3e47742 | admin-rounds-data                    | admin-rounds-data                    | ACTIVE | 2       | 2025-09-16 15:35:28 
    3730d5c4-1d14-4ece-8a4d-b9bfb9e73bdb | admin-auction-data                   | admin-auction-data                   | ACTIVE | 2       | 2025-09-16 15:33:15 
@@ -127,7 +127,7 @@
    a79530b6-dfef-4845-b044-49f4eecd4075 | admin-get-payment-reminder-history   | admin-get-payment-reminder-history   | ACTIVE | 1       | 2025-09-22 19:51:18 
    3d9457fe-ce19-464e-9495-3f77b3306ace | admin-get-offer-history              | admin-get-offer-history              | ACTIVE | 1       | 2025-09-22 19:51:18 
    c6b4a63a-f722-4030-80f7-2867dbd46a52 | paperwork-data                       | paperwork-data                       | ACTIVE | 6       | 2025-09-23 00:43:55 
-   043299ec-0c3c-4a42-af59-67f9ec4c1b41 | process-pending-payments             | process-pending-payments             | ACTIVE | 12      | 2025-09-23 15:45:00 
+   043299ec-0c3c-4a42-af59-67f9ec4c1b41 | process-pending-payments             | process-pending-payments             | ACTIVE | 17      | 2025-09-25 19:44:47 
    5a5bd79a-0c6d-42f3-b6f8-f3be6d3fbc06 | check-env                            | check-env                            | ACTIVE | 1       | 2025-09-23 15:19:16 
    1542e0e6-9925-4a69-ad58-95dee114206f | get-artist-profile-data              | get-artist-profile-data              | ACTIVE | 2       | 2025-09-23 17:29:19 
    ae2d2b65-414b-4a49-a954-e426d912bae1 | admin-artist-payments-list           | admin-artist-payments-list           | ACTIVE | 16      | 2025-09-24 00:33:30 
@@ -136,6 +136,6 @@
    6e086973-bf11-40f2-85ab-e308576d5cde | fresh-admin-payments                 | fresh-admin-payments                 | ACTIVE | 1       | 2025-09-24 00:40:58 
    6fcf0435-665e-4e09-a8ba-f262620a5a1d | echo-admin-data                      | echo-admin-data                      | ACTIVE | 2       | 2025-09-24 01:18:26 
    6ff4ff79-d399-4d24-9fec-5a7d38c8922f | test-owed-money                      | test-owed-money                      | ACTIVE | 1       | 2025-09-24 01:39:37 
-   70373f00-ed0c-4ad3-ada8-3da67feb6827 | working-admin-payments               | working-admin-payments               | ACTIVE | 19      | 2025-09-25 02:16:54 
+   70373f00-ed0c-4ad3-ada8-3da67feb6827 | working-admin-payments               | working-admin-payments               | ACTIVE | 21      | 2025-09-25 19:18:52 
    4a3dfe00-4856-4356-b90b-92d3227fcaf1 | admin-send-payment-invite            | admin-send-payment-invite            | ACTIVE | 1       | 2025-09-24 02:26:17 
 
