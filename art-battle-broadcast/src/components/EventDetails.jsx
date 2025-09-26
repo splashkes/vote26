@@ -252,18 +252,60 @@ const EventDetails = () => {
                     console.log(`📸 Updated media for ${Object.keys(mediaByArt).length} artworks`);
 
                     // Update artworks with new media data
-                    // GLOBAL STATE: Update artworks with new media data
+                    // GLOBAL STATE: Update artworks with new media data, preserving recent optimistic uploads
                     const currentState = publicDataManager.getEventState(eventEid);
-                    const updated = currentState.artworks.map(artwork => ({
-                      ...artwork,
-                      media: mediaByArt[artwork.id] || artwork.media || []
-                    }));
+                    const updated = currentState.artworks.map(artwork => {
+                      const freshMedia = mediaByArt[artwork.id];
+                      const currentMedia = artwork.media || [];
 
-                    // CRITICAL: Also update selectedArt if it's currently open
+                      // CHROME FIX: Preserve optimistic uploads that aren't in the API response yet
+                      if (freshMedia && currentMedia.length > freshMedia.length) {
+                        // Current state has more media than API response - preserve optimistic uploads
+                        const freshMediaIds = new Set(freshMedia.map(m => m.media_files?.id).filter(Boolean));
+                        const optimisticMedia = currentMedia.filter(m =>
+                          !freshMediaIds.has(m.media_files?.id) &&
+                          m.media_files?.metadata?.uploaded_via === 'admin_panel'
+                        );
+
+                        if (optimisticMedia.length > 0) {
+                          console.log(`🔧 [CHROME-FIX] Preserving ${optimisticMedia.length} optimistic uploads for artwork ${artwork.id}`);
+                          return {
+                            ...artwork,
+                            media: [...freshMedia, ...optimisticMedia]
+                          };
+                        }
+                      }
+
+                      return {
+                        ...artwork,
+                        media: freshMedia || currentMedia
+                      };
+                    });
+
+                    // CRITICAL: Also update selectedArt if it's currently open, preserving optimistic uploads
                     if (selectedArt && mediaByArt[selectedArt.id]) {
+                      const freshMedia = mediaByArt[selectedArt.id];
+                      const currentMedia = selectedArt.media || [];
+
+                      let finalMedia = freshMedia;
+
+                      // CHROME FIX: Same logic for selectedArt
+                      if (currentMedia.length > freshMedia.length) {
+                        const freshMediaIds = new Set(freshMedia.map(m => m.media_files?.id).filter(Boolean));
+                        const optimisticMedia = currentMedia.filter(m =>
+                          !freshMediaIds.has(m.media_files?.id) &&
+                          m.media_files?.metadata?.uploaded_via === 'admin_panel'
+                        );
+
+                        if (optimisticMedia.length > 0) {
+                          console.log(`🔧 [CHROME-FIX] Preserving ${optimisticMedia.length} optimistic uploads for selectedArt ${selectedArt.id}`);
+                          finalMedia = [...freshMedia, ...optimisticMedia];
+                        }
+                      }
+
                       const updatedSelectedArt = {
                         ...selectedArt,
-                        media: mediaByArt[selectedArt.id]
+                        media: finalMedia
                       };
                       setSelectedArt(updatedSelectedArt);
                     }
