@@ -956,6 +956,32 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
             <Heading size="3" mb="4" color="gray">
               Artists Owed Money ({filteredArtistsOwed.length})
             </Heading>
+
+            {/* Currency Summary */}
+            {enhancedData?.summary?.currency_totals && Object.keys(enhancedData.summary.currency_totals).length > 0 && (
+              <Flex direction="row" gap="4" mb="4" style={{
+                padding: '12px 16px',
+                backgroundColor: 'var(--gray-2)',
+                borderRadius: '8px',
+                border: '1px solid var(--gray-6)'
+              }}>
+                <Text size="2" weight="medium" color="gray">Total Owed:</Text>
+                {Object.entries(enhancedData.summary.currency_totals)
+                  .sort(([,a], [,b]) => b.total - a.total)
+                  .map(([currency, data]) => (
+                    <Flex key={currency} align="center" gap="1">
+                      <Text size="2" weight="bold" color="red">
+                        {currency} ${data.total.toFixed(2)}
+                      </Text>
+                      <Text size="1" color="gray">
+                        ({data.count} artists)
+                      </Text>
+                    </Flex>
+                  ))
+                }
+              </Flex>
+            )}
+
             {filteredArtistsOwed.length === 0 ? (
               <Text color="gray" style={{ textAlign: 'center', padding: '2rem' }}>
                 No artists owed money found
@@ -984,7 +1010,7 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                       </Table.Cell>
                       <Table.Cell>
                         <Text size="2" weight="bold" color="red">
-                          ${(artist.estimated_balance || artist.current_balance || 0).toFixed(2)} {artist.currency_info?.primary_currency || 'USD'}
+                          ${(artist.estimated_balance || artist.current_balance || 0).toFixed(2)} {artist.balance_currency || 'USD'}
                         </Text>
                       </Table.Cell>
                       <Table.Cell>
@@ -1189,10 +1215,10 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                             color="green"
                             onClick={() => {
                               setSelectedArtist(artist);
-                              const currency = artist.currency_info?.primary_currency || 'USD';
+                              const currency = artist.balance_currency || 'USD';
                               openPayNowDialog(currency);
                             }}
-                            title={`Pay ${formatCurrency(artist.estimated_balance, artist.currency_info?.primary_currency || 'USD')} now`}
+                            title={`Pay ${formatCurrency(artist.estimated_balance, artist.balance_currency || 'USD')} now`}
                           >
                             Pay Now
                           </Button>

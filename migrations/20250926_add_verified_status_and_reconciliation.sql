@@ -40,9 +40,9 @@ BEGIN
         ap.status as current_status,
         'paid'::text as suggested_status,
         ap.stripe_transfer_id as transfer_id,
-        profiles.name as artist_name,
+        profiles.name::text as artist_name,
         ap.gross_amount as amount,
-        ap.currency,
+        ap.currency::text,
         ap.created_at,
         'has_transfer_id_but_failed'::text as correction_reason
     FROM artist_payments ap
@@ -59,9 +59,9 @@ BEGIN
         ap.status as current_status,
         'verified'::text as suggested_status,
         ap.stripe_transfer_id as transfer_id,
-        profiles.name as artist_name,
+        profiles.name::text as artist_name,
         ap.gross_amount as amount,
-        ap.currency,
+        ap.currency::text,
         ap.created_at,
         'has_webhook_confirmation'::text as correction_reason
     FROM artist_payments ap
@@ -80,9 +80,9 @@ BEGIN
         ap.status as current_status,
         'paid'::text as suggested_status,
         ap.stripe_transfer_id as transfer_id,
-        profiles.name as artist_name,
+        profiles.name::text as artist_name,
         ap.gross_amount as amount,
-        ap.currency,
+        ap.currency::text,
         ap.created_at,
         'api_conversation_success'::text as correction_reason
     FROM artist_payments ap

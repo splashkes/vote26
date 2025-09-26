@@ -56,6 +56,7 @@ import { getRFMScore, getBatchRFMScores, getSegmentColor, getSegmentTier } from 
 import PersonTile from './PersonTile';
 import { parsePhoneNumber, isValidPhoneNumber } from 'libphonenumber-js';
 import EventDeleteModal from './EventDeleteModal';
+import EventPaymentWrapper from './EventPaymentWrapper';
 import { useAdmin } from '../contexts/AdminContext';
 import { checkEventAdminPermission } from '../lib/adminHelpers';
 import { formatDateForDisplay, sortByNewestFirst, getRecentActivityColor } from '../lib/dateUtils';
@@ -1741,6 +1742,9 @@ The Art Battle Team`);
               <Tabs.Trigger value="artists">
                 Artists ({artistApplications.length + artistInvites.length + artistConfirmations.length})
               </Tabs.Trigger>
+              <Tabs.Trigger value="auction">
+                Auction & Payments
+              </Tabs.Trigger>
               <Tabs.Trigger value="people">
                 People ({eventPeople.length})
               </Tabs.Trigger>
@@ -2250,6 +2254,14 @@ The Art Battle Team`);
                     </Grid>
                   </Flex>
                 )}
+              </Tabs.Content>
+
+              <Tabs.Content value="auction">
+                <EventPaymentWrapper
+                  eventId={eventId}
+                  eventName={event?.name}
+                  showInlineView={false}
+                />
               </Tabs.Content>
 
               <Tabs.Content value="people">

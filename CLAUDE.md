@@ -1,6 +1,8 @@
 ## Supabase
 
 - Supabase Migrations - THE ONE LINE TO REMEMBER - bash PGPASSWORD='6kEtvU9n0KhTVr5' psql -h db.artb.art -p 5432 -d postgres -U postgres -f migrations/[MIGRATION_FILE].sql
+- Database Access: For console/direct access use db.xsqdkubgyqwpyvfltnrf.supabase.co:5432/postgres
+- Public URL: For public access use db.artb.art
 
 ## Application Overview
 

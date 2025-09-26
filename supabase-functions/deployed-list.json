@@ -8,7 +8,7 @@
    ac7fe2c4-289c-47c6-9264-87610e8c3f8a | slack-webhook                        | slack-webhook                        | ACTIVE | 27      | 2025-08-04 02:16:03 
    33de40e6-8bb0-49e9-a4ff-21784739c4df | slack-channel-lookup                 | slack-channel-lookup                 | ACTIVE | 25      | 2025-09-08 03:23:23 
    c94c954f-9582-4d33-ad06-7296aaa147c5 | stripe-create-checkout               | stripe-create-checkout               | ACTIVE | 40      | 2025-09-18 12:59:16 
-   48f36631-5a03-4684-8ebd-404abbdd54c1 | stripe-webhook-handler               | stripe-webhook-handler               | ACTIVE | 42      | 2025-09-15 15:31:13 
+   48f36631-5a03-4684-8ebd-404abbdd54c1 | stripe-webhook-handler               | stripe-webhook-handler               | ACTIVE | 43      | 2025-09-26 13:39:28 
    5457dcc3-222b-478c-81ec-e4389db42aa9 | stripe-payment-status                | stripe-payment-status                | ACTIVE | 29      | 2025-09-18 13:18:57 
    04f714a0-8f9b-4b91-88f6-79c0da5d2270 | stripe-payment-success               | stripe-payment-success               | ACTIVE | 16      | 2025-08-07 15:12:59 
    9f46f40d-c8a2-41e1-9be9-28907854cac6 | generate-qr-code                     | generate-qr-code                     | ACTIVE | 25      | 2025-08-17 02:52:07 
@@ -136,6 +136,9 @@
    6e086973-bf11-40f2-85ab-e308576d5cde | fresh-admin-payments                 | fresh-admin-payments                 | ACTIVE | 1       | 2025-09-24 00:40:58 
    6fcf0435-665e-4e09-a8ba-f262620a5a1d | echo-admin-data                      | echo-admin-data                      | ACTIVE | 2       | 2025-09-24 01:18:26 
    6ff4ff79-d399-4d24-9fec-5a7d38c8922f | test-owed-money                      | test-owed-money                      | ACTIVE | 1       | 2025-09-24 01:39:37 
-   70373f00-ed0c-4ad3-ada8-3da67feb6827 | working-admin-payments               | working-admin-payments               | ACTIVE | 21      | 2025-09-25 19:18:52 
+   70373f00-ed0c-4ad3-ada8-3da67feb6827 | working-admin-payments               | working-admin-payments               | ACTIVE | 23      | 2025-09-26 15:53:30 
    4a3dfe00-4856-4356-b90b-92d3227fcaf1 | admin-send-payment-invite            | admin-send-payment-invite            | ACTIVE | 1       | 2025-09-24 02:26:17 
+   a614f45f-f542-49c9-9a5d-4ecbb500976e | recover-stripe-events                | recover-stripe-events                | ACTIVE | 1       | 2025-09-26 14:02:37 
+   4d42efba-3526-4e8b-9d7b-b2994b6dc7d8 | event-admin-payments                 | event-admin-payments                 | ACTIVE | 3       | 2025-09-26 17:07:02 
+   d56b4d80-56c1-47d6-9502-478d65f152be | event-payment-reminder               | event-payment-reminder               | ACTIVE | 1       | 2025-09-26 16:34:58 
 

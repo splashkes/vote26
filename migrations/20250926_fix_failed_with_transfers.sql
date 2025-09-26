@@ -1,12 +1,7 @@
--- Universal Stripe Webhook Processing Trigger
--- This trigger fires whenever webhook events update metadata in key tables
--- It handles Slack notifications and processes transfer events that update artist_payments
+-- Fix payments that show as 'failed' but actually have successful transfers
+-- These are the payments that succeeded but the webhook status progression didn't account for failed → verified
 
--- First, add transfer event handling to the existing webhook handler
--- We need to insert transfer events into artist_global_payments.metadata for trigger processing
--- This will be done by updating the existing webhook handler to capture transfer events
-
--- Create the universal webhook processing function
+-- Update webhook trigger logic to handle failed → verified progression
 CREATE OR REPLACE FUNCTION process_stripe_webhook_metadata()
 RETURNS TRIGGER
 SECURITY DEFINER
@@ -169,12 +164,14 @@ BEGIN
                 BEGIN
                     SELECT status INTO current_status FROM artist_payments WHERE id = payment_id;
 
-                    -- Determine next status based on current status and webhook event
+                    -- Enhanced status progression logic that handles failed → verified
                     CASE
                         WHEN current_status = 'processing' AND webhook_event_type = 'transfer.created' THEN
                             next_status := 'paid';  -- First confirmation: transfer created
                         WHEN current_status = 'paid' AND webhook_event_type IN ('transfer.created', 'transfer.updated') THEN
                             next_status := 'verified';  -- Final confirmation: webhook received
+                        WHEN current_status = 'failed' AND webhook_event_type = 'transfer.created' THEN
+                            next_status := 'verified';  -- CORRECTION: Failed payments with successful transfers should be verified
                         WHEN current_status = 'processing' AND webhook_event_type = 'transfer.failed' THEN
                             next_status := 'failed';  -- Transfer failed
                         ELSE
@@ -194,17 +191,28 @@ BEGIN
                             'transfer_currency', transfer_currency,
                             'webhook_event_type', webhook_event_type,
                             'previous_status', current_status,
-                            'status_progression', current_status || ' → ' || next_status
+                            'status_progression', current_status || ' → ' || next_status,
+                            'corrected_from_failed', CASE WHEN current_status = 'failed' THEN true ELSE false END
                         )
                     WHERE id = payment_id;
 
-                    -- Log status progression
+                    -- Log status progression with special handling for failed corrections
                     INSERT INTO system_logs (service, operation, level, message, request_data)
                     VALUES (
                         'webhook_trigger',
-                        'status_progression',
+                        CASE WHEN current_status = 'failed' AND next_status = 'verified'
+                             THEN 'failed_payment_corrected'
+                             ELSE 'status_progression' END,
                         'info',
-                        format('Payment %s: %s → %s via %s', payment_id, current_status, next_status, webhook_event_type),
+                        format('Payment %s: %s → %s via %s%s',
+                            payment_id,
+                            current_status,
+                            next_status,
+                            webhook_event_type,
+                            CASE WHEN current_status = 'failed' AND next_status = 'verified'
+                                 THEN ' [CORRECTED]'
+                                 ELSE '' END
+                        ),
                         jsonb_build_object(
                             'payment_id', payment_id,
                             'transfer_id', transfer_id,
@@ -213,26 +221,42 @@ BEGIN
                             'webhook_event_type', webhook_event_type,
                             'artist_id', artist_id,
                             'amount', transfer_amount,
-                            'currency', transfer_currency
+                            'currency', transfer_currency,
+                            'correction_type', CASE WHEN current_status = 'failed' AND next_status = 'verified'
+                                                   THEN 'failed_to_verified'
+                                                   ELSE 'normal_progression' END
                         )
                     );
-                END;
 
-                -- Log successful update
-                INSERT INTO system_logs (service, operation, level, message, request_data)
-                VALUES (
-                    'webhook_trigger',
-                    'transfer_payment_updated',
-                    'info',
-                    format('Updated payment %s with transfer %s', payment_id, transfer_id),
-                    jsonb_build_object(
-                        'payment_id', payment_id,
-                        'transfer_id', transfer_id,
-                        'artist_id', artist_id,
-                        'amount', transfer_amount,
-                        'currency', transfer_currency
-                    )
-                );
+                    -- Send special Slack notification for failed payment corrections
+                    IF current_status = 'failed' AND next_status = 'verified' THEN
+                        PERFORM queue_slack_notification(
+                            'stripe-flood',
+                            'payment_correction',
+                            format('🔧 [CORRECTED] Payment %s: Failed → Verified | $%s %s to %s',
+                                SUBSTRING(payment_id::text, 1, 8),
+                                transfer_amount,
+                                transfer_currency,
+                                artist_name
+                            ),
+                            jsonb_build_array(
+                                jsonb_build_object(
+                                    'type', 'section',
+                                    'text', jsonb_build_object(
+                                        'type', 'mrkdwn',
+                                        'text', format('🔧 *Payment Status Corrected*\n*Artist:* %s\n*Amount:* $%s %s\n*Status:* Failed → Verified\n*Transfer ID:* `%s`\n*Reason:* Received successful transfer webhook',
+                                            artist_name,
+                                            transfer_amount,
+                                            transfer_currency,
+                                            transfer_id
+                                        )
+                                    )
+                                )
+                            ),
+                            NULL
+                        );
+                    END IF;
+                END;
 
             ELSE
                 -- Create new artist_payments record for transfers without existing payment_id
@@ -248,23 +272,26 @@ BEGIN
                     payment_method,
                     description,
                     paid_at,
-                    metadata,
+                    webhook_confirmed_at,
+                    verification_metadata,
                     created_by
                 ) VALUES (
                     artist_id,
                     transfer_amount,
                     transfer_amount, -- Assume no fees for webhook-created transfers
                     UPPER(transfer_currency),
-                    'paid',
+                    'verified',  -- Start as verified since we have webhook confirmation
                     transfer_id,
                     'automated',
                     'stripe_transfer',
                     COALESCE(webhook_event_data->>'description', format('Transfer to %s', artist_name)),
                     NOW(),
+                    NOW(),
                     jsonb_build_object(
                         'created_via', 'webhook_transfer',
                         'transfer_webhook_data', webhook_event_data,
-                        'processed_at', NOW()::text
+                        'processed_at', NOW()::text,
+                        'status_progression', 'created → verified'
                     ),
                     'webhook_trigger'
                 );
@@ -308,48 +335,3 @@ BEGIN
     RETURN NEW;
 END;
 $$;
-
--- Create the trigger on artist_global_payments (primary webhook data store)
-DROP TRIGGER IF EXISTS universal_stripe_webhook_trigger ON artist_global_payments;
-CREATE TRIGGER universal_stripe_webhook_trigger
-    AFTER UPDATE ON artist_global_payments
-    FOR EACH ROW
-    WHEN (NEW.metadata IS DISTINCT FROM OLD.metadata AND NEW.metadata->>'last_webhook_update' IS NOT NULL)
-    EXECUTE FUNCTION process_stripe_webhook_metadata();
-
--- Create triggers on other webhook tables
-DROP TRIGGER IF EXISTS universal_stripe_webhook_trigger_payment_processing ON payment_processing;
-CREATE TRIGGER universal_stripe_webhook_trigger_payment_processing
-    AFTER UPDATE ON payment_processing
-    FOR EACH ROW
-    WHEN (NEW.metadata IS DISTINCT FROM OLD.metadata AND NEW.metadata->>'webhook_event' IS NOT NULL)
-    EXECUTE FUNCTION process_stripe_webhook_metadata();
-
-DROP TRIGGER IF EXISTS universal_stripe_webhook_trigger_global_payments ON global_payment_requests;
-CREATE TRIGGER universal_stripe_webhook_trigger_global_payments
-    AFTER UPDATE ON global_payment_requests
-    FOR EACH ROW
-    WHEN (NEW.metadata IS DISTINCT FROM OLD.metadata AND NEW.metadata->>'last_webhook_update' IS NOT NULL)
-    EXECUTE FUNCTION process_stripe_webhook_metadata();
-
--- Create slack_notifications table if it doesn't exist
-CREATE TABLE IF NOT EXISTS slack_notifications (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    channel_name text NOT NULL,
-    message_type text,
-    text text NOT NULL,
-    blocks jsonb DEFAULT '[]'::jsonb,
-    event_id text,
-    status text DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'failed')),
-    attempts integer DEFAULT 0,
-    created_at timestamp with time zone DEFAULT NOW(),
-    sent_at timestamp with time zone,
-    error_message text
-);
-
--- Create index for efficient processing
-CREATE INDEX IF NOT EXISTS idx_slack_notifications_status_created ON slack_notifications (status, created_at);
-
--- Grant necessary permissions
-GRANT SELECT, INSERT, UPDATE ON slack_notifications TO authenticated;
-GRANT SELECT, INSERT ON system_logs TO authenticated;

@@ -1,0 +1,88 @@
+-- Fix get_payment_attempts function to exclude 'verified' status payments
+-- This ensures that verified payments don't appear in the "In Progress" tab
+
+-- Drop existing function first
+DROP FUNCTION IF EXISTS public.get_payment_attempts(integer);
+
+CREATE OR REPLACE FUNCTION public.get_payment_attempts(days_back integer DEFAULT 90)
+RETURNS TABLE(
+    artist_id uuid,
+    artist_name text,
+    artist_email text,
+    artist_phone text,
+    artist_entry_id integer,
+    artist_country text,
+    estimated_balance numeric,
+    payment_id uuid,
+    payment_amount numeric,
+    payment_currency text,
+    payment_status text,
+    payment_method text,
+    payment_type text,
+    payment_created_at timestamp with time zone,
+    payment_updated_at timestamp with time zone,
+    stripe_recipient_id text,
+    recent_city text,
+    is_recent_contestant boolean
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $function$
+BEGIN
+  RETURN QUERY
+  WITH recent_event_info AS (
+    SELECT
+      rc.artist_id,
+      c.name as event_city,
+      ROW_NUMBER() OVER (PARTITION BY rc.artist_id ORDER BY e.event_start_datetime DESC) as rn
+    FROM round_contestants rc
+    JOIN rounds r ON rc.round_id = r.id
+    JOIN events e ON r.event_id = e.id
+    LEFT JOIN cities c ON e.city_id = c.id
+    WHERE e.event_start_datetime >= NOW() - (days_back || ' days')::INTERVAL
+  )
+  SELECT
+    ap.id as artist_id,
+    ap.name::text as artist_name,
+    ap.email::text as artist_email,
+    ap.phone::text as artist_phone,
+    ap.entry_id as artist_entry_id,
+    ap.country::text as artist_country,
+    0::numeric as estimated_balance,  -- Simplified for now
+    apt.id as payment_id,
+    apt.net_amount as payment_amount,
+    apt.currency::text as payment_currency,
+    apt.status::text as payment_status,
+    apt.payment_method::text as payment_method,
+    apt.payment_type::text as payment_type,
+    apt.created_at as payment_created_at,
+    apt.updated_at as payment_updated_at,
+    agp.stripe_recipient_id::text,
+    rei.event_city::text as recent_city,
+    (rei.artist_id IS NOT NULL) as is_recent_contestant
+  FROM artist_profiles ap
+  JOIN artist_payments apt ON ap.id = apt.artist_profile_id
+  LEFT JOIN artist_global_payments agp ON ap.id = agp.artist_profile_id
+  LEFT JOIN recent_event_info rei ON ap.id = rei.artist_id AND rei.rn = 1
+  WHERE apt.created_at >= NOW() - (days_back || ' days')::INTERVAL
+    AND apt.status NOT IN ('completed', 'paid', 'verified')  -- Exclude verified payments from In Progress tab
+  ORDER BY apt.created_at DESC;
+END;
+$function$;
+
+-- Grant permissions
+GRANT EXECUTE ON FUNCTION get_payment_attempts(integer) TO authenticated;
+
+-- Log migration completion
+INSERT INTO system_logs (service, operation, level, message, request_data)
+VALUES (
+    'migration',
+    'fix_payment_attempts_exclude_verified',
+    'info',
+    'Updated get_payment_attempts function to exclude verified status payments from In Progress tab',
+    jsonb_build_object(
+        'migration_file', '20250926_fix_payment_attempts_exclude_verified.sql',
+        'applied_at', NOW()::text,
+        'excludes_statuses', ARRAY['completed', 'paid', 'verified']
+    )
+);

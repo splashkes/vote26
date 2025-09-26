@@ -73,6 +73,24 @@ serve(async (req) => {
     debugInfo.artists_owed_count = artistsOwedMoney?.length || 0;
     console.log(`✅ Found ${artistsOwedMoney?.length} artists owed money`);
 
+    // Calculate currency totals for summary display
+    const currencyTotals = (artistsOwedMoney || []).reduce((totals, artist) => {
+      const currency = artist.balance_currency || 'USD';
+      const amount = Number(artist.estimated_balance) || 0;
+
+      if (!totals[currency]) {
+        totals[currency] = { count: 0, total: 0 };
+      }
+
+      totals[currency].count += 1;
+      totals[currency].total += amount;
+
+      return totals;
+    }, {});
+
+    debugInfo.currency_totals = currencyTotals;
+    console.log(`💰 Currency breakdown:`, currencyTotals);
+
     // 2. Get ready to pay artists (only those with verified Stripe accounts)
     const { data: readyToPayArtists, error: readyError } = await serviceClient
       .rpc('get_ready_to_pay_artists');
@@ -184,6 +202,7 @@ serve(async (req) => {
         payment_account_status: artist.payment_account_status,
         stripe_recipient_id: artist.stripe_recipient_id,
         estimated_balance: Number(artist.estimated_balance),
+        balance_currency: artist.balance_currency || 'USD',
         current_balance: Number(artist.estimated_balance),
         latest_payment_status: null,
         payment_history_summary: {
@@ -223,6 +242,7 @@ serve(async (req) => {
         payment_account_status: 'ready',
         stripe_recipient_id: artist.stripe_recipient_id,
         estimated_balance: Number(artist.estimated_balance),
+        balance_currency: artist.balance_currency || 'USD',
         current_balance: Number(artist.estimated_balance),
         latest_payment_status: null,
         payment_history_summary: {
@@ -330,6 +350,7 @@ serve(async (req) => {
         artists_ready_count: readyToPayArtists?.length || 0,
         payment_attempts_count: paymentAttempts?.length || 0,
         completed_payments_count: completedPayments?.length || 0,
+        currency_totals: currencyTotals,
         generated_at: new Date().toISOString()
       }
     };
