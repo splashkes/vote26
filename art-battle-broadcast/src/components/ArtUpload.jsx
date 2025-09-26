@@ -428,10 +428,8 @@ const ArtUpload = ({ artwork, onUploadComplete }) => {
                   setUploadedThumbnail(null);
                   setUploadProgress(0);
                   setUploadError(false);
-                  // Trigger callback
-                  if (onUploadComplete) {
-                    onUploadComplete();
-                  }
+                  // Reset state only - don't trigger callback when resetting
+                  // (onUploadComplete should only be called when actually uploading)
                 } else if (!uploading) {
                   fileInputRef.current?.click();
                 }
