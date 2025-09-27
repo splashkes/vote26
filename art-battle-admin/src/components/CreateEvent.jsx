@@ -48,7 +48,8 @@ const CreateEvent = () => {
     capacity: 200,
     eid: '',
     eventbrite_id: '',
-    slack_channel: ''
+    slack_channel: '',
+    artist_auction_portion: 0.5
   });
 
   useEffect(() => {
@@ -194,7 +195,8 @@ const CreateEvent = () => {
           capacity: eventData.capacity || 200,
           eid: eventData.eid || '',
           eventbrite_id: eventData.eventbrite_id || '',
-          slack_channel: eventData.slack_channel || ''
+          slack_channel: eventData.slack_channel || '',
+          artist_auction_portion: eventData.artist_auction_portion || 0.5
         });
       }
     } catch (err) {
@@ -495,6 +497,29 @@ const CreateEvent = () => {
                       />
                       <Text size="2" color="gray" mt="1" style={{ display: 'block' }}>
                         Optional. Slack channel name for event notifications (with or without #).
+                      </Text>
+                    </Box>
+
+                    <Box>
+                      <Text as="label" size="2" weight="medium" mb="1" style={{ display: 'block' }}>
+                        Artist Auction Portion (%) *
+                      </Text>
+                      <TextField.Root
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="1"
+                        placeholder="50"
+                        value={Math.round(formData.artist_auction_portion * 100)}
+                        onChange={(e) => {
+                          const percentage = parseFloat(e.target.value) || 0;
+                          const decimal = Math.max(0, Math.min(100, percentage)) / 100;
+                          handleInputChange('artist_auction_portion', decimal);
+                        }}
+                        required
+                      />
+                      <Text size="2" color="gray" mt="1" style={{ display: 'block' }}>
+                        Percentage of auction proceeds that artists receive. 0% = charity event, 50% = standard, 100% = artist keeps all proceeds.
                       </Text>
                     </Box>
                   </Flex>

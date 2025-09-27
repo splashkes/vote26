@@ -155,6 +155,7 @@ serve(async (req) => {
 
       console.log(`Processing payment ${payment.id} for ${artistProfile.name}: ${payment.currency} ${payment.gross_amount}`);
 
+      let apiConversationLogged = false;
       try {
         let stripe_response = null;
         let payment_status = 'paid';
@@ -173,7 +174,7 @@ serve(async (req) => {
             stripeApiKey = Deno.env.get('stripe_canada_secret_key');
             stripeAccountType = 'canada';
           } else {
-            stripeApiKey = Deno.env.get('stripe_intl_secret_key_2');
+            stripeApiKey = Deno.env.get('stripe_intl_secret_key');
             stripeAccountType = 'international';
           }
 
@@ -256,6 +257,9 @@ serve(async (req) => {
               created_by: 'process-pending-payments'
             });
 
+          // Mark that API conversation was successfully logged
+          apiConversationLogged = true;
+
           if (!stripeTransferResponse.ok) {
             // Error response was already logged above, now throw the error
             throw new Error(`Stripe API error: ${stripe_response.error?.message || 'Unknown error'}`);
@@ -304,8 +308,8 @@ serve(async (req) => {
           status: 'success',
           stripe_transfer_id: stripe_response.id,
           dry_run: dry_run,
-          // Include API conversation logged flag for all real payments
-          api_conversation_logged: true
+          // Include API conversation logged flag only if actually logged
+          api_conversation_logged: apiConversationLogged
         });
 
       } catch (error) {
@@ -334,8 +338,8 @@ serve(async (req) => {
           status: 'failed',
           error: error.message,
           dry_run: dry_run,
-          // Include API conversation ID if one was logged
-          api_conversation_logged: true
+          // Include API conversation logged flag only if actually logged
+          api_conversation_logged: apiConversationLogged
         });
       }
     }

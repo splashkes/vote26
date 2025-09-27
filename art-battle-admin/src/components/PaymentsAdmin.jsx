@@ -1119,7 +1119,7 @@ const PaymentsAdmin = () => {
                                     )}
                                     {entry.metadata?.gross_sale_price && (
                                       <Text size="1" color="blue">
-                                        Sale: ${entry.metadata.gross_sale_price.toFixed(2)} → Artist: ${entry.amount.toFixed(2)} (50%)
+                                        Sale: ${entry.metadata.gross_sale_price.toFixed(2)} → Artist: ${entry.amount.toFixed(2)} ({((entry.metadata.commission_rate ?? entry.art_info?.commission_rate ?? 0.5) * 100).toFixed(0)}%)
                                       </Text>
                                     )}
                                     {entry.metadata?.payment_type === 'manual' && (

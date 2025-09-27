@@ -22,10 +22,44 @@ import {
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
+// Utility function to add business days (excluding weekends)
+const addBusinessDays = (date, days) => {
+  const result = new Date(date);
+  let addedDays = 0;
+  while (addedDays < days) {
+    result.setDate(result.getDate() + 1);
+    if (result.getDay() !== 0 && result.getDay() !== 6) { // Not Sunday or Saturday
+      addedDays++;
+    }
+  }
+  return result;
+};
+
+// Get recent successful payments from ledger entries
+const getRecentSuccessfulPayments = (ledgerEntries) => {
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  return (ledgerEntries || []).filter(entry =>
+    entry.type === 'debit' &&
+    (entry.metadata?.status === 'verified' || entry.metadata?.status === 'paid') &&
+    new Date(entry.date) > thirtyDaysAgo
+  ).sort((a, b) => new Date(b.date) - new Date(a.date)); // Most recent first
+};
+
+// Format date for display
+const formatDate = (date) => {
+  return new Date(date).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+};
+
 const PaymentStatusBanner = ({ artistProfile, confirmations, hasRecentActivity, onNavigateToTab }) => {
   const { person } = useAuth();
   const [paymentData, setPaymentData] = useState(null);
   const [paymentAccount, setPaymentAccount] = useState(null);
+  const [recentPayments, setRecentPayments] = useState(null);
+  const [bannerType, setBannerType] = useState(null); // 'success' or 'pending'
   const [loading, setLoading] = useState(true);
   const [dismissed, setDismissed] = useState(false);
   const [showBanner, setShowBanner] = useState(false);
@@ -39,6 +73,22 @@ const PaymentStatusBanner = ({ artistProfile, confirmations, hasRecentActivity, 
       setLoading(false);
     }
   }, [artistProfile, hasRecentActivity]);
+
+  // Determine banner type after data is loaded
+  useEffect(() => {
+    if (!loading && paymentData && recentPayments !== null) {
+      // Priority: Recent successful payments > Pending payments
+      if (recentPayments && recentPayments.length > 0) {
+        setBannerType('success');
+        setShowBanner(true);
+      } else if (paymentData?.hasEarnings || paymentData?.hasPotentialEarnings) {
+        setBannerType('pending');
+        setShowBanner(true);
+      } else {
+        setShowBanner(false);
+      }
+    }
+  }, [loading, paymentData, recentPayments]);
 
   const checkIfShouldShowBanner = async () => {
     try {
@@ -146,9 +196,13 @@ const PaymentStatusBanner = ({ artistProfile, confirmations, hasRecentActivity, 
       }
 
       // Calculate unpaid bids from artworks that appear in ledger as opportunities
-      const unpaidBidsFromLedger = data.entries
+      const unpaidBidsFromLedger = data.ledger
         ?.filter((entry) => entry.type === 'event' && entry.metadata?.lost_opportunity)
         ?.reduce((sum, entry) => sum + (entry.metadata?.potential_artist_earnings || 0), 0) || 0;
+
+      // Check for recent successful payments
+      const recentSuccessfulPayments = getRecentSuccessfulPayments(data.ledger);
+      setRecentPayments(recentSuccessfulPayments);
 
       setPaymentData({
         pendingPayments: totalPendingPayments,
@@ -272,6 +326,82 @@ const PaymentStatusBanner = ({ artistProfile, confirmations, hasRecentActivity, 
     }
   };
 
+  const renderSuccessBanner = () => {
+    if (!recentPayments || !recentPayments.length) return null;
+
+    const mostRecentPayment = recentPayments[0];
+    const paymentDate = new Date(mostRecentPayment.date);
+    const expectedArrival = addBusinessDays(paymentDate, 2);
+
+    return (
+      <Card size="3" style={{
+        marginBottom: '1.5rem',
+        border: '2px solid var(--green-8)',
+        backgroundColor: 'var(--green-2)'
+      }}>
+        <Flex justify="between" align="start">
+          <Flex direction="column" gap="3" style={{ flex: 1 }}>
+            <Flex align="center" gap="2">
+              <Badge color="green" variant="soft" size="2">
+                <CheckCircledIcon width="16" height="16" />
+                Payment Sent
+              </Badge>
+            </Flex>
+
+            <Box>
+              <Text size="3" weight="medium" mb="2" style={{ display: 'block' }}>
+                Payment Sent Successfully
+              </Text>
+
+              <Flex direction="column" gap="2" mb="2">
+                <Flex align="center" gap="2">
+                  <Text size="2" color="gray">Sent on:</Text>
+                  <Text size="3" weight="medium">
+                    {formatDate(paymentDate)}
+                  </Text>
+                </Flex>
+
+                <Flex align="center" gap="2">
+                  <Text size="2" color="gray">Expected arrival:</Text>
+                  <Text size="3" weight="medium">
+                    {formatDate(expectedArrival)}
+                  </Text>
+                </Flex>
+
+                <Flex align="center" gap="2">
+                  <Text size="2" color="gray">Amount:</Text>
+                  <Text size="4" weight="bold" color="green">
+                    {formatAmount(mostRecentPayment.amount, mostRecentPayment.currency)}
+                  </Text>
+                </Flex>
+              </Flex>
+
+              <Text size="2" color="gray">
+                Payments typically arrive within 2 business days
+              </Text>
+            </Box>
+
+            <Box>
+              <Button size="2" variant="soft" color="green" onClick={() => onNavigateToTab('payments')}>
+                View Account
+                <ArrowRightIcon width="16" height="16" />
+              </Button>
+            </Box>
+          </Flex>
+
+          <IconButton
+            size="1"
+            variant="ghost"
+            color="gray"
+            onClick={() => setDismissed(true)}
+          >
+            <Cross2Icon width="14" height="14" />
+          </IconButton>
+        </Flex>
+      </Card>
+    );
+  };
+
   const getActionButtons = (status) => {
     const isDisabled = redirecting;
 
@@ -360,129 +490,177 @@ const PaymentStatusBanner = ({ artistProfile, confirmations, hasRecentActivity, 
     return null;
   }
 
-  const paymentStatus = getPaymentStatus();
+  // Show success banner for recent payments
+  if (bannerType === 'success') {
+    return (
+      <>
+        {renderSuccessBanner()}
+        {/* Pending Sales Info Modal */}
+        <Dialog.Root open={showInfoModal} onOpenChange={setShowInfoModal}>
+          <Dialog.Content maxWidth="500px">
+            <Dialog.Title>
+              <Flex align="center" gap="2">
+                <InfoCircledIcon width="18" height="18" />
+                About Pending Sales
+              </Flex>
+            </Dialog.Title>
 
-  // Only show banner if there are pending payments OR unpaid bids (regardless of account status)
-  if ((!paymentData?.pendingPayments || paymentData.pendingPayments <= 0) &&
-      (!paymentData?.unpaidBids || paymentData.unpaidBids <= 0)) {
-    return null;
+            <Dialog.Description size="2" mb="4">
+              <Box style={{ lineHeight: '1.6' }}>
+                <Text as="p" mb="3">
+                  We let buyers bid without putting down a credit card or deposit as it leads to much more successful auctions. This means that sometimes we aren't able to collect payment.
+                </Text>
+                <Text as="p" mb="3">
+                  We will work to reach out to the buyer, and (if any) other bidders who showed interest in your artwork.
+                </Text>
+                <Text as="p" weight="medium">
+                  Art Battle pays out 50% of what we are able to collect.
+                </Text>
+              </Box>
+            </Dialog.Description>
+
+            <Flex gap="3" mt="4" justify="end">
+              <Dialog.Close>
+                <Button variant="soft">Got it</Button>
+              </Dialog.Close>
+            </Flex>
+          </Dialog.Content>
+        </Dialog.Root>
+      </>
+    );
   }
 
-  return (
-    <Card size="3" style={{
-      marginBottom: '1.5rem',
-      border: `2px solid var(--${paymentStatus.color === 'gray' ? 'blue' : paymentStatus.color}-8)`,
-      backgroundColor: `var(--${paymentStatus.color === 'gray' ? 'blue' : paymentStatus.color}-2)`
-    }}>
-      <Flex justify="between" align="start">
-        <Flex direction="column" gap="3" style={{ flex: 1 }}>
-          <Flex align="center" gap="2">
-            <Badge color={paymentStatus.color} variant="soft" size="2">
-              {getStatusIcon(paymentStatus.status)}
-              Payment Account: {paymentStatus.text}
-            </Badge>
-          </Flex>
+  // Show pending banner for outstanding payments (existing logic)
+  if (bannerType === 'pending') {
+    const paymentStatus = getPaymentStatus();
 
-          <Box>
-            <Text size="3" weight="medium" mb="2" style={{ display: 'block' }}>
-              {paymentStatus.status === 'ready'
-                ? 'Payment Account Ready'
-                : 'Payment Account Setup Required'}
-            </Text>
+    // Only show banner if there are pending payments OR unpaid bids (regardless of account status)
+    if ((!paymentData?.pendingPayments || paymentData.pendingPayments <= 0) &&
+        (!paymentData?.unpaidBids || paymentData.unpaidBids <= 0)) {
+      return null;
+    }
 
-            {/* Balance Display - always show if there are any amounts */}
-            {(paymentData?.pendingPayments > 0 || paymentData?.unpaidBids > 0) && (
-              <Flex direction="column" gap="2" mb="2">
-                {/* Outstanding Balance - Big Green */}
-                {paymentData?.pendingPayments > 0 && (
-                  <Flex align="center" gap="2">
-                    <Text size="1" color="gray">Outstanding Balance:</Text>
-                    <Text size="5" weight="bold" color="green">
-                      {formatAmount(paymentData.pendingPayments, paymentData.currency)}
-                    </Text>
-                  </Flex>
-                )}
-
-                {/* Pending Sales - Smaller Yellow */}
-                {paymentData?.unpaidBids > 0 && (
-                  <Flex align="center" gap="2">
-                    <Text size="1" color="gray">Pending Sales:</Text>
-                    <Text size="3" weight="medium" style={{ color: 'var(--amber-11)' }}>
-                      {formatAmount(paymentData.unpaidBids, paymentData.currency)}
-                    </Text>
-                    <Button
-                      variant="ghost"
-                      size="1"
-                      color="gray"
-                      onClick={() => setShowInfoModal(true)}
-                      style={{ padding: '2px 4px', fontSize: '10px' }}
-                    >
-                      <InfoCircledIcon width="10" height="10" />
-                      (more info)
-                    </Button>
-                  </Flex>
-                )}
+    return (
+      <>
+        <Card size="3" style={{
+          marginBottom: '1.5rem',
+          border: `2px solid var(--${paymentStatus.color === 'gray' ? 'blue' : paymentStatus.color}-8)`,
+          backgroundColor: `var(--${paymentStatus.color === 'gray' ? 'blue' : paymentStatus.color}-2)`
+        }}>
+          <Flex justify="between" align="start">
+            <Flex direction="column" gap="3" style={{ flex: 1 }}>
+              <Flex align="center" gap="2">
+                <Badge color={paymentStatus.color} variant="soft" size="2">
+                  {getStatusIcon(paymentStatus.status)}
+                  Payment Account: {paymentStatus.text}
+                </Badge>
               </Flex>
-            )}
 
-            {/* Setup message for non-ready accounts */}
-            {paymentStatus.status !== 'ready' && (
-              <Text size="2" color="gray">
-                Set up your payment account to receive earnings from art sales
-              </Text>
-            )}
-          </Box>
+              <Box>
+                <Text size="3" weight="medium" mb="2" style={{ display: 'block' }}>
+                  {paymentStatus.status === 'ready'
+                    ? 'Payment Account Ready'
+                    : 'Payment Account Setup Required'}
+                </Text>
 
-          {getActionButtons(paymentStatus.status) && (
-            <Box>
-              {getActionButtons(paymentStatus.status)}
-            </Box>
-          )}
-        </Flex>
+                {/* Balance Display - always show if there are any amounts */}
+                {(paymentData?.pendingPayments > 0 || paymentData?.unpaidBids > 0) && (
+                  <Flex direction="column" gap="2" mb="2">
+                    {/* Outstanding Balance - Big Green */}
+                    {paymentData?.pendingPayments > 0 && (
+                      <Flex align="center" gap="2">
+                        <Text size="1" color="gray">Outstanding Balance:</Text>
+                        <Text size="5" weight="bold" color="green">
+                          {formatAmount(paymentData.pendingPayments, paymentData.currency)}
+                        </Text>
+                      </Flex>
+                    )}
 
-        <IconButton
-          size="1"
-          variant="ghost"
-          color="gray"
-          onClick={() => setDismissed(true)}
-        >
-          <Cross2Icon width="14" height="14" />
-        </IconButton>
-      </Flex>
+                    {/* Pending Sales - Smaller Yellow */}
+                    {paymentData?.unpaidBids > 0 && (
+                      <Flex align="center" gap="2">
+                        <Text size="1" color="gray">Pending Sales:</Text>
+                        <Text size="3" weight="medium" style={{ color: 'var(--amber-11)' }}>
+                          {formatAmount(paymentData.unpaidBids, paymentData.currency)}
+                        </Text>
+                        <Button
+                          variant="ghost"
+                          size="1"
+                          color="gray"
+                          onClick={() => setShowInfoModal(true)}
+                          style={{ padding: '2px 4px', fontSize: '10px' }}
+                        >
+                          <InfoCircledIcon width="10" height="10" />
+                          (more info)
+                        </Button>
+                      </Flex>
+                    )}
+                  </Flex>
+                )}
 
-      {/* Pending Sales Info Modal */}
-      <Dialog.Root open={showInfoModal} onOpenChange={setShowInfoModal}>
-        <Dialog.Content maxWidth="500px">
-          <Dialog.Title>
-            <Flex align="center" gap="2">
-              <InfoCircledIcon width="18" height="18" />
-              About Pending Sales
+                {/* Setup message for non-ready accounts */}
+                {paymentStatus.status !== 'ready' && (
+                  <Text size="2" color="gray">
+                    Set up your payment account to receive earnings from art sales
+                  </Text>
+                )}
+              </Box>
+
+              {getActionButtons(paymentStatus.status) && (
+                <Box>
+                  {getActionButtons(paymentStatus.status)}
+                </Box>
+              )}
             </Flex>
-          </Dialog.Title>
 
-          <Dialog.Description size="2" mb="4">
-            <Box style={{ lineHeight: '1.6' }}>
-              <Text as="p" mb="3">
-                We let buyers bid without putting down a credit card or deposit as it leads to much more successful auctions. This means that sometimes we aren't able to collect payment.
-              </Text>
-              <Text as="p" mb="3">
-                We will work to reach out to the buyer, and (if any) other bidders who showed interest in your artwork.
-              </Text>
-              <Text as="p" weight="medium">
-                Art Battle pays out 50% of what we are able to collect.
-              </Text>
-            </Box>
-          </Dialog.Description>
-
-          <Flex gap="3" mt="4" justify="end">
-            <Dialog.Close>
-              <Button variant="soft">Got it</Button>
-            </Dialog.Close>
+            <IconButton
+              size="1"
+              variant="ghost"
+              color="gray"
+              onClick={() => setDismissed(true)}
+            >
+              <Cross2Icon width="14" height="14" />
+            </IconButton>
           </Flex>
-        </Dialog.Content>
-      </Dialog.Root>
-    </Card>
-  );
+        </Card>
+
+        {/* Pending Sales Info Modal */}
+        <Dialog.Root open={showInfoModal} onOpenChange={setShowInfoModal}>
+          <Dialog.Content maxWidth="500px">
+            <Dialog.Title>
+              <Flex align="center" gap="2">
+                <InfoCircledIcon width="18" height="18" />
+                About Pending Sales
+              </Flex>
+            </Dialog.Title>
+
+            <Dialog.Description size="2" mb="4">
+              <Box style={{ lineHeight: '1.6' }}>
+                <Text as="p" mb="3">
+                  We let buyers bid without putting down a credit card or deposit as it leads to much more successful auctions. This means that sometimes we aren't able to collect payment.
+                </Text>
+                <Text as="p" mb="3">
+                  We will work to reach out to the buyer, and (if any) other bidders who showed interest in your artwork.
+                </Text>
+                <Text as="p" weight="medium">
+                  Art Battle pays out 50% of what we are able to collect.
+                </Text>
+              </Box>
+            </Dialog.Description>
+
+            <Flex gap="3" mt="4" justify="end">
+              <Dialog.Close>
+                <Button variant="soft">Got it</Button>
+              </Dialog.Close>
+            </Flex>
+          </Dialog.Content>
+        </Dialog.Root>
+      </>
+    );
+  }
+
+  // Don't show banner if no type is set
+  return null;
 };
 
 export default PaymentStatusBanner;

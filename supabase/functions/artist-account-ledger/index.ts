@@ -151,7 +151,7 @@ serve(async (req) => {
         created_at,
         updated_at,
         closing_time,
-        events!inner(name, currency)
+        events!inner(name, currency, artist_auction_portion)
       `)
       .eq('artist_id', artist_profile_id)
       .in('status', ['sold', 'paid', 'closed'])
@@ -163,11 +163,18 @@ serve(async (req) => {
     for (const art of artSales || []) {
       const salePrice = art.final_price || art.current_bid || 0;
       const currency = art.events?.currency || 'USD';
+      // FIXED: Use dynamic artist_auction_portion instead of hardcoded 0.5
+      // Explicitly handle the value from events table
+      let artistAuctionPortion = 0.5; // default fallback
+      if (art.events && typeof art.events.artist_auction_portion === 'number') {
+        artistAuctionPortion = art.events.artist_auction_portion;
+      }
+
 
       if (art.status === 'sold' || art.status === 'paid') {
-        // Calculate artist commission (50% of sale price)
-        const artistCommission = salePrice * 0.5;
-        const houseCommission = salePrice * 0.5;
+        // Calculate artist commission using dynamic percentage
+        const artistCommission = salePrice * artistAuctionPortion;
+        const houseCommission = salePrice * (1 - artistAuctionPortion);
 
         // TEMPORARILY DISABLED: Calculate credit card fees (2.5% of sale, artist pays half = 1.25% of sale)
         // const totalCCFees = salePrice * 0.025;
@@ -177,14 +184,18 @@ serve(async (req) => {
         // Net amount artist receives = full commission (no CC fees deducted for now)
         const netToArtist = artistCommission;
 
-        // CREDIT: Art sale earned (artist gets 50%)
+        // Determine amount based on payment status
+        const ledgerAmount = art.status === 'paid' ? artistCommission : 0;
+        const statusNote = art.status === 'paid' ? '' : ` (${art.status.toUpperCase()} - not yet paid)`;
+
+        // CREDIT: Art sale earned (artist gets commission only when paid)
         ledgerEntries.push({
           id: `art-sale-${art.id}`,
           date: art.closing_time || art.updated_at,
           type: 'credit',
           category: 'Art Sale',
-          description: art.art_code,
-          amount: artistCommission,
+          description: `${art.art_code}${statusNote}`,
+          amount: ledgerAmount,
           currency: currency,
           art_info: {
             art_code: art.art_code,
@@ -192,13 +203,13 @@ serve(async (req) => {
             final_price: salePrice,
             artist_commission: artistCommission,
             house_commission: houseCommission,
-            commission_rate: 0.5,
+            commission_rate: artistAuctionPortion,
             status: art.status
           },
           metadata: {
             sale_type: 'art_sale',
             gross_sale_price: salePrice,
-            commission_rate: 0.5,
+            commission_rate: artistAuctionPortion,
             house_take: houseCommission,
             net_to_artist: artistCommission
           }
@@ -247,7 +258,7 @@ serve(async (req) => {
             status: art.status
           },
           metadata: {
-            potential_artist_earnings: salePrice * 0.5,
+            potential_artist_earnings: salePrice * artistAuctionPortion,
             lost_opportunity: true
           }
         });
@@ -282,6 +293,11 @@ serve(async (req) => {
     // Process payments into ledger entries
     for (const payment of payments || []) {
       const paymentDate = payment.paid_at || payment.created_at;
+
+      // Skip cancelled payments - they should not affect balance calculations
+      if (payment.status === 'cancelled') {
+        continue;
+      }
 
       if (payment.payment_type === 'manual') {
         // DEBIT: Manual payment made

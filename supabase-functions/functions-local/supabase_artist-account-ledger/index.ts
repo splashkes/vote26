@@ -29,13 +29,33 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  let artist_profile_id = null;
+  let include_zero_entry = false;
+  let user = null;
+
   try {
+    // Create client with anon key for RLS-aware operations
     const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      {
+        global: {
+          headers: {
+            Authorization: req.headers.get('Authorization') ?? ''
+          }
+        }
+      }
+    );
+
+    // Create service role client for admin operations if needed
+    const serviceClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { artist_profile_id, include_zero_entry = false } = await req.json();
+    const requestBody = await req.json();
+    artist_profile_id = requestBody.artist_profile_id;
+    include_zero_entry = requestBody.include_zero_entry || false;
 
     if (!artist_profile_id) {
       return new Response(
@@ -44,10 +64,83 @@ serve(async (req) => {
       );
     }
 
+    // Verify the user is authenticated
+    const { data: { user: authUser }, error: authError } = await supabaseClient.auth.getUser();
+    user = authUser;
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Authentication required' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Check if the user is an ABHQ super admin first
+    const { data: adminCheck, error: adminError } = await supabaseClient
+      .from('abhq_admin_users')
+      .select('level, active')
+      .eq('user_id', user.id)
+      .eq('active', true)
+      .single();
+
+    let isAbhqAdmin = false;
+    if (!adminError && adminCheck) {
+      isAbhqAdmin = true;
+    }
+
+    // If not an admin, verify the user owns the artist profile
+    if (!isAbhqAdmin) {
+      // Check if the user owns this artist profile
+      const { data: profileCheck, error: profileError } = await supabaseClient
+        .from('artist_profiles')
+        .select('person_id')
+        .eq('id', artist_profile_id)
+        .single();
+
+      if (profileError || !profileCheck) {
+        return new Response(
+          JSON.stringify({ error: 'Artist profile not found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Get the person_id from JWT claims (for auth v2-http system)
+      // The person_id is stored in the JWT root level for auth v2-http
+      const authHeader = req.headers.get('Authorization') || '';
+      const token = authHeader.replace('Bearer ', '');
+
+      let personId = null;
+      try {
+        // Decode JWT payload (simple base64 decode - no verification needed as Supabase already verified)
+        const payloadBase64 = token.split('.')[1];
+        const payload = JSON.parse(atob(payloadBase64));
+        personId = payload.person_id;
+      } catch (e) {
+        // Fallback to querying people table with user.id
+        const { data: personData } = await supabaseClient
+          .from('people')
+          .select('id')
+          .eq('id', user.id)
+          .single();
+        personId = personData?.id;
+      }
+
+      if (!personId || personId !== profileCheck.person_id) {
+        return new Response(
+          JSON.stringify({ error: 'Access denied' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    // At this point, user is either:
+    // 1. An ABHQ admin (can access any artist's data), OR
+    // 2. The artist who owns this profile (can access their own data)
+
     const ledgerEntries: LedgerEntry[] = [];
 
     // 1. Get all art sales (CREDITS to artist account)
-    const { data: artSales, error: artError } = await supabaseClient
+    // Use service client for art data as it may not have RLS policies for artists
+    const { data: artSales, error: artError } = await serviceClient
       .from('art')
       .select(`
         id,
@@ -58,7 +151,7 @@ serve(async (req) => {
         created_at,
         updated_at,
         closing_time,
-        events!inner(name, currency)
+        events!inner(name, currency, artist_auction_portion)
       `)
       .eq('artist_id', artist_profile_id)
       .in('status', ['sold', 'paid', 'closed'])
@@ -70,11 +163,13 @@ serve(async (req) => {
     for (const art of artSales || []) {
       const salePrice = art.final_price || art.current_bid || 0;
       const currency = art.events?.currency || 'USD';
+      // FIXED: Use dynamic artist_auction_portion instead of hardcoded 0.5
+      const artistAuctionPortion = art.events?.artist_auction_portion || 0.5;
 
       if (art.status === 'sold' || art.status === 'paid') {
-        // Calculate artist commission (50% of sale price)
-        const artistCommission = salePrice * 0.5;
-        const houseCommission = salePrice * 0.5;
+        // Calculate artist commission using dynamic percentage
+        const artistCommission = salePrice * artistAuctionPortion;
+        const houseCommission = salePrice * (1 - artistAuctionPortion);
 
         // TEMPORARILY DISABLED: Calculate credit card fees (2.5% of sale, artist pays half = 1.25% of sale)
         // const totalCCFees = salePrice * 0.025;
@@ -99,13 +194,13 @@ serve(async (req) => {
             final_price: salePrice,
             artist_commission: artistCommission,
             house_commission: houseCommission,
-            commission_rate: 0.5,
+            commission_rate: artistAuctionPortion,
             status: art.status
           },
           metadata: {
             sale_type: 'art_sale',
             gross_sale_price: salePrice,
-            commission_rate: 0.5,
+            commission_rate: artistAuctionPortion,
             house_take: houseCommission,
             net_to_artist: artistCommission
           }
@@ -154,7 +249,7 @@ serve(async (req) => {
             status: art.status
           },
           metadata: {
-            potential_artist_earnings: salePrice * 0.5,
+            potential_artist_earnings: salePrice * artistAuctionPortion,
             lost_opportunity: true
           }
         });
@@ -162,7 +257,8 @@ serve(async (req) => {
     }
 
     // 2. Get all artist payments (DEBITS from artist account - money paid out)
-    const { data: payments, error: paymentsError } = await supabaseClient
+    // Use service client for payment data as it may not have RLS policies for artists
+    const { data: payments, error: paymentsError } = await serviceClient
       .from('artist_payments')
       .select(`
         id,
@@ -258,21 +354,101 @@ serve(async (req) => {
       }
 
       if (runningBalance !== 0) {
-        const zeroAmount = -runningBalance; // Opposite to zero out the balance
-        ledgerEntries.push({
-          id: `zero-entry-${Date.now()}`,
-          date: new Date().toISOString(),
-          type: zeroAmount > 0 ? 'credit' : 'debit',
-          category: 'Account Adjustment',
-          description: `Balance adjustment for system migration (zeroing ${Math.abs(runningBalance).toFixed(2)})`,
-          amount: Math.abs(zeroAmount),
-          currency: 'USD', // Default currency for zero entries
-          metadata: {
-            is_zero_entry: true,
-            previous_balance: runningBalance,
-            adjustment_amount: zeroAmount
+        // For positive balance (artist is owed money), we create a payment (debit) to zero it out
+        // For negative balance (artist was overpaid), we can't use artist_payments table to add credit
+        if (runningBalance > 0) {
+          // Artist has positive balance - create a payment to zero it out
+          const paymentAmount = runningBalance; // Payment amount equals the balance owed
+
+          // Insert the zero entry payment into the database
+          const { data: insertedPayment, error: insertError } = await serviceClient
+            .from('artist_payments')
+            .insert({
+              artist_profile_id: artist_profile_id,
+              gross_amount: paymentAmount,
+              net_amount: paymentAmount,
+              platform_fee: 0.00,
+              stripe_fee: 0.00,
+              currency: 'USD',
+              description: `Balance adjustment for system migration (zeroing $${runningBalance.toFixed(2)} owed)`,
+              payment_method: 'Balance Adjustment',
+              payment_type: 'manual',
+              status: 'paid',
+              created_by: user.email || 'admin@artbattle.com',
+              reference: `zero-entry-${Date.now()}`
+            })
+            .select()
+            .single();
+
+          if (insertError) {
+            console.error('Error inserting zero entry payment:', insertError);
+            return new Response(
+              JSON.stringify({
+                error: 'Failed to create zero entry payment',
+                success: false,
+                debug: {
+                  timestamp: new Date().toISOString(),
+                  function_name: 'artist-account-ledger',
+                  artist_profile_id: artist_profile_id,
+                  include_zero_entry: include_zero_entry,
+                  running_balance: runningBalance,
+                  payment_amount: paymentAmount,
+                  insert_error: {
+                    message: insertError.message,
+                    details: insertError.details,
+                    hint: insertError.hint,
+                    code: insertError.code
+                  },
+                  user_info: {
+                    user_id: user?.id,
+                    user_email: user?.email
+                  }
+                }
+              }),
+              {
+                status: 500,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+              }
+            );
           }
-        });
+
+          // Add the persisted zero entry to ledger entries
+          ledgerEntries.push({
+            id: `zero-entry-${insertedPayment.id}`,
+            date: insertedPayment.created_at,
+            type: 'debit',
+            category: 'Account Adjustment',
+            description: insertedPayment.description,
+            amount: paymentAmount,
+            currency: insertedPayment.currency,
+            metadata: {
+              is_zero_entry: true,
+              previous_balance: runningBalance,
+              payment_id: insertedPayment.id,
+              payment_method: insertedPayment.payment_method,
+              reference: insertedPayment.reference,
+              created_by: insertedPayment.created_by
+            }
+          });
+        } else {
+          // Artist has negative balance (was overpaid) - just add a virtual entry for display
+          // We can't create actual credits in artist_payments table
+          ledgerEntries.push({
+            id: `zero-entry-${Date.now()}`,
+            date: new Date().toISOString(),
+            type: 'credit',
+            category: 'Account Adjustment',
+            description: `Balance adjustment for system migration (correcting $${Math.abs(runningBalance).toFixed(2)} overpayment)`,
+            amount: Math.abs(runningBalance),
+            currency: 'USD',
+            metadata: {
+              is_zero_entry: true,
+              previous_balance: runningBalance,
+              is_virtual_entry: true,
+              note: 'Virtual entry - negative balances cannot be adjusted via payments table'
+            }
+          });
+        }
       }
     }
 
@@ -297,16 +473,17 @@ serve(async (req) => {
 
     // Group by currency
     for (const entry of finalEntries) {
-      if (entry.amount !== undefined) {
+      if (entry.amount !== undefined && entry.amount !== null) {
         const currency = entry.currency || 'USD';
         if (!currencyTotals[currency]) {
           currencyTotals[currency] = { credits: 0, debits: 0, balance: 0 };
         }
 
+        const amount = entry.amount || 0;
         if (entry.type === 'credit') {
-          currencyTotals[currency].credits += entry.amount;
+          currencyTotals[currency].credits += amount;
         } else if (entry.type === 'debit') {
-          currencyTotals[currency].debits += entry.amount;
+          currencyTotals[currency].debits += amount;
         }
         currencyTotals[currency].balance = currencyTotals[currency].credits - currencyTotals[currency].debits;
       }
@@ -325,9 +502,16 @@ serve(async (req) => {
 
     // Determine primary currency (most used currency)
     const currencies = Object.keys(currencyTotals);
-    const primaryCurrency = currencies.length === 1 ? currencies[0] :
-      currencies.reduce((a, b) =>
-        (Math.abs(currencyTotals[a].balance) > Math.abs(currencyTotals[b].balance)) ? a : b, 'USD');
+    let primaryCurrency = 'USD';
+    if (currencies.length === 1) {
+      primaryCurrency = currencies[0];
+    } else if (currencies.length > 1) {
+      primaryCurrency = currencies.reduce((a, b) => {
+        const aBalance = currencyTotals[a] && currencyTotals[a].balance !== undefined ? Math.abs(currencyTotals[a].balance) : 0;
+        const bBalance = currencyTotals[b] && currencyTotals[b].balance !== undefined ? Math.abs(currencyTotals[b].balance) : 0;
+        return aBalance > bBalance ? a : b;
+      }, currencies[0] || 'USD');
+    }
 
     const summary = {
       current_balance: currentBalance,
@@ -353,7 +537,24 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in artist-account-ledger:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({
+        error: error.message,
+        success: false,
+        debug: {
+          timestamp: new Date().toISOString(),
+          function_name: 'artist-account-ledger',
+          error_type: error.constructor.name,
+          stack: error.stack,
+          request_data: {
+            artist_profile_id: artist_profile_id,
+            include_zero_entry: include_zero_entry
+          },
+          auth_info: {
+            has_auth_header: !!req.headers.get('Authorization'),
+            user_available: !!user
+          }
+        }
+      }),
       {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }

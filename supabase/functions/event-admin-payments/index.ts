@@ -169,11 +169,42 @@ serve(async (req) => {
       console.log(`✅ User ${user.phone} has ${eventAdminCheck.admin_level} access to event ${event_id}`);
     }
 
+    // Convert event_id (eid) to UUID if needed
+    let event_uuid = event_id;
+
+    // Check if event_id is an eid (like AB3044) and convert to UUID
+    if (!event_id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+      // This is an eid, look up the UUID
+      const { data: eventLookup, error: lookupError } = await serviceClient
+        .from('events')
+        .select('id')
+        .eq('eid', event_id)
+        .single();
+
+      if (lookupError || !eventLookup) {
+        return new Response(JSON.stringify({
+          error: `Event not found with eid: ${event_id}`,
+          success: false,
+          debug: {
+            ...debugInfo,
+            operation: 'event_lookup',
+            lookup_error: lookupError?.message
+          }
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 404
+        });
+      }
+
+      event_uuid = eventLookup.id;
+      console.log(`✅ Converted eid ${event_id} to UUID ${event_uuid}`);
+    }
+
     // Now fetch event-specific payment data using our new functions
 
     // 1. Get event artists owed money
     const { data: eventArtistsOwed, error: owedError } = await serviceClient
-      .rpc('get_event_artists_owed', { p_event_id: event_id });
+      .rpc('get_event_artists_owed', { p_event_id: event_uuid });
 
     if (owedError) {
       return new Response(JSON.stringify({
@@ -218,7 +249,7 @@ serve(async (req) => {
 
     // 2. Get event ready to pay artists
     const { data: eventReadyToPay, error: readyError } = await serviceClient
-      .rpc('get_event_ready_to_pay', { p_event_id: event_id });
+      .rpc('get_event_ready_to_pay', { p_event_id: event_uuid });
 
     if (readyError) {
       return new Response(JSON.stringify({
@@ -245,7 +276,7 @@ serve(async (req) => {
 
     // 3. Get event payment attempts
     const { data: eventPaymentAttempts, error: attemptsError } = await serviceClient
-      .rpc('get_event_payment_attempts', { p_event_id: event_id, p_days_back: days_back });
+      .rpc('get_event_payment_attempts', { p_event_id: event_uuid, p_days_back: days_back });
 
     if (attemptsError) {
       return new Response(JSON.stringify({
@@ -272,7 +303,7 @@ serve(async (req) => {
 
     // 4. Get event art status (sold vs paid)
     const { data: eventArtStatus, error: artStatusError } = await serviceClient
-      .rpc('get_event_art_status', { p_event_id: event_id });
+      .rpc('get_event_art_status', { p_event_id: event_uuid });
 
     if (artStatusError) {
       return new Response(JSON.stringify({
@@ -297,31 +328,21 @@ serve(async (req) => {
     debugInfo.event_art_status_count = eventArtStatus?.length || 0;
     console.log(`✅ Found ${eventArtStatus?.length} event art pieces with status`);
 
-    // 5. Get event payment summary
-    const { data: eventSummary, error: summaryError } = await serviceClient
-      .rpc('get_event_payment_summary', { p_event_id: event_id });
+    // 5. Get event payment summary (temporarily disabled due to function error)
+    let eventSummary = null;
+    try {
+      const { data: summary, error: summaryError } = await serviceClient
+        .rpc('get_event_payment_summary', { p_event_id: event_uuid });
 
-    if (summaryError) {
-      return new Response(JSON.stringify({
-        error: 'Failed to get event payment summary',
-        success: false,
-        debug: {
-          ...debugInfo,
-          operation: 'get_event_payment_summary',
-          database_error: {
-            message: summaryError.message,
-            code: summaryError.code,
-            details: summaryError.details,
-            hint: summaryError.hint
-          }
-        }
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500
-      });
+      if (!summaryError) {
+        eventSummary = summary;
+        console.log(`✅ Retrieved event payment summary`);
+      } else {
+        console.log(`⚠️  Event payment summary failed, continuing without it:`, summaryError.message);
+      }
+    } catch (e) {
+      console.log(`⚠️  Event payment summary error, continuing without it:`, e.message);
     }
-
-    console.log(`✅ Retrieved event payment summary`);
 
     // Add processing debug info
     debugInfo.data_processing = {

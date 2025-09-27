@@ -254,6 +254,32 @@ const EventPaymentDashboard = ({ eventId, eventName }) => {
             </Card>
           </Flex>
 
+          {/* Artist Auction Portion */}
+          {summary.artist_auction_portion !== undefined && (
+            <Box mt="4">
+              <Card variant="surface" size="1">
+                <Flex align="center" gap="2">
+                  <Text size="2" weight="medium">Artist Auction Portion:</Text>
+                  <Badge
+                    color={
+                      summary.artist_auction_portion === 0 ? 'orange' :
+                      summary.artist_auction_portion === 0.5 ? 'blue' :
+                      summary.artist_auction_portion === 1.0 ? 'green' : 'gray'
+                    }
+                    variant="soft"
+                  >
+                    {Math.round(summary.artist_auction_portion * 100)}%
+                  </Badge>
+                  <Text size="1" color="gray">
+                    {summary.artist_auction_portion === 0 ? '(Charity Event)' :
+                     summary.artist_auction_portion === 0.5 ? '(Standard)' :
+                     summary.artist_auction_portion === 1.0 ? '(Artists Keep All)' : '(Custom)'}
+                  </Text>
+                </Flex>
+              </Card>
+            </Box>
+          )}
+
           {/* Currency breakdown */}
           {summary.event_currency_totals && Object.keys(summary.event_currency_totals).length > 0 && (
             <Box mt="4">

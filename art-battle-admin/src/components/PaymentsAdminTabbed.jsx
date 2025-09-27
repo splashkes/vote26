@@ -436,6 +436,9 @@ const PaymentsAdminTabbed = () => {
           ...selectedArtist,
           payment_amount: selectedArtist.estimated_balance,
           payment_status: 'processing',
+          latest_payment_status: 'processing',
+          payment_type: 'automated',
+          payment_currency: currency,
           payment_date: new Date().toISOString(),
           stripe_transfer_id: data?.stripe_transfer_id || null
         };
@@ -814,7 +817,7 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
     }
 
     // For automated payments (Stripe), use same logic as process-pending-payments
-    if (payment.payment_type === 'automated' || payment.latest_payment_status === 'processing') {
+    if (payment.payment_type === 'automated' || payment.latest_payment_status === 'processing' || payment.latest_payment_status === 'pending') {
       // Determine region using same logic as payment processing
       const currency = payment.payment_currency || payment.currency;
       const stripeRecipientId = payment.stripe_recipient_id;
@@ -1184,11 +1187,11 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                           artist.automated_payment_status === 'failed' ? 'red' :
                           artist.automated_payment_status === 'completed' ? 'green' :
                           artist.automated_payment_status === 'pending' ? 'orange' :
-                          artist.payment_account_status === 'ready' ? 'gray' : 'gray'
+                          artist.payment_account_status === 'ready' ? 'green' : 'gray'
                         }>
                           {artist.automated_payment_status ?
                             artist.automated_payment_status.charAt(0).toUpperCase() + artist.automated_payment_status.slice(1) :
-                            'No Payment Record'
+                            (artist.payment_account_status === 'ready' ? 'READY' : 'No Payment Record')
                           }
                         </Badge>
                       </Table.Cell>
@@ -1588,12 +1591,13 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                             <Badge
                               color={
                                 artist.latest_payment_status === 'completed' ? 'green' :
-                                artist.latest_payment_status === 'pending' ? 'yellow' :
+                                artist.latest_payment_status === 'pending' ? 'orange' :
                                 artist.latest_payment_status === 'processing' ? 'blue' : 'red'
                               }
                               variant="soft"
                             >
-                              {artist.latest_payment_status || 'Unknown'}
+                              {artist.latest_payment_status === 'pending' ? 'QUEUED' :
+                               artist.latest_payment_status || 'Unknown'}
                             </Badge>
                           )}
                           {artist.error_message && (
@@ -1691,8 +1695,14 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                               {artist.stripe_transfer_id.substring(0, 20)}...
                             </Text>
                           )}
-                          <Badge color="green" size="1">
-                            ✅ Completed
+                          <Badge
+                            color="green"
+                            size="1"
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => handleViewApiConversations(artist.payment_id)}
+                            title="Click to view API details"
+                          >
+                            ✅ Completed - View API Logs
                           </Badge>
                         </Flex>
                       </Table.Cell>
@@ -1950,7 +1960,7 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                                       )}
                                       {entry.metadata?.gross_sale_price && (
                                         <Text size="1" color="blue">
-                                          Sale: ${entry.metadata.gross_sale_price.toFixed(2)} → Artist: ${entry.amount.toFixed(2)} (50%)
+                                          Sale: ${entry.metadata.gross_sale_price.toFixed(2)} → Artist: ${entry.amount.toFixed(2)} ({((entry.metadata.commission_rate ?? entry.art_info?.commission_rate ?? 0.5) * 100).toFixed(0)}%)
                                         </Text>
                                       )}
                                     </Flex>
