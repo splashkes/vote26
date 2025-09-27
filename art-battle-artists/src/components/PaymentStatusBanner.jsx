@@ -66,6 +66,12 @@ const PaymentStatusBanner = ({ artistProfile, confirmations, hasRecentActivity, 
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
 
+  // Instant payout state
+  const [instantPayoutEligibility, setInstantPayoutEligibility] = useState(null);
+  const [checkingEligibility, setCheckingEligibility] = useState(false);
+  const [processingInstantPayout, setProcessingInstantPayout] = useState(false);
+  const [showInstantPayoutModal, setShowInstantPayoutModal] = useState(false);
+
   useEffect(() => {
     if (artistProfile) {
       checkIfShouldShowBanner();
@@ -217,6 +223,89 @@ const PaymentStatusBanner = ({ artistProfile, confirmations, hasRecentActivity, 
     }
   };
 
+  // Check for instant payout eligibility using recent payment function
+  const checkInstantPayoutEligibility = async () => {
+    setCheckingEligibility(true);
+    try {
+      // Get the most recent payment directly
+      const { data: paymentData, error: paymentError } = await supabase.functions.invoke('get-artist-recent-payment', {
+        body: {}
+      });
+
+      if (paymentError || !paymentData?.success || !paymentData?.recent_payment) {
+        setInstantPayoutEligibility(null);
+        return;
+      }
+
+      const recentPayment = paymentData.recent_payment;
+
+      // Check eligibility for this payment
+      const { data, error } = await supabase.functions.invoke('check-instant-payout-eligibility', {
+        body: { payment_id: recentPayment.payment_id }
+      });
+
+      if (error) {
+        console.error('Error checking instant payout eligibility:', error);
+        return;
+      }
+
+      setInstantPayoutEligibility(data);
+    } catch (err) {
+      console.error('Error checking instant payout eligibility:', err);
+    } finally {
+      setCheckingEligibility(false);
+    }
+  };
+
+  // Process instant payout
+  const handleInstantPayout = async () => {
+    if (!instantPayoutEligibility?.eligible) return;
+
+    setProcessingInstantPayout(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('process-instant-payout', {
+        body: { payment_id: instantPayoutEligibility.payment_id }
+      });
+
+      if (error) {
+        console.error('Error processing instant payout:', error);
+
+        // Check for specific Stripe errors
+        const errorMessage = data?.stripe_error?.error?.message;
+        if (errorMessage && errorMessage.includes('instant_payouts_limit_exceeded')) {
+          alert('Instant payouts are not available for your account yet. This typically requires account verification and may take 1-2 business days to activate. Your payment will arrive via standard payout (2-3 business days).');
+        } else if (errorMessage && errorMessage.includes('insufficient_funds')) {
+          alert('Insufficient funds available for instant payout. Please try again later or contact support.');
+        } else {
+          alert('Failed to process instant payout. Please try again or contact support if the issue persists.');
+        }
+        return;
+      }
+
+      // Success! Update UI
+      alert(`Success! $${data.net_to_artist.toFixed(2)} ${data.currency} sent to your account. Expected arrival: ${data.estimated_arrival}`);
+
+      // Refresh payment data to reflect changes
+      await loadPaymentData();
+      // Also refresh instant payout eligibility
+      await checkInstantPayoutEligibility();
+      setShowInstantPayoutModal(false);
+
+    } catch (err) {
+      console.error('Error processing instant payout:', err);
+      alert('An error occurred. Please try again.');
+    } finally {
+      setProcessingInstantPayout(false);
+    }
+  };
+
+  // Check instant payout eligibility when artist profile is loaded
+  useEffect(() => {
+    if (artistProfile && showBanner) {
+      checkInstantPayoutEligibility();
+    }
+  }, [artistProfile, showBanner]);
+
   const getPaymentStatus = () => {
     if (!paymentAccount) {
       return { status: 'not_started', text: 'Not Started', color: 'gray' };
@@ -333,24 +422,32 @@ const PaymentStatusBanner = ({ artistProfile, confirmations, hasRecentActivity, 
     const paymentDate = new Date(mostRecentPayment.date);
     const expectedArrival = addBusinessDays(paymentDate, 2);
 
+    // Check if instant payout already processed
+    const instantPayoutProcessed = mostRecentPayment.metadata?.instant_payout_processed;
+
     return (
       <Card size="3" style={{
         marginBottom: '1.5rem',
-        border: '2px solid var(--green-8)',
-        backgroundColor: 'var(--green-2)'
+        border: `2px solid var(--${instantPayoutEligibility?.eligible && !instantPayoutProcessed ? 'blue' : 'green'}-8)`,
+        backgroundColor: `var(--${instantPayoutEligibility?.eligible && !instantPayoutProcessed ? 'blue' : 'green'}-2)`
       }}>
         <Flex justify="between" align="start">
           <Flex direction="column" gap="3" style={{ flex: 1 }}>
             <Flex align="center" gap="2">
-              <Badge color="green" variant="soft" size="2">
+              <Badge color={instantPayoutEligibility?.eligible && !instantPayoutProcessed ? "blue" : "green"} variant="soft" size="2">
                 <CheckCircledIcon width="16" height="16" />
-                Payment Sent
+                {instantPayoutProcessed ? 'Instant Payout Sent' : 'Payment Ready'}
               </Badge>
+              {instantPayoutEligibility?.eligible && !instantPayoutProcessed && (
+                <Badge color="orange" variant="soft" size="1">
+                  Instant Available
+                </Badge>
+              )}
             </Flex>
 
             <Box>
               <Text size="3" weight="medium" mb="2" style={{ display: 'block' }}>
-                Payment Sent Successfully
+                {instantPayoutProcessed ? 'Instant Payout Complete' : 'Payment Ready for Payout'}
               </Text>
 
               <Flex direction="column" gap="2" mb="2">
@@ -362,31 +459,69 @@ const PaymentStatusBanner = ({ artistProfile, confirmations, hasRecentActivity, 
                 </Flex>
 
                 <Flex align="center" gap="2">
-                  <Text size="2" color="gray">Expected arrival:</Text>
+                  <Text size="2" color="gray">
+                    {instantPayoutProcessed ? 'Arrived:' : 'Expected arrival:'}
+                  </Text>
                   <Text size="3" weight="medium">
-                    {formatDate(expectedArrival)}
+                    {instantPayoutProcessed ? 'Within 30 minutes' : formatDate(expectedArrival)}
                   </Text>
                 </Flex>
 
                 <Flex align="center" gap="2">
                   <Text size="2" color="gray">Amount:</Text>
-                  <Text size="4" weight="bold" color="green">
+                  <Text size="4" weight="bold" color={instantPayoutProcessed ? "blue" : "green"}>
                     {formatAmount(mostRecentPayment.amount, mostRecentPayment.currency)}
                   </Text>
                 </Flex>
               </Flex>
 
-              <Text size="2" color="gray">
-                Payments typically arrive within 2 business days
-              </Text>
+              {instantPayoutEligibility?.eligible && !instantPayoutProcessed ? (
+                <Callout.Root color="blue" size="1" mb="3">
+                  <Callout.Icon>
+                    <InfoCircledIcon />
+                  </Callout.Icon>
+                  <Callout.Text>
+                    Get your money in 30 minutes instead of 2-3 days!
+                    <br />
+                    <Text size="1" color="gray">
+                      Instant payout fee: ${instantPayoutEligibility.our_fee?.toFixed(2)}
+                      (Net: ${instantPayoutEligibility.net_to_artist?.toFixed(2)})
+                    </Text>
+                  </Callout.Text>
+                </Callout.Root>
+              ) : (
+                <Text size="2" color="gray">
+                  {instantPayoutProcessed ?
+                    'Instant payout completed successfully' :
+                    'Standard payout - arrives within 2-3 business days'
+                  }
+                </Text>
+              )}
             </Box>
 
-            <Box>
-              <Button size="2" variant="soft" color="green" onClick={() => onNavigateToTab('payments')}>
-                View Account
-                <ArrowRightIcon width="16" height="16" />
-              </Button>
-            </Box>
+            <Flex gap="2">
+              {instantPayoutEligibility?.eligible && !instantPayoutProcessed ? (
+                <>
+                  <Button
+                    size="2"
+                    variant="solid"
+                    color="blue"
+                    onClick={() => setShowInstantPayoutModal(true)}
+                    disabled={processingInstantPayout}
+                  >
+                    Get Instantly (30 min)
+                  </Button>
+                  <Button size="2" variant="outline" onClick={() => onNavigateToTab('payments')}>
+                    Wait 2-3 Days (Free)
+                  </Button>
+                </>
+              ) : (
+                <Button size="2" variant="soft" color="green" onClick={() => onNavigateToTab('payments')}>
+                  View Account
+                  <ArrowRightIcon width="16" height="16" />
+                </Button>
+              )}
+            </Flex>
           </Flex>
 
           <IconButton
@@ -495,6 +630,78 @@ const PaymentStatusBanner = ({ artistProfile, confirmations, hasRecentActivity, 
     return (
       <>
         {renderSuccessBanner()}
+
+        {/* Instant Payout Confirmation Modal */}
+        <Dialog.Root open={showInstantPayoutModal} onOpenChange={setShowInstantPayoutModal}>
+          <Dialog.Content maxWidth="500px">
+            <Dialog.Title>
+              <Flex align="center" gap="2">
+                <CheckCircledIcon width="18" height="18" />
+                Instant Payout Confirmation
+              </Flex>
+            </Dialog.Title>
+
+            <Dialog.Description size="2" mb="4">
+              {instantPayoutEligibility && (
+                <Box style={{ lineHeight: '1.6' }}>
+                  <Text as="p" mb="3">
+                    You're about to request instant payout for your recent payment.
+                  </Text>
+
+                  <Card style={{ backgroundColor: 'var(--gray-2)', padding: '1rem', margin: '1rem 0' }}>
+                    <Flex direction="column" gap="2">
+                      <Flex justify="between">
+                        <Text size="2" color="gray">Original Amount:</Text>
+                        <Text size="2" weight="medium">
+                          {formatAmount(instantPayoutEligibility.original_amount, instantPayoutEligibility.currency)}
+                        </Text>
+                      </Flex>
+                      <Flex justify="between">
+                        <Text size="2" color="gray">Instant Payout Fee (1.5%):</Text>
+                        <Text size="2" color="red">
+                          -{formatAmount(instantPayoutEligibility.our_fee, instantPayoutEligibility.currency)}
+                        </Text>
+                      </Flex>
+                      <hr style={{ margin: '0.5rem 0', border: 'none', borderTop: '1px solid var(--gray-6)' }} />
+                      <Flex justify="between">
+                        <Text size="3" weight="bold">You'll Receive:</Text>
+                        <Text size="3" weight="bold" color="green">
+                          {formatAmount(instantPayoutEligibility.net_to_artist, instantPayoutEligibility.currency)}
+                        </Text>
+                      </Flex>
+                    </Flex>
+                  </Card>
+
+                  <Text as="p" mb="3" color="blue">
+                    💨 <strong>Estimated arrival:</strong> Within 30 minutes
+                  </Text>
+
+                  <Text as="p" size="1" color="gray">
+                    By clicking "Confirm Instant Payout", you authorize us to deduct the 1.5% fee
+                    and send the remaining amount to your bank account immediately.
+                  </Text>
+                </Box>
+              )}
+            </Dialog.Description>
+
+            <Flex gap="3" mt="4" justify="end">
+              <Dialog.Close>
+                <Button variant="soft" disabled={processingInstantPayout}>
+                  Cancel
+                </Button>
+              </Dialog.Close>
+              <Button
+                variant="solid"
+                color="blue"
+                onClick={handleInstantPayout}
+                disabled={processingInstantPayout}
+              >
+                {processingInstantPayout ? 'Processing...' : 'Confirm Instant Payout'}
+              </Button>
+            </Flex>
+          </Dialog.Content>
+        </Dialog.Root>
+
         {/* Pending Sales Info Modal */}
         <Dialog.Root open={showInfoModal} onOpenChange={setShowInfoModal}>
           <Dialog.Content maxWidth="500px">
