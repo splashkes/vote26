@@ -896,6 +896,20 @@ const EventDetails = () => {
     }
   }, [eventId, setEventEid]); // MEMOIZATION: Dependencies for fetchEventDetails
 
+  // Define closeArtDialog function before useEffect that uses it
+  const closeArtDialog = (skipHistoryUpdate = false) => {
+    setSelectedArt(null);
+    setSelectedImageIndex(0);
+    setVoteError('');
+    setBidError('');
+    setBidSuccess(false);
+
+    // Navigate back to event page (unless we're responding to back button)
+    if (!skipHistoryUpdate && window.location.pathname.includes('/art/')) {
+      navigate(`/event/${eventId}`, { replace: true });
+    }
+  };
+
   // Handle URL state and browser back button for art modal
   useEffect(() => {
     const handlePopState = () => {
@@ -1755,18 +1769,6 @@ const EventDetails = () => {
     }
   };
 
-  const closeArtDialog = (skipHistoryUpdate = false) => {
-    setSelectedArt(null);
-    setSelectedImageIndex(0);
-    setVoteError('');
-    setBidError('');
-    setBidSuccess(false);
-
-    // Navigate back to event page (unless we're responding to back button)
-    if (!skipHistoryUpdate && window.location.pathname.includes('/art/')) {
-      navigate(`/event/${eventId}`, { replace: true });
-    }
-  };
 
   if (loading || authLoading) {
     return (
