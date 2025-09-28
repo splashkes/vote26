@@ -26,6 +26,7 @@ function App() {
             <Routes>
               <Route path="/" element={<EventList />} />
               <Route path="/event/:eventId" element={<EventDetails />} />
+              <Route path="/event/:eventId/art/:artworkId" element={<EventDetails />} />
               <Route path="/e/:eid/:tab" element={<EidResolver />} />
               <Route path="/e/:eid" element={<EidResolver />} />
               <Route path="/upgrade/:qrCode" element={<UpgradeHandler />} />

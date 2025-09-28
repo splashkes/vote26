@@ -896,6 +896,53 @@ const EventDetails = () => {
     }
   }, [eventId, setEventEid]); // MEMOIZATION: Dependencies for fetchEventDetails
 
+  // Handle URL state and browser back button for art modal
+  useEffect(() => {
+    const handlePopState = () => {
+      const currentPath = window.location.pathname;
+      const artworkMatch = currentPath.match(/\/art\/([^-]+)-(\d+)-(\d+)$/);
+
+      if (!artworkMatch && selectedArt) {
+        // Back button pressed to event page, close modal without updating URL again
+        closeArtDialog(true);
+      } else if (artworkMatch && !selectedArt && artworks.length > 0) {
+        // Forward navigation or direct URL access with artwork path
+        const [, artEventId, round, easel] = artworkMatch;
+        const artwork = artworks.find(art =>
+          art.round === parseInt(round) && art.easel === parseInt(easel)
+        );
+        if (artwork) {
+          setSelectedArt(artwork);
+          setSelectedImageIndex(0);
+          setVoteError('');
+          setBidError('');
+          setBidSuccess(false);
+        }
+      }
+    };
+
+    // Check URL on component mount to restore state
+    const currentPath = window.location.pathname;
+    const artworkMatch = currentPath.match(/\/art\/([^-]+)-(\d+)-(\d+)$/);
+    if (artworkMatch && !selectedArt && artworks.length > 0) {
+      const [, artEventId, round, easel] = artworkMatch;
+      const artwork = artworks.find(art =>
+        art.round === parseInt(round) && art.easel === parseInt(easel)
+      );
+      if (artwork) {
+        setSelectedArt(artwork);
+        setSelectedImageIndex(0);
+      }
+    }
+
+    // Listen for browser navigation
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [selectedArt, artworks, closeArtDialog, eventId]);
+
   // V2 BROADCAST: Background refresh function removed - V2 broadcast system handles all real-time updates automatically
 
   // Check if user needs to see automatic payment modal
@@ -1580,7 +1627,11 @@ const EventDetails = () => {
     setVoteError('');
     setBidError('');
     setBidSuccess(false);
-    
+
+    // Add artwork to URL path for back button support (art/eventId-round-easel)
+    const artworkPath = `/event/${eventId}/art/${eventId}-${artwork.round}-${artwork.easel}`;
+    navigate(artworkPath, { replace: true });
+
     // Initialize bid amount to minimum bid if not already set
     if (artwork && !bidAmounts[artwork.id]) {
       const currentBid = currentBids[artwork.id]?.amount || 0;
@@ -1704,12 +1755,17 @@ const EventDetails = () => {
     }
   };
 
-  const closeArtDialog = () => {
+  const closeArtDialog = (skipHistoryUpdate = false) => {
     setSelectedArt(null);
     setSelectedImageIndex(0);
     setVoteError('');
     setBidError('');
     setBidSuccess(false);
+
+    // Navigate back to event page (unless we're responding to back button)
+    if (!skipHistoryUpdate && window.location.pathname.includes('/art/')) {
+      navigate(`/event/${eventId}`, { replace: true });
+    }
   };
 
   if (loading || authLoading) {
@@ -2444,9 +2500,19 @@ const EventDetails = () => {
                       })()}
                     </Box>
                     <Dialog.Close>
-                      <IconButton size="2" variant="ghost">
-                        <Cross2Icon />
-                      </IconButton>
+                      <Button
+                        size="3"
+                        variant="soft"
+                        color="gray"
+                        style={{
+                          minWidth: '100px',
+                          fontSize: '16px',
+                          padding: '8px 16px'
+                        }}
+                      >
+                        <Cross2Icon style={{ marginRight: '6px' }} />
+                        Close
+                      </Button>
                     </Dialog.Close>
                   </Flex>
                 </Dialog.Title>
