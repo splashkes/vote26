@@ -4,7 +4,7 @@ import {
   formatCurrencyFromEvent, 
   formatMinimumBidText 
 } from '../utils/currency';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Container,
   Heading,
@@ -62,6 +62,7 @@ import PaymentButton from './PaymentButton';
 const EventDetails = () => {
   const { eventId, tab } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   
   const { user, person, session, loading: authLoading } = useAuth();
 
@@ -910,18 +911,31 @@ const EventDetails = () => {
     }
   };
 
-  // Handle URL state and browser back button for art modal
+  // Handle URL changes for art modal (React Router approach)
   useEffect(() => {
-    const handlePopState = () => {
-      const currentPath = window.location.pathname;
-      const artworkMatch = currentPath.match(/\/art\/([^-]+)-(\d+)-(\d+)$/);
+    console.log('Location changed:', location.pathname);
+    console.log('selectedArt exists:', !!selectedArt);
 
-      if (!artworkMatch && selectedArt) {
-        // Back button pressed to event page, close modal without updating URL again
-        closeArtDialog(true);
-      } else if (artworkMatch && !selectedArt && artworks.length > 0) {
-        // Forward navigation or direct URL access with artwork path
-        const [, artEventId, round, easel] = artworkMatch;
+    const currentPath = location.pathname;
+    const hasArtInPath = currentPath.includes('/art/');
+
+    console.log('hasArtInPath:', hasArtInPath);
+
+    // If we're on event page (/event/AB3023) and modal is open, close it
+    if (!hasArtInPath && selectedArt) {
+      console.log('Closing modal - navigated back to event page');
+      setSelectedArt(null);
+      setSelectedImageIndex(0);
+      setVoteError('');
+      setBidError('');
+      setBidSuccess(false);
+    }
+    // If we're on artwork page and no modal is open, open it
+    else if (hasArtInPath && !selectedArt && artworks.length > 0) {
+      console.log('Opening modal - navigated to artwork page');
+      const pathMatch = currentPath.match(/\/art\/([^-]+)-(\d+)-(\d+)$/);
+      if (pathMatch) {
+        const [, artEventId, round, easel] = pathMatch;
         const artwork = artworks.find(art =>
           art.round === parseInt(round) && art.easel === parseInt(easel)
         );
@@ -933,29 +947,8 @@ const EventDetails = () => {
           setBidSuccess(false);
         }
       }
-    };
-
-    // Check URL on component mount to restore state
-    const currentPath = window.location.pathname;
-    const artworkMatch = currentPath.match(/\/art\/([^-]+)-(\d+)-(\d+)$/);
-    if (artworkMatch && !selectedArt && artworks.length > 0) {
-      const [, artEventId, round, easel] = artworkMatch;
-      const artwork = artworks.find(art =>
-        art.round === parseInt(round) && art.easel === parseInt(easel)
-      );
-      if (artwork) {
-        setSelectedArt(artwork);
-        setSelectedImageIndex(0);
-      }
     }
-
-    // Listen for browser navigation
-    window.addEventListener('popstate', handlePopState);
-
-    return () => {
-      window.removeEventListener('popstate', handlePopState);
-    };
-  }, [selectedArt, artworks, closeArtDialog, eventId]);
+  }, [location.pathname, selectedArt, artworks]);
 
   // V2 BROADCAST: Background refresh function removed - V2 broadcast system handles all real-time updates automatically
 
@@ -1644,7 +1637,7 @@ const EventDetails = () => {
 
     // Add artwork to URL path for back button support (art/eventId-round-easel)
     const artworkPath = `/event/${eventId}/art/${eventId}-${artwork.round}-${artwork.easel}`;
-    navigate(artworkPath, { replace: true });
+    navigate(artworkPath);
 
     // Initialize bid amount to minimum bid if not already set
     if (artwork && !bidAmounts[artwork.id]) {
