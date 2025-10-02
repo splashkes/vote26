@@ -47,6 +47,9 @@ const PaymentsAdminTabbed = () => {
   const [sendingReminder, setSendingReminder] = useState(false);
   const [accountLedger, setAccountLedger] = useState(null);
   const [loadingLedger, setLoadingLedger] = useState(false);
+  const [manualPaymentRequest, setManualPaymentRequest] = useState(null);
+  const [loadingManualPaymentRequest, setLoadingManualPaymentRequest] = useState(false);
+  const [revealedPaymentDetails, setRevealedPaymentDetails] = useState(false);
   const [showZeroAccount, setShowZeroAccount] = useState(false);
   const [showPayNowDialog, setShowPayNowDialog] = useState(false);
   const [processingPayments, setProcessingPayments] = useState(false);
@@ -59,7 +62,8 @@ const PaymentsAdminTabbed = () => {
     currency: 'USD',
     description: '',
     payment_method: 'bank_transfer',
-    reference: ''
+    reference: '',
+    paid_by: 'art_battle'
   });
   const [availableCurrencies, setAvailableCurrencies] = useState([]);
   const [showInvitationHistory, setShowInvitationHistory] = useState(false);
@@ -216,14 +220,17 @@ const PaymentsAdminTabbed = () => {
     setSelectedArtist(artist);
     setStripeDetails(null);
     setAccountLedger(null);
+    setManualPaymentRequest(null);
+    setRevealedPaymentDetails(false);
     setLoadingStripe(false);
     setLoadingLedger(true);
+    setLoadingManualPaymentRequest(true);
 
     // Open modal with loading state
     setShowArtistDetail(true);
 
     try {
-      // Fetch both Stripe details and account ledger in parallel
+      // Fetch Stripe details, account ledger, and manual payment request in parallel
       const promises = [];
 
       // Fetch Stripe details if account exists
@@ -233,6 +240,9 @@ const PaymentsAdminTabbed = () => {
 
       // Always fetch account ledger
       promises.push(fetchArtistAccountLedger(false, artist.artist_profiles.id));
+
+      // Always fetch manual payment request
+      promises.push(fetchManualPaymentRequest(artist.artist_profiles.id));
 
       // Wait for all data to load
       await Promise.all(promises);
@@ -293,6 +303,76 @@ const PaymentsAdminTabbed = () => {
     }
   };
 
+  const fetchManualPaymentRequest = async (artistProfileId) => {
+    if (!artistProfileId) {
+      console.error('No artist profile ID available for manual payment request fetch');
+      return;
+    }
+
+    try {
+      setLoadingManualPaymentRequest(true);
+
+      const session = await supabase.auth.getSession();
+      const response = await fetch('https://db.artb.art/functions/v1/admin-get-manual-payment-request', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.data.session?.access_token}`,
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcWRrdWJneXF3cHl2Zmx0bnJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjI1NDI0ODQsImV4cCI6MjAzODExODQ4NH0.x6JzxElYCf9lpkpc3RYX2XOQQ-v8QLPQOHWOzLj0a3M'
+        },
+        body: JSON.stringify({
+          artist_profile_id: artistProfileId,
+          reveal_details: false
+        })
+      });
+
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to fetch manual payment request');
+      }
+
+      if (result.has_request) {
+        setManualPaymentRequest(result);
+      }
+    } catch (err) {
+      console.error('Failed to load manual payment request:', err);
+      // Don't set error - this is optional data
+    } finally {
+      setLoadingManualPaymentRequest(false);
+    }
+  };
+
+  const revealPaymentDetails = async () => {
+    if (!selectedArtist?.artist_profiles?.id) return;
+
+    try {
+      const session = await supabase.auth.getSession();
+      const response = await fetch('https://db.artb.art/functions/v1/admin-get-manual-payment-request', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.data.session?.access_token}`,
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcWRrdWJneXF3cHl2Zmx0bnJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjI1NDI0ODQsImV4cCI6MjAzODExODQ4NH0.x6JzxElYCf9lpkpc3RYX2XOQQ-v8QLPQOHWOzLj0a3M'
+        },
+        body: JSON.stringify({
+          artist_profile_id: selectedArtist.artist_profiles.id,
+          reveal_details: true
+        })
+      });
+
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to reveal payment details');
+      }
+
+      setManualPaymentRequest(result);
+      setRevealedPaymentDetails(true);
+    } catch (err) {
+      console.error('Failed to reveal payment details:', err);
+      setError('Failed to reveal payment details: ' + err.message);
+    }
+  };
+
   const handleManualPayment = async () => {
     try {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -319,14 +399,15 @@ const PaymentsAdminTabbed = () => {
           metadata: {
             created_via: 'admin_panel',
             created_at: new Date().toISOString(),
-            admin_user: createdBy
+            admin_user: createdBy,
+            paid_by: manualPaymentData.paid_by
           }
         });
 
       if (error) throw error;
 
       setShowManualPayment(false);
-      setManualPaymentData({ amount: '', currency: 'USD', description: '', payment_method: 'bank_transfer', reference: '' });
+      setManualPaymentData({ amount: '', currency: 'USD', description: '', payment_method: 'bank_transfer', reference: '', paid_by: 'art_battle' });
 
       fetchEnhancedData();
     } catch (err) {
@@ -1846,6 +1927,112 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                   </Card>
                 )}
 
+                {/* Manual Payment Request */}
+                {loadingManualPaymentRequest ? (
+                  <Card>
+                    <Skeleton height="80px" />
+                  </Card>
+                ) : manualPaymentRequest && manualPaymentRequest.has_request ? (
+                  <Card>
+                    <Flex direction="column" gap="3">
+                      <Flex justify="between" align="center">
+                        <Heading size="3">Manual Payment Request</Heading>
+                        <Badge
+                          color={
+                            manualPaymentRequest.metadata.status === 'paid' ? 'green' :
+                            manualPaymentRequest.metadata.status === 'approved' ? 'blue' :
+                            manualPaymentRequest.metadata.status === 'rejected' ? 'red' :
+                            'orange'
+                          }
+                        >
+                          {manualPaymentRequest.metadata.status.toUpperCase()}
+                        </Badge>
+                      </Flex>
+
+                      {/* Metadata - always visible */}
+                      <Flex direction="column" gap="2">
+                        <Flex justify="between">
+                          <Text size="2" color="gray">Payment Method:</Text>
+                          <Badge variant="outline">{manualPaymentRequest.metadata.payment_method || 'Not specified'}</Badge>
+                        </Flex>
+                        <Flex justify="between">
+                          <Text size="2" color="gray">Requested Amount:</Text>
+                          <Text size="2" weight="bold">
+                            {manualPaymentRequest.metadata.requested_amount
+                              ? `$${manualPaymentRequest.metadata.requested_amount.toFixed(2)} ${manualPaymentRequest.metadata.preferred_currency || 'USD'}`
+                              : 'Not specified'}
+                          </Text>
+                        </Flex>
+                        <Flex justify="between">
+                          <Text size="2" color="gray">Country:</Text>
+                          <Text size="2">{manualPaymentRequest.metadata.country_code || 'Not specified'}</Text>
+                        </Flex>
+                        <Flex justify="between">
+                          <Text size="2" color="gray">Events:</Text>
+                          <Text size="2">{manualPaymentRequest.metadata.events_referenced?.join(', ') || 'None'}</Text>
+                        </Flex>
+                        <Flex justify="between">
+                          <Text size="2" color="gray">Submitted:</Text>
+                          <Text size="2">{new Date(manualPaymentRequest.metadata.created_at).toLocaleDateString()}</Text>
+                        </Flex>
+                        {manualPaymentRequest.metadata.processed_at && (
+                          <Flex justify="between">
+                            <Text size="2" color="gray">Processed:</Text>
+                            <Text size="2">{new Date(manualPaymentRequest.metadata.processed_at).toLocaleDateString()}</Text>
+                          </Flex>
+                        )}
+                      </Flex>
+
+                      {/* Reveal sensitive details */}
+                      {!revealedPaymentDetails ? (
+                        <Callout.Root color="orange">
+                          <Callout.Icon>
+                            <InfoCircledIcon />
+                          </Callout.Icon>
+                          <Callout.Text>
+                            <Flex justify="between" align="center">
+                              <Text size="2">
+                                Banking details are hidden for security. Click to reveal and audit log the access.
+                              </Text>
+                              <Button
+                                size="1"
+                                variant="soft"
+                                onClick={revealPaymentDetails}
+                              >
+                                Reveal Details
+                              </Button>
+                            </Flex>
+                          </Callout.Text>
+                        </Callout.Root>
+                      ) : (
+                        <Card variant="surface" style={{ backgroundColor: 'var(--yellow-2)', border: '1px solid var(--yellow-6)' }}>
+                          <Flex direction="column" gap="2">
+                            <Flex align="center" gap="2">
+                              <Badge color="yellow">🔓 Sensitive Data Revealed</Badge>
+                              <Text size="1" color="gray">(Audit logged)</Text>
+                            </Flex>
+                            <Separator />
+                            <Box>
+                              <Text size="2" weight="bold" mb="1" style={{ display: 'block' }}>Payment Details:</Text>
+                              <Text size="2" style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', display: 'block' }}>
+                                {manualPaymentRequest.sensitive_details?.payment_details || 'No details provided'}
+                              </Text>
+                            </Box>
+                            {manualPaymentRequest.sensitive_details?.admin_notes && (
+                              <Box>
+                                <Text size="2" weight="bold" mb="1" style={{ display: 'block' }}>Admin Notes:</Text>
+                                <Text size="2" style={{ whiteSpace: 'pre-wrap', display: 'block' }}>
+                                  {manualPaymentRequest.sensitive_details.admin_notes}
+                                </Text>
+                              </Box>
+                            )}
+                          </Flex>
+                        </Card>
+                      )}
+                    </Flex>
+                  </Card>
+                ) : null}
+
                 {/* Account Ledger */}
                 <Card>
                   <Flex justify="between" align="center" mb="3">
@@ -2081,6 +2268,20 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                   <Select.Item value="paypal">PayPal</Select.Item>
                   <Select.Item value="zelle">Zelle</Select.Item>
                   <Select.Item value="other">Other</Select.Item>
+                </Select.Content>
+              </Select.Root>
+            </Box>
+
+            <Box>
+              <Text size="2" weight="medium" mb="1">Paid By</Text>
+              <Select.Root
+                value={manualPaymentData.paid_by}
+                onValueChange={(value) => setManualPaymentData({...manualPaymentData, paid_by: value})}
+              >
+                <Select.Trigger />
+                <Select.Content>
+                  <Select.Item value="art_battle">ART BATTLE</Select.Item>
+                  <Select.Item value="local_producer">LOCAL PRODUCER</Select.Item>
                 </Select.Content>
               </Select.Root>
             </Box>
