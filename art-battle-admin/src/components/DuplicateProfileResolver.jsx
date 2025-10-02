@@ -152,6 +152,11 @@ const DuplicateProfileResolver = () => {
         const onlyOnePerson = uniquePersons.length === 1;
         const singlePerson = onlyOnePerson ? uniquePersons[0] : null;
 
+        // Auto-select the single person if there's only one
+        if (onlyOnePerson && singlePerson && !selectedPersonId) {
+          setSelectedPersonId(singlePerson.id);
+        }
+
         return (
           <>
             {/* USER Header */}
@@ -222,6 +227,26 @@ const DuplicateProfileResolver = () => {
               /* Single Column: Just show profiles */
               <Card size="3" mb="4">
                 <Heading size="4" mb="3">Artist Profiles</Heading>
+                {isAlreadyReconciled && canonicalProfile ? (
+                  <Callout.Root color="green" mb="3">
+                    <Callout.Icon>
+                      <CheckCircledIcon />
+                    </Callout.Icon>
+                    <Callout.Text>
+                      <strong>Single Linked Account:</strong> {canonicalProfile.name} (ID: {canonicalProfile.id.slice(0, 8)}...)
+                      {canonicalProfile.outstanding_balance > 0 && ` • Balance: $${canonicalProfile.outstanding_balance.toFixed(2)}`}
+                    </Callout.Text>
+                  </Callout.Root>
+                ) : !isAlreadyReconciled && searchResults.profiles.length > 1 ? (
+                  <Callout.Root color="orange" mb="3">
+                    <Callout.Icon>
+                      <InfoCircledIcon />
+                    </Callout.Icon>
+                    <Callout.Text>
+                      <strong>Reconciliation Needed:</strong> Select the canonical artist profile below, then click Reconcile.
+                    </Callout.Text>
+                  </Callout.Root>
+                ) : null}
                 <RadioGroup.Root value={selectedArtistProfileId || ''} onValueChange={setSelectedArtistProfileId}>
                   <Flex direction="column" gap="3">
                     {searchResults.profiles.map((profile) => {
