@@ -89,7 +89,77 @@ serve(async (req) => {
 
     const notes = [];
 
-    // Note 1: Payment options info (always show if not dismissed)
+    // Note 1: Manual payment eligibility (check balance and event age) - PRIORITY: Show first
+    if (!dismissedNoteIds.has('manual-payment-eligible-2025-10')) {
+      // Calculate balance directly (credits - debits)
+      const { data: artSales } = await serviceClient
+        .from('art')
+        .select('final_price, current_bid, status')
+        .eq('artist_id', artistProfile.id)
+        .in('status', ['sold', 'paid']);
+
+      const totalEarned = artSales?.reduce((sum, art) => {
+        const salePrice = art.final_price || art.current_bid || 0;
+        return sum + (salePrice * 0.5); // 50% artist commission
+      }, 0) || 0;
+
+      const { data: payments } = await serviceClient
+        .from('artist_payments')
+        .select('gross_amount')
+        .eq('artist_profile_id', artistProfile.id)
+        .in('status', ['completed', 'paid', 'verified']);
+
+      const totalPaid = payments?.reduce((sum, p) => sum + (p.gross_amount || 0), 0) || 0;
+
+      const balance = totalEarned - totalPaid;
+      const currency = 'USD'; // Default for now
+
+      if (balance > 0) {
+        // Check for events older than 14 days
+        const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+
+        const { data: confirmations } = await serviceClient
+          .from('artist_confirmations')
+          .select('id, event_eid')
+          .eq('artist_profile_id', artistProfile.id)
+          .eq('confirmation_status', 'confirmed');
+
+        if (confirmations && confirmations.length > 0) {
+          // Get event details separately to avoid join issues
+          const eventEids = confirmations.map(c => c.event_eid);
+          const { data: events } = await serviceClient
+            .from('events')
+            .select('id, eid, name, event_start_datetime')
+            .in('eid', eventEids);
+
+          const oldEvents = events?.filter(e => {
+            const eventDate = new Date(e.event_start_datetime);
+            return eventDate < fourteenDaysAgo;
+          }) || [];
+
+          if (oldEvents.length > 0) {
+            notes.push({
+              id: 'manual-payment-eligible-2025-10',
+              variant: 'warning',
+              title: 'Manual Payment Available',
+              content: {
+                type: 'manual-payment-request',
+                balance: balance,
+                currency: currency,
+                events: oldEvents.map(e => ({
+                  id: e.id,
+                  eid: e.eid,
+                  name: e.name,
+                  date: e.event_start_datetime
+                }))
+              }
+            });
+          }
+        }
+      }
+    }
+
+    // Note 2: Payment options info (general info, show after urgent notes)
     if (!dismissedNoteIds.has('payment-options-info-2025-10')) {
       notes.push({
         id: 'payment-options-info-2025-10',
@@ -137,61 +207,6 @@ serve(async (req) => {
           ]
         }
       });
-    }
-
-    // Note 2: Manual payment eligibility (check balance and event age)
-    if (!dismissedNoteIds.has('manual-payment-eligible-2025-10')) {
-      // Get balance using artist-account-ledger function
-      const { data: ledgerData } = await serviceClient.functions.invoke('artist-account-ledger', {
-        body: { artist_profile_id: artistProfile.id }
-      });
-
-      const balance = ledgerData?.summary?.current_balance || 0;
-      const currency = ledgerData?.summary?.primary_currency || 'USD';
-
-      if (balance > 0) {
-        // Check for events older than 14 days
-        const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
-
-        const { data: confirmations } = await serviceClient
-          .from('artist_confirmations')
-          .select('id, event_eid')
-          .eq('artist_profile_id', artistProfile.id)
-          .eq('confirmation_status', 'confirmed');
-
-        if (confirmations && confirmations.length > 0) {
-          // Get event details separately to avoid join issues
-          const eventEids = confirmations.map(c => c.event_eid);
-          const { data: events } = await serviceClient
-            .from('events')
-            .select('id, eid, name, event_start_datetime')
-            .in('eid', eventEids);
-
-          const oldEvents = events?.filter(e => {
-            const eventDate = new Date(e.event_start_datetime);
-            return eventDate < fourteenDaysAgo;
-          }) || [];
-
-          if (oldEvents.length > 0) {
-            notes.push({
-              id: 'manual-payment-eligible-2025-10',
-              variant: 'warning',
-              title: 'Manual Payment Available',
-              content: {
-                type: 'manual-payment-request',
-                balance: balance,
-                currency: currency,
-                events: oldEvents.map(e => ({
-                  id: e.id,
-                  eid: e.eid,
-                  name: e.name,
-                  date: e.event_start_datetime
-                }))
-              }
-            });
-          }
-        }
-      }
     }
 
     return new Response(

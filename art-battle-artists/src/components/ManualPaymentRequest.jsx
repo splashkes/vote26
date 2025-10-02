@@ -19,7 +19,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import DismissibleNote from './DismissibleNote';
 
-const ManualPaymentRequest = ({ artistProfile }) => {
+const ManualPaymentRequest = ({ artistProfile, noteId, serverEligibility }) => {
   const { person } = useAuth();
   const [isEligible, setIsEligible] = useState(false);
   const [eligibilityData, setEligibilityData] = useState(null);
@@ -31,11 +31,19 @@ const ManualPaymentRequest = ({ artistProfile }) => {
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    if (artistProfile && person) {
+    if (serverEligibility) {
+      // Use server-provided eligibility data
+      setIsEligible(true);
+      setEligibilityData(serverEligibility);
+    } else if (artistProfile && person) {
+      // Fallback to client-side check (deprecated)
       checkEligibility();
+    }
+
+    if (artistProfile && person) {
       checkExistingRequest();
     }
-  }, [artistProfile, person]);
+  }, [artistProfile, person, serverEligibility]);
 
   const checkEligibility = async () => {
     try {

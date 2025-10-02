@@ -2678,7 +2678,15 @@ The Art Battle Team`);
                             </Flex>
                           </Table.Cell>
                           <Table.Cell>
-                            <Text size="2" weight="bold" color={artist.totals.amount_owed > 0 ? 'orange' : 'gray'}>
+                            <Text
+                              size="2"
+                              weight="bold"
+                              color={
+                                artist.totals.amount_owed > 0 ? 'orange' :
+                                artist.totals.total_earned > 0 ? 'green' :
+                                'gray'
+                              }
+                            >
                               ${artist.totals.amount_owed.toFixed(2)}
                             </Text>
                           </Table.Cell>

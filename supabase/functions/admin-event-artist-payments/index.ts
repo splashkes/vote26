@@ -154,10 +154,10 @@ serve(async (req) => {
         .in('artist_profile_id', artistIds)
         .order('sent_at', { ascending: false }),
 
-      // Get payment requests to check for stripe_recipient_id
+      // Get artist global payment accounts (status and stripe_recipient_id)
       supabaseClient
-        .from('global_payment_requests')
-        .select('artist_profile_id, stripe_recipient_id')
+        .from('artist_global_payments')
+        .select('artist_profile_id, status, stripe_recipient_id')
         .in('artist_profile_id', artistIds)
     ]);
 
@@ -260,12 +260,12 @@ serve(async (req) => {
       }
     });
 
-    // Map payment accounts (check if artist has stripe_recipient_id)
-    paymentRequests?.forEach(request => {
-      if (!paymentAccountByArtist.has(request.artist_profile_id) && request.stripe_recipient_id) {
-        paymentAccountByArtist.set(request.artist_profile_id, {
-          stripe_recipient_id: request.stripe_recipient_id,
-          status: 'ready'
+    // Map payment accounts from artist_global_payments (has status and stripe_recipient_id)
+    paymentRequests?.forEach(account => {
+      if (!paymentAccountByArtist.has(account.artist_profile_id)) {
+        paymentAccountByArtist.set(account.artist_profile_id, {
+          stripe_recipient_id: account.stripe_recipient_id,
+          status: account.status  // Use actual status: 'ready', 'pending', 'blocked', etc.
         });
       }
     });
@@ -381,7 +381,7 @@ serve(async (req) => {
           status: invitation.status,
           completed_at: invitation.completed_at
         } : null,
-        payment_account_status: paymentAccount ? 'ready' : (invitation?.status === 'completed' ? 'pending' : 'not_invited'),
+        payment_account_status: paymentAccount?.status || (invitation?.status === 'completed' ? 'pending' : 'not_invited'),
         stripe_recipient_id: paymentAccount?.stripe_recipient_id || null,
         totals: {
           total_earned: totalEarned,
