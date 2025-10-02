@@ -2412,6 +2412,25 @@ The Art Battle Team`);
                       )}
                     </Flex>
 
+                    {/* Eventbrite Event Verification */}
+                    {postEventData?.ticket_sales?.eventbrite_event_name && (
+                      <Box mb="3" p="2" style={{ backgroundColor: 'var(--blue-2)', borderRadius: '6px' }}>
+                        <Text size="1" color="blue" style={{ display: 'block' }}>
+                          <strong>Eventbrite Event:</strong> {postEventData.ticket_sales.eventbrite_event_name}
+                          {postEventData.ticket_sales.currency_code && (
+                            <Badge size="1" ml="2" color="blue">{postEventData.ticket_sales.currency_code}</Badge>
+                          )}
+                        </Text>
+                        {postEventData.ticket_sales.eventbrite_start_date && (
+                          <Text size="1" color="gray" style={{ display: 'block', marginTop: '0.25rem' }}>
+                            {new Date(postEventData.ticket_sales.eventbrite_start_date).toLocaleDateString('en-US', {
+                              weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                            })}
+                          </Text>
+                        )}
+                      </Box>
+                    )}
+
                     {postEventData?.ticket_sales ? (
                       <>
                         <Grid columns="4" gap="3" mb="3">

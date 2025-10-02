@@ -11,19 +11,17 @@ import {
   Table,
   Separator,
   Callout,
-  Dialog,
   ScrollArea,
-  Checkbox,
-  Code
+  Dialog,
+  RadioGroup,
+  Grid
 } from '@radix-ui/themes';
 import {
   MagnifyingGlassIcon,
-  ExclamationTriangleIcon,
-  CheckCircledIcon,
-  Cross2Icon,
-  PersonIcon,
   InfoCircledIcon,
-  ReloadIcon
+  ReloadIcon,
+  ExclamationTriangleIcon,
+  CheckCircledIcon
 } from '@radix-ui/react-icons';
 import { supabase } from '../lib/supabase';
 
@@ -31,27 +29,20 @@ const DuplicateProfileResolver = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [selectedPrimary, setSelectedPrimary] = useState(null);
-  const [selectedSecondaries, setSelectedSecondaries] = useState([]);
-  const [showTransferDialog, setShowTransferDialog] = useState(false);
-  const [transferOptions, setTransferOptions] = useState({
-    art: true,
-    invitations: true,
-    applications: true,
-    confirmations: true,
-    stripe_accounts: true,
-    payments: false
-  });
-  const [transferInProgress, setTransferInProgress] = useState(false);
-  const [transferResult, setTransferResult] = useState(null);
+  const [selectedPersonId, setSelectedPersonId] = useState(null);
+  const [selectedArtistProfileId, setSelectedArtistProfileId] = useState(null);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [reconciling, setReconciling] = useState(false);
+  const [reconcileResult, setReconcileResult] = useState(null);
 
   const searchProfiles = async () => {
     if (!searchQuery.trim()) return;
 
     setLoading(true);
     setSearchResults(null);
-    setSelectedPrimary(null);
-    setSelectedSecondaries([]);
+    setSelectedPersonId(null);
+    setSelectedArtistProfileId(null);
+    setReconcileResult(null);
 
     try {
       const { data, error } = await supabase.functions.invoke('admin-duplicate-profile-search', {
@@ -60,14 +51,6 @@ const DuplicateProfileResolver = () => {
 
       if (error) throw error;
       setSearchResults(data);
-
-      // Auto-select recommended primary if duplicates found
-      if (data.duplicate_groups && data.duplicate_groups.length > 0) {
-        const firstGroup = data.duplicate_groups[0];
-        if (firstGroup.recommended_primary) {
-          setSelectedPrimary(firstGroup.recommended_primary.id);
-        }
-      }
     } catch (err) {
       console.error('Search error:', err);
       alert('Error searching profiles: ' + err.message);
@@ -76,66 +59,46 @@ const DuplicateProfileResolver = () => {
     }
   };
 
-  const handleSecondaryToggle = (profileId) => {
-    if (selectedSecondaries.includes(profileId)) {
-      setSelectedSecondaries(selectedSecondaries.filter(id => id !== profileId));
-    } else {
-      setSelectedSecondaries([...selectedSecondaries, profileId]);
-    }
-  };
-
-  const performTransfer = async () => {
-    if (!selectedPrimary || selectedSecondaries.length === 0) {
-      alert('Please select a primary profile and at least one secondary profile');
+  const handleReconcile = async () => {
+    if (!selectedPersonId || !selectedArtistProfileId) {
+      alert('Please select both a Person and an Artist Profile');
       return;
     }
 
-    setTransferInProgress(true);
+    setReconciling(true);
     try {
-      const { data, error } = await supabase.functions.invoke('admin-transfer-profile-data', {
+      const { data, error } = await supabase.functions.invoke('admin-reconcile-profile', {
         body: {
-          primary_profile_id: selectedPrimary,
-          secondary_profile_ids: selectedSecondaries,
-          transfer_options: transferOptions,
-          safety_checks: true
+          phone_number: searchResults.search_type === 'phone' ? searchQuery.trim() : null,
+          canonical_person_id: selectedPersonId,
+          canonical_artist_profile_id: selectedArtistProfileId,
+          all_person_ids: searchResults.profiles
+            .filter(p => p.person)
+            .map(p => p.person.id)
+            .filter((id, idx, arr) => arr.indexOf(id) === idx),
+          all_artist_profile_ids: searchResults.profiles.map(p => p.id)
         }
       });
 
       if (error) throw error;
 
-      setTransferResult(data);
+      setReconcileResult(data);
+      setShowConfirmDialog(false);
 
       if (data.success) {
-        alert(`Successfully transferred data!\n\n${Object.entries(data.transferred).map(([key, count]) => `${key}: ${count}`).join('\n')}`);
-        setShowTransferDialog(false);
-        // Refresh search
+        alert('✅ Reconciliation successful!\n\nRefreshing results...');
         searchProfiles();
       } else {
-        alert(`Transfer completed with errors:\n\n${data.errors.join('\n')}`);
+        alert('⚠️ Reconciliation completed with errors:\n\n' + (data.errors || []).join('\n'));
       }
     } catch (err) {
-      console.error('Transfer error:', err);
-      alert('Error transferring data: ' + err.message);
+      console.error('Reconciliation error:', err);
+      alert('❌ Error during reconciliation: ' + err.message);
     } finally {
-      setTransferInProgress(false);
+      setReconciling(false);
     }
   };
 
-  const getProfileBadgeColor = (profile) => {
-    if (profile.can_login) return 'green';
-    if (profile.total_activity > 0) return 'blue';
-    return 'gray';
-  };
-
-  const formatActivitySummary = (counts) => {
-    const items = [];
-    if (counts.art) items.push(`${counts.art} art`);
-    if (counts.artist_payments) items.push(`${counts.artist_payments} payments`);
-    if (counts.artist_invitations) items.push(`${counts.artist_invitations} invitations`);
-    if (counts.artist_applications) items.push(`${counts.artist_applications} applications`);
-    if (counts.artist_global_payments) items.push(`${counts.artist_global_payments} Stripe`);
-    return items.length > 0 ? items.join(', ') : 'No activity';
-  };
 
   return (
     <Box p="4">
@@ -165,324 +128,339 @@ const DuplicateProfileResolver = () => {
         </Flex>
       </Card>
 
-      {searchResults && (
-        <>
-          {/* Summary Card */}
-          <Card size="2" mb="4">
-            <Flex gap="4" align="center">
-              <Box>
-                <Text size="1" color="gray">Profiles Found</Text>
-                <Text size="5" weight="bold">{searchResults.total_profiles}</Text>
-              </Box>
-              <Separator orientation="vertical" />
-              <Box>
-                <Text size="1" color="gray">Duplicate Groups</Text>
-                <Text size="5" weight="bold">{searchResults.duplicate_groups?.length || 0}</Text>
-              </Box>
-              <Separator orientation="vertical" />
-              <Box>
-                <Text size="1" color="gray">Orphan Profiles</Text>
-                <Text size="5" weight="bold">{searchResults.orphan_profiles?.length || 0}</Text>
-              </Box>
-            </Flex>
-          </Card>
+      {searchResults && searchResults.profiles && searchResults.profiles.length > 0 && (() => {
+        // Group profiles by person_id and collect unique persons
+        const uniquePersons = [];
+        const personMap = new Map();
 
-          {searchResults.has_duplicates ? (
-            <>
-              {/* Duplicate Groups */}
-              {searchResults.duplicate_groups?.map((group, groupIndex) => (
-                <Card key={groupIndex} size="3" mb="4">
-                  <Flex justify="between" align="center" mb="3">
-                    <Box>
-                      <Heading size="4">
-                        Duplicate Group: {group.person_name}
-                      </Heading>
-                      <Text size="2" color="gray">
-                        {group.profile_count} profiles linked to same person
-                      </Text>
-                    </Box>
-                    <Button
-                      onClick={() => setShowTransferDialog(true)}
-                      disabled={!selectedPrimary || selectedSecondaries.length === 0}
-                    >
-                      Merge Selected
-                    </Button>
-                  </Flex>
+        searchResults.profiles.forEach(profile => {
+          if (profile.person && profile.person.id && !personMap.has(profile.person.id)) {
+            personMap.set(profile.person.id, profile.person);
+            uniquePersons.push(profile.person);
+          }
+        });
 
-                  <ScrollArea style={{ maxHeight: '500px' }}>
-                    <Table.Root>
-                      <Table.Header>
-                        <Table.Row>
-                          <Table.ColumnHeaderCell>Primary</Table.ColumnHeaderCell>
-                          <Table.ColumnHeaderCell>Merge</Table.ColumnHeaderCell>
-                          <Table.ColumnHeaderCell>Profile</Table.ColumnHeaderCell>
-                          <Table.ColumnHeaderCell>Person Info</Table.ColumnHeaderCell>
-                          <Table.ColumnHeaderCell>Balance</Table.ColumnHeaderCell>
-                          <Table.ColumnHeaderCell>Stripe</Table.ColumnHeaderCell>
-                          <Table.ColumnHeaderCell>Activity</Table.ColumnHeaderCell>
-                          <Table.ColumnHeaderCell>Priority</Table.ColumnHeaderCell>
-                        </Table.Row>
-                      </Table.Header>
-                      <Table.Body>
-                        {group.profiles.map((profile) => {
-                          const isPrimary = selectedPrimary === profile.id;
-                          const isSecondary = selectedSecondaries.includes(profile.id);
+        // Get USER info from first person with auth_user_id
+        const userInfo = uniquePersons.find(p => p.auth_user_id);
+        const phoneNumber = searchResults.search_type === 'phone' ? searchQuery :
+                           uniquePersons.find(p => p.phone)?.phone || 'Unknown';
 
-                          return (
-                            <Table.Row key={profile.id} style={{
-                              backgroundColor: isPrimary ? 'var(--green-2)' : isSecondary ? 'var(--orange-2)' : 'transparent'
-                            }}>
-                              <Table.Cell>
-                                <Checkbox
-                                  checked={isPrimary}
-                                  onCheckedChange={(checked) => {
-                                    if (checked) {
-                                      setSelectedPrimary(profile.id);
-                                      // Remove from secondaries if was there
-                                      setSelectedSecondaries(selectedSecondaries.filter(id => id !== profile.id));
-                                    } else {
-                                      setSelectedPrimary(null);
-                                    }
-                                  }}
-                                />
-                              </Table.Cell>
-                              <Table.Cell>
-                                {!isPrimary && (
-                                  <Checkbox
-                                    checked={isSecondary}
-                                    onCheckedChange={() => handleSecondaryToggle(profile.id)}
-                                  />
-                                )}
-                              </Table.Cell>
-                              <Table.Cell>
-                                <Box>
-                                  <Text weight="medium">{profile.name}</Text>
-                                  <Text size="1" color="gray" style={{ display: 'block' }}>
-                                    ID: {profile.id.slice(0, 8)}...
-                                  </Text>
-                                  <Text size="1" color="gray" style={{ display: 'block' }}>
-                                    Created: {new Date(profile.created_at).toLocaleDateString()}
-                                  </Text>
-                                </Box>
-                              </Table.Cell>
-                              <Table.Cell>
-                                <Box>
-                                  {profile.person ? (
-                                    <>
-                                      <Flex gap="2" mb="1">
-                                        {profile.can_login && (
-                                          <Badge color="green" size="1">🔐 Can Login</Badge>
-                                        )}
-                                      </Flex>
-                                      {profile.person.phone && (
-                                        <Text size="1" style={{ display: 'block' }}>
-                                          📱 {profile.person.phone}
-                                        </Text>
-                                      )}
-                                      {profile.person.email && (
-                                        <Text size="1" style={{ display: 'block' }}>
-                                          ✉️ {profile.person.email}
-                                        </Text>
-                                      )}
-                                    </>
-                                  ) : (
-                                    <Badge color="red" size="1">No Person Link</Badge>
-                                  )}
-                                </Box>
-                              </Table.Cell>
-                              <Table.Cell>
-                                {profile.outstanding_balance > 0 ? (
-                                  <Text weight="bold" color="green">
-                                    ${profile.outstanding_balance.toFixed(2)}
-                                  </Text>
-                                ) : (
-                                  <Text size="1" color="gray">$0.00</Text>
-                                )}
-                              </Table.Cell>
-                              <Table.Cell>
-                                {profile.stripe_account ? (
-                                  <Box>
-                                    <Badge color="blue" size="1">✓ Connected</Badge>
-                                    {profile.stripe_account.stripe_status && (
-                                      <Text size="1" color="gray" style={{ display: 'block' }}>
-                                        {profile.stripe_account.stripe_status}
-                                      </Text>
-                                    )}
-                                  </Box>
-                                ) : (
-                                  <Text size="1" color="gray">Not set up</Text>
-                                )}
-                              </Table.Cell>
-                              <Table.Cell>
-                                <Text size="1">{formatActivitySummary(profile.activity_counts)}</Text>
-                              </Table.Cell>
-                              <Table.Cell>
-                                <Badge color={profile.priority_score >= 7 ? 'green' : profile.priority_score >= 4 ? 'orange' : 'red'}>
-                                  {profile.priority_score}
-                                </Badge>
-                              </Table.Cell>
-                            </Table.Row>
-                          );
-                        })}
-                      </Table.Body>
-                    </Table.Root>
-                  </ScrollArea>
-                </Card>
-              ))}
+        // Check if already reconciled - find canonical profile
+        const canonicalProfile = searchResults.profiles.find(p => !p.superseded_by);
+        const supersededProfiles = searchResults.profiles.filter(p => p.superseded_by);
+        const isAlreadyReconciled = supersededProfiles.length > 0 && canonicalProfile;
 
-              {/* Orphan Profiles */}
-              {searchResults.orphan_profiles?.length > 0 && (
-                <Card size="3" mb="4">
-                  <Heading size="4" mb="3">
-                    Orphan Profiles (Not Linked to Person)
-                  </Heading>
-                  <Callout.Root color="orange" mb="3">
-                    <Callout.Icon>
-                      <InfoCircledIcon />
-                    </Callout.Icon>
-                    <Callout.Text>
-                      These profiles are not linked to any person record. Consider linking them before merging.
-                    </Callout.Text>
-                  </Callout.Root>
-                  <Table.Root>
-                    <Table.Header>
-                      <Table.Row>
-                        <Table.ColumnHeaderCell>Profile</Table.ColumnHeaderCell>
-                        <Table.ColumnHeaderCell>Activity</Table.ColumnHeaderCell>
-                        <Table.ColumnHeaderCell>Created</Table.ColumnHeaderCell>
-                      </Table.Row>
-                    </Table.Header>
-                    <Table.Body>
-                      {searchResults.orphan_profiles.map((profile) => (
-                        <Table.Row key={profile.id}>
-                          <Table.Cell>
-                            <Text weight="medium">{profile.name}</Text>
-                            <Text size="1" color="gray" style={{ display: 'block' }}>
-                              {profile.id.slice(0, 8)}...
-                            </Text>
-                          </Table.Cell>
-                          <Table.Cell>
-                            <Text size="1">{formatActivitySummary(profile.activity_counts)}</Text>
-                          </Table.Cell>
-                          <Table.Cell>
-                            <Text size="1">{new Date(profile.created_at).toLocaleDateString()}</Text>
-                          </Table.Cell>
-                        </Table.Row>
-                      ))}
-                    </Table.Body>
-                  </Table.Root>
-                </Card>
-              )}
-            </>
-          ) : (
-            <Card size="3">
-              <Flex direction="column" align="center" gap="2" py="6">
-                <CheckCircledIcon width="32" height="32" color="var(--green-9)" />
-                <Text size="4" weight="medium">No duplicates found</Text>
-                <Text size="2" color="gray">All profiles appear to be unique</Text>
+        return (
+          <>
+            {/* USER Header */}
+            <Card size="3" mb="4" style={{ backgroundColor: 'var(--blue-2)' }}>
+              <Flex direction="column" gap="2">
+                <Heading size="5">
+                  For USER {userInfo ? `(${userInfo.auth_user_id.slice(0, 8)}...)` : '(Not Linked)'} with phone number {phoneNumber}
+                </Heading>
+                {userInfo && userInfo.email && (
+                  <Text size="2" color="gray">Email: {userInfo.email}</Text>
+                )}
+                {!isAlreadyReconciled && (
+                  <Text size="2" weight="bold" color="blue">
+                    Which PERSON and ARTIST_PROFILE do you want to link?
+                  </Text>
+                )}
               </Flex>
             </Card>
-          )}
-        </>
-      )}
 
-      {/* Transfer Confirmation Dialog */}
-      <Dialog.Root open={showTransferDialog} onOpenChange={setShowTransferDialog}>
-        <Dialog.Content maxWidth="600px">
-          <Dialog.Title>Confirm Profile Data Transfer</Dialog.Title>
-          <Dialog.Description size="2" mb="4">
-            This will transfer data from secondary profiles to the primary profile. This action cannot be undone automatically.
-          </Dialog.Description>
+            {/* Reconciliation Status */}
+            {isAlreadyReconciled && (
+              <Callout.Root color="green" mb="4">
+                <Callout.Icon>
+                  <CheckCircledIcon />
+                </Callout.Icon>
+                <Callout.Text>
+                  <strong>✅ Already Reconciled!</strong> This phone number has been reconciled.
+                  Profile "{canonicalProfile.name}" (ID: {canonicalProfile.id.slice(0, 8)}...) is the CANONICAL profile.
+                  {supersededProfiles.length > 0 && ` ${supersededProfiles.length} other profile${supersededProfiles.length > 1 ? 's are' : ' is'} marked as superseded.`}
+                </Callout.Text>
+              </Callout.Root>
+            )}
 
-          {searchResults && selectedPrimary && (
-            <Box mb="4">
-              <Text weight="medium" mb="2" style={{ display: 'block' }}>
-                Primary Profile (will receive data):
-              </Text>
-              <Card size="1" mb="3" style={{ backgroundColor: 'var(--green-2)' }}>
-                {searchResults.profiles.find(p => p.id === selectedPrimary) && (
-                  <Box>
-                    <Text weight="medium">{searchResults.profiles.find(p => p.id === selectedPrimary).name}</Text>
-                    <Text size="1" color="gray" style={{ display: 'block' }}>
-                      {formatActivitySummary(searchResults.profiles.find(p => p.id === selectedPrimary).activity_counts)}
-                    </Text>
-                  </Box>
-                )}
+            {/* Summary Card */}
+            <Card size="2" mb="4">
+              <Flex gap="4" align="center">
+                <Box>
+                  <Text size="1" color="gray">Total Profiles Found</Text>
+                  <Text size="5" weight="bold">{searchResults.total_profiles}</Text>
+                </Box>
+                <Separator orientation="vertical" />
+                <Box>
+                  <Text size="1" color="gray">Unique Person Records</Text>
+                  <Text size="5" weight="bold">{uniquePersons.length}</Text>
+                </Box>
+                <Separator orientation="vertical" />
+                <Box>
+                  <Text size="1" color="gray">Total Balance Owing</Text>
+                  <Text size="5" weight="bold" color="green">
+                    ${searchResults.profiles.reduce((sum, p) => sum + (p.outstanding_balance || 0), 0).toFixed(2)}
+                  </Text>
+                </Box>
+              </Flex>
+            </Card>
+
+            {/* Two Column Selection */}
+            <Grid columns="2" gap="4" mb="4">
+              {/* Left Column: Person Selection */}
+              <Card size="3">
+                <Heading size="4" mb="3">Select PERSON to Link</Heading>
+                <RadioGroup.Root value={selectedPersonId || ''} onValueChange={setSelectedPersonId}>
+                  <Flex direction="column" gap="3">
+                    {uniquePersons.map((person) => (
+                      <Card key={person.id} size="2" style={{
+                        backgroundColor: selectedPersonId === person.id ? 'var(--green-2)' : 'transparent',
+                        cursor: 'pointer',
+                        border: selectedPersonId === person.id ? '2px solid var(--green-9)' : '1px solid var(--gray-6)'
+                      }}>
+                        <Flex gap="3" align="start">
+                          <RadioGroup.Item value={person.id} />
+                          <Box style={{ flex: 1 }}>
+                            <Flex justify="between" align="start" mb="2">
+                              <Text weight="bold" size="3">
+                                {person.name || 'Unnamed Person'}
+                              </Text>
+                              {person.has_login && (
+                                <Badge color="green" size="1">🔐 Has Login</Badge>
+                              )}
+                            </Flex>
+                            <Flex direction="column" gap="1">
+                              {person.phone && (
+                                <Text size="2">📱 {person.phone}</Text>
+                              )}
+                              {person.email && (
+                                <Text size="2">✉️ {person.email}</Text>
+                              )}
+                              <Text size="1" color="gray">
+                                Person ID: {person.id.slice(0, 8)}...
+                              </Text>
+                              {person.auth_user_id && (
+                                <Text size="1" color="gray">
+                                  User ID: {person.auth_user_id.slice(0, 8)}...
+                                </Text>
+                              )}
+                            </Flex>
+                          </Box>
+                        </Flex>
+                      </Card>
+                    ))}
+                  </Flex>
+                </RadioGroup.Root>
               </Card>
 
-              <Text weight="medium" mb="2" style={{ display: 'block' }}>
-                Secondary Profiles (data will be transferred from):
-              </Text>
-              {selectedSecondaries.map(secId => {
-                const profile = searchResults.profiles.find(p => p.id === secId);
-                return profile ? (
-                  <Card key={secId} size="1" mb="2" style={{ backgroundColor: 'var(--orange-2)' }}>
-                    <Text weight="medium">{profile.name}</Text>
-                    <Text size="1" color="gray" style={{ display: 'block' }}>
-                      {formatActivitySummary(profile.activity_counts)}
+              {/* Right Column: Artist Profile Selection */}
+              <Card size="3">
+                <Heading size="4" mb="3">Select ARTIST_PROFILE to Link</Heading>
+                <RadioGroup.Root value={selectedArtistProfileId || ''} onValueChange={setSelectedArtistProfileId}>
+                  <Flex direction="column" gap="3">
+                    {searchResults.profiles.map((profile) => {
+                      const isCanonical = !profile.superseded_by;
+                      const isSuperseded = !!profile.superseded_by;
+
+                      return (
+                        <Card key={profile.id} size="2" style={{
+                          backgroundColor: selectedArtistProfileId === profile.id ? 'var(--green-2)' :
+                                          isSuperseded ? 'var(--gray-2)' : 'transparent',
+                          cursor: 'pointer',
+                          border: selectedArtistProfileId === profile.id ? '2px solid var(--green-9)' :
+                                  isCanonical && isAlreadyReconciled ? '2px solid var(--green-7)' :
+                                  '1px solid var(--gray-6)',
+                          opacity: isSuperseded ? 0.7 : 1
+                        }}>
+                          <Flex gap="3" align="start">
+                            <RadioGroup.Item value={profile.id} disabled={isAlreadyReconciled} />
+                            <Box style={{ flex: 1 }}>
+                              <Flex justify="between" align="start" mb="2">
+                                <Box>
+                                  <Flex gap="2" align="center" mb="1">
+                                    <Text weight="bold" size="3">{profile.name}</Text>
+                                    {isCanonical && isAlreadyReconciled && (
+                                      <Badge color="green" size="1">⭐ CANONICAL</Badge>
+                                    )}
+                                    {isSuperseded && (
+                                      <Badge color="gray" size="1">Superseded</Badge>
+                                    )}
+                                  </Flex>
+                                  {profile.outstanding_balance > 0 && (
+                                    <Text size="5" weight="bold" color="green" style={{ display: 'block' }}>
+                                      💰 ${profile.outstanding_balance.toFixed(2)}
+                                    </Text>
+                                  )}
+                                </Box>
+                                {profile.person && (
+                                  <Badge size="1" color="blue">
+                                    → Person {profile.person.id.slice(0, 6)}
+                                  </Badge>
+                                )}
+                              </Flex>
+                            <Flex direction="column" gap="1">
+                              {profile.email && (
+                                <Text size="2">✉️ {profile.email}</Text>
+                              )}
+                              {profile.activity_counts.art > 0 && (
+                                <Text size="2">🎨 {profile.activity_counts.art} art pieces</Text>
+                              )}
+                              {profile.activity_counts.artist_applications > 0 && (
+                                <Text size="2">📝 {profile.activity_counts.artist_applications} applications</Text>
+                              )}
+                              {profile.activity_counts.artist_invitations > 0 && (
+                                <Text size="2">📧 {profile.activity_counts.artist_invitations} invitations</Text>
+                              )}
+                              {profile.activity_counts.artist_payments > 0 && (
+                                <Text size="2">💵 {profile.activity_counts.artist_payments} payments</Text>
+                              )}
+                              {profile.stripe_account && (
+                                <Badge color="blue" size="1">✓ Stripe Connected</Badge>
+                              )}
+                              <Text size="1" color="gray">
+                                Profile ID: {profile.id.slice(0, 8)}...
+                              </Text>
+                              <Text size="1" color="gray">
+                                Created: {new Date(profile.created_at).toLocaleDateString()}
+                              </Text>
+                              {isSuperseded && profile.superseded_by && (
+                                <Text size="1" color="orange">
+                                  → Superseded by {profile.superseded_by.slice(0, 8)}...
+                                </Text>
+                              )}
+                            </Flex>
+                          </Box>
+                        </Flex>
+                      </Card>
+                    );
+                    })}
+                  </Flex>
+                </RadioGroup.Root>
+              </Card>
+            </Grid>
+
+            {/* Reconcile Button */}
+            {selectedPersonId && selectedArtistProfileId && (
+              <Card size="3" mb="4" style={{ backgroundColor: 'var(--green-2)' }}>
+                <Flex justify="between" align="center">
+                  <Box>
+                    <Text weight="bold" size="4">Ready to Reconcile</Text>
+                    <Text size="2" color="gray">
+                      Person {selectedPersonId.slice(0, 8)}... will be linked to Artist Profile {selectedArtistProfileId.slice(0, 8)}...
                     </Text>
-                  </Card>
-                ) : null;
-              })}
+                  </Box>
+                  <Button size="3" color="green" onClick={() => setShowConfirmDialog(true)}>
+                    🔗 Reconcile for Phone {phoneNumber}
+                  </Button>
+                </Flex>
+              </Card>
+            )}
+          </>
+        );
+      })()}
 
-              <Separator my="3" />
+      {/* Confirmation Dialog */}
+      <Dialog.Root open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <Dialog.Content maxWidth="600px">
+          <Dialog.Title>Confirm Profile Reconciliation</Dialog.Title>
+          <Dialog.Description size="2" mb="4">
+            This will set the canonical USER → PERSON → ARTIST_PROFILE chain and mark other records as superseded.
+          </Dialog.Description>
 
-              <Text weight="medium" mb="2" style={{ display: 'block' }}>
-                Transfer Options:
-              </Text>
-              <Flex direction="column" gap="2">
-                <Flex gap="2" align="center">
-                  <Checkbox
-                    checked={transferOptions.art}
-                    onCheckedChange={(checked) => setTransferOptions({...transferOptions, art: checked})}
-                  />
-                  <Text size="2">Art pieces</Text>
-                </Flex>
-                <Flex gap="2" align="center">
-                  <Checkbox
-                    checked={transferOptions.invitations}
-                    onCheckedChange={(checked) => setTransferOptions({...transferOptions, invitations: checked})}
-                  />
-                  <Text size="2">Invitations</Text>
-                </Flex>
-                <Flex gap="2" align="center">
-                  <Checkbox
-                    checked={transferOptions.applications}
-                    onCheckedChange={(checked) => setTransferOptions({...transferOptions, applications: checked})}
-                  />
-                  <Text size="2">Applications</Text>
-                </Flex>
-                <Flex gap="2" align="center">
-                  <Checkbox
-                    checked={transferOptions.confirmations}
-                    onCheckedChange={(checked) => setTransferOptions({...transferOptions, confirmations: checked})}
-                  />
-                  <Text size="2">Confirmations</Text>
-                </Flex>
-                <Flex gap="2" align="center">
-                  <Checkbox
-                    checked={transferOptions.stripe_accounts}
-                    onCheckedChange={(checked) => setTransferOptions({...transferOptions, stripe_accounts: checked})}
-                  />
-                  <Text size="2">Stripe Accounts</Text>
-                </Flex>
-                <Flex gap="2" align="center">
-                  <Checkbox
-                    checked={transferOptions.payments}
-                    onCheckedChange={(checked) => setTransferOptions({...transferOptions, payments: checked})}
-                  />
-                  <Text size="2">Payment records (use with caution)</Text>
-                </Flex>
-              </Flex>
-            </Box>
-          )}
+          {searchResults && selectedPersonId && selectedArtistProfileId && (() => {
+            const selectedPerson = searchResults.profiles.find(p => p.person && p.person.id === selectedPersonId)?.person;
+            const selectedProfile = searchResults.profiles.find(p => p.id === selectedArtistProfileId);
+            const phoneNumber = searchResults.search_type === 'phone' ? searchQuery :
+                               selectedPerson?.phone || 'Unknown';
+
+            return (
+              <Box mb="4">
+                <Callout.Root color="blue" mb="3">
+                  <Callout.Icon>
+                    <InfoCircledIcon />
+                  </Callout.Icon>
+                  <Callout.Text>
+                    <strong>What will happen:</strong>
+                    <br/>1. Artist Profile "{selectedProfile?.name}" will be linked to Person {selectedPersonId?.slice(0, 8)}
+                    <br/>2. Person will be linked to USER with phone {phoneNumber}
+                    <br/>3. All other Artist Profiles will be transferred to this Person
+                    <br/>4. Other Persons will be marked as superseded
+                  </Callout.Text>
+                </Callout.Root>
+
+                <Text weight="medium" mb="2" style={{ display: 'block' }}>
+                  Selected PERSON (will be canonical):
+                </Text>
+                <Card size="1" mb="3" style={{ backgroundColor: 'var(--green-2)' }}>
+                  <Text weight="medium">{selectedPerson?.name || 'Unnamed'}</Text>
+                  <Text size="1" color="gray" style={{ display: 'block' }}>
+                    {selectedPerson?.email} • {selectedPerson?.phone}
+                  </Text>
+                  <Text size="1" color="gray" style={{ display: 'block' }}>
+                    Person ID: {selectedPersonId?.slice(0, 8)}...
+                  </Text>
+                </Card>
+
+                <Text weight="medium" mb="2" style={{ display: 'block' }}>
+                  Selected ARTIST_PROFILE (will be canonical):
+                </Text>
+                <Card size="1" mb="3" style={{ backgroundColor: 'var(--green-2)' }}>
+                  <Text weight="medium">{selectedProfile?.name}</Text>
+                  {selectedProfile?.outstanding_balance > 0 && (
+                    <Text size="2" weight="bold" color="green" style={{ display: 'block' }}>
+                      Balance: ${selectedProfile.outstanding_balance.toFixed(2)}
+                    </Text>
+                  )}
+                  <Text size="1" color="gray" style={{ display: 'block' }}>
+                    Profile ID: {selectedArtistProfileId?.slice(0, 8)}...
+                  </Text>
+                </Card>
+
+                <Separator my="3" />
+
+                <Card size="2" style={{ backgroundColor: 'var(--gray-2)' }}>
+                  <Text size="2" weight="bold" mb="2" style={{ display: 'block' }}>
+                    📋 Message for Support Team / User:
+                  </Text>
+                  <Box style={{
+                    backgroundColor: 'white',
+                    padding: '12px',
+                    borderRadius: '6px',
+                    fontFamily: 'monospace',
+                    fontSize: '12px'
+                  }}>
+                    <Text size="1" style={{ whiteSpace: 'pre-wrap', userSelect: 'all' }}>
+{`Hi ${selectedProfile?.name || 'there'},
+
+We've resolved the duplicate profile issue with your account.
+
+Your account is now properly linked to phone number ${phoneNumber}.
+
+When you log in, you'll see:
+• Your balance of $${selectedProfile?.outstanding_balance?.toFixed(2) || '0.00'}
+• All your art pieces and applications
+• Your complete event history
+
+If you have any questions, please let us know!
+
+Best regards,
+Art Battle Support Team`}
+                    </Text>
+                  </Box>
+                  <Text size="1" color="gray" mt="2" style={{ display: 'block' }}>
+                    ↑ Click text above to select and copy
+                  </Text>
+                </Card>
+              </Box>
+            );
+          })()}
 
           <Callout.Root color="red" mb="3">
             <Callout.Icon>
               <ExclamationTriangleIcon />
             </Callout.Icon>
             <Callout.Text>
-              <strong>Warning:</strong> This operation transfers data between profiles. Always verify the profiles belong to the same person before proceeding.
+              <strong>Warning:</strong> This operation modifies Person and Artist_Profile records. Make sure you've selected the correct records before proceeding.
             </Callout.Text>
           </Callout.Root>
 
@@ -493,11 +471,12 @@ const DuplicateProfileResolver = () => {
               </Button>
             </Dialog.Close>
             <Button
-              color="red"
-              onClick={performTransfer}
-              disabled={transferInProgress}
+              color="green"
+              onClick={handleReconcile}
+              disabled={reconciling}
             >
-              {transferInProgress ? 'Transferring...' : 'Confirm Transfer'}
+              {reconciling ? <ReloadIcon className="animate-spin" /> : <CheckCircledIcon />}
+              {reconciling ? 'Reconciling...' : 'Confirm Reconciliation'}
             </Button>
           </Flex>
         </Dialog.Content>
@@ -507,12 +486,12 @@ const DuplicateProfileResolver = () => {
       <Card size="2" style={{ marginTop: '2rem' }}>
         <Heading size="3" mb="2">How to Use</Heading>
         <Flex direction="column" gap="2">
-          <Text size="2">1. Search by phone number (e.g. 5148266476), email, or artist name</Text>
-          <Text size="2">2. Review duplicate groups - profiles with same person</Text>
-          <Text size="2">3. Select the PRIMARY profile (usually one with login capability)</Text>
-          <Text size="2">4. Select SECONDARY profiles to merge from</Text>
-          <Text size="2">5. Click "Merge Selected" and confirm transfer</Text>
-          <Text size="2" color="orange" weight="medium">⚠️ Priority score helps identify best primary (higher = better)</Text>
+          <Text size="2">1. <strong>Search</strong> by phone number (e.g. 5148266476), email, or artist name</Text>
+          <Text size="2">2. <strong>Select PERSON</strong> - pick the one with correct contact info and login</Text>
+          <Text size="2">3. <strong>Select ARTIST_PROFILE</strong> - pick the one with actual data/balance</Text>
+          <Text size="2">4. <strong>Click Reconcile</strong> - links them together and marks others as superseded</Text>
+          <Text size="2">5. <strong>Copy support message</strong> - use the pre-written message to inform the user</Text>
+          <Text size="2" color="orange" weight="medium">⚠️ This creates the canonical USER → PERSON → ARTIST_PROFILE chain</Text>
         </Flex>
       </Card>
     </Box>

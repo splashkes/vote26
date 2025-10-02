@@ -188,10 +188,28 @@ serve(async (req) => {
     let apiErrorMessage: string | null = null;
     let salesReportData: any = null;
     let useSalesReport = false;
+    let eventbriteEventDetails: any = null;
 
     // Organization ID already declared above (line 36)
     if (!eventbriteOrgId) {
       console.warn('⚠️  EB_ORG_ID not set, Sales Report API will likely fail');
+    }
+
+    // Fetch Event Details (to verify we have the right event)
+    const eventDetailsResponse = await fetch(
+      `https://www.eventbriteapi.com/v3/events/${event.eventbrite_id}/`,
+      {
+        headers: {
+          'Authorization': `Bearer ${eventbriteToken}`
+        }
+      }
+    );
+
+    if (eventDetailsResponse.ok) {
+      eventbriteEventDetails = await eventDetailsResponse.json();
+      console.log(`✅ Event details: ${eventbriteEventDetails.name?.text} (${eventbriteEventDetails.currency})`);
+    } else {
+      console.warn(`⚠️  Could not fetch event details (${eventDetailsResponse.status})`);
     }
 
     // Fetch Sales Report (aggregated financial data - preferred for billing accuracy)
@@ -323,6 +341,10 @@ serve(async (req) => {
         event_id: event.id,
         eid: event.eid,
         eventbrite_id: event.eventbrite_id,
+
+        // Eventbrite event verification
+        eventbrite_event_name: eventbriteEventDetails?.name?.text || null,
+        eventbrite_start_date: eventbriteEventDetails?.start?.local || null,
 
         event_data: salesReportData,
         ticket_classes: processed.ticket_classes,

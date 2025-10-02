@@ -118,7 +118,9 @@ serve(async (req) => {
           expires_at,
           api_response_status,
           ticket_classes,
-          sales_summary
+          sales_summary,
+          eventbrite_event_name,
+          eventbrite_start_date
         `)
         .eq('eid', event.eid)
         .gt('expires_at', new Date().toISOString())
@@ -450,6 +452,10 @@ serve(async (req) => {
               cache_age_hours: cacheAgeHours.toFixed(2),
               fetched_at: apiCache.fetched_at,
               expires_at: apiCache.expires_at,
+
+              // Event verification (to ensure correct Eventbrite event is linked)
+              eventbrite_event_name: apiCache.eventbrite_event_name || null,
+              eventbrite_start_date: apiCache.eventbrite_start_date || null,
 
               // Detailed breakdown
               ticket_classes: apiCache.ticket_classes || [],
