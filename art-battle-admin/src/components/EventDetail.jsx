@@ -152,6 +152,22 @@ const EventDetail = () => {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
+  // Artwork Detail Modal (for viewing bidders and sending reminders/offers)
+  const [showArtworkDetail, setShowArtworkDetail] = useState(false);
+  const [selectedArtworkForBids, setSelectedArtworkForBids] = useState(null);
+  const [artworkBids, setArtworkBids] = useState([]);
+  const [loadingArtworkBids, setLoadingArtworkBids] = useState(false);
+  const [showOfferConfirm, setShowOfferConfirm] = useState(null); // { bid, bidder, artwork }
+  const [showReminderHistory, setShowReminderHistory] = useState(null);
+  const [showOfferHistory, setShowOfferHistory] = useState(null);
+  const [reminderHistory, setReminderHistory] = useState(null);
+  const [offerHistory, setOfferHistory] = useState(null);
+  const [artworkHistoryLoading, setArtworkHistoryLoading] = useState(false);
+  const [paymentReminderLoading, setPaymentReminderLoading] = useState(false);
+  const [offerLoading, setOfferLoading] = useState(false);
+  const [lastReminderSent, setLastReminderSent] = useState({});
+  const [activeOffers, setActiveOffers] = useState({});
+
   useEffect(() => {
     if (eventId) {
       // Preload all data for fast tab switching - fetch event details first, then others
@@ -1126,6 +1142,235 @@ const EventDetail = () => {
       setSampleWorks([]);
     } finally {
       setSampleWorksLoading(false);
+    }
+  };
+
+  // Artwork Modal Functions (for viewing bidders and sending reminders/offers)
+  const fetchArtworkBids = async (artworkId) => {
+    try {
+      setLoadingArtworkBids(true);
+
+      // Fetch bids with bidder data (people table join)
+      const { data: bidsData, error: bidsError } = await supabase
+        .from('bids')
+        .select(`
+          id,
+          amount,
+          created_at,
+          people:person_id (
+            id,
+            first_name,
+            last_name,
+            name,
+            nickname,
+            email,
+            phone,
+            phone_number,
+            auth_phone
+          )
+        `)
+        .eq('art_id', artworkId)
+        .order('amount', { ascending: false });
+
+      if (bidsError) {
+        console.error('Error fetching bids:', bidsError);
+        setArtworkBids([]);
+        return;
+      }
+
+      // Format the bids data to match broadcast pattern
+      const formattedBids = (bidsData || []).map(bid => ({
+        id: bid.id,
+        amount: bid.amount,
+        created_at: bid.created_at,
+        bidder: bid.people ? {
+          id: bid.people.id,
+          first_name: bid.people.first_name,
+          last_name: bid.people.last_name,
+          name: bid.people.name,
+          nickname: bid.people.nickname,
+          email: bid.people.email,
+          phone: bid.people.phone || bid.people.phone_number || bid.people.auth_phone
+        } : null
+      }));
+
+      setArtworkBids(formattedBids);
+    } catch (err) {
+      console.error('Error fetching artwork bids:', err);
+      setArtworkBids([]);
+    } finally {
+      setLoadingArtworkBids(false);
+    }
+  };
+
+  const handleOpenArtworkDetail = async (artwork) => {
+    setSelectedArtworkForBids(artwork);
+    setShowArtworkDetail(true);
+    await fetchArtworkBids(artwork.art_id);
+  };
+
+  const handleCreateOffer = async () => {
+    if (!showOfferConfirm || !selectedArtworkForBids) return;
+
+    setOfferLoading(true);
+    try {
+      const session = await supabase.auth.getSession();
+      const response = await fetch('https://db.artb.art/functions/v1/admin-offer-to-bidder', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.data.session?.access_token}`,
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhzc2RrdWJneXF3cHl2Zmx0bnJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mjg0MzY4NzYsImV4cCI6MjA0NDAxMjg3Nn0.SRr0cu_CBDs_BNriath2HLu0msxLE3TcIPbxe7s69-8'
+        },
+        body: JSON.stringify({
+          art_id: selectedArtworkForBids.art_id,
+          bid_id: showOfferConfirm.bid.id,
+          admin_note: `Offer created via admin panel for ${showOfferConfirm.bidder.first_name || 'bidder'}`
+        })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        // Handle specific error cases
+        if (response.status === 409) {
+          alert('This bidder already has an active offer for this artwork');
+        } else if (response.status === 400 && result.error?.includes('winner')) {
+          alert('Cannot create offer for the winning bidder. Use payment reminder instead.');
+        } else if (result.error?.includes('already paid')) {
+          alert('This artwork has already been paid for');
+        } else {
+          throw new Error(result.error || 'Failed to create offer');
+        }
+        return;
+      }
+
+      // Track active offer with expiration
+      setActiveOffers(prev => ({
+        ...prev,
+        [selectedArtworkForBids.art_id]: {
+          expires_at: result.offer.expires_at,
+          bidder_name: result.offer.bidder_name,
+          bidder_id: result.offer.offered_to_person_id
+        }
+      }));
+
+      alert(`Offer sent successfully to ${showOfferConfirm.bidder.first_name || 'bidder'}!`);
+      setShowOfferConfirm(null);
+
+    } catch (error) {
+      console.error('Error creating offer:', error);
+      alert(`Error: ${error.message}`);
+    } finally {
+      setOfferLoading(false);
+    }
+  };
+
+  const handleSendPaymentReminder = async (artId, bidder) => {
+    setPaymentReminderLoading(true);
+    try {
+      const session = await supabase.auth.getSession();
+      const response = await fetch('https://db.artb.art/functions/v1/admin-send-payment-reminder', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.data.session?.access_token}`,
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhzc2RrdWJneXF3cHl2Zmx0bnJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mjg0MzY4NzYsImV4cCI6MjA0NDAxMjg3Nn0.SRr0cu_CBDs_BNriath2HLu0msxLE3TcIPbxe7s69-8'
+        },
+        body: JSON.stringify({
+          art_id: artId,
+          admin_note: `Payment reminder sent via admin panel to ${bidder.first_name || bidder.name || 'bidder'}`
+        })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        if (result.error?.includes('already paid')) {
+          alert('This artwork has already been paid for');
+        } else if (result.error?.includes('No winning bid')) {
+          alert('No winning bid found for this artwork');
+        } else {
+          throw new Error(result.error || 'Failed to send reminder');
+        }
+        return;
+      }
+
+      // Update timestamp tracking
+      setLastReminderSent(prev => ({
+        ...prev,
+        [artId]: new Date().toISOString()
+      }));
+
+      alert(`Payment reminder sent successfully to ${bidder.first_name || bidder.name || 'winner'}!`);
+
+    } catch (error) {
+      console.error('Error sending payment reminder:', error);
+      alert(`Error: ${error.message}`);
+    } finally {
+      setPaymentReminderLoading(false);
+    }
+  };
+
+  const fetchReminderHistory = async (artId) => {
+    setArtworkHistoryLoading(true);
+    try {
+      const session = await supabase.auth.getSession();
+      const response = await fetch('https://db.artb.art/functions/v1/admin-get-payment-reminder-history', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.data.session?.access_token}`,
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhzc2RrdWJneXF3cHl2Zmx0bnJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mjg0MzY4NzYsImV4cCI6MjA0NDAxMjg3Nn0.SRr0cu_CBDs_BNriath2HLu0msxLE3TcIPbxe7s69-8'
+        },
+        body: JSON.stringify({ art_id: artId })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to fetch reminder history');
+      }
+
+      setReminderHistory(result);
+      setShowReminderHistory(artId);
+
+    } catch (error) {
+      console.error('Error fetching reminder history:', error);
+      alert(`Error: ${error.message}`);
+    } finally {
+      setArtworkHistoryLoading(false);
+    }
+  };
+
+  const fetchOfferHistory = async (artId) => {
+    setArtworkHistoryLoading(true);
+    try {
+      const session = await supabase.auth.getSession();
+      const response = await fetch('https://db.artb.art/functions/v1/admin-get-offer-history', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.data.session?.access_token}`,
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhzc2RrdWJneXF3cHl2Zmx0bnJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mjg0MzY4NzYsImV4cCI6MjA0NDAxMjg3Nn0.SRr0cu_CBDs_BNriath2HLu0msxLE3TcIPbxe7s69-8'
+        },
+        body: JSON.stringify({ art_id: artId })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to fetch offer history');
+      }
+
+      setOfferHistory(result);
+      setShowOfferHistory(artId);
+
+    } catch (error) {
+      console.error('Error fetching offer history:', error);
+      alert(`Error: ${error.message}`);
+    } finally {
+      setArtworkHistoryLoading(false);
     }
   };
 
@@ -2195,6 +2440,97 @@ The Art Battle Team`);
                     )}
                   </Box>
                 </Card>
+
+                {/* Meta Advertising Row */}
+                <Card mt="3">
+                  <Box p="3">
+                    <Flex justify="between" align="center" mb="3">
+                      <Text size="2" weight="medium">
+                        Meta Advertising
+                      </Text>
+                      {metaAdsLoading && <Spinner size="1" />}
+                      {metaAdsData && (
+                        <Badge size="1" color="blue">
+                          {metaAdsData.campaigns?.length || 0} campaign{metaAdsData.campaigns?.length !== 1 ? 's' : ''}
+                        </Badge>
+                      )}
+                    </Flex>
+
+                    {metaAdsData && metaAdsData.total_spend > 0 ? (
+                      <>
+                        <Grid columns="4" gap="3" mb="3">
+                          <Box>
+                            <Text size="1" color="gray" style={{ display: 'block' }}>Total Spend</Text>
+                            <Text size="4" weight="bold" color="orange">
+                              {metaAdsData.currency} ${metaAdsData.total_spend?.toFixed(2) || '0.00'}
+                            </Text>
+                          </Box>
+                          <Box>
+                            <Text size="1" color="gray" style={{ display: 'block' }}>Total Reach</Text>
+                            <Text size="4" weight="bold">
+                              {metaAdsData.total_reach?.toLocaleString() || '0'}
+                            </Text>
+                            <Text size="1" color="gray">people reached</Text>
+                          </Box>
+                          <Box>
+                            <Text size="1" color="gray" style={{ display: 'block' }}>Total Clicks</Text>
+                            <Text size="4" weight="bold">
+                              {metaAdsData.total_clicks?.toLocaleString() || '0'}
+                            </Text>
+                            {metaAdsData.total_reach > 0 && (
+                              <Text size="1" color="gray">
+                                {((metaAdsData.total_clicks / metaAdsData.total_reach) * 100).toFixed(2)}% CTR
+                              </Text>
+                            )}
+                          </Box>
+                          <Box>
+                            <Text size="1" color="gray" style={{ display: 'block' }}>Cost Per Click</Text>
+                            <Text size="4" weight="bold">
+                              ${metaAdsData.total_clicks > 0 ? (metaAdsData.total_spend / metaAdsData.total_clicks).toFixed(2) : '0.00'}
+                            </Text>
+                          </Box>
+                        </Grid>
+
+                        {metaAdsData.campaigns && metaAdsData.campaigns.length > 0 && (
+                          <Box mt="3" style={{ borderTop: '1px solid var(--gray-5)', paddingTop: '12px' }}>
+                            <Text size="1" weight="medium" color="gray" style={{ display: 'block', marginBottom: '8px' }}>
+                              Campaigns:
+                            </Text>
+                            {metaAdsData.campaigns.map((campaign, idx) => (
+                              <Flex key={idx} justify="between" align="center" mb="1">
+                                <Text size="1">{campaign.name}</Text>
+                                <Flex gap="3" align="center">
+                                  <Text size="1" color="gray">{campaign.reach?.toLocaleString()} reach</Text>
+                                  <Text size="1" color="gray">{campaign.clicks} clicks</Text>
+                                  <Text size="1" weight="bold">${campaign.spend?.toFixed(2)}</Text>
+                                </Flex>
+                              </Flex>
+                            ))}
+                          </Box>
+                        )}
+                      </>
+                    ) : (
+                      <Grid columns="4" gap="3">
+                        <Box>
+                          <Text size="1" color="gray" style={{ display: 'block' }}>Total Spend</Text>
+                          <Text size="2" color="gray">No ad campaigns found for {event?.eid}</Text>
+                        </Box>
+                        <Box>
+                          <Text size="1" color="gray" style={{ display: 'block' }}>Total Reach</Text>
+                          <Text size="4" weight="bold">--</Text>
+                        </Box>
+                        <Box>
+                          <Text size="1" color="gray" style={{ display: 'block' }}>Total Clicks</Text>
+                          <Text size="4" weight="bold">--</Text>
+                        </Box>
+                        <Box>
+                          <Text size="1" color="gray" style={{ display: 'block' }}>Cost Per Click</Text>
+                          <Text size="4" weight="bold">--</Text>
+                        </Box>
+                      </Grid>
+                    )}
+                  </Box>
+                </Card>
               </Box>
             )}
           </Card>
@@ -2260,21 +2596,39 @@ The Art Battle Team`);
                           </Table.Cell>
                           <Table.Cell>
                             <Flex direction="column" gap="1">
-                              {artist.artworks_paid.length > 0 && (
-                                <Badge color="green" size="1">
-                                  {artist.artworks_paid.length} Paid
+                              {artist.artworks_paid.length > 0 && artist.artworks_paid.map(artwork => (
+                                <Badge
+                                  key={artwork.art_id}
+                                  color="green"
+                                  size="1"
+                                  style={{ cursor: 'pointer' }}
+                                  onClick={() => handleOpenArtworkDetail(artwork)}
+                                >
+                                  {artwork.art_code} - ${artwork.sale_price?.toFixed(2)}
                                 </Badge>
-                              )}
-                              {artist.artworks_unpaid.length > 0 && (
-                                <Badge color="orange" size="1">
-                                  {artist.artworks_unpaid.length} Unpaid
+                              ))}
+                              {artist.artworks_unpaid.length > 0 && artist.artworks_unpaid.map(artwork => (
+                                <Badge
+                                  key={artwork.art_id}
+                                  color="orange"
+                                  size="1"
+                                  style={{ cursor: 'pointer' }}
+                                  onClick={() => handleOpenArtworkDetail(artwork)}
+                                >
+                                  {artwork.art_code} - ${artwork.winning_bid?.toFixed(2)}
                                 </Badge>
-                              )}
-                              {artist.artworks_no_bid?.length > 0 && (
-                                <Badge color="gray" size="1">
-                                  {artist.artworks_no_bid.length} No Bids
+                              ))}
+                              {artist.artworks_no_bid?.length > 0 && artist.artworks_no_bid.map(artwork => (
+                                <Badge
+                                  key={artwork.art_id}
+                                  color="gray"
+                                  size="1"
+                                  style={{ cursor: 'pointer' }}
+                                  onClick={() => handleOpenArtworkDetail(artwork)}
+                                >
+                                  {artwork.art_code} - No Bids
                                 </Badge>
-                              )}
+                              ))}
                             </Flex>
                           </Table.Cell>
                           <Table.Cell>
@@ -4692,6 +5046,331 @@ The Art Battle Team`);
             >
               Record Payment
             </Button>
+          </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
+
+      {/* Artwork Detail Modal - Shows bidders and allows sending reminders/offers */}
+      <Dialog.Root open={showArtworkDetail} onOpenChange={setShowArtworkDetail}>
+        <Dialog.Content style={{ maxWidth: '700px', maxHeight: '80vh', overflow: 'auto' }}>
+          <Dialog.Title>
+            Artwork Details - {selectedArtworkForBids?.art_code}
+          </Dialog.Title>
+          <Dialog.Description>
+            View bidders and send payment reminders or offers
+          </Dialog.Description>
+
+          {selectedArtworkForBids && (
+            <Box mt="4">
+              {/* Artwork Info Card */}
+              <Card mb="4">
+                <Flex direction="column" gap="2" p="3">
+                  <Flex justify="between" align="center">
+                    <Text size="3" weight="bold">{selectedArtworkForBids.art_code}</Text>
+                    <Badge color={selectedArtworkForBids.is_paid ? 'green' : 'orange'} size="2">
+                      {selectedArtworkForBids.is_paid ? 'PAID' : 'UNPAID'}
+                    </Badge>
+                  </Flex>
+                  <Flex gap="4">
+                    <Text size="2" color="gray">Round: {selectedArtworkForBids.round}</Text>
+                    <Text size="2" color="gray">Easel: {selectedArtworkForBids.easel}</Text>
+                    <Text size="2" weight="bold">
+                      {selectedArtworkForBids.is_paid ?
+                        `Sale Price: $${selectedArtworkForBids.sale_price?.toFixed(2)}` :
+                        `Winning Bid: $${selectedArtworkForBids.winning_bid?.toFixed(2)}`
+                      }
+                    </Text>
+                  </Flex>
+                  {selectedArtworkForBids.is_paid && selectedArtworkForBids.payment_in && (
+                    <Text size="1" color="green">
+                      Paid {new Date(selectedArtworkForBids.payment_in.paid_at).toLocaleDateString()} via {selectedArtworkForBids.payment_in.method}
+                    </Text>
+                  )}
+                </Flex>
+              </Card>
+
+              {/* Bidders List */}
+              <Text size="2" weight="bold" mb="2" style={{ display: 'block' }}>
+                All Bidders ({artworkBids.length})
+              </Text>
+
+              {loadingArtworkBids ? (
+                <Flex justify="center" p="4">
+                  <Text color="gray">Loading bidders...</Text>
+                </Flex>
+              ) : artworkBids.length === 0 ? (
+                <Flex justify="center" p="4">
+                  <Text color="gray">No bids found for this artwork</Text>
+                </Flex>
+              ) : (
+                <Flex direction="column" gap="2">
+                  {artworkBids.map((bid, index) => (
+                    <Card key={bid.id}>
+                      <Flex direction="column" gap="2" p="3">
+                        <Flex justify="between" align="start">
+                          <Flex direction="column" gap="1">
+                            <Flex align="center" gap="2">
+                              {index === 0 && (
+                                <Badge color="green" size="1">WINNER</Badge>
+                              )}
+                              <Text size="3" weight="bold">
+                                {bid.bidder?.first_name ?
+                                  `${bid.bidder.first_name} ${bid.bidder.last_name || ''}`.trim() :
+                                  bid.bidder?.name || bid.bidder?.nickname || bid.bidder?.email?.split('@')[0] || 'Unknown Bidder'
+                                }
+                              </Text>
+                            </Flex>
+
+                            {/* Contact Info */}
+                            <Flex direction="column" gap="0">
+                              {bid.bidder?.email && (
+                                <Text size="2" color="gray">📧 {bid.bidder.email}</Text>
+                              )}
+                              {bid.bidder?.phone && (
+                                <Text size="2" color="gray">📱 {bid.bidder.phone}</Text>
+                              )}
+                            </Flex>
+                          </Flex>
+
+                          <Flex direction="column" align="end" gap="1">
+                            <Text size="4" weight="bold" color="green">
+                              ${bid.amount.toFixed(2)}
+                            </Text>
+                            <Text size="1" color="gray">
+                              {new Date(bid.created_at).toLocaleString()}
+                            </Text>
+                          </Flex>
+                        </Flex>
+
+                        {/* Action Buttons */}
+                        <Flex gap="2" mt="2">
+                          {index === 0 ? (
+                            // Winner gets payment reminder button
+                            <>
+                              <Button
+                                size="2"
+                                onClick={() => handleSendPaymentReminder(selectedArtworkForBids.art_id, bid.bidder)}
+                                disabled={paymentReminderLoading || selectedArtworkForBids.is_paid}
+                              >
+                                {paymentReminderLoading ? 'Sending...' :
+                                 lastReminderSent[selectedArtworkForBids.art_id] ?
+                                 'Send Another Reminder' : 'Send Payment Reminder'}
+                              </Button>
+                              <Button
+                                size="2"
+                                variant="soft"
+                                onClick={() => fetchReminderHistory(selectedArtworkForBids.art_id)}
+                              >
+                                Reminder History
+                              </Button>
+                            </>
+                          ) : (
+                            // Non-winners get offer button
+                            <>
+                              <Button
+                                size="2"
+                                color="orange"
+                                onClick={() => setShowOfferConfirm({ bid: { id: bid.id, amount: bid.amount }, bidder: bid.bidder })}
+                                disabled={selectedArtworkForBids.is_paid || activeOffers[selectedArtworkForBids.art_id]?.bidder_id === bid.bidder?.id}
+                              >
+                                {activeOffers[selectedArtworkForBids.art_id]?.bidder_id === bid.bidder?.id ?
+                                 'Offer Active' : 'Create Offer'}
+                              </Button>
+                              <Button
+                                size="2"
+                                variant="soft"
+                                onClick={() => fetchOfferHistory(selectedArtworkForBids.art_id)}
+                              >
+                                Offer History
+                              </Button>
+                            </>
+                          )}
+                        </Flex>
+
+                        {/* Show active offer info if exists for this bidder */}
+                        {activeOffers[selectedArtworkForBids.art_id]?.bidder_id === bid.bidder?.id && (
+                          <Text size="1" color="orange" mt="1">
+                            Active offer expires: {new Date(activeOffers[selectedArtworkForBids.art_id].expires_at).toLocaleString()}
+                          </Text>
+                        )}
+
+                        {/* Show last reminder sent for winner */}
+                        {index === 0 && lastReminderSent[selectedArtworkForBids.art_id] && (
+                          <Text size="1" color="green" mt="1">
+                            Last reminder sent: {new Date(lastReminderSent[selectedArtworkForBids.art_id]).toLocaleString()}
+                          </Text>
+                        )}
+                      </Flex>
+                    </Card>
+                  ))}
+                </Flex>
+              )}
+            </Box>
+          )}
+
+          <Flex gap="3" mt="4" justify="end">
+            <Dialog.Close>
+              <Button variant="soft" color="gray">Close</Button>
+            </Dialog.Close>
+          </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
+
+      {/* Offer Confirmation Dialog */}
+      <Dialog.Root open={!!showOfferConfirm} onOpenChange={(open) => !open && setShowOfferConfirm(null)}>
+        <Dialog.Content style={{ maxWidth: '450px' }}>
+          <Dialog.Title>Create Timed Offer</Dialog.Title>
+          <Dialog.Description>
+            Create a 48-hour offer for {showOfferConfirm?.bidder?.first_name || 'this bidder'} to purchase this artwork?
+          </Dialog.Description>
+
+          {showOfferConfirm && (
+            <Box mt="4">
+              <Card>
+                <Flex direction="column" gap="2" p="3">
+                  <Text size="2">
+                    <strong>Bidder:</strong> {showOfferConfirm.bidder?.first_name || 'Unknown'} {showOfferConfirm.bidder?.last_name || ''}
+                  </Text>
+                  <Text size="2">
+                    <strong>Bid Amount:</strong> ${showOfferConfirm.bid?.amount?.toFixed(2)}
+                  </Text>
+                  <Text size="2">
+                    <strong>Email:</strong> {showOfferConfirm.bidder?.email || 'N/A'}
+                  </Text>
+                  <Text size="2">
+                    <strong>Phone:</strong> {showOfferConfirm.bidder?.phone || 'N/A'}
+                  </Text>
+                </Flex>
+              </Card>
+
+              <Text size="2" color="gray" mt="3" style={{ display: 'block' }}>
+                This will send an email and SMS notification to the bidder with a 48-hour deadline to purchase the artwork.
+              </Text>
+            </Box>
+          )}
+
+          <Flex gap="3" mt="4" justify="end">
+            <Button
+              variant="soft"
+              color="gray"
+              onClick={() => setShowOfferConfirm(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              color="orange"
+              onClick={handleCreateOffer}
+              disabled={offerLoading}
+            >
+              {offerLoading ? 'Sending...' : 'Send Offer'}
+            </Button>
+          </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
+
+      {/* Reminder History Dialog */}
+      <Dialog.Root open={!!showReminderHistory} onOpenChange={(open) => !open && setShowReminderHistory(null)}>
+        <Dialog.Content style={{ maxWidth: '600px', maxHeight: '80vh', overflow: 'auto' }}>
+          <Dialog.Title>Payment Reminder History</Dialog.Title>
+          <Dialog.Description>
+            All payment reminders sent for this artwork
+          </Dialog.Description>
+
+          <Box mt="4">
+            {artworkHistoryLoading ? (
+              <Flex justify="center" p="4">
+                <Text color="gray">Loading history...</Text>
+              </Flex>
+            ) : reminderHistory?.reminders?.length > 0 ? (
+              <Flex direction="column" gap="2">
+                {reminderHistory.reminders.map((reminder, index) => (
+                  <Card key={index}>
+                    <Flex direction="column" gap="1" p="3">
+                      <Text size="2" weight="bold">
+                        {new Date(reminder.sent_at).toLocaleString()}
+                      </Text>
+                      <Text size="2" color="gray">
+                        Method: {reminder.method || 'SMS'}
+                      </Text>
+                      {reminder.admin_note && (
+                        <Text size="1" color="gray">
+                          Note: {reminder.admin_note}
+                        </Text>
+                      )}
+                    </Flex>
+                  </Card>
+                ))}
+              </Flex>
+            ) : (
+              <Text color="gray">No payment reminders sent yet</Text>
+            )}
+          </Box>
+
+          <Flex gap="3" mt="4" justify="end">
+            <Dialog.Close>
+              <Button variant="soft" color="gray">Close</Button>
+            </Dialog.Close>
+          </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
+
+      {/* Offer History Dialog */}
+      <Dialog.Root open={!!showOfferHistory} onOpenChange={(open) => !open && setShowOfferHistory(null)}>
+        <Dialog.Content style={{ maxWidth: '600px', maxHeight: '80vh', overflow: 'auto' }}>
+          <Dialog.Title>Offer History</Dialog.Title>
+          <Dialog.Description>
+            All offers sent for this artwork
+          </Dialog.Description>
+
+          <Box mt="4">
+            {artworkHistoryLoading ? (
+              <Flex justify="center" p="4">
+                <Text color="gray">Loading history...</Text>
+              </Flex>
+            ) : offerHistory?.offers?.length > 0 ? (
+              <Flex direction="column" gap="2">
+                {offerHistory.offers.map((offer, index) => (
+                  <Card key={index}>
+                    <Flex direction="column" gap="1" p="3">
+                      <Flex justify="between" align="center">
+                        <Text size="2" weight="bold">
+                          {offer.bidder_name || 'Unknown Bidder'}
+                        </Text>
+                        <Badge
+                          color={offer.status === 'active' ? 'green' :
+                                 offer.status === 'expired' ? 'gray' :
+                                 offer.status === 'accepted' ? 'blue' : 'red'}
+                        >
+                          {offer.status?.toUpperCase()}
+                        </Badge>
+                      </Flex>
+                      <Text size="2" color="gray">
+                        Sent: {new Date(offer.sent_at).toLocaleString()}
+                      </Text>
+                      <Text size="2" color="gray">
+                        Expires: {new Date(offer.expires_at).toLocaleString()}
+                      </Text>
+                      <Text size="2" weight="bold">
+                        Amount: ${offer.amount?.toFixed(2)}
+                      </Text>
+                      {offer.admin_note && (
+                        <Text size="1" color="gray">
+                          Note: {offer.admin_note}
+                        </Text>
+                      )}
+                    </Flex>
+                  </Card>
+                ))}
+              </Flex>
+            ) : (
+              <Text color="gray">No offers sent yet</Text>
+            )}
+          </Box>
+
+          <Flex gap="3" mt="4" justify="end">
+            <Dialog.Close>
+              <Button variant="soft" color="gray">Close</Button>
+            </Dialog.Close>
           </Flex>
         </Dialog.Content>
       </Dialog.Root>
