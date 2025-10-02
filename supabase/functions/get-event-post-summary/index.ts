@@ -368,51 +368,92 @@ serve(async (req) => {
           sample_thumbnails: noBidThumbnails,
         },
 
-        ticket_sales: (() => {
+        ticket_sales: await (async () => {
           // Priority 1: Use fresh Eventbrite API cache data (< 6 hours old, quality >= 70)
-          if (eventbriteApiCache) {
-            const cacheAgeHours = (Date.now() - new Date(eventbriteApiCache.fetched_at).getTime()) / (1000 * 60 * 60);
+          let apiCache = eventbriteApiCache;
+
+          // If no valid cache, fetch fresh data from Eventbrite API
+          if (!apiCache) {
+            console.log(`No valid Eventbrite cache for ${event.eid}, fetching fresh data...`);
+            try {
+              const fetchResponse = await fetch(
+                `${Deno.env.get('SUPABASE_URL')}/functions/v1/fetch-eventbrite-data`,
+                {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': req.headers.get('Authorization') || '',
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({ eid: event.eid, fetch_reason: 'post_event_summary' })
+                }
+              );
+
+              if (fetchResponse.ok) {
+                const fetchData = await fetchResponse.json();
+                console.log(`✅ Fresh Eventbrite data fetched for ${event.eid}`);
+
+                // Query cache again to get the newly inserted data
+                const { data: freshCache } = await supabaseClient
+                  .from('eventbrite_api_cache')
+                  .select('*')
+                  .eq('eid', event.eid)
+                  .order('fetched_at', { ascending: false })
+                  .limit(1)
+                  .single();
+
+                apiCache = freshCache;
+              } else {
+                console.error(`Failed to fetch Eventbrite data: ${fetchResponse.status}`);
+              }
+            } catch (error) {
+              console.error(`Error fetching Eventbrite data:`, error);
+            }
+          }
+
+          // If we have API cache (either existing or freshly fetched), use it
+          if (apiCache) {
+            const cacheAgeHours = (Date.now() - new Date(apiCache.fetched_at).getTime()) / (1000 * 60 * 60);
 
             return {
               // Basic metrics
-              total_sold: eventbriteApiCache.total_tickets_sold || 0,
-              total_capacity: eventbriteApiCache.total_capacity || 0,
-              percentage_sold: eventbriteApiCache.total_capacity > 0
-                ? ((eventbriteApiCache.total_tickets_sold / eventbriteApiCache.total_capacity) * 100).toFixed(1)
+              total_sold: apiCache.total_tickets_sold || 0,
+              total_capacity: apiCache.total_capacity || 0,
+              percentage_sold: apiCache.total_capacity > 0
+                ? ((apiCache.total_tickets_sold / apiCache.total_capacity) * 100).toFixed(1)
                 : 0,
 
               // Financial breakdown (billing-accurate)
-              gross_revenue: parseFloat(eventbriteApiCache.gross_revenue || 0),
-              ticket_revenue: parseFloat(eventbriteApiCache.ticket_revenue || 0),
-              taxes_collected: parseFloat(eventbriteApiCache.taxes_collected || 0),
-              eventbrite_fees: parseFloat(eventbriteApiCache.eventbrite_fees || 0),
-              payment_processing_fees: parseFloat(eventbriteApiCache.payment_processing_fees || 0),
-              total_fees: parseFloat(eventbriteApiCache.total_fees || 0),
-              net_deposit: parseFloat(eventbriteApiCache.net_deposit || 0),
+              gross_revenue: parseFloat(apiCache.gross_revenue || 0),
+              ticket_revenue: parseFloat(apiCache.ticket_revenue || 0),
+              taxes_collected: parseFloat(apiCache.taxes_collected || 0),
+              eventbrite_fees: parseFloat(apiCache.eventbrite_fees || 0),
+              payment_processing_fees: parseFloat(apiCache.payment_processing_fees || 0),
+              total_fees: parseFloat(apiCache.total_fees || 0),
+              net_deposit: parseFloat(apiCache.net_deposit || 0),
 
               // Calculated metrics
-              average_ticket_price: eventbriteApiCache.total_tickets_sold > 0
-                ? (eventbriteApiCache.ticket_revenue / eventbriteApiCache.total_tickets_sold).toFixed(2)
+              average_ticket_price: apiCache.total_tickets_sold > 0
+                ? (apiCache.ticket_revenue / apiCache.total_tickets_sold).toFixed(2)
                 : 0,
-              average_net_per_ticket: eventbriteApiCache.total_tickets_sold > 0
-                ? (eventbriteApiCache.net_deposit / eventbriteApiCache.total_tickets_sold).toFixed(2)
+              average_net_per_ticket: apiCache.total_tickets_sold > 0
+                ? (apiCache.net_deposit / apiCache.total_tickets_sold).toFixed(2)
                 : 0,
 
               // Currency
-              currency_code: eventbriteApiCache.currency_code || currencyCode,
+              currency_code: apiCache.currency_code || currencyCode,
               currency_symbol: currencySymbol,
 
               // Metadata
-              data_source: 'Eventbrite API (cached)',
-              data_quality_score: eventbriteApiCache.data_quality_score,
-              api_response_status: eventbriteApiCache.api_response_status,
+              data_source: 'Eventbrite API',
+              data_quality_score: apiCache.data_quality_score,
+              api_response_status: apiCache.api_response_status,
               cache_age_hours: cacheAgeHours.toFixed(2),
-              fetched_at: eventbriteApiCache.fetched_at,
-              expires_at: eventbriteApiCache.expires_at,
+              fetched_at: apiCache.fetched_at,
+              expires_at: apiCache.expires_at,
 
               // Detailed breakdown
-              ticket_classes: eventbriteApiCache.ticket_classes || [],
-              sales_summary: eventbriteApiCache.sales_summary || {},
+              ticket_classes: apiCache.ticket_classes || [],
+              sales_summary: apiCache.sales_summary || {},
             };
           }
 
@@ -467,7 +508,7 @@ serve(async (req) => {
             door_sales: 0, // No door sales data in cached_event_data
             total_capacity: cachedEventData.ticket_capacity || 0,
             venue_capacity: cachedEventData.venue_capacity || 0,
-            data_source: `Legacy Eventbrite Cache (CAUTION: may be inaccurate)`,
+            data_source: `Legacy Eventbrite Cache`,
             last_updated: cachedEventData.last_updated,
             raw_data: {
               current_sales: cachedEventData.current_sales,
