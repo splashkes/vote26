@@ -20,14 +20,16 @@ import {
   Select,
   AlertDialog,
   Callout,
-  IconButton
+  IconButton,
+  Skeleton,
+  TextField
 } from '@radix-ui/themes';
 import { supabase } from '../lib/supabase';
 import { DebugField, DebugObjectViewer } from './DebugComponents';
 import { debugObject } from '../lib/debugHelpers';
-import { 
-  PersonIcon, 
-  EnvelopeClosedIcon, 
+import {
+  PersonIcon,
+  EnvelopeClosedIcon,
   ChatBubbleIcon,
   Cross2Icon,
   CalendarIcon,
@@ -53,7 +55,9 @@ import {
   ReloadIcon,
   TrashIcon,
   ChevronDownIcon,
-  ChevronUpIcon
+  ChevronUpIcon,
+  UpdateIcon,
+  PlusIcon
 } from '@radix-ui/react-icons';
 import { getRFMScore, getBatchRFMScores, getSegmentColor, getSegmentTier } from '../lib/rfmScoring';
 import PersonTile from './PersonTile';
@@ -111,8 +115,23 @@ const EventDetail = () => {
   const [postEventLoading, setPostEventLoading] = useState(false);
   const [unpaidModalOpen, setUnpaidModalOpen] = useState(false);
   const [noBidModalOpen, setNoBidModalOpen] = useState(false);
+  const [metaAdsData, setMetaAdsData] = useState(null);
+  const [metaAdsLoading, setMetaAdsLoading] = useState(false);
   const [artistModalOpen, setArtistModalOpen] = useState(false);
   const [artistModalType, setArtistModalType] = useState(''); // 'application', 'invitation', 'confirmation'
+
+  // Artist Payment Detail Modal
+  const [showArtistDetail, setShowArtistDetail] = useState(false);
+  const [selectedArtistForPayment, setSelectedArtistForPayment] = useState(null);
+  const [accountLedger, setAccountLedger] = useState(null);
+  const [loadingLedger, setLoadingLedger] = useState(false);
+  const [stripeDetails, setStripeDetails] = useState(null);
+  const [loadingStripe, setLoadingStripe] = useState(false);
+  const [showManualPayment, setShowManualPayment] = useState(false);
+  const [manualPaymentAmount, setManualPaymentAmount] = useState('');
+  const [manualPaymentMethod, setManualPaymentMethod] = useState('bank_transfer');
+  const [manualPaymentNotes, setManualPaymentNotes] = useState('');
+  const [submittingManualPayment, setSubmittingManualPayment] = useState(false);
   const [artistPerformanceData, setArtistPerformanceData] = useState(new Map());
   const [sampleWorks, setSampleWorks] = useState([]);
   const [sampleWorksLoading, setSampleWorksLoading] = useState(false);
@@ -190,6 +209,7 @@ const EventDetail = () => {
 
         if (isCompleted) {
           promises.push(fetchPostEventData());
+          promises.push(fetchMetaAdsData());
         }
       }
 
@@ -612,6 +632,171 @@ const EventDetail = () => {
     }
   };
 
+  const formatCurrency = (amount, currency = 'USD') => {
+    // Validate and clean the currency code
+    let cleanCurrency = currency;
+
+    if (!cleanCurrency || typeof cleanCurrency !== 'string') {
+      cleanCurrency = 'USD';
+    }
+
+    // Remove any extra whitespace and convert to uppercase
+    cleanCurrency = cleanCurrency.trim().toUpperCase();
+
+    // Try to format with the provided currency
+    try {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: cleanCurrency
+      }).format(amount);
+    } catch (e) {
+      // If currency is invalid, fall back to USD
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD'
+      }).format(amount);
+    }
+  };
+
+  const openArtistPaymentDetail = async (artist) => {
+    // Set the selected artist for payment details
+    setSelectedArtistForPayment(artist);
+    setStripeDetails(null);
+    setAccountLedger(null);
+    setLoadingStripe(false);
+    setLoadingLedger(true);
+
+    // Open modal with loading state
+    setShowArtistDetail(true);
+
+    try {
+      // Fetch both Stripe details and account ledger in parallel
+      const promises = [];
+
+      // Fetch Stripe details if account exists
+      if (artist.stripe_recipient_id) {
+        promises.push(fetchStripeDetails(artist.stripe_recipient_id, artist.artist_id));
+      }
+
+      // Always fetch account ledger
+      promises.push(fetchArtistAccountLedger(false, artist.artist_id));
+
+      // Wait for all data to load
+      await Promise.all(promises);
+    } catch (error) {
+      console.error('Error loading artist details:', error);
+      setError('Failed to load artist details: ' + error.message);
+    }
+  };
+
+  const fetchStripeDetails = async (stripeAccountId, artistProfileId) => {
+    try {
+      setLoadingStripe(true);
+
+      const { data, error } = await supabase.functions.invoke('stripe-account-details', {
+        body: {
+          stripe_account_id: stripeAccountId,
+          artist_profile_id: artistProfileId
+        }
+      });
+
+      if (error) throw error;
+
+      setStripeDetails(data.account_details);
+    } catch (err) {
+      console.error('Failed to fetch Stripe details:', err);
+    } finally {
+      setLoadingStripe(false);
+    }
+  };
+
+  const fetchArtistAccountLedger = async (includeZeroEntry = false, artistProfileId = null) => {
+    const profileId = artistProfileId || selectedArtistForPayment?.artist_id;
+
+    if (!profileId) {
+      console.error('No artist profile ID available for ledger fetch');
+      return;
+    }
+
+    try {
+      setLoadingLedger(true);
+
+      const { data, error } = await supabase.functions.invoke('artist-account-ledger', {
+        body: {
+          artist_profile_id: profileId,
+          include_zero_entry: includeZeroEntry
+        }
+      });
+
+      if (error) throw error;
+
+      setAccountLedger(data);
+    } catch (err) {
+      console.error('Failed to load account ledger:', err);
+    } finally {
+      setLoadingLedger(false);
+    }
+  };
+
+  const handleManualPayment = async () => {
+    try {
+      setSubmittingManualPayment(true);
+
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+
+      const createdBy = user?.email || 'admin@artbattle.com';
+      const paymentAmount = parseFloat(manualPaymentAmount);
+
+      if (isNaN(paymentAmount) || paymentAmount <= 0) {
+        throw new Error('Invalid payment amount');
+      }
+
+      const { data, error } = await supabase
+        .from('artist_payments')
+        .insert({
+          artist_profile_id: selectedArtistForPayment.artist_id,
+          gross_amount: paymentAmount,
+          net_amount: paymentAmount,
+          platform_fee: 0.00,
+          stripe_fee: 0.00,
+          currency: artistPaymentsData[0]?.totals?.primary_currency || 'USD',
+          description: manualPaymentNotes || 'Manual payment recorded via admin panel',
+          payment_method: manualPaymentMethod,
+          reference: null,
+          status: 'paid',
+          payment_type: 'manual',
+          created_by: createdBy,
+          metadata: {
+            created_via: 'admin_panel',
+            created_at: new Date().toISOString(),
+            admin_user: createdBy,
+            event_id: event.id,
+            event_eid: event.eid
+          }
+        });
+
+      if (error) throw error;
+
+      // Close manual payment modal
+      setShowManualPayment(false);
+      setManualPaymentAmount('');
+      setManualPaymentNotes('');
+      setManualPaymentMethod('bank_transfer');
+
+      // Refresh ledger
+      await fetchArtistAccountLedger(false, selectedArtistForPayment.artist_id);
+
+      // Refresh artist payments list
+      await fetchArtistPayments();
+    } catch (err) {
+      console.error('Failed to create manual payment:', err);
+      setError('Failed to create manual payment: ' + err.message);
+    } finally {
+      setSubmittingManualPayment(false);
+    }
+  };
+
   const fetchPostEventData = async () => {
     if (!event?.id) return;
 
@@ -642,6 +827,28 @@ const EventDetail = () => {
       console.error('Error fetching post-event data:', err);
     } finally {
       setPostEventLoading(false);
+    }
+  };
+
+  const fetchMetaAdsData = async () => {
+    if (!event?.eid) return;
+
+    setMetaAdsLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke(`meta-ads-report/${event.eid}`);
+
+      if (error) {
+        console.error('Error fetching Meta ads data:', error);
+        setMetaAdsData(null);
+        return;
+      }
+
+      setMetaAdsData(data);
+    } catch (err) {
+      console.error('Error fetching Meta ads data:', err);
+      setMetaAdsData(null);
+    } finally {
+      setMetaAdsLoading(false);
     }
   };
 
@@ -1894,27 +2101,98 @@ The Art Battle Team`);
                 {/* Ticket Sales Row */}
                 <Card mt="3">
                   <Box p="3">
-                    <Text size="2" weight="medium" mb="3" style={{ display: 'block' }}>
-                      Ticket Sales
-                    </Text>
-                    <Grid columns="4" gap="3">
-                      <Box>
-                        <Text size="1" color="gray" style={{ display: 'block' }}>Total Sold</Text>
-                        <Text size="4" weight="bold">--</Text>
-                      </Box>
-                      <Box>
-                        <Text size="1" color="gray" style={{ display: 'block' }}>Total Revenue</Text>
-                        <Text size="4" weight="bold" color="green">--</Text>
-                      </Box>
-                      <Box>
-                        <Text size="1" color="gray" style={{ display: 'block' }}>Online Sales</Text>
-                        <Text size="4" weight="bold">--</Text>
-                      </Box>
-                      <Box>
-                        <Text size="1" color="gray" style={{ display: 'block' }}>Door Sales</Text>
-                        <Text size="4" weight="bold">--</Text>
-                      </Box>
-                    </Grid>
+                    <Flex justify="between" align="center" mb="3">
+                      <Text size="2" weight="medium">
+                        Ticket Sales
+                      </Text>
+                      {postEventData?.ticket_sales?.data_source && (
+                        <Badge size="1" color={postEventData.ticket_sales.data_source.includes('API') ? 'green' : 'yellow'}>
+                          {postEventData.ticket_sales.data_source}
+                        </Badge>
+                      )}
+                    </Flex>
+
+                    {postEventData?.ticket_sales ? (
+                      <>
+                        <Grid columns="4" gap="3" mb="3">
+                          <Box>
+                            <Text size="1" color="gray" style={{ display: 'block' }}>Tickets Sold</Text>
+                            <Text size="4" weight="bold">
+                              {postEventData.ticket_sales.total_sold || 0}
+                              {postEventData.ticket_sales.total_capacity > 0 && (
+                                <Text size="2" color="gray"> / {postEventData.ticket_sales.total_capacity}</Text>
+                              )}
+                            </Text>
+                            {postEventData.ticket_sales.percentage_sold && (
+                              <Text size="1" color="gray">{postEventData.ticket_sales.percentage_sold}% sold</Text>
+                            )}
+                          </Box>
+                          <Box>
+                            <Text size="1" color="gray" style={{ display: 'block' }}>Gross Revenue</Text>
+                            <Text size="4" weight="bold" color="green">
+                              {postEventData.ticket_sales.currency_symbol || postEventData.auction_summary?.currency_symbol || '$'}
+                              {postEventData.ticket_sales.gross_revenue?.toFixed(2) || postEventData.ticket_sales.total_revenue?.toFixed(2) || '0.00'}
+                            </Text>
+                          </Box>
+                          <Box>
+                            <Text size="1" color="gray" style={{ display: 'block' }}>Total Fees</Text>
+                            <Text size="4" weight="bold" color="red">
+                              {postEventData.ticket_sales.currency_symbol || postEventData.auction_summary?.currency_symbol || '$'}
+                              {postEventData.ticket_sales.total_fees?.toFixed(2) || '0.00'}
+                            </Text>
+                            {postEventData.ticket_sales.eventbrite_fees > 0 && (
+                              <Text size="1" color="gray">
+                                EB: {postEventData.ticket_sales.currency_symbol}{postEventData.ticket_sales.eventbrite_fees.toFixed(2)}
+                              </Text>
+                            )}
+                          </Box>
+                          <Box>
+                            <Text size="1" color="gray" style={{ display: 'block' }}>Net Deposit</Text>
+                            <Text size="4" weight="bold" color="blue">
+                              {postEventData.ticket_sales.currency_symbol || postEventData.auction_summary?.currency_symbol || '$'}
+                              {postEventData.ticket_sales.net_deposit?.toFixed(2) || '0.00'}
+                            </Text>
+                            {postEventData.ticket_sales.average_net_per_ticket && (
+                              <Text size="1" color="gray">
+                                Avg: {postEventData.ticket_sales.currency_symbol}{postEventData.ticket_sales.average_net_per_ticket}/ticket
+                              </Text>
+                            )}
+                          </Box>
+                        </Grid>
+
+                        {postEventData.ticket_sales.data_quality_score && (
+                          <Flex gap="2" align="center" mt="2">
+                            <Text size="1" color="gray">
+                              Quality: {postEventData.ticket_sales.data_quality_score}/100
+                            </Text>
+                            {postEventData.ticket_sales.cache_age_hours && (
+                              <Text size="1" color="gray">
+                                • Cache: {parseFloat(postEventData.ticket_sales.cache_age_hours).toFixed(1)}h old
+                              </Text>
+                            )}
+                          </Flex>
+                        )}
+                      </>
+                    ) : (
+                      <Grid columns="4" gap="3">
+                        <Box>
+                          <Text size="1" color="gray" style={{ display: 'block' }}>Total Sold</Text>
+                          <Text size="4" weight="bold">--</Text>
+                        </Box>
+                        <Box>
+                          <Text size="1" color="gray" style={{ display: 'block' }}>Total Revenue</Text>
+                          <Text size="4" weight="bold" color="green">--</Text>
+                        </Box>
+                        <Box>
+                          <Text size="1" color="gray" style={{ display: 'block' }}>Fees</Text>
+                          <Text size="4" weight="bold">--</Text>
+                        </Box>
+                        <Box>
+                          <Text size="1" color="gray" style={{ display: 'block' }}>Net Deposit</Text>
+                          <Text size="4" weight="bold">--</Text>
+                        </Box>
+                      </Grid>
+                    )}
                   </Box>
                 </Card>
               </Box>
@@ -1969,7 +2247,14 @@ The Art Battle Team`);
                         <Table.Row key={artist.artist_id}>
                           <Table.Cell>
                             <Flex direction="column" gap="0">
-                              <Text size="2" weight="bold">{artist.artist_name}</Text>
+                              <Text
+                                size="2"
+                                weight="bold"
+                                style={{ cursor: 'pointer', color: 'var(--accent-9)' }}
+                                onClick={() => openArtistPaymentDetail(artist)}
+                              >
+                                {artist.artist_name}
+                              </Text>
                               <Text size="1" color="gray">#{artist.artist_number}</Text>
                             </Flex>
                           </Table.Cell>
@@ -4106,6 +4391,308 @@ The Art Battle Team`);
               </Table.Body>
             </Table.Root>
           </ScrollArea>
+        </Dialog.Content>
+      </Dialog.Root>
+
+      {/* Artist Payment Detail Modal */}
+      <Dialog.Root open={showArtistDetail} onOpenChange={setShowArtistDetail}>
+        <Dialog.Content style={{ maxWidth: '1100px', maxHeight: '95vh', overflow: 'auto' }}>
+          <Dialog.Title>
+            {selectedArtistForPayment?.artist_name} - Payment Details
+          </Dialog.Title>
+
+          <Box style={{ maxHeight: 'none', padding: '0' }}>
+            {selectedArtistForPayment && (
+              <Flex direction="column" gap="4" mt="4">
+
+                {/* Artist Info */}
+                <Card>
+                  <Heading size="3" mb="3">Artist Information</Heading>
+                  <Flex direction="column" gap="2">
+                    <Flex justify="between">
+                      <Text weight="medium">Name:</Text>
+                      <Text>{selectedArtistForPayment.artist_name}</Text>
+                    </Flex>
+                    <Flex justify="between">
+                      <Text weight="medium">Entry ID:</Text>
+                      <Badge>{selectedArtistForPayment.entry_id}</Badge>
+                    </Flex>
+                    <Flex justify="between">
+                      <Text weight="medium">Email:</Text>
+                      <Text>{selectedArtistForPayment.email}</Text>
+                    </Flex>
+                  </Flex>
+                </Card>
+
+                {/* Stripe Account Details */}
+                {selectedArtistForPayment.stripe_recipient_id && (
+                  <Card>
+                    <Flex justify="between" align="center" mb="3">
+                      <Heading size="3">Stripe Account Details</Heading>
+                      <Button
+                        size="1"
+                        variant="soft"
+                        loading={loadingStripe}
+                        onClick={() => fetchStripeDetails(selectedArtistForPayment.stripe_recipient_id, selectedArtistForPayment.artist_id)}
+                      >
+                        <UpdateIcon width="14" height="14" />
+                        Refresh
+                      </Button>
+                    </Flex>
+
+                    {loadingStripe ? (
+                      <Skeleton height="100px" />
+                    ) : stripeDetails ? (
+                      <Flex direction="column" gap="2">
+                        <Flex justify="between">
+                          <Text weight="medium">Account ID:</Text>
+                          <Text style={{ fontFamily: 'monospace' }}>{stripeDetails.id}</Text>
+                        </Flex>
+                        <Flex justify="between">
+                          <Text weight="medium">Status:</Text>
+                          <Flex gap="2">
+                            {stripeDetails.charges_enabled && <Badge color="green">Charges</Badge>}
+                            {stripeDetails.payouts_enabled && <Badge color="green">Payouts</Badge>}
+                          </Flex>
+                        </Flex>
+                        <Flex justify="between">
+                          <Text weight="medium">Currency:</Text>
+                          <Badge variant="outline">{stripeDetails.default_currency.toUpperCase()}</Badge>
+                        </Flex>
+                        <Flex justify="between">
+                          <Text weight="medium">Verification:</Text>
+                          <Badge color={stripeDetails.individual?.verification?.status === 'verified' ? 'green' : 'yellow'}>
+                            {stripeDetails.individual?.verification?.status || 'Pending'}
+                          </Badge>
+                        </Flex>
+                      </Flex>
+                    ) : (
+                      <Text color="gray">Click refresh to load Stripe details</Text>
+                    )}
+                  </Card>
+                )}
+
+                {/* Account Ledger */}
+                <Card>
+                  <Flex justify="between" align="center" mb="3">
+                    <Heading size="3">Account Ledger</Heading>
+                    <Button
+                      size="1"
+                      variant="soft"
+                      onClick={() => fetchArtistAccountLedger()}
+                      loading={loadingLedger}
+                    >
+                      <UpdateIcon width="12" height="12" />
+                      Refresh
+                    </Button>
+                  </Flex>
+
+                  {loadingLedger ? (
+                    <Skeleton height="150px" />
+                  ) : accountLedger ? (
+                    <Flex direction="column" gap="4">
+                      {/* Account Summary */}
+                      <Card variant="ghost">
+                        <Flex justify="between" align="center">
+                          <Box>
+                            <Text size="2" color="gray">Current Balance</Text>
+                            <Text size="4" weight="bold" color={accountLedger.summary.current_balance >= 0 ? 'green' : 'red'}>
+                              {formatCurrency(accountLedger.summary.current_balance, accountLedger.summary.primary_currency)}
+                            </Text>
+                          </Box>
+                          <Box style={{ textAlign: 'right' }}>
+                            <Text size="2" color="gray">Total Credits</Text>
+                            <Text size="3" weight="medium" color="green">
+                              +${accountLedger.summary.total_credits.toFixed(2)}
+                            </Text>
+                          </Box>
+                          <Box style={{ textAlign: 'right' }}>
+                            <Text size="2" color="gray">Total Debits</Text>
+                            <Text size="3" weight="medium" color="red">
+                              -${accountLedger.summary.total_debits.toFixed(2)}
+                            </Text>
+                          </Box>
+                          <Box style={{ textAlign: 'right' }}>
+                            <Text size="2" color="gray">Entries</Text>
+                            <Text size="3" weight="medium">
+                              {accountLedger.summary.entry_count}
+                            </Text>
+                          </Box>
+                        </Flex>
+                      </Card>
+
+                      {/* Ledger Entries */}
+                      <Box>
+                        <ScrollArea style={{ height: '300px' }}>
+                          <Table.Root>
+                            <Table.Header>
+                              <Table.Row>
+                                <Table.ColumnHeaderCell>Date</Table.ColumnHeaderCell>
+                                <Table.ColumnHeaderCell>Type</Table.ColumnHeaderCell>
+                                <Table.ColumnHeaderCell>Description</Table.ColumnHeaderCell>
+                                <Table.ColumnHeaderCell>Amount</Table.ColumnHeaderCell>
+                                <Table.ColumnHeaderCell>Currency</Table.ColumnHeaderCell>
+                                <Table.ColumnHeaderCell>Balance</Table.ColumnHeaderCell>
+                              </Table.Row>
+                            </Table.Header>
+                            <Table.Body>
+                              {accountLedger.ledger.map((entry) => (
+                                <Table.Row key={entry.id}>
+                                  <Table.Cell>
+                                    <Text size="2" color="gray">
+                                      {new Date(entry.date).toLocaleDateString()}
+                                    </Text>
+                                  </Table.Cell>
+                                  <Table.Cell>
+                                    <Badge
+                                      color={
+                                        entry.type === 'credit' ? 'green' :
+                                        entry.type === 'debit' ? 'red' : 'blue'
+                                      }
+                                      variant="soft"
+                                    >
+                                      {entry.category}
+                                    </Badge>
+                                  </Table.Cell>
+                                  <Table.Cell>
+                                    <Flex direction="column" gap="1">
+                                      <Text size="2" weight="medium">
+                                        {entry.description}
+                                      </Text>
+                                      {entry.art_info && (
+                                        <Text size="1" color="gray">
+                                          {entry.art_info.event_name} • {entry.art_info.art_code}
+                                        </Text>
+                                      )}
+                                    </Flex>
+                                  </Table.Cell>
+                                  <Table.Cell>
+                                    {entry.amount !== undefined ? (
+                                      <Text
+                                        size="2"
+                                        weight="medium"
+                                        color={entry.type === 'credit' ? 'green' : 'red'}
+                                      >
+                                        {entry.type === 'credit' ? '+' : '-'}${entry.amount.toFixed(2)}
+                                      </Text>
+                                    ) : (
+                                      <Text size="2" color="gray">—</Text>
+                                    )}
+                                  </Table.Cell>
+                                  <Table.Cell>
+                                    <Badge
+                                      variant="outline"
+                                      size="1"
+                                      color={entry.currency === 'USD' ? 'blue' : 'orange'}
+                                    >
+                                      {entry.currency || 'USD'}
+                                    </Badge>
+                                  </Table.Cell>
+                                  <Table.Cell>
+                                    {entry.balance_after !== undefined ? (
+                                      <Text
+                                        size="2"
+                                        weight="medium"
+                                        color={entry.balance_after >= 0 ? 'green' : 'red'}
+                                      >
+                                        ${entry.balance_after.toFixed(2)}
+                                      </Text>
+                                    ) : (
+                                      <Text size="2" color="gray">—</Text>
+                                    )}
+                                  </Table.Cell>
+                                </Table.Row>
+                              ))}
+                            </Table.Body>
+                          </Table.Root>
+                        </ScrollArea>
+                      </Box>
+                    </Flex>
+                  ) : (
+                    <Text color="gray">Click refresh to load account ledger</Text>
+                  )}
+                </Card>
+
+                {/* Manual Payment Button */}
+                <Flex justify="end" gap="2">
+                  <Button
+                    variant="solid"
+                    color="blue"
+                    onClick={() => setShowManualPayment(true)}
+                  >
+                    <PlusIcon width="16" height="16" />
+                    Record Manual Payment
+                  </Button>
+                </Flex>
+              </Flex>
+            )}
+          </Box>
+
+          <Flex gap="3" mt="4" justify="end">
+            <Dialog.Close>
+              <Button variant="soft" color="gray">Close</Button>
+            </Dialog.Close>
+          </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
+
+      {/* Manual Payment Modal */}
+      <Dialog.Root open={showManualPayment} onOpenChange={setShowManualPayment}>
+        <Dialog.Content style={{ maxWidth: '500px' }}>
+          <Dialog.Title>Record Manual Payment</Dialog.Title>
+          <Dialog.Description>
+            Record a manual payment made to {selectedArtistForPayment?.artist_name} outside of the Stripe system.
+          </Dialog.Description>
+
+          <Flex direction="column" gap="3" mt="4">
+            <label>
+              <Text size="2" weight="medium" mb="1">Amount</Text>
+              <TextField.Root
+                value={manualPaymentAmount}
+                onChange={(e) => setManualPaymentAmount(e.target.value)}
+                placeholder="0.00"
+                type="number"
+                step="0.01"
+              />
+            </label>
+
+            <label>
+              <Text size="2" weight="medium" mb="1">Payment Method</Text>
+              <Select.Root value={manualPaymentMethod} onValueChange={setManualPaymentMethod}>
+                <Select.Trigger style={{ width: '100%' }} />
+                <Select.Content>
+                  <Select.Item value="bank_transfer">Bank Transfer</Select.Item>
+                  <Select.Item value="check">Check</Select.Item>
+                  <Select.Item value="cash">Cash</Select.Item>
+                  <Select.Item value="paypal">PayPal</Select.Item>
+                  <Select.Item value="other">Other</Select.Item>
+                </Select.Content>
+              </Select.Root>
+            </label>
+
+            <label>
+              <Text size="2" weight="medium" mb="1">Notes (Optional)</Text>
+              <TextArea
+                value={manualPaymentNotes}
+                onChange={(e) => setManualPaymentNotes(e.target.value)}
+                placeholder="Additional notes about this payment..."
+                rows={3}
+              />
+            </label>
+          </Flex>
+
+          <Flex gap="3" mt="4" justify="end">
+            <Dialog.Close>
+              <Button variant="soft" color="gray">Cancel</Button>
+            </Dialog.Close>
+            <Button
+              onClick={handleManualPayment}
+              disabled={!manualPaymentAmount || parseFloat(manualPaymentAmount) <= 0}
+              loading={submittingManualPayment}
+            >
+              Record Payment
+            </Button>
+          </Flex>
         </Dialog.Content>
       </Dialog.Root>
     </Box>
