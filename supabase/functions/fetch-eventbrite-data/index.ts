@@ -196,13 +196,11 @@ serve(async (req) => {
 
     // Fetch Sales Report (aggregated financial data - preferred for billing accuracy)
     // Use organization-level endpoint (user-level endpoint is deprecated)
-    // Force redeploy to pick up updated secrets
     const salesReportResponse = await fetch(
       `https://www.eventbriteapi.com/v3/organizations/${eventbriteOrgId}/reports/sales/?event_ids=${event.eventbrite_id}`,
       {
         headers: {
-          'Authorization': `Bearer ${eventbriteToken}`,
-          'Content-Type': 'application/json'
+          'Authorization': `Bearer ${eventbriteToken}`
         }
       }
     );
@@ -223,7 +221,20 @@ serve(async (req) => {
     } else {
       const errorText = await salesReportResponse.text();
       console.error(`❌ Sales Report API failed (${salesReportResponse.status}): ${errorText}`);
-      throw new Error(`Sales Report API failed (${salesReportResponse.status}): ${errorText}`);
+
+      return new Response(
+        JSON.stringify({
+          error: `Sales Report API failed (${salesReportResponse.status})`,
+          eventbrite_error: errorText,
+          debug_values: {
+            org_id: eventbriteOrgId,
+            event_eventbrite_id: event.eventbrite_id,
+            url_called: `https://www.eventbriteapi.com/v3/organizations/${eventbriteOrgId}/reports/sales/?event_ids=${event.eventbrite_id}`,
+            token_length: eventbriteToken?.length
+          }
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     // Fetch Ticket Classes (for capacity and breakdown)

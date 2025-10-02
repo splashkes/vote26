@@ -58,18 +58,34 @@ https://www.eventbriteapi.com/v3/organizations/{EB_ORG_ID}/reports/sales/?event_
 ### What I Did (Mistakes Made)
 
 1. **Removed Orders API fallback code** ← This was correct
-2. **BUT introduced variable scoping errors:**
-   - Declared `netDeposit` variable twice (lines 269 and 307)
-   - Removed `orders` array but left references to `orders.length`
-   - Created `processed.net_deposit` in one place but referenced `netDeposit` variable in another
+2. **BUT introduced TWO critical errors:**
 
-3. **Result:** Function returns `BOOT_ERROR` - won't even start
+   **Error 1: Duplicate variable declaration**
+   - Declared `eventbriteOrgId` twice (line 36 and line 191)
+   - Result: `BOOT_ERROR` - function wouldn't compile
 
-### Current Broken State
+   **Error 2: Added Content-Type header to Sales Report API**
+   - Added `'Content-Type': 'application/json'` to fetch headers
+   - Eventbrite Sales Report API rejects requests with this header
+   - Result: `400 ARGUMENTS_ERROR: "Please specify event_ids or event_status"`
 
-**Error:** `{"code":"BOOT_ERROR","message":"Function failed to start (please check logs)"}`
+### Fixed State
 
-**Root Cause:** Syntax/reference errors prevent Deno from compiling the function
+**Fix 1:** Removed duplicate `eventbriteOrgId` declaration (line 191)
+
+**Fix 2:** Removed `'Content-Type': 'application/json'` from Sales Report API fetch
+```typescript
+// WRONG - causes 400 error
+headers: {
+  'Authorization': `Bearer ${eventbriteToken}`,
+  'Content-Type': 'application/json'  // ← REMOVE THIS
+}
+
+// CORRECT
+headers: {
+  'Authorization': `Bearer ${eventbriteToken}`
+}
+```
 
 ---
 
