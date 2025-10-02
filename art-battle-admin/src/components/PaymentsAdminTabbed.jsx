@@ -43,6 +43,7 @@ const PaymentsAdminTabbed = () => {
   const [showManualPayment, setShowManualPayment] = useState(false);
   const [showReminderDialog, setShowReminderDialog] = useState(false);
   const [reminderType, setReminderType] = useState('email');
+  const [adminNote, setAdminNote] = useState('');
   const [sendingReminder, setSendingReminder] = useState(false);
   const [accountLedger, setAccountLedger] = useState(null);
   const [loadingLedger, setLoadingLedger] = useState(false);
@@ -338,36 +339,25 @@ const PaymentsAdminTabbed = () => {
     try {
       setSendingReminder(true);
 
-      const reminderData = {
-        artist_profile_id: selectedArtist.artist_profiles.id,
-        artist_name: selectedArtist.artist_profiles.name,
-        artist_email: selectedArtist.artist_profiles.email,
-        artist_phone: selectedArtist.artist_profiles.phone,
-        entry_id: selectedArtist.artist_profiles.entry_id,
-        reminder_type: reminderType,
-        recent_events: 'recent events'
-      };
-
-      const { data, error } = await supabase.functions.invoke('send-payment-setup-reminder', {
-        body: reminderData
+      const session = await supabase.auth.getSession();
+      const response = await fetch('https://db.artb.art/functions/v1/admin-send-payment-invite', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.data.session?.access_token}`,
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcWRrdWJneXF3cHl2Zmx0bnJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjI1NDI0ODQsImV4cCI6MjAzODExODQ4NH0.x6JzxElYCf9lpkpc3RYX2XOQQ-v8QLPQOHWOzLj0a3M'
+        },
+        body: JSON.stringify({
+          artist_id: selectedArtist.artist_profiles.id,
+          invite_type: reminderType,
+          admin_note: adminNote.trim() || undefined
+        })
       });
 
-      if (error) throw error;
-
-      // Log the invitation after successful send
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      const sentBy = user?.email || 'admin@artbattle.com';
-
-      await supabase.rpc('log_payment_setup_invitation', {
-        p_artist_profile_id: selectedArtist.artist_profiles.id,
-        p_invitation_method: reminderType,
-        p_sent_by: sentBy,
-        p_recipient_email: reminderType === 'email' || reminderType === 'both' ? selectedArtist.artist_profiles.email : null,
-        p_recipient_phone: reminderType === 'sms' || reminderType === 'both' ? selectedArtist.artist_profiles.phone : null,
-        p_invitation_type: 'payment_setup',
-        p_message_content: `Payment setup reminder sent via ${reminderType}`,
-        p_delivery_metadata: { reminder_data: reminderData }
-      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to send invitation');
+      }
 
       // Update the specific artist's invitation info inline without full reload
       const updatedInvitationInfo = {
@@ -399,9 +389,12 @@ const PaymentsAdminTabbed = () => {
       });
 
       setShowReminderDialog(false);
+      setAdminNote('');
       setError('');
+      alert(`Payment invitation sent successfully to ${selectedArtist.artist_profiles.name}!`);
     } catch (err) {
       setError(`Failed to send ${reminderType} reminder: ` + err.message);
+      alert(`Error: ${err.message}`);
     } finally {
       setSendingReminder(false);
     }
@@ -2127,7 +2120,12 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
       </Dialog.Root>
 
       {/* Send Reminder Dialog */}
-      <Dialog.Root open={showReminderDialog} onOpenChange={setShowReminderDialog}>
+      <Dialog.Root open={showReminderDialog} onOpenChange={(open) => {
+        setShowReminderDialog(open);
+        if (!open) {
+          setAdminNote('');
+        }
+      }}>
         <Dialog.Content style={{ maxWidth: '450px' }}>
           <Dialog.Title>Send Payment Setup Reminder</Dialog.Title>
           <Dialog.Description>
@@ -2213,6 +2211,19 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                   )}
                 </Select.Content>
               </Select.Root>
+            </Box>
+
+            <Box>
+              <Text size="2" weight="medium" mb="2">Admin Note (Optional)</Text>
+              <Text size="1" color="gray" mb="2">
+                This note will appear in <strong>bold at the top</strong> of the email or SMS message
+              </Text>
+              <TextArea
+                placeholder="e.g. 'Please set up your account by Friday so we can process payments.'"
+                value={adminNote}
+                onChange={(e) => setAdminNote(e.target.value)}
+                rows={3}
+              />
             </Box>
 
             <Callout.Root color="orange">

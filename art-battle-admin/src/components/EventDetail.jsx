@@ -168,6 +168,13 @@ const EventDetail = () => {
   const [lastReminderSent, setLastReminderSent] = useState({});
   const [activeOffers, setActiveOffers] = useState({});
 
+  // Payment Invitation Modal (shared between payment setup flow)
+  const [showPaymentInviteModal, setShowPaymentInviteModal] = useState(false);
+  const [selectedArtistForInvite, setSelectedArtistForInvite] = useState(null);
+  const [inviteType, setInviteType] = useState('email');
+  const [adminNote, setAdminNote] = useState('');
+  const [sendingPaymentInvite, setSendingPaymentInvite] = useState(false);
+
   useEffect(() => {
     if (eventId) {
       // Preload all data for fast tab switching - fetch event details first, then others
@@ -1374,12 +1381,60 @@ const EventDetail = () => {
     }
   };
 
+  const handleSendPaymentInvite = async () => {
+    if (!selectedArtistForInvite || !inviteType) {
+      alert('Please select an invitation type');
+      return;
+    }
+
+    setSendingPaymentInvite(true);
+    try {
+      const session = await supabase.auth.getSession();
+      const response = await fetch('https://db.artb.art/functions/v1/admin-send-payment-invite', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.data.session?.access_token}`,
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhzc2RrdWJneXF3cHl2Zmx0bnJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mjg0MzY4NzYsImV4cCI6MjA0NDAxMjg3Nn0.SRr0cu_CBDs_BNriath2HLu0msxLE3TcIPbxe7s69-8'
+        },
+        body: JSON.stringify({
+          artist_id: selectedArtistForInvite.artist_id,
+          invite_type: inviteType,
+          admin_note: adminNote.trim() || undefined
+        })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to send invitation');
+      }
+
+      alert(`Payment invitation sent successfully to ${selectedArtistForInvite.artist_name}!`);
+
+      // Close modal and reset
+      setShowPaymentInviteModal(false);
+      setSelectedArtistForInvite(null);
+      setInviteType('email');
+      setAdminNote('');
+
+      // Refresh artist data to show updated invitation status
+      await fetchArtistData(0);
+
+    } catch (error) {
+      console.error('Error sending payment invitation:', error);
+      alert(`Error: ${error.message}`);
+    } finally {
+      setSendingPaymentInvite(false);
+    }
+  };
+
   const handleArtistCardClick = async (artist, type) => {
     setSelectedArtist(artist);
     setArtistModalType(type);
     setArtistModalOpen(true);
     setSampleWorks([]); // Clear previous sample works
-    
+
     // Initialize bio editing state
     setBioText(artist.artist_profiles?.abhq_bio || '');
     setEditingBio(false);
@@ -2642,7 +2697,16 @@ The Art Battle Team`);
                                 </Text>
                               </Flex>
                             ) : (
-                              <Text size="1" color="gray">Not sent</Text>
+                              <Button
+                                size="1"
+                                variant="soft"
+                                onClick={() => {
+                                  setSelectedArtistForInvite(artist);
+                                  setShowPaymentInviteModal(true);
+                                }}
+                              >
+                                Send Invite
+                              </Button>
                             )}
                           </Table.Cell>
                           <Table.Cell>
@@ -5379,6 +5443,91 @@ The Art Battle Team`);
             <Dialog.Close>
               <Button variant="soft" color="gray">Close</Button>
             </Dialog.Close>
+          </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
+
+      {/* Payment Invitation Modal */}
+      <Dialog.Root open={showPaymentInviteModal} onOpenChange={(open) => {
+        setShowPaymentInviteModal(open);
+        if (!open) {
+          setSelectedArtistForInvite(null);
+          setInviteType('email');
+          setAdminNote('');
+        }
+      }}>
+        <Dialog.Content style={{ maxWidth: '500px' }}>
+          <Dialog.Title>Send Payment Setup Invitation</Dialog.Title>
+          <Dialog.Description>
+            Send a payment setup invitation to {selectedArtistForInvite?.artist_name}
+          </Dialog.Description>
+
+          {selectedArtistForInvite && (
+            <Flex direction="column" gap="4" mt="4">
+              {/* Artist Info */}
+              <Card>
+                <Flex direction="column" gap="2" p="3">
+                  <Text size="2"><strong>Artist:</strong> {selectedArtistForInvite.artist_name}</Text>
+                  <Text size="2"><strong>Email:</strong> {selectedArtistForInvite.email}</Text>
+                  {selectedArtistForInvite.phone && (
+                    <Text size="2"><strong>Phone:</strong> {selectedArtistForInvite.phone}</Text>
+                  )}
+                </Flex>
+              </Card>
+
+              {/* Invitation Type */}
+              <Box>
+                <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>
+                  Invitation Method
+                </Text>
+                <Flex gap="2">
+                  <Button
+                    variant={inviteType === 'email' ? 'solid' : 'soft'}
+                    onClick={() => setInviteType('email')}
+                    disabled={!selectedArtistForInvite.email}
+                  >
+                    Email
+                  </Button>
+                  <Button
+                    variant={inviteType === 'sms' ? 'solid' : 'soft'}
+                    onClick={() => setInviteType('sms')}
+                    disabled={!selectedArtistForInvite.phone}
+                  >
+                    SMS
+                  </Button>
+                </Flex>
+              </Box>
+
+              {/* Admin Note */}
+              <Box>
+                <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>
+                  Admin Note (Optional)
+                </Text>
+                <Text size="1" color="gray" mb="2" style={{ display: 'block' }}>
+                  This note will appear in <strong>bold at the top</strong> of the email or SMS message
+                </Text>
+                <TextArea
+                  placeholder="e.g. 'Please set up your account by Friday so we can process payments.'"
+                  value={adminNote}
+                  onChange={(e) => setAdminNote(e.target.value)}
+                  rows={3}
+                />
+              </Box>
+            </Flex>
+          )}
+
+          <Flex gap="3" mt="4" justify="end">
+            <Dialog.Close>
+              <Button variant="soft" color="gray" disabled={sendingPaymentInvite}>
+                Cancel
+              </Button>
+            </Dialog.Close>
+            <Button
+              onClick={handleSendPaymentInvite}
+              disabled={sendingPaymentInvite || !inviteType}
+            >
+              {sendingPaymentInvite ? 'Sending...' : `Send ${inviteType === 'email' ? 'Email' : 'SMS'}`}
+            </Button>
           </Flex>
         </Dialog.Content>
       </Dialog.Root>

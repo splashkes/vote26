@@ -76,7 +76,8 @@ serve(async (req) => {
           id,
           name,
           entry_id,
-          email
+          email,
+          phone
         )
       `)
       .eq('event_id', event.id);
@@ -98,7 +99,8 @@ serve(async (req) => {
           id,
           name,
           entry_id,
-          email
+          email,
+          phone
         )
       `)
       .eq('event_eid', event.eid)
@@ -118,6 +120,7 @@ serve(async (req) => {
       paymentsOutResult,
       bidsResult,
       paymentInvitationsResult,
+      paymentSetupInvitationsResult,
       paymentRequestsResult
     ] = await Promise.all([
 
@@ -147,10 +150,17 @@ serve(async (req) => {
         .select('art_id, amount')
         .in('art_id', artworkIds),
 
-      // Get payment invitations for artists
+      // Get payment invitations for artists (new system)
       supabaseClient
         .from('payment_invitations')
         .select('artist_profile_id, invite_type, sent_at, status, completed_at')
+        .in('artist_profile_id', artistIds)
+        .order('sent_at', { ascending: false }),
+
+      // Get payment setup invitations (old system)
+      supabaseClient
+        .from('payment_setup_invitations')
+        .select('artist_profile_id, invitation_method, sent_at, status')
         .in('artist_profile_id', artistIds)
         .order('sent_at', { ascending: false }),
 
@@ -184,6 +194,11 @@ serve(async (req) => {
     const { data: paymentInvitations, error: invitationsError } = paymentInvitationsResult;
     if (invitationsError) {
       console.error('Error fetching payment invitations:', invitationsError);
+    }
+
+    const { data: paymentSetupInvitations, error: setupInvitationsError } = paymentSetupInvitationsResult;
+    if (setupInvitationsError) {
+      console.error('Error fetching payment setup invitations:', setupInvitationsError);
     }
 
     const { data: paymentRequests, error: requestsError } = paymentRequestsResult;
@@ -253,8 +268,35 @@ serve(async (req) => {
       bidsByArt.get(bid.art_id).push(bid);
     });
 
-    // Map invitations (get most recent for each artist)
-    paymentInvitations?.forEach(invitation => {
+    // Map invitations from both tables (get most recent for each artist)
+    // Combine new system (payment_invitations) and old system (payment_setup_invitations)
+    const allInvitations = [];
+
+    // Add new system invitations (with invite_type field)
+    paymentInvitations?.forEach(inv => {
+      allInvitations.push({
+        artist_profile_id: inv.artist_profile_id,
+        invite_type: inv.invite_type,
+        sent_at: inv.sent_at,
+        status: inv.status,
+        completed_at: inv.completed_at
+      });
+    });
+
+    // Add old system invitations (with invitation_method field)
+    paymentSetupInvitations?.forEach(inv => {
+      allInvitations.push({
+        artist_profile_id: inv.artist_profile_id,
+        invite_type: inv.invitation_method, // Map invitation_method to invite_type
+        sent_at: inv.sent_at,
+        status: inv.status,
+        completed_at: null
+      });
+    });
+
+    // Sort by sent_at descending and keep most recent per artist
+    allInvitations.sort((a, b) => new Date(b.sent_at) - new Date(a.sent_at));
+    allInvitations.forEach(invitation => {
       if (!invitationsByArtist.has(invitation.artist_profile_id)) {
         invitationsByArtist.set(invitation.artist_profile_id, invitation);
       }
@@ -283,6 +325,7 @@ serve(async (req) => {
       const artistName = artistWorks[0].artist_profiles.name;
       const entryId = artistWorks[0].artist_profiles.entry_id;
       const email = artistWorks[0].artist_profiles.email;
+      const phone = artistWorks[0].artist_profiles.phone;
 
       // Get artist_number from confirmation if available (supplementary data)
       const confirmation = confirmationByArtistId.get(artistId);
@@ -370,6 +413,7 @@ serve(async (req) => {
         artist_number: artistNumber,
         entry_id: entryId,
         email: email,
+        phone: phone,
         artworks_paid: paidArtworks,
         artworks_unpaid: unpaidArtworks,
         artworks_no_bid: noBidArtworks,

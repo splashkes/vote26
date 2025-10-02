@@ -25,7 +25,8 @@ serve(async (req) => {
     const {
       artist_id,
       invite_type = 'email',
-      custom_message
+      custom_message,
+      admin_note
     } = body;
 
     if (!artist_id) {
@@ -45,7 +46,8 @@ serve(async (req) => {
       .rpc('send_payment_setup_invitation', {
         artist_id,
         invite_type,
-        custom_message
+        custom_message,
+        admin_note
       });
 
     if (inviteError) {
