@@ -151,6 +151,13 @@ const AdminSidebar = ({ collapsed = false, onToggleCollapse, hideToggleAndSignOu
           color: 'green'
         },
         {
+          to: '/duplicate-profiles',
+          icon: PersonIcon,
+          label: 'Duplicate Profiles',
+          description: 'Search and merge duplicate artist profiles',
+          color: 'orange'
+        },
+        {
           to: '/sms-marketing',
           icon: ChatBubbleIcon,
           label: 'SMS Marketing',

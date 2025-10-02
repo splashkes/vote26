@@ -447,7 +447,7 @@ const PaymentStatusBanner = ({ artistProfile, confirmations, hasRecentActivity, 
 
             <Box>
               <Text size="3" weight="medium" mb="2" style={{ display: 'block' }}>
-                {instantPayoutProcessed ? 'Instant Payout Complete' : 'Payment Ready for Payout'}
+                Payment Sent Successfully
               </Text>
 
               <Flex direction="column" gap="2" mb="2">
@@ -459,69 +459,31 @@ const PaymentStatusBanner = ({ artistProfile, confirmations, hasRecentActivity, 
                 </Flex>
 
                 <Flex align="center" gap="2">
-                  <Text size="2" color="gray">
-                    {instantPayoutProcessed ? 'Arrived:' : 'Expected arrival:'}
-                  </Text>
+                  <Text size="2" color="gray">Expected arrival:</Text>
                   <Text size="3" weight="medium">
-                    {instantPayoutProcessed ? 'Within 30 minutes' : formatDate(expectedArrival)}
+                    {formatDate(expectedArrival)}
                   </Text>
                 </Flex>
 
                 <Flex align="center" gap="2">
                   <Text size="2" color="gray">Amount:</Text>
-                  <Text size="4" weight="bold" color={instantPayoutProcessed ? "blue" : "green"}>
+                  <Text size="4" weight="bold" color="green">
                     {formatAmount(mostRecentPayment.amount, mostRecentPayment.currency)}
                   </Text>
                 </Flex>
               </Flex>
 
-              {instantPayoutEligibility?.eligible && !instantPayoutProcessed ? (
-                <Callout.Root color="blue" size="1" mb="3">
-                  <Callout.Icon>
-                    <InfoCircledIcon />
-                  </Callout.Icon>
-                  <Callout.Text>
-                    Get your money in 30 minutes instead of 2-3 days!
-                    <br />
-                    <Text size="1" color="gray">
-                      Instant payout fee: ${instantPayoutEligibility.our_fee?.toFixed(2)}
-                      (Net: ${instantPayoutEligibility.net_to_artist?.toFixed(2)})
-                    </Text>
-                  </Callout.Text>
-                </Callout.Root>
-              ) : (
-                <Text size="2" color="gray">
-                  {instantPayoutProcessed ?
-                    'Instant payout completed successfully' :
-                    'Standard payout - arrives within 2-3 business days'
-                  }
-                </Text>
-              )}
+              <Text size="2" color="gray">
+                Payments typically arrive within 2 business days
+              </Text>
             </Box>
 
-            <Flex gap="2">
-              {instantPayoutEligibility?.eligible && !instantPayoutProcessed ? (
-                <>
-                  <Button
-                    size="2"
-                    variant="solid"
-                    color="blue"
-                    onClick={() => setShowInstantPayoutModal(true)}
-                    disabled={processingInstantPayout}
-                  >
-                    Get Instantly (30 min)
-                  </Button>
-                  <Button size="2" variant="outline" onClick={() => onNavigateToTab('payments')}>
-                    Wait 2-3 Days (Free)
-                  </Button>
-                </>
-              ) : (
-                <Button size="2" variant="soft" color="green" onClick={() => onNavigateToTab('payments')}>
-                  View Account
-                  <ArrowRightIcon width="16" height="16" />
-                </Button>
-              )}
-            </Flex>
+            <Box>
+              <Button size="2" variant="soft" color="green" onClick={() => onNavigateToTab('payments')}>
+                View Account
+                <ArrowRightIcon width="16" height="16" />
+              </Button>
+            </Box>
           </Flex>
 
           <IconButton

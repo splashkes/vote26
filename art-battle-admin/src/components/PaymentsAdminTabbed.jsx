@@ -172,24 +172,26 @@ const PaymentsAdminTabbed = () => {
     // Remove any extra whitespace and convert to uppercase
     cleanCurrency = cleanCurrency.trim().toUpperCase();
 
-    // List of common valid currency codes
-    const validCurrencies = ['USD', 'CAD', 'EUR', 'GBP', 'AUD', 'JPY', 'CHF', 'CNY', 'INR', 'BRL', 'MXN', 'ZAR'];
-
-    // If currency is not in our list of valid currencies, default to USD
-    if (!validCurrencies.includes(cleanCurrency)) {
-      console.warn(`Invalid currency code "${currency}", defaulting to USD`);
-      cleanCurrency = 'USD';
-    }
-
+    // Try to format with the provided currency
+    // Intl.NumberFormat will handle all valid ISO 4217 currency codes
     try {
       return new Intl.NumberFormat('en-US', {
         style: 'currency',
         currency: cleanCurrency
       }).format(amount || 0);
     } catch (error) {
-      console.error(`Currency formatting error with currency "${cleanCurrency}":`, error);
-      // Fallback to simple formatting
-      return `$${(amount || 0).toFixed(2)}`;
+      // If the currency code is invalid, try with USD as fallback
+      console.warn(`Invalid or unsupported currency code "${currency}", falling back to USD:`, error);
+      try {
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD'
+        }).format(amount || 0);
+      } catch (fallbackError) {
+        // Final fallback to simple formatting
+        console.error(`Currency formatting failed completely:`, fallbackError);
+        return `$${(amount || 0).toFixed(2)}`;
+      }
     }
   };
 
@@ -860,7 +862,7 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
 
   // Calculate total amount ready to pay by currency
   const totalsByCurrency = filteredReadyToPay.reduce((totals, artist) => {
-    const currency = artist.currency_info?.primary_currency || 'USD';
+    const currency = artist.balance_currency || 'USD';
     // Use estimated balance if available, otherwise show that there are processing payments
     const amount = artist.estimated_balance || 0;
     totals[currency] = (totals[currency] || 0) + amount;
@@ -1013,7 +1015,7 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                       </Table.Cell>
                       <Table.Cell>
                         <Text size="2" weight="bold" color="red">
-                          ${(artist.estimated_balance || artist.current_balance || 0).toFixed(2)} {artist.balance_currency || 'USD'}
+                          {formatCurrency(artist.estimated_balance || artist.current_balance, artist.balance_currency || 'USD')}
                         </Text>
                       </Table.Cell>
                       <Table.Cell>
@@ -1178,7 +1180,7 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                       </Table.Cell>
                       <Table.Cell>
                         <Text size="2" weight="bold" color="green">
-                          {formatCurrency(artist.estimated_balance, artist.currency_info?.primary_currency)}
+                          {formatCurrency(artist.estimated_balance, artist.balance_currency || 'USD')}
                         </Text>
                       </Table.Cell>
                       <Table.Cell>

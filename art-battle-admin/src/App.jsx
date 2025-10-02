@@ -22,6 +22,7 @@ import PromotionSystem from './components/PromotionSystem';
 import BulkArtistView from './components/BulkArtistView';
 import ContentLibrary from './components/ContentLibrary';
 import PaymentsAdminTabbed from './components/PaymentsAdminTabbed';
+import DuplicateProfileResolver from './components/DuplicateProfileResolver';
 import Welcome from './components/Welcome';
 import './App.css';
 
@@ -60,6 +61,7 @@ function App() {
                 <Route path="email-queue" element={<EmailQueueDashboard />} />
                 <Route path="email-queue/:eventEid" element={<EmailQueueManager />} />
                 <Route path="payments" element={<PaymentsAdminTabbed />} />
+                <Route path="duplicate-profiles" element={<DuplicateProfileResolver />} />
                 <Route path="sms-marketing" element={<PromotionSystem />} />
                 <Route path="artist/:entryId" element={<ArtistsManagement />} />
                 <Route path="*" element={<Navigate to="/events" replace />} />

@@ -1,6 +1,32 @@
-// Stripe Global Payments Payout Edge Function
-// Creates direct payouts to recipients using Global Payouts system
-// Date: 2025-09-09
+// ============================================================================
+// Stripe Global Payments Transfer Edge Function
+// ============================================================================
+// CRITICAL FIX - 2025-10-02:
+// Changed from stripe.payouts.create() to stripe.transfers.create()
+//
+// WHY THIS CHANGE WAS NECESSARY:
+// - The old payouts.create() API uses the "recipient" parameter
+// - This only works with "full" service agreement accounts
+// - "Full" service agreement only supports ~40 countries (not Thailand, etc.)
+// - Artists with "custom" accounts (created by stripe-global-payments-onboard)
+//   would get error: "Funds can't be sent to accounts located in TH when
+//   the account is under the `full` service agreement"
+//
+// THE FIX:
+// - Use transfers.create() with "destination" parameter instead
+// - This works with "custom" Connected Accounts (type: 'custom')
+// - Supports 50+ countries including Thailand, Philippines, etc.
+// - Money transfers to artist's Stripe balance, then THEY withdraw to bank
+// - Same fees, same functionality, broader country support
+//
+// SEARCH KEYWORDS FOR FUTURE REFERENCE:
+// - Thailand payment error
+// - Custom account transfers
+// - Service agreement full vs custom
+// - Stripe Connect international payments
+//
+// Date Created: 2025-09-09
+// Date Fixed: 2025-10-02
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -169,34 +195,60 @@ serve(async (req) => {
     });
 
     try {
-      // Create the payout using Global Payouts
-      const payout = await stripe.payouts.create({
+      // =====================================================================
+      // CRITICAL: Using stripe.transfers.create() NOT stripe.payouts.create()
+      // =====================================================================
+      // OLD CODE (BROKEN - only worked with ~40 countries):
+      //   const payout = await stripe.payouts.create({
+      //     recipient: globalPaymentAccount.stripe_recipient_id,  // ❌ WRONG
+      //     ...
+      //   });
+      //
+      // NEW CODE (WORKS GLOBALLY - 50+ countries):
+      //   const transfer = await stripe.transfers.create({
+      //     destination: globalPaymentAccount.stripe_recipient_id,  // ✅ CORRECT
+      //     ...
+      //   });
+      //
+      // KEY DIFFERENCES:
+      // - payouts.create() = direct bank payout (requires "full" agreement)
+      // - transfers.create() = transfer to Stripe balance (works with "custom" accounts)
+      // - Custom accounts let artists withdraw themselves to their local bank
+      // - This enables payments to Thailand (THB), Philippines (PHP), etc.
+      // =====================================================================
+
+      const transfer = await stripe.transfers.create({
         amount: amountMinor,
         currency: currency.toLowerCase(),
-        recipient: globalPaymentAccount.stripe_recipient_id,
+        destination: globalPaymentAccount.stripe_recipient_id, // Changed from "recipient" to "destination"
         metadata: {
           art_id: art_id,
           art_code: artwork.art_code,
           artist_profile_id: targetArtistProfileId,
-          internal_payout_id: payoutRecord.id
+          internal_payout_id: payoutRecord.id,
+          payment_method: 'stripe_transfer_api' // Track which API we used
         }
       }, {
         idempotencyKey: idempotencyKey
       });
 
-      console.log('Stripe payout created:', payout.id);
+      console.log('Stripe transfer created:', transfer.id, '- Amount:', amountMinor, currency);
 
-      // Update our record with Stripe payout ID and status
+      // Update our record with Stripe transfer ID and status
+      // NOTE: We store in stripe_payout_id column for backward compatibility
+      // but it's actually a transfer ID now (tr_xxx not po_xxx)
       const { error: updateError } = await supabase
         .from('global_payment_requests')
         .update({
-          stripe_payout_id: payout.id,
-          status: 'sent', // Global Payouts start as 'sent'
+          stripe_payout_id: transfer.id, // Actually a transfer ID (tr_xxx)
+          status: 'sent', // Transfers are immediately available in recipient balance
           sent_at: new Date().toISOString(),
           metadata: {
             ...payoutRecord.metadata,
-            stripe_status: payout.status,
-            stripe_arrival_date: payout.arrival_date ? new Date(payout.arrival_date * 1000).toISOString() : null
+            stripe_status: transfer.object, // Will be 'transfer'
+            transfer_type: 'stripe_connect_transfer', // Document the method used
+            api_used: 'transfers.create', // IMPORTANT: Track which API for future debugging
+            created_timestamp: transfer.created ? new Date(transfer.created * 1000).toISOString() : null
           }
         })
         .eq('id', payoutRecord.id);
@@ -208,15 +260,17 @@ serve(async (req) => {
 
       return new Response(JSON.stringify({
         success: true,
-        message: 'Payout sent successfully',
+        message: 'Transfer sent successfully - funds available immediately in artist Stripe balance',
         payout: {
           id: payoutRecord.id,
-          stripe_payout_id: payout.id,
+          stripe_transfer_id: transfer.id, // Using transfer ID (tr_xxx format)
+          stripe_payout_id: transfer.id, // Kept for backward compatibility
           amount: amount,
           currency: currency,
-          recipient_id: globalPaymentAccount.stripe_recipient_id,
+          destination_account: globalPaymentAccount.stripe_recipient_id,
           status: 'sent',
-          arrival_date: payout.arrival_date ? new Date(payout.arrival_date * 1000).toISOString() : null
+          transfer_type: 'stripe_connect_transfer',
+          note: 'Using Stripe Transfers API for global payment support (50+ countries)'
         },
         system: 'global_payments'
       }), {
@@ -225,8 +279,8 @@ serve(async (req) => {
       });
 
     } catch (stripeError) {
-      console.error('Stripe payout failed:', stripeError);
-      
+      console.error('Stripe transfer failed:', stripeError);
+
       // Update our record to reflect the failure
       const { error: failureUpdateError } = await supabase
         .from('global_payment_requests')
@@ -237,17 +291,19 @@ serve(async (req) => {
           metadata: {
             ...payoutRecord.metadata,
             stripe_error: stripeError.message,
+            stripe_error_code: stripeError.code,
+            api_used: 'transfers.create',
             failed_at: new Date().toISOString()
           }
         })
         .eq('id', payoutRecord.id);
 
       if (failureUpdateError) {
-        console.error('Error updating failed payout record:', failureUpdateError);
+        console.error('Error updating failed payment record:', failureUpdateError);
       }
 
       // Re-throw the Stripe error
-      throw new Error(`Stripe payout failed: ${stripeError.message}`);
+      throw new Error(`Stripe transfer failed: ${stripeError.message}`);
     }
 
   } catch (error) {
@@ -262,34 +318,58 @@ serve(async (req) => {
   }
 });
 
-// TODO: Production Implementation Notes
+// ============================================================================
+// PRODUCTION IMPLEMENTATION NOTES - UPDATED FOR TRANSFERS API
+// ============================================================================
+//
+// IMPORTANT: This function now uses Stripe Transfers API (not Payouts API)
+// Search for "stripe.transfers.create" in code above
 //
 // 1. Balance Management:
-//    - Global Payouts require prefunded Stripe balance
+//    - Stripe Transfers require prefunded platform Stripe balance
 //    - Monitor balance levels and alert when low
 //    - Consider automatic top-ups or manual funding processes
+//    - Transfers happen instantly once platform has funds
 //
 // 2. Error Handling:
 //    - Implement retry logic for transient failures
 //    - Handle insufficient_funds errors gracefully
-//    - Track failed payouts for manual review
+//    - Track failed transfers for manual review
+//    - Monitor for account_invalid errors (artist account issues)
 //
 // 3. Compliance & Validation:
-//    - Validate recipient eligibility before payout
+//    - Validate recipient account is "ready" status before transfer
 //    - Check for country-specific requirements
 //    - Handle regulatory restrictions (e.g., sanctions lists)
+//    - Verify artist has completed Stripe onboarding
 //
 // 4. Currency Considerations:
-//    - Support multi-currency payouts based on recipient country
-//    - Handle FX rates and conversion fees
-//    - Maintain currency-specific balances
+//    - Support multi-currency transfers based on event location (not artist country!)
+//    - Artists traveling internationally get paid in event currency
+//    - Example: Thai artist in Canada event gets CAD, not THB
+//    - Handle FX rates if needed in future
+//    - Transfers must match currency of connected account's country
 //
 // 5. Audit & Reconciliation:
-//    - Log all payout attempts and outcomes
+//    - Log all transfer attempts and outcomes
 //    - Regular reconciliation with Stripe records
 //    - Financial reporting and tax implications
+//    - Track which API was used (metadata.api_used = 'transfers.create')
 //
 // 6. Webhook Integration:
-//    - Listen for payout.updated events from Stripe
-//    - Update local records based on final payout status
-//    - Handle payout reversals or failures
+//    - Listen for transfer.created, transfer.updated events from Stripe
+//    - Listen for transfer.paid events (when funds reach artist)
+//    - Update local records based on transfer status
+//    - Handle transfer reversals or failures
+//
+// 7. Artist Withdrawal Process:
+//    - After transfer, funds are in artist's Stripe balance
+//    - Artist controls when/how to withdraw to their bank
+//    - Stripe handles local payment methods (bank transfer, PromptPay, etc.)
+//    - No additional code needed on our side for withdrawals
+//
+// 8. Migration from Old Payouts System:
+//    - Old records have po_xxx IDs (payout IDs)
+//    - New records have tr_xxx IDs (transfer IDs)
+//    - Both stored in stripe_payout_id column for backward compatibility
+//    - Check metadata.api_used field to determine which API was used

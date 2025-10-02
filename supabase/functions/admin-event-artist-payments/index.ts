@@ -114,18 +114,26 @@ serve(async (req) => {
     // Fetch all relevant data in parallel
     const [
       paymentsInResult,
+      paymentLogsResult,
       paymentsOutResult,
       bidsResult,
       paymentInvitationsResult,
       paymentRequestsResult
     ] = await Promise.all([
 
-      // Get all payments IN (from buyers) for this event
+      // Get all payments IN (from buyers) for this event - Stripe payments
       supabaseClient
         .from('payment_processing')
         .select('art_id, amount, amount_with_tax, tax_amount, status, completed_at, payment_method')
         .eq('event_id', event.id)
         .eq('status', 'completed'),
+
+      // Get manual/admin-marked payments IN (from buyers) for this event
+      supabaseClient
+        .from('payment_logs')
+        .select('art_id, amount, actual_amount_collected, actual_tax_collected, payment_method, created_at, payment_type')
+        .in('art_id', artworkIds)
+        .eq('payment_type', 'admin_marked'),
 
       // Get all payments OUT (to artists) - don't filter by status, we'll skip cancelled ones later
       supabaseClient
@@ -156,6 +164,11 @@ serve(async (req) => {
     const { data: paymentsIn, error: payInError } = paymentsInResult;
     if (payInError) {
       console.error('Error fetching payments in:', payInError);
+    }
+
+    const { data: paymentLogs, error: paymentLogsError } = paymentLogsResult;
+    if (paymentLogsError) {
+      console.error('Error fetching payment logs:', paymentLogsError);
     }
 
     const { data: paymentsOut, error: payOutError } = paymentsOutResult;
@@ -200,8 +213,30 @@ serve(async (req) => {
       artworksByArtist.get(artistId).push(art);
     });
 
+    // Add Stripe payments (from payment_processing)
     paymentsIn?.forEach(payment => {
-      paymentsInByArt.set(payment.art_id, payment);
+      paymentsInByArt.set(payment.art_id, {
+        art_id: payment.art_id,
+        amount: payment.amount,
+        amount_with_tax: payment.amount_with_tax,
+        tax_amount: payment.tax_amount,
+        completed_at: payment.completed_at,
+        payment_method: payment.payment_method,
+        source: 'stripe'
+      });
+    });
+
+    // Add manual/admin-marked payments (from payment_logs)
+    paymentLogs?.forEach(payment => {
+      paymentsInByArt.set(payment.art_id, {
+        art_id: payment.art_id,
+        amount: payment.actual_amount_collected || payment.amount,
+        amount_with_tax: (payment.actual_amount_collected || payment.amount) + (payment.actual_tax_collected || 0),
+        tax_amount: payment.actual_tax_collected || 0,
+        completed_at: payment.created_at,
+        payment_method: payment.payment_method || 'manual',
+        source: 'manual'
+      });
     });
 
     paymentsOut?.forEach(payment => {

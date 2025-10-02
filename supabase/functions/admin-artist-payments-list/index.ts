@@ -23,6 +23,8 @@ interface Artist {
   stripe_recipient_id: string | null;
   estimated_balance: number;
   current_balance: number;
+  balance_currency: string;
+  currency_symbol: string;
   latest_payment_status: string | null;
   payment_history_summary: {
     pending: number;
@@ -150,6 +152,8 @@ serve(async (req) => {
       stripe_recipient_id: data.stripe_recipient_id,
       estimated_balance: Number(data.estimated_balance),
       current_balance: Number(data.estimated_balance),
+      balance_currency: data.currency_code || 'USD',
+      currency_symbol: data.currency_symbol || '$',
       latest_payment_status: data.latest_payment_status,
       payment_history_summary: {
         pending: Number(data.payment_pending_count),
@@ -162,7 +166,7 @@ serve(async (req) => {
       recent_contests: Number(data.recent_contests),
       is_recent_contestant: data.is_recent_contestant,
       currency_info: {
-        primary_currency: 'USD',
+        primary_currency: data.currency_code || 'USD',
         has_mixed_currencies: false
       },
       invitation_info: null

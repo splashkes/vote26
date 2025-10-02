@@ -203,6 +203,7 @@ serve(async (req) => {
         stripe_recipient_id: artist.stripe_recipient_id,
         estimated_balance: Number(artist.estimated_balance),
         balance_currency: artist.balance_currency || 'USD',
+        currency_symbol: artist.currency_symbol || '$',
         current_balance: Number(artist.estimated_balance),
         latest_payment_status: null,
         payment_history_summary: {
@@ -216,7 +217,7 @@ serve(async (req) => {
         recent_contests: Number(artist.recent_contests) || 0,
         is_recent_contestant: artist.recent_contests > 0,
         currency_info: {
-          primary_currency: 'USD',
+          primary_currency: artist.balance_currency || 'USD',
           has_mixed_currencies: false
         },
         invitation_info: artist.invitation_count > 0 ? {
@@ -243,6 +244,7 @@ serve(async (req) => {
         stripe_recipient_id: artist.stripe_recipient_id,
         estimated_balance: Number(artist.estimated_balance),
         balance_currency: artist.balance_currency || 'USD',
+        currency_symbol: artist.currency_symbol || '$',
         current_balance: Number(artist.estimated_balance),
         latest_payment_status: null,
         payment_history_summary: {
@@ -256,8 +258,8 @@ serve(async (req) => {
         recent_contests: Number(artist.recent_contests) || 0,
         is_recent_contestant: artist.recent_contests > 0,
         currency_info: {
-          primary_currency: artist.default_currency || 'USD',
-          has_mixed_currencies: false
+          primary_currency: artist.balance_currency || 'USD',
+          has_mixed_currencies: artist.has_mixed_currencies || false
         },
         invitation_info: null
       })) || [],

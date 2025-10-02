@@ -1,3 +1,30 @@
+// ============================================================================
+// Stripe Instant Payout Function - CURRENTLY DISABLED
+// ============================================================================
+// STATUS: DISABLED (2025-10-02)
+//
+// REASON FOR DISABLING:
+// - Instant Payouts only work with "full" or "express" service agreement accounts
+// - Our Global Payments system uses "custom" accounts for international support
+// - This caused errors for artists in Thailand and other non-US/CA countries
+// - We're focusing on getting basic transfers working first
+//
+// CURRENT PAYMENT FLOW (USING REGULAR TRANSFERS):
+// 1. Use process-pending-payments function (regular transfers)
+// 2. Money goes to artist's Stripe balance immediately
+// 3. Artist withdraws to their bank on their own schedule
+// 4. Works with ALL countries (50+), not just instant payout countries
+//
+// FUTURE RE-ENABLEMENT:
+// If we want instant payouts again, they only work for:
+// - United States (USD), Canada (CAD), United Kingdom (GBP)
+// - European Union (EUR), Singapore (SGD), Australia (AUD)
+// - Norway (NOK), New Zealand (NZD), Malaysia (MYR)
+// - Currency MUST match country (e.g., CAD for Canada, not USD)
+// - And artist must have "express" account type (not "custom")
+//
+// ============================================================================
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -13,6 +40,28 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  // ========================================================================
+  // INSTANT PAYOUTS ARE DISABLED - Return error immediately
+  // ========================================================================
+  return new Response(JSON.stringify({
+    success: false,
+    error: 'Instant Payouts are currently disabled',
+    message: 'Instant Payouts have been disabled to support international artists. Please use regular payment processing instead.',
+    details: {
+      reason: 'Instant Payouts only work with express/full service agreement accounts, but our Global Payments system uses custom accounts for international support (Thailand, Philippines, etc.)',
+      alternative: 'Use the "Process Payment" button which uses regular transfers - works with all countries and funds are available immediately in artist Stripe balance',
+      disabled_date: '2025-10-02',
+      status: 'DISABLED'
+    }
+  }), {
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    status: 400
+  });
+
+  // ========================================================================
+  // OLD CODE BELOW - Kept for reference if we re-enable instant payouts
+  // ========================================================================
+  /*
   try {
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -317,4 +366,5 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
+  */
 });

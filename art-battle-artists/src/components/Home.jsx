@@ -26,6 +26,8 @@ import { supabase } from '../lib/supabase';
 import AuthModal from './AuthModal';
 import InvitationAcceptanceModal from './InvitationAcceptanceModal';
 import PaymentStatusBanner from './PaymentStatusBanner';
+import DismissibleNote from './DismissibleNote';
+import ManualPaymentRequest from './ManualPaymentRequest';
 
 
 const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
@@ -853,6 +855,73 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
         hasRecentActivity={hasRecentActivity}
         onNavigateToTab={onNavigateToTab}
       />
+
+      {/* Dismissible Notes - informational announcements */}
+      <DismissibleNote
+        noteId="payment-options-info-2025-10"
+        variant="info"
+        title="We're Making Payment Improvements!"
+      >
+        <Flex direction="column" gap="3">
+          <Text size="2">
+            There are several ways to receive payment for Art Battle auction sales and prizes:
+          </Text>
+
+          <Box>
+            <Text size="2" weight="bold" style={{ color: 'var(--green-11)' }}>
+              ⚡ Fastest (2-4 days after event/sale)
+            </Text>
+            <Text size="2" style={{ display: 'block', marginLeft: '1rem' }}>
+              Add your bank account through our financial partner Stripe.{' '}
+              <Text weight="bold" style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => onNavigateToTab('payments')}>
+                Set up now
+              </Text>
+            </Text>
+          </Box>
+
+          <Box>
+            <Text size="2" weight="bold" style={{ color: 'var(--orange-11)' }}>
+              📧 Standard (14-21 days after event/sale)
+            </Text>
+            <Text size="2" style={{ display: 'block', marginLeft: '1rem' }}>
+              Payment through Zelle (US), SWIFT transfer (EU/AU/NZ), PayPal (Global except CA), or Interac (CA)
+            </Text>
+          </Box>
+
+          <Box>
+            <Text size="2" weight="bold" style={{ color: 'var(--gray-11)' }}>
+              🤝 Manual (21+ days after event/sale)
+            </Text>
+            <Text size="2" style={{ display: 'block', marginLeft: '1rem' }}>
+              Payment from local producer (CashApp, cash, etc.) - available after 14 days
+            </Text>
+          </Box>
+
+          <Callout.Root color="blue" size="1">
+            <Callout.Text>
+              <Text size="1">
+                <strong>Why Stripe is fastest:</strong> It's more secure (your info never reaches our team via email),
+                ensures the correct amount is sent every time, and processes automatically.
+              </Text>
+            </Callout.Text>
+          </Callout.Root>
+
+          <Callout.Root color="amber" size="1">
+            <Callout.Text>
+              <Text size="1">
+                <strong>Don't see your balance?</strong> Contact{' '}
+                <a href="mailto:artists@artbattle.com" style={{ textDecoration: 'underline' }}>
+                  artists@artbattle.com
+                </a>
+                {' '}with your name, phone number, and most recent event to link your sales.
+              </Text>
+            </Callout.Text>
+          </Callout.Root>
+        </Flex>
+      </DismissibleNote>
+
+      {/* Manual Payment Request - shows if eligible (event >14 days old with balance) */}
+      <ManualPaymentRequest artistProfile={selectedProfile} />
 
       {error && (
         <Callout.Root color="red">

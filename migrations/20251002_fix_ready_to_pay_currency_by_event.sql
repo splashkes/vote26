@@ -1,0 +1,124 @@
+-- Fix currency for ready-to-pay artists based on EVENT location, not artist country
+-- Artists travel - they should be paid in the currency of where they sold artwork
+
+DROP FUNCTION IF EXISTS public.get_ready_to_pay_artists();
+
+CREATE OR REPLACE FUNCTION public.get_ready_to_pay_artists()
+ RETURNS TABLE(
+   artist_id uuid,
+   artist_name text,
+   artist_email text,
+   artist_phone text,
+   artist_entry_id integer,
+   artist_country text,
+   estimated_balance numeric,
+   balance_currency text,
+   currency_symbol text,
+   has_mixed_currencies boolean,
+   payment_account_status text,
+   stripe_recipient_id text,
+   recent_city text,
+   recent_contests bigint
+ )
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+  RETURN QUERY
+  WITH art_sales_by_currency AS (
+    -- Calculate sales grouped by artist AND currency (from event currency)
+    SELECT
+      ap.id as artist_id,
+      e.currency as sale_currency,
+      SUM(COALESCE(a.final_price, a.current_bid, 0) * e.artist_auction_portion) as sales_total
+    FROM art a
+    JOIN artist_profiles ap ON a.artist_id = ap.id
+    JOIN events e ON a.event_id = e.id
+    WHERE a.status IN ('sold', 'paid', 'closed')
+      AND COALESCE(a.final_price, a.current_bid, 0) > 0
+    GROUP BY ap.id, e.currency
+  ),
+  artist_currency_summary AS (
+    -- For each artist, determine primary currency and if they have mixed currencies
+    SELECT
+      art_sales_by_currency.artist_id,
+      -- Primary currency = the one with highest total sales
+      (ARRAY_AGG(sale_currency ORDER BY sales_total DESC))[1] as primary_currency,
+      -- Total balance in primary currency (simplified - just use highest currency total)
+      MAX(sales_total) as primary_balance,
+      -- Check if artist has sales in multiple currencies
+      COUNT(DISTINCT sale_currency) > 1 as has_mixed_currencies,
+      -- Sum ALL sales (this is a simplification - ideally we'd convert to one currency)
+      SUM(sales_total) as total_all_currencies
+    FROM art_sales_by_currency
+    GROUP BY art_sales_by_currency.artist_id
+  ),
+  payment_debits AS (
+    SELECT
+      ap.artist_profile_id,
+      SUM(ap.gross_amount) as debits_total
+    FROM artist_payments ap
+    WHERE ap.status IN ('paid', 'verified')
+    GROUP BY ap.artist_profile_id
+  ),
+  recent_event_info AS (
+    SELECT
+      rc.artist_id,
+      c.name as event_city,
+      COUNT(DISTINCT e.id) as contest_count,
+      ROW_NUMBER() OVER (PARTITION BY rc.artist_id ORDER BY MAX(e.event_start_datetime) DESC) as rn
+    FROM round_contestants rc
+    JOIN rounds r ON rc.round_id = r.id
+    JOIN events e ON r.event_id = e.id
+    LEFT JOIN cities c ON e.city_id = c.id
+    WHERE e.event_start_datetime >= NOW() - INTERVAL '90 days'
+    GROUP BY rc.artist_id, c.name
+  ),
+  active_payment_attempts AS (
+    SELECT DISTINCT
+      ap.artist_profile_id
+    FROM artist_payments ap
+    WHERE (
+      ap.status IN ('pending', 'processing')
+      AND ap.created_at >= NOW() - INTERVAL '24 hours'
+    ) OR (
+      ap.status = 'failed'
+      AND ap.created_at >= NOW() - INTERVAL '24 hours'
+    )
+  )
+  SELECT
+    ap.id::UUID,
+    ap.name::TEXT,
+    ap.email::TEXT,
+    ap.phone::TEXT,
+    ap.entry_id::INTEGER,
+    ap.country::TEXT,
+    -- Use total from ALL currencies (simplified approach)
+    GREATEST(0, COALESCE(acs.total_all_currencies, 0) - COALESCE(pd.debits_total, 0))::NUMERIC,
+    -- Currency is based on where they sold most artwork
+    COALESCE(acs.primary_currency, 'USD')::TEXT as balance_currency,
+    -- Get currency symbol for primary currency
+    COALESCE(
+      (SELECT countries.currency_symbol FROM countries WHERE countries.currency_code = acs.primary_currency LIMIT 1),
+      '$'
+    )::TEXT as currency_symbol,
+    COALESCE(acs.has_mixed_currencies, false)::BOOLEAN,
+    agp.status::TEXT,
+    agp.stripe_recipient_id::TEXT,
+    COALESCE(rei.event_city, 'No recent events')::TEXT,
+    COALESCE(rei.contest_count, 0)::BIGINT
+  FROM artist_profiles ap
+  JOIN artist_global_payments agp ON ap.id = agp.artist_profile_id
+  LEFT JOIN artist_currency_summary acs ON ap.id = acs.artist_id
+  LEFT JOIN payment_debits pd ON ap.id = pd.artist_profile_id
+  LEFT JOIN recent_event_info rei ON ap.id = rei.artist_id AND rei.rn = 1
+  LEFT JOIN active_payment_attempts apa ON ap.id = apa.artist_profile_id
+  WHERE agp.status = 'ready'
+    AND agp.stripe_recipient_id IS NOT NULL
+    AND GREATEST(0, COALESCE(acs.total_all_currencies, 0) - COALESCE(pd.debits_total, 0)) > 0.01
+    AND apa.artist_profile_id IS NULL
+  ORDER BY GREATEST(0, COALESCE(acs.total_all_currencies, 0) - COALESCE(pd.debits_total, 0)) DESC;
+END;
+$function$;
+
+GRANT EXECUTE ON FUNCTION public.get_ready_to_pay_artists() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_ready_to_pay_artists() TO service_role;
