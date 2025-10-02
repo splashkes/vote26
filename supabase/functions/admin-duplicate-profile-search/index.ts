@@ -237,13 +237,15 @@ serve(async (req) => {
         email: data.profile.email,
         phone: data.profile.phone,
         created_at: data.profile.created_at,
+        superseded_by: data.profile.superseded_by || null,
         person: data.profile.person_id ? {
           id: data.profile.person_id,
           name: data.person?.name || null,
           email: data.person?.email || null,
           phone: data.person?.phone || null,
           auth_user_id: data.person?.auth_user_id || null,
-          has_login: !!data.person?.auth_user_id
+          has_login: !!data.person?.auth_user_id,
+          superseded_by: data.person?.superseded_by || null
         } : null,
         activity_counts: activityCounts,
         total_activity: totalActivity,

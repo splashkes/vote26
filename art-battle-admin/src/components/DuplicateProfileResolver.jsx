@@ -149,39 +149,51 @@ const DuplicateProfileResolver = () => {
         const canonicalProfile = searchResults.profiles.find(p => !p.superseded_by);
         const supersededProfiles = searchResults.profiles.filter(p => p.superseded_by);
         const isAlreadyReconciled = supersededProfiles.length > 0 && canonicalProfile;
+        const onlyOnePerson = uniquePersons.length === 1;
+        const singlePerson = onlyOnePerson ? uniquePersons[0] : null;
 
         return (
           <>
             {/* USER Header */}
-            <Card size="3" mb="4" style={{ backgroundColor: 'var(--blue-2)' }}>
+            <Card size="3" mb="4" style={{ backgroundColor: onlyOnePerson ? 'var(--green-2)' : 'var(--blue-2)' }}>
               <Flex direction="column" gap="2">
                 <Heading size="5">
                   For USER {userInfo ? `(${userInfo.auth_user_id.slice(0, 8)}...)` : '(Not Linked)'} with phone number {phoneNumber}
+                  {onlyOnePerson && singlePerson && (
+                    <span style={{ color: 'var(--green-11)' }}> IS LINKED TO PERSON {singlePerson.id.slice(0, 8)}...</span>
+                  )}
                 </Heading>
-                {userInfo && userInfo.email && (
+                {onlyOnePerson && singlePerson && (
+                  <Flex gap="3" mt="2" wrap="wrap">
+                    {singlePerson.name && (
+                      <Text size="2" weight="medium">👤 {singlePerson.name}</Text>
+                    )}
+                    {singlePerson.phone && (
+                      <Text size="2">📱 {singlePerson.phone}</Text>
+                    )}
+                    {singlePerson.email && (
+                      <Text size="2">✉️ {singlePerson.email}</Text>
+                    )}
+                    {singlePerson.has_login && (
+                      <Badge color="green" size="1">🔐 Has Login</Badge>
+                    )}
+                  </Flex>
+                )}
+                {userInfo && userInfo.email && !onlyOnePerson && (
                   <Text size="2" color="gray">Email: {userInfo.email}</Text>
                 )}
-                {!isAlreadyReconciled && (
+                {!onlyOnePerson && (
                   <Text size="2" weight="bold" color="blue">
                     Which PERSON and ARTIST_PROFILE do you want to link?
                   </Text>
                 )}
+                {onlyOnePerson && isAlreadyReconciled && (
+                  <Badge color="green" size="2" style={{ marginTop: '8px' }}>
+                    ✅ Reconciliation Complete
+                  </Badge>
+                )}
               </Flex>
             </Card>
-
-            {/* Reconciliation Status */}
-            {isAlreadyReconciled && (
-              <Callout.Root color="green" mb="4">
-                <Callout.Icon>
-                  <CheckCircledIcon />
-                </Callout.Icon>
-                <Callout.Text>
-                  <strong>✅ Already Reconciled!</strong> This phone number has been reconciled.
-                  Profile "{canonicalProfile.name}" (ID: {canonicalProfile.id.slice(0, 8)}...) is the CANONICAL profile.
-                  {supersededProfiles.length > 0 && ` ${supersededProfiles.length} other profile${supersededProfiles.length > 1 ? 's are' : ' is'} marked as superseded.`}
-                </Callout.Text>
-              </Callout.Root>
-            )}
 
             {/* Summary Card */}
             <Card size="2" mb="4">
@@ -205,57 +217,11 @@ const DuplicateProfileResolver = () => {
               </Flex>
             </Card>
 
-            {/* Two Column Selection */}
-            <Grid columns="2" gap="4" mb="4">
-              {/* Left Column: Person Selection */}
-              <Card size="3">
-                <Heading size="4" mb="3">Select PERSON to Link</Heading>
-                <RadioGroup.Root value={selectedPersonId || ''} onValueChange={setSelectedPersonId}>
-                  <Flex direction="column" gap="3">
-                    {uniquePersons.map((person) => (
-                      <Card key={person.id} size="2" style={{
-                        backgroundColor: selectedPersonId === person.id ? 'var(--green-2)' : 'transparent',
-                        cursor: 'pointer',
-                        border: selectedPersonId === person.id ? '2px solid var(--green-9)' : '1px solid var(--gray-6)'
-                      }}>
-                        <Flex gap="3" align="start">
-                          <RadioGroup.Item value={person.id} />
-                          <Box style={{ flex: 1 }}>
-                            <Flex justify="between" align="start" mb="2">
-                              <Text weight="bold" size="3">
-                                {person.name || 'Unnamed Person'}
-                              </Text>
-                              {person.has_login && (
-                                <Badge color="green" size="1">🔐 Has Login</Badge>
-                              )}
-                            </Flex>
-                            <Flex direction="column" gap="1">
-                              {person.phone && (
-                                <Text size="2">📱 {person.phone}</Text>
-                              )}
-                              {person.email && (
-                                <Text size="2">✉️ {person.email}</Text>
-                              )}
-                              <Text size="1" color="gray">
-                                Person ID: {person.id.slice(0, 8)}...
-                              </Text>
-                              {person.auth_user_id && (
-                                <Text size="1" color="gray">
-                                  User ID: {person.auth_user_id.slice(0, 8)}...
-                                </Text>
-                              )}
-                            </Flex>
-                          </Box>
-                        </Flex>
-                      </Card>
-                    ))}
-                  </Flex>
-                </RadioGroup.Root>
-              </Card>
-
-              {/* Right Column: Artist Profile Selection */}
-              <Card size="3">
-                <Heading size="4" mb="3">Select ARTIST_PROFILE to Link</Heading>
+            {/* Two Column Selection OR Single Column if only one person */}
+            {onlyOnePerson ? (
+              /* Single Column: Just show profiles */
+              <Card size="3" mb="4">
+                <Heading size="4" mb="3">Artist Profiles</Heading>
                 <RadioGroup.Root value={selectedArtistProfileId || ''} onValueChange={setSelectedArtistProfileId}>
                   <Flex direction="column" gap="3">
                     {searchResults.profiles.map((profile) => {
@@ -298,7 +264,7 @@ const DuplicateProfileResolver = () => {
                                   </Badge>
                                 )}
                               </Flex>
-                            <Flex direction="column" gap="1">
+                              <Flex direction="column" gap="1">
                               {profile.email && (
                                 <Text size="2">✉️ {profile.email}</Text>
                               )}
@@ -337,7 +303,141 @@ const DuplicateProfileResolver = () => {
                   </Flex>
                 </RadioGroup.Root>
               </Card>
-            </Grid>
+            ) : (
+              /* Two Column Grid: Show both person and profile selection */
+              <Grid columns="2" gap="4" mb="4">
+                {/* Left Column: Person Selection */}
+                <Card size="3">
+                  <Heading size="4" mb="3">Select PERSON to Link</Heading>
+                  <RadioGroup.Root value={selectedPersonId || ''} onValueChange={setSelectedPersonId}>
+                    <Flex direction="column" gap="3">
+                      {uniquePersons.map((person) => (
+                        <Card key={person.id} size="2" style={{
+                          backgroundColor: selectedPersonId === person.id ? 'var(--green-2)' : 'transparent',
+                          cursor: 'pointer',
+                          border: selectedPersonId === person.id ? '2px solid var(--green-9)' : '1px solid var(--gray-6)'
+                        }}>
+                          <Flex gap="3" align="start">
+                            <RadioGroup.Item value={person.id} />
+                            <Box style={{ flex: 1 }}>
+                              <Flex justify="between" align="start" mb="2">
+                                <Text weight="bold" size="3">
+                                  {person.name || 'Unnamed Person'}
+                                </Text>
+                                {person.has_login && (
+                                  <Badge color="green" size="1">🔐 Has Login</Badge>
+                                )}
+                              </Flex>
+                              <Flex direction="column" gap="1">
+                                {person.phone && (
+                                  <Text size="2">📱 {person.phone}</Text>
+                                )}
+                                {person.email && (
+                                  <Text size="2">✉️ {person.email}</Text>
+                                )}
+                                <Text size="1" color="gray">
+                                  Person ID: {person.id.slice(0, 8)}...
+                                </Text>
+                                {person.auth_user_id && (
+                                  <Text size="1" color="gray">
+                                    User ID: {person.auth_user_id.slice(0, 8)}...
+                                  </Text>
+                                )}
+                              </Flex>
+                            </Box>
+                          </Flex>
+                        </Card>
+                      ))}
+                    </Flex>
+                  </RadioGroup.Root>
+                </Card>
+
+                {/* Right Column: Artist Profile Selection */}
+                <Card size="3">
+                  <Heading size="4" mb="3">Select ARTIST_PROFILE to Link</Heading>
+                  <RadioGroup.Root value={selectedArtistProfileId || ''} onValueChange={setSelectedArtistProfileId}>
+                    <Flex direction="column" gap="3">
+                      {searchResults.profiles.map((profile) => {
+                        const isCanonical = !profile.superseded_by;
+                        const isSuperseded = !!profile.superseded_by;
+
+                        return (
+                          <Card key={profile.id} size="2" style={{
+                            backgroundColor: selectedArtistProfileId === profile.id ? 'var(--green-2)' :
+                                            isSuperseded ? 'var(--gray-2)' : 'transparent',
+                            cursor: 'pointer',
+                            border: selectedArtistProfileId === profile.id ? '2px solid var(--green-9)' :
+                                    isCanonical && isAlreadyReconciled ? '2px solid var(--green-7)' :
+                                    '1px solid var(--gray-6)',
+                            opacity: isSuperseded ? 0.7 : 1
+                          }}>
+                            <Flex gap="3" align="start">
+                              <RadioGroup.Item value={profile.id} disabled={isAlreadyReconciled} />
+                              <Box style={{ flex: 1 }}>
+                                <Flex justify="between" align="start" mb="2">
+                                  <Box>
+                                    <Flex gap="2" align="center" mb="1">
+                                      <Text weight="bold" size="3">{profile.name}</Text>
+                                      {isCanonical && isAlreadyReconciled && (
+                                        <Badge color="green" size="1">⭐ CANONICAL</Badge>
+                                      )}
+                                      {isSuperseded && (
+                                        <Badge color="gray" size="1">Superseded</Badge>
+                                      )}
+                                    </Flex>
+                                    {profile.outstanding_balance > 0 && (
+                                      <Text size="5" weight="bold" color="green" style={{ display: 'block' }}>
+                                        💰 ${profile.outstanding_balance.toFixed(2)}
+                                      </Text>
+                                    )}
+                                  </Box>
+                                  {profile.person && (
+                                    <Badge size="1" color="blue">
+                                      → Person {profile.person.id.slice(0, 6)}
+                                    </Badge>
+                                  )}
+                                </Flex>
+                                <Flex direction="column" gap="1">
+                                  {profile.email && (
+                                    <Text size="2">✉️ {profile.email}</Text>
+                                  )}
+                                  {profile.activity_counts.art > 0 && (
+                                    <Text size="2">🎨 {profile.activity_counts.art} art pieces</Text>
+                                  )}
+                                  {profile.activity_counts.artist_applications > 0 && (
+                                    <Text size="2">📝 {profile.activity_counts.artist_applications} applications</Text>
+                                  )}
+                                  {profile.activity_counts.artist_invitations > 0 && (
+                                    <Text size="2">📧 {profile.activity_counts.artist_invitations} invitations</Text>
+                                  )}
+                                  {profile.activity_counts.artist_payments > 0 && (
+                                    <Text size="2">💵 {profile.activity_counts.artist_payments} payments</Text>
+                                  )}
+                                  {profile.stripe_account && (
+                                    <Badge color="blue" size="1">✓ Stripe Connected</Badge>
+                                  )}
+                                  <Text size="1" color="gray">
+                                    Profile ID: {profile.id.slice(0, 8)}...
+                                  </Text>
+                                  <Text size="1" color="gray">
+                                    Created: {new Date(profile.created_at).toLocaleDateString()}
+                                  </Text>
+                                  {isSuperseded && profile.superseded_by && (
+                                    <Text size="1" color="orange">
+                                      → Superseded by {profile.superseded_by.slice(0, 8)}...
+                                    </Text>
+                                  )}
+                                </Flex>
+                              </Box>
+                            </Flex>
+                          </Card>
+                        );
+                      })}
+                    </Flex>
+                  </RadioGroup.Root>
+                </Card>
+              </Grid>
+            )}
 
             {/* Reconcile Button */}
             {selectedPersonId && selectedArtistProfileId && (
