@@ -2559,6 +2559,70 @@ The Art Battle Team`);
                         </Box>
                       </Grid>
                     )}
+
+                    {/* Producer Tickets Sold */}
+                    <Separator my="3" />
+                    <Box>
+                      <Flex align="center" justify="between" gap="2" mb="2">
+                        <Text size="2" weight="medium">
+                          Tickets Sold by Producer
+                        </Text>
+                        {!editingProducerTickets && (
+                          <Button
+                            size="1"
+                            variant="soft"
+                            onClick={() => {
+                              setEditingProducerTickets(true);
+                              setProducerTicketsValue(event.producer_tickets_sold || '0');
+                            }}
+                          >
+                            Edit
+                          </Button>
+                        )}
+                      </Flex>
+                      {editingProducerTickets ? (
+                        <Flex gap="2" mt="1">
+                          <TextField.Root
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                            value={producerTicketsValue}
+                            onChange={(e) => setProducerTicketsValue(e.target.value)}
+                            style={{ flex: 1 }}
+                          />
+                          <Button
+                            size="1"
+                            onClick={updateProducerTickets}
+                            disabled={updatingProducerTickets}
+                          >
+                            {updatingProducerTickets ? 'Saving...' : 'Save'}
+                          </Button>
+                          <Button
+                            size="1"
+                            variant="soft"
+                            color="gray"
+                            onClick={() => {
+                              setEditingProducerTickets(false);
+                              setProducerTicketsValue('');
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        </Flex>
+                      ) : (
+                        <Flex direction="column" gap="1">
+                          <Text size="3" weight="bold">
+                            {event.producer_tickets_currency || event.currency || '$'}{(event.producer_tickets_sold || 0).toFixed(2)}
+                          </Text>
+                          {event.producer_tickets_updated_by && (
+                            <Text size="1" color="gray">
+                              Last updated by {event.producer_tickets_updated_by}
+                              {event.producer_tickets_updated_at && ` on ${new Date(event.producer_tickets_updated_at).toLocaleString()}`}
+                            </Text>
+                          )}
+                        </Flex>
+                      )}
+                    </Box>
                   </Box>
                 </Card>
 
