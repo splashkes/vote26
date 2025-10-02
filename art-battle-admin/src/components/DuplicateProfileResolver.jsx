@@ -544,17 +544,48 @@ const DuplicateProfileResolver = () => {
                 <Separator my="3" />
 
                 <Card size="2" style={{ backgroundColor: 'var(--gray-2)' }}>
-                  <Text size="2" weight="bold" mb="2" style={{ display: 'block' }}>
-                    📋 Message for Support Team / User:
-                  </Text>
+                  <Flex justify="between" align="center" mb="2">
+                    <Text size="2" weight="bold">
+                      📋 Message for Support Team / User:
+                    </Text>
+                    <Button
+                      size="1"
+                      variant="soft"
+                      onClick={() => {
+                        const message = `Hi ${selectedProfile?.name || 'there'},
+
+We've resolved the duplicate profile issue with your account.
+
+Your account is now properly linked to phone number ${phoneNumber}.
+
+When you log in, you'll see:
+• Your balance of $${selectedProfile?.outstanding_balance?.toFixed(2) || '0.00'}
+• All your art pieces and applications
+• Your complete event history
+
+If you have any questions, please let us know!
+
+Best regards,
+Art Battle Support Team`;
+                        navigator.clipboard.writeText(message).then(() => {
+                          alert('✅ Message copied to clipboard!');
+                        }).catch(() => {
+                          alert('❌ Failed to copy. Please select and copy manually.');
+                        });
+                      }}
+                    >
+                      📋 Copy Message
+                    </Button>
+                  </Flex>
                   <Box style={{
-                    backgroundColor: 'white',
+                    backgroundColor: '#1a1a1a',
                     padding: '12px',
                     borderRadius: '6px',
                     fontFamily: 'monospace',
-                    fontSize: '12px'
+                    fontSize: '12px',
+                    color: '#e0e0e0'
                   }}>
-                    <Text size="1" style={{ whiteSpace: 'pre-wrap', userSelect: 'all' }}>
+                    <Text size="1" style={{ whiteSpace: 'pre-wrap', userSelect: 'all', color: '#e0e0e0' }}>
 {`Hi ${selectedProfile?.name || 'there'},
 
 We've resolved the duplicate profile issue with your account.
@@ -572,9 +603,6 @@ Best regards,
 Art Battle Support Team`}
                     </Text>
                   </Box>
-                  <Text size="1" color="gray" mt="2" style={{ display: 'block' }}>
-                    ↑ Click text above to select and copy
-                  </Text>
                 </Card>
               </Box>
             );
