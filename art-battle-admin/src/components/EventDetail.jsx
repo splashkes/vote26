@@ -19,7 +19,8 @@ import {
   TextArea,
   Select,
   AlertDialog,
-  Callout
+  Callout,
+  IconButton
 } from '@radix-ui/themes';
 import { supabase } from '../lib/supabase';
 import { DebugField, DebugObjectViewer } from './DebugComponents';
@@ -50,7 +51,9 @@ import {
   DotFilledIcon,
   BadgeIcon,
   ReloadIcon,
-  TrashIcon
+  TrashIcon,
+  ChevronDownIcon,
+  ChevronUpIcon
 } from '@radix-ui/react-icons';
 import { getRFMScore, getBatchRFMScores, getSegmentColor, getSegmentTier } from '../lib/rfmScoring';
 import PersonTile from './PersonTile';
@@ -99,6 +102,15 @@ const EventDetail = () => {
   const [artistConfirmations, setArtistConfirmations] = useState([]);
   const [artistsLoading, setArtistsLoading] = useState(false);
   const [selectedArtist, setSelectedArtist] = useState(null);
+  const [preEventCollapsed, setPreEventCollapsed] = useState(false);
+  const [postEventCollapsed, setPostEventCollapsed] = useState(false);
+  const [artistPaymentsCollapsed, setArtistPaymentsCollapsed] = useState(false);
+  const [artistPaymentsData, setArtistPaymentsData] = useState([]);
+  const [artistPaymentsLoading, setArtistPaymentsLoading] = useState(false);
+  const [postEventData, setPostEventData] = useState(null);
+  const [postEventLoading, setPostEventLoading] = useState(false);
+  const [unpaidModalOpen, setUnpaidModalOpen] = useState(false);
+  const [noBidModalOpen, setNoBidModalOpen] = useState(false);
   const [artistModalOpen, setArtistModalOpen] = useState(false);
   const [artistModalType, setArtistModalType] = useState(''); // 'application', 'invitation', 'confirmation'
   const [artistPerformanceData, setArtistPerformanceData] = useState(new Map());
@@ -162,6 +174,38 @@ const EventDetail = () => {
       checkSuperAdmin();
     }
   }, [eventId]);
+
+  // Fetch artist payments and post-event data in parallel when event is loaded
+  useEffect(() => {
+    if (!event) return;
+
+    const fetchPostEventDataIfNeeded = async () => {
+      const promises = [];
+
+      // Check if completed and fetch post-event data
+      if (event.event_end_datetime) {
+        const now = new Date();
+        const endTime = new Date(event.event_end_datetime);
+        const isCompleted = now > endTime;
+
+        if (isCompleted) {
+          promises.push(fetchPostEventData());
+        }
+      }
+
+      // Fetch artist payments if confirmations are loaded
+      if (artistConfirmations.length > 0) {
+        promises.push(fetchArtistPayments());
+      }
+
+      // Run both in parallel if both conditions are met
+      if (promises.length > 0) {
+        await Promise.all(promises);
+      }
+    };
+
+    fetchPostEventDataIfNeeded();
+  }, [event, artistConfirmations]);
 
   const fetchEventDetail = async () => {
     try {
@@ -542,6 +586,62 @@ const EventDetail = () => {
       setArtistConfirmations([]);
     } finally {
       setArtistsLoading(false);
+    }
+  };
+
+  const fetchArtistPayments = async () => {
+    if (!event?.id || !event?.eid) return;
+
+    setArtistPaymentsLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-event-artist-payments', {
+        body: { event_eid: event.eid }
+      });
+
+      if (error) {
+        console.error('Error fetching artist payments:', error);
+        throw error;
+      }
+
+      // Set the artist payment data from the new endpoint
+      setArtistPaymentsData(data.artists || []);
+    } catch (err) {
+      console.error('Error fetching artist payments:', err);
+    } finally {
+      setArtistPaymentsLoading(false);
+    }
+  };
+
+  const fetchPostEventData = async () => {
+    if (!event?.id) return;
+
+    setPostEventLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('get-event-post-summary', {
+        body: { event_id: event.id }
+      });
+
+      if (error) {
+        // Try to parse debug info from error
+        if (error.context) {
+          try {
+            const responseText = await error.context.text();
+            console.log('Edge function error response:', responseText);
+            const parsed = JSON.parse(responseText);
+            if (parsed.debug) {
+              console.log('Edge function debug info:', parsed.debug);
+            }
+          } catch (e) {
+            console.log('Could not parse error response:', e);
+          }
+        }
+        throw error;
+      }
+      setPostEventData(data);
+    } catch (err) {
+      console.error('Error fetching post-event data:', err);
+    } finally {
+      setPostEventLoading(false);
     }
   };
 
@@ -1602,13 +1702,375 @@ The Art Battle Team`);
           </Flex>
         </Flex>
 
-        {/* Event Info Cards */}
-        <div className="card-grid card-grid-3">
+        {/* Post-Event Summary - Collapsible (only show if event is in the past) */}
+        {status.label === 'Completed' && (
           <Card>
             <Box p="3">
-              <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>
-                Basic Info
-              </Text>
+              <Flex justify="between" align="center" style={{ cursor: 'pointer' }} onClick={() => setPostEventCollapsed(!postEventCollapsed)}>
+                <Heading size="4">Post-Event Summary</Heading>
+                <IconButton size="1" variant="ghost">
+                  {postEventCollapsed ? <ChevronDownIcon /> : <ChevronUpIcon />}
+                </IconButton>
+              </Flex>
+            </Box>
+            {!postEventCollapsed && (
+              <Box p="3" pt="0">
+                {postEventLoading ? (
+                  <Flex align="center" justify="center" p="4">
+                    <Spinner size="3" />
+                  </Flex>
+                ) : (
+                  <>
+                    <div className="card-grid card-grid-3">
+                      {/* Sales Summary Card */}
+                      <Card>
+                        <Box p="3">
+                          <Text size="2" weight="medium" mb="3" style={{ display: 'block' }}>
+                            Auction Sales Summary
+                          </Text>
+                          <Flex direction="column" gap="2">
+                            <Flex justify="between">
+                              <Text size="2" color="gray">Total Top Bids:</Text>
+                              <Text size="2" weight="bold">
+                                {postEventData?.auction_summary?.currency_symbol}
+                                {postEventData?.auction_summary?.total_top_bids_amount?.toFixed(2) || '0.00'}
+                              </Text>
+                            </Flex>
+                            <Flex justify="between">
+                              <Text size="2" color="gray">Paid Online:</Text>
+                              <Text size="2" weight="bold" color="green">
+                                {postEventData?.auction_summary?.currency_symbol}
+                                {postEventData?.auction_summary?.total_paid_online?.toFixed(2) || '0.00'}
+                              </Text>
+                            </Flex>
+                            <Flex justify="between">
+                              <Text size="2" color="gray">Collected by Partner:</Text>
+                              <Text size="2" weight="bold" color="blue">
+                                {postEventData?.auction_summary?.currency_symbol}
+                                {postEventData?.auction_summary?.total_paid_partner?.toFixed(2) || '0.00'}
+                              </Text>
+                            </Flex>
+                            <Flex justify="between">
+                              <Text size="2" color="gray">Sold & Unpaid:</Text>
+                              <Text size="2" weight="bold" color="orange">
+                                {postEventData?.auction_summary?.currency_symbol}
+                                {postEventData?.unpaid_paintings?.total_amount?.toFixed(2) || '0.00'}
+                              </Text>
+                            </Flex>
+                            <Separator size="4" />
+                            <Flex justify="between">
+                              <Text size="2" color="gray">Tax (Online):</Text>
+                              <Text size="2" weight="bold">
+                                {postEventData?.auction_summary?.currency_symbol}
+                                {postEventData?.auction_summary?.tax_collected_online?.toFixed(2) || '0.00'}
+                              </Text>
+                            </Flex>
+                            <Flex justify="between">
+                              <Text size="2" color="gray">Tax (Partner):</Text>
+                              <Text size="2" weight="bold">
+                                {postEventData?.auction_summary?.currency_symbol}
+                                {postEventData?.auction_summary?.tax_collected_partner?.toFixed(2) || '0.00'}
+                              </Text>
+                            </Flex>
+                          </Flex>
+                        </Box>
+                      </Card>
+
+                      {/* Unpaid Paintings Card */}
+                      <Card>
+                        <Box p="3">
+                          <Text size="2" weight="medium" mb="3" style={{ display: 'block' }}>
+                            Unpaid Paintings
+                          </Text>
+                          <Flex direction="column" gap="2">
+                            <Flex justify="between" align="center">
+                              <Badge color="orange" size="2">
+                                {postEventData?.unpaid_paintings?.count || 0} paintings
+                              </Badge>
+                              <Text size="2" weight="bold" color="orange">
+                                {postEventData?.auction_summary?.currency_symbol}
+                                {postEventData?.unpaid_paintings?.total_amount?.toFixed(2) || '0.00'}
+                              </Text>
+                            </Flex>
+                            <Text size="1" color="gray">
+                              Paintings with bids but no payment
+                            </Text>
+                            <Button
+                              size="1"
+                              variant="soft"
+                              mt="2"
+                              onClick={() => setUnpaidModalOpen(true)}
+                              disabled={!postEventData?.unpaid_paintings?.count}
+                            >
+                              View List
+                            </Button>
+                            {postEventData?.unpaid_paintings?.sample_thumbnails &&
+                             postEventData.unpaid_paintings.sample_thumbnails.length > 0 && (
+                              <Flex gap="1" mt="2" wrap="wrap">
+                                {postEventData.unpaid_paintings.sample_thumbnails.slice(0, 3).map((thumb, idx) => (
+                                  <Box
+                                    key={idx}
+                                    style={{
+                                      width: '60px',
+                                      height: '60px',
+                                      borderRadius: '4px',
+                                      overflow: 'hidden',
+                                      border: '1px solid var(--gray-6)'
+                                    }}
+                                  >
+                                    <img
+                                      src={thumb}
+                                      alt="Unpaid painting"
+                                      style={{
+                                        width: '100%',
+                                        height: '100%',
+                                        objectFit: 'cover'
+                                      }}
+                                    />
+                                  </Box>
+                                ))}
+                              </Flex>
+                            )}
+                          </Flex>
+                        </Box>
+                      </Card>
+
+                      {/* No Bids Card */}
+                      <Card>
+                        <Box p="3">
+                          <Text size="2" weight="medium" mb="3" style={{ display: 'block' }}>
+                            No Bid Paintings
+                          </Text>
+                          <Flex direction="column" gap="2">
+                            <Badge color="gray" size="2">
+                              {postEventData?.no_bid_paintings?.count || 0} paintings
+                            </Badge>
+                            <Text size="1" color="gray">
+                              Paintings that received no bids
+                            </Text>
+                            <Button
+                              size="1"
+                              variant="soft"
+                              mt="2"
+                              onClick={() => setNoBidModalOpen(true)}
+                              disabled={!postEventData?.no_bid_paintings?.count}
+                            >
+                              View List
+                            </Button>
+                            {postEventData?.no_bid_paintings?.sample_thumbnails &&
+                             postEventData.no_bid_paintings.sample_thumbnails.length > 0 && (
+                              <Flex gap="1" mt="2" wrap="wrap">
+                                {postEventData.no_bid_paintings.sample_thumbnails.slice(0, 3).map((thumb, idx) => (
+                                  <Box
+                                    key={idx}
+                                    style={{
+                                      width: '60px',
+                                      height: '60px',
+                                      borderRadius: '4px',
+                                      overflow: 'hidden',
+                                      border: '1px solid var(--gray-6)'
+                                    }}
+                                  >
+                                    <img
+                                      src={thumb}
+                                      alt="No bid painting"
+                                      style={{
+                                        width: '100%',
+                                        height: '100%',
+                                        objectFit: 'cover'
+                                      }}
+                                    />
+                                  </Box>
+                                ))}
+                              </Flex>
+                            )}
+                          </Flex>
+                        </Box>
+                      </Card>
+                    </div>
+                  </>
+                )}
+
+                {/* Ticket Sales Row */}
+                <Card mt="3">
+                  <Box p="3">
+                    <Text size="2" weight="medium" mb="3" style={{ display: 'block' }}>
+                      Ticket Sales
+                    </Text>
+                    <Grid columns="4" gap="3">
+                      <Box>
+                        <Text size="1" color="gray" style={{ display: 'block' }}>Total Sold</Text>
+                        <Text size="4" weight="bold">--</Text>
+                      </Box>
+                      <Box>
+                        <Text size="1" color="gray" style={{ display: 'block' }}>Total Revenue</Text>
+                        <Text size="4" weight="bold" color="green">--</Text>
+                      </Box>
+                      <Box>
+                        <Text size="1" color="gray" style={{ display: 'block' }}>Online Sales</Text>
+                        <Text size="4" weight="bold">--</Text>
+                      </Box>
+                      <Box>
+                        <Text size="1" color="gray" style={{ display: 'block' }}>Door Sales</Text>
+                        <Text size="4" weight="bold">--</Text>
+                      </Box>
+                    </Grid>
+                  </Box>
+                </Card>
+              </Box>
+            )}
+          </Card>
+        )}
+
+        {/* Artist Payments - Collapsible (only show if event is in the past) */}
+        {status.label === 'Completed' && (
+          <Card>
+            <Box p="3">
+              <Flex justify="between" align="center" style={{ cursor: 'pointer' }} onClick={() => setArtistPaymentsCollapsed(!artistPaymentsCollapsed)}>
+                <Heading size="4">Artist Payments ({artistPaymentsData.length})</Heading>
+                <Flex align="center" gap="2">
+                  {artistPaymentsLoading && <Spinner size="1" />}
+                  <IconButton size="1" variant="ghost">
+                    {artistPaymentsCollapsed ? <ChevronDownIcon /> : <ChevronUpIcon />}
+                  </IconButton>
+                </Flex>
+              </Flex>
+            </Box>
+            {!artistPaymentsCollapsed && (
+              <Box p="3" pt="0">
+                {artistPaymentsLoading ? (
+                  <Flex align="center" justify="center" p="4">
+                    <Spinner size="3" />
+                  </Flex>
+                ) : artistPaymentsData.length === 0 ? (
+                  <Callout.Root color="gray">
+                    <Callout.Icon>
+                      <InfoCircledIcon />
+                    </Callout.Icon>
+                    <Callout.Text>
+                      No artist payment data available for this event yet.
+                    </Callout.Text>
+                  </Callout.Root>
+                ) : (
+                  <Table.Root variant="surface">
+                    <Table.Header>
+                      <Table.Row>
+                        <Table.ColumnHeaderCell>Artist</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell>Artworks</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell>Invitation</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell>Account Status</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell>Earned</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell>Paid Out</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell>Owed</Table.ColumnHeaderCell>
+                      </Table.Row>
+                    </Table.Header>
+                    <Table.Body>
+                      {artistPaymentsData.map((artist) => (
+                        <Table.Row key={artist.artist_id}>
+                          <Table.Cell>
+                            <Flex direction="column" gap="0">
+                              <Text size="2" weight="bold">{artist.artist_name}</Text>
+                              <Text size="1" color="gray">#{artist.artist_number}</Text>
+                            </Flex>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <Flex direction="column" gap="1">
+                              {artist.artworks_paid.length > 0 && (
+                                <Badge color="green" size="1">
+                                  {artist.artworks_paid.length} Paid
+                                </Badge>
+                              )}
+                              {artist.artworks_unpaid.length > 0 && (
+                                <Badge color="orange" size="1">
+                                  {artist.artworks_unpaid.length} Unpaid
+                                </Badge>
+                              )}
+                              {artist.artworks_no_bid?.length > 0 && (
+                                <Badge color="gray" size="1">
+                                  {artist.artworks_no_bid.length} No Bids
+                                </Badge>
+                              )}
+                            </Flex>
+                          </Table.Cell>
+                          <Table.Cell>
+                            {artist.payment_invitation ? (
+                              <Flex direction="column" gap="0">
+                                <Badge size="1" color={artist.payment_invitation.status === 'completed' ? 'green' : 'blue'}>
+                                  {artist.payment_invitation.invite_type.toUpperCase()}
+                                </Badge>
+                                <Text size="1" color="gray">
+                                  {new Date(artist.payment_invitation.sent_at).toLocaleDateString()}
+                                </Text>
+                              </Flex>
+                            ) : (
+                              <Text size="1" color="gray">Not sent</Text>
+                            )}
+                          </Table.Cell>
+                          <Table.Cell>
+                            <Badge
+                              color={
+                                artist.payment_account_status === 'ready' ? 'green' :
+                                artist.payment_account_status === 'pending' ? 'orange' :
+                                'gray'
+                              }
+                              size="1"
+                            >
+                              {artist.payment_account_status === 'ready' ? 'Ready' :
+                               artist.payment_account_status === 'pending' ? 'Pending' :
+                               'Not Set Up'}
+                            </Badge>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <Text size="2" weight="bold" color="green">
+                              ${artist.totals.total_earned.toFixed(2)}
+                            </Text>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <Flex direction="column" gap="0">
+                              <Text size="1">
+                                ${artist.totals.total_paid.toFixed(2)}
+                              </Text>
+                              {artist.totals.total_paid > 0 && (
+                                <Text size="1" color="gray">
+                                  {artist.totals.total_paid_stripe > 0 && `S: $${artist.totals.total_paid_stripe.toFixed(2)}`}
+                                  {artist.totals.total_paid_manual > 0 && ` M: $${artist.totals.total_paid_manual.toFixed(2)}`}
+                                </Text>
+                              )}
+                            </Flex>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <Text size="2" weight="bold" color={artist.totals.amount_owed > 0 ? 'orange' : 'gray'}>
+                              ${artist.totals.amount_owed.toFixed(2)}
+                            </Text>
+                          </Table.Cell>
+                        </Table.Row>
+                      ))}
+                    </Table.Body>
+                  </Table.Root>
+                )}
+              </Box>
+            )}
+          </Card>
+        )}
+
+        {/* Pre-Event Info - Collapsible */}
+        <Card>
+          <Box p="3">
+            <Flex justify="between" align="center" style={{ cursor: 'pointer' }} onClick={() => setPreEventCollapsed(!preEventCollapsed)}>
+              <Heading size="4">Pre-Event Information</Heading>
+              <IconButton size="1" variant="ghost">
+                {preEventCollapsed ? <ChevronDownIcon /> : <ChevronUpIcon />}
+              </IconButton>
+            </Flex>
+          </Box>
+          {!preEventCollapsed && (
+            <Box p="3" pt="0">
+              <div className="card-grid card-grid-3">
+                <Card>
+                  <Box p="3">
+                    <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>
+                      Basic Info
+                    </Text>
               <Flex direction="column" gap="2">
                 <Text size="2">
                   <strong>EID:</strong> <DebugField value={event.eid} fieldName="event.eid" />
@@ -1727,7 +2189,10 @@ The Art Battle Team`);
               </Flex>
             </Box>
           </Card>
-        </div>
+              </div>
+            </Box>
+          )}
+        </Card>
 
         {/* Tabs for different sections */}
         <Card>
@@ -1741,9 +2206,6 @@ The Art Battle Team`);
               </Tabs.Trigger>
               <Tabs.Trigger value="artists">
                 Artists ({artistApplications.length + artistInvites.length + artistConfirmations.length})
-              </Tabs.Trigger>
-              <Tabs.Trigger value="auction">
-                Auction & Payments
               </Tabs.Trigger>
               <Tabs.Trigger value="people">
                 People ({eventPeople.length})
@@ -2254,14 +2716,6 @@ The Art Battle Team`);
                     </Grid>
                   </Flex>
                 )}
-              </Tabs.Content>
-
-              <Tabs.Content value="auction">
-                <EventPaymentWrapper
-                  eventId={eventId}
-                  eventName={event?.name}
-                  showInlineView={false}
-                />
               </Tabs.Content>
 
               <Tabs.Content value="people">
@@ -3575,6 +4029,85 @@ The Art Battle Team`);
         onClose={() => setDeleteModalOpen(false)}
         onDeleted={handleEventDeleted}
       />
+
+      {/* Unpaid Paintings Modal */}
+      <Dialog.Root open={unpaidModalOpen} onOpenChange={setUnpaidModalOpen}>
+        <Dialog.Content maxWidth="900px">
+          <Dialog.Title>Unpaid Paintings</Dialog.Title>
+          <Dialog.Description size="2" mb="3">
+            Paintings with bids but no recorded payment
+          </Dialog.Description>
+          <ScrollArea style={{ maxHeight: '60vh' }}>
+            <Table.Root>
+              <Table.Header>
+                <Table.Row>
+                  <Table.ColumnHeaderCell>Art Code</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell>Artist</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell>Winning Bid</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell>Status</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell>Days Unpaid</Table.ColumnHeaderCell>
+                </Table.Row>
+              </Table.Header>
+              <Table.Body>
+                {postEventData?.unpaid_paintings?.list?.map(painting => (
+                  <Table.Row key={painting.art_id}>
+                    <Table.Cell>
+                      <Text weight="bold">{painting.art_code}</Text>
+                    </Table.Cell>
+                    <Table.Cell>{painting.artist_name}</Table.Cell>
+                    <Table.Cell>
+                      {postEventData.auction_summary.currency_symbol}
+                      {painting.winning_bid?.toFixed(2)}
+                    </Table.Cell>
+                    <Table.Cell>
+                      <Text size="1" color="gray">{painting.payment_status}</Text>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <Badge color={painting.days_since_bid > 7 ? 'red' : 'orange'}>
+                        {painting.days_since_bid} days
+                      </Badge>
+                    </Table.Cell>
+                  </Table.Row>
+                ))}
+              </Table.Body>
+            </Table.Root>
+          </ScrollArea>
+        </Dialog.Content>
+      </Dialog.Root>
+
+      {/* No Bid Paintings Modal */}
+      <Dialog.Root open={noBidModalOpen} onOpenChange={setNoBidModalOpen}>
+        <Dialog.Content maxWidth="700px">
+          <Dialog.Title>Paintings With No Bids</Dialog.Title>
+          <Dialog.Description size="2" mb="3">
+            These paintings received no bids during the auction
+          </Dialog.Description>
+          <ScrollArea style={{ maxHeight: '60vh' }}>
+            <Table.Root>
+              <Table.Header>
+                <Table.Row>
+                  <Table.ColumnHeaderCell>Art Code</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell>Artist</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell>Round</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell>Easel</Table.ColumnHeaderCell>
+                </Table.Row>
+              </Table.Header>
+              <Table.Body>
+                {postEventData?.no_bid_paintings?.list?.map(painting => (
+                  <Table.Row key={painting.art_id}>
+                    <Table.Cell>
+                      <Text weight="bold">{painting.art_code}</Text>
+                    </Table.Cell>
+                    <Table.Cell>{painting.artist_name}</Table.Cell>
+                    <Table.Cell>{painting.round}</Table.Cell>
+                    <Table.Cell>{painting.easel}</Table.Cell>
+                  </Table.Row>
+                ))}
+              </Table.Body>
+            </Table.Root>
+          </ScrollArea>
+        </Dialog.Content>
+      </Dialog.Root>
     </Box>
   );
 };
