@@ -77,6 +77,9 @@ const EventDetail = () => {
   const [error, setError] = useState(null);
   const [eventPeople, setEventPeople] = useState([]);
   const [peopleLoading, setPeopleLoading] = useState(false);
+  const [editingProducerTickets, setEditingProducerTickets] = useState(false);
+  const [producerTicketsValue, setProducerTicketsValue] = useState('');
+  const [updatingProducerTickets, setUpdatingProducerTickets] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [personHistory, setPersonHistory] = useState(null);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -317,6 +320,50 @@ const EventDetail = () => {
     } catch (err) {
       console.error('Error in toggleApplications:', err);
       setError('Failed to toggle applications status');
+    }
+  };
+
+  const updateProducerTickets = async () => {
+    if (!producerTicketsValue || isNaN(parseFloat(producerTicketsValue))) {
+      alert('Please enter a valid number');
+      return;
+    }
+
+    try {
+      setUpdatingProducerTickets(true);
+
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+
+      const { error } = await supabase
+        .from('events')
+        .update({
+          producer_tickets_sold: parseFloat(producerTicketsValue),
+          producer_tickets_currency: event.currency || 'USD',
+          producer_tickets_updated_by: user.email,
+          producer_tickets_updated_at: new Date().toISOString()
+        })
+        .eq('id', eventId);
+
+      if (error) throw error;
+
+      // Update local state
+      setEvent(prev => ({
+        ...prev,
+        producer_tickets_sold: parseFloat(producerTicketsValue),
+        producer_tickets_currency: event.currency || 'USD',
+        producer_tickets_updated_by: user.email,
+        producer_tickets_updated_at: new Date().toISOString()
+      }));
+
+      setEditingProducerTickets(false);
+      setProducerTicketsValue('');
+
+    } catch (err) {
+      console.error('Error updating producer tickets:', err);
+      setError('Failed to update producer tickets: ' + err.message);
+    } finally {
+      setUpdatingProducerTickets(false);
     }
   };
 
@@ -2808,6 +2855,70 @@ The Art Battle Team`);
                 <Text size="2">
                   <strong>Eventbrite ID:</strong> <DebugField value={event.eventbrite_id} fieldName="event.eventbrite_id" fallback="Not set" />
                 </Text>
+
+                {/* Producer Tickets Sold */}
+                <Box>
+                  <Flex align="center" justify="between" gap="2">
+                    <Text size="2">
+                      <strong>Tickets Sold by Producer:</strong>
+                    </Text>
+                    {!editingProducerTickets && (
+                      <Button
+                        size="1"
+                        variant="soft"
+                        onClick={() => {
+                          setEditingProducerTickets(true);
+                          setProducerTicketsValue(event.producer_tickets_sold || '0');
+                        }}
+                      >
+                        Edit
+                      </Button>
+                    )}
+                  </Flex>
+                  {editingProducerTickets ? (
+                    <Flex gap="2" mt="1">
+                      <TextField.Root
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={producerTicketsValue}
+                        onChange={(e) => setProducerTicketsValue(e.target.value)}
+                        style={{ flex: 1 }}
+                      />
+                      <Button
+                        size="1"
+                        onClick={updateProducerTickets}
+                        disabled={updatingProducerTickets}
+                      >
+                        {updatingProducerTickets ? 'Saving...' : 'Save'}
+                      </Button>
+                      <Button
+                        size="1"
+                        variant="soft"
+                        color="gray"
+                        onClick={() => {
+                          setEditingProducerTickets(false);
+                          setProducerTicketsValue('');
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </Flex>
+                  ) : (
+                    <Flex direction="column" gap="1" mt="1">
+                      <Text size="2" weight="bold">
+                        {event.producer_tickets_currency || event.currency || '$'}{(event.producer_tickets_sold || 0).toFixed(2)}
+                      </Text>
+                      {event.producer_tickets_updated_by && (
+                        <Text size="1" color="gray">
+                          Last updated by {event.producer_tickets_updated_by}
+                          {event.producer_tickets_updated_at && ` on ${new Date(event.producer_tickets_updated_at).toLocaleString()}`}
+                        </Text>
+                      )}
+                    </Flex>
+                  )}
+                </Box>
+
                 <Text size="2">
                   <strong>Slack Channel:</strong> <DebugField value={event.slack_channel} fieldName="event.slack_channel" fallback="Not set" />
                 </Text>
