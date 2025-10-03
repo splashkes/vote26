@@ -1302,11 +1302,13 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                           artist.automated_payment_status === 'failed' ? 'red' :
                           artist.automated_payment_status === 'completed' ? 'green' :
                           artist.automated_payment_status === 'pending' ? 'orange' :
-                          artist.payment_account_status === 'ready' ? 'green' : 'gray'
+                          artist.payment_account_status === 'ready' ? 'green' :
+                          artist.payment_account_status === 'READY MANUAL' ? 'purple' : 'gray'
                         }>
                           {artist.automated_payment_status ?
                             artist.automated_payment_status.charAt(0).toUpperCase() + artist.automated_payment_status.slice(1) :
-                            (artist.payment_account_status === 'ready' ? 'READY' : 'No Payment Record')
+                            (artist.payment_account_status === 'ready' ? 'READY' :
+                             artist.payment_account_status === 'READY MANUAL' ? 'READY MANUAL' : 'No Payment Record')
                           }
                         </Badge>
                       </Table.Cell>

@@ -313,11 +313,15 @@ const ProfileForm = ({ existingProfile = null, onSuccess }) => {
                 <Flex direction="column" gap="2" style={{ flex: 1 }}>
                   <Text size="2" weight="medium">Country</Text>
                   <Select.Root
-                    value={formData.country}
+                    key={`country-${countries.length}`}
+                    value={formData.country || undefined}
                     onValueChange={(value) => handleChange('country', value)}
                   >
-                    <Select.Trigger placeholder="Select country" tabIndex={3} />
-                    <Select.Content>
+                    <Select.Trigger
+                      placeholder={countries.length === 0 ? "Loading countries..." : "Select country"}
+                      tabIndex={3}
+                    />
+                    <Select.Content position="popper" sideOffset={5}>
                       {countries.map((country) => (
                         <Select.Item key={country.code} value={country.code}>
                           {country.name}
