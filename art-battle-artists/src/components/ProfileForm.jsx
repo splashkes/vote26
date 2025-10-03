@@ -36,9 +36,15 @@ const ProfileForm = ({ existingProfile = null, onSuccess }) => {
 
   const isEditing = !!existingProfile;
 
-  // Load existing profile data if editing
+  // Load countries first
   useEffect(() => {
-    if (existingProfile) {
+    fetchCountries();
+  }, []);
+
+  // Load existing profile data AFTER countries are loaded
+  useEffect(() => {
+    // Only set form data once we have countries loaded (or it's a new profile)
+    if (existingProfile && countries.length > 0) {
       setFormData({
         name: existingProfile.name || '',
         bio: existingProfile.bio || '',
@@ -50,19 +56,14 @@ const ProfileForm = ({ existingProfile = null, onSuccess }) => {
         facebook: existingProfile.facebook || '',
         twitter: existingProfile.twitter || '',
       });
-    } else {
+    } else if (!existingProfile) {
       // New profile - pre-fill email from auth
       setFormData(prev => ({
         ...prev,
         email: user?.email || '',
       }));
     }
-  }, [existingProfile, user]);
-
-  // Load countries
-  useEffect(() => {
-    fetchCountries();
-  }, []);
+  }, [existingProfile, user, countries]);
 
   const fetchCountries = async () => {
     try {
@@ -313,8 +314,7 @@ const ProfileForm = ({ existingProfile = null, onSuccess }) => {
                 <Flex direction="column" gap="2" style={{ flex: 1 }}>
                   <Text size="2" weight="medium">Country</Text>
                   <Select.Root
-                    key={`country-${countries.length}`}
-                    value={formData.country || undefined}
+                    value={countries.length > 0 ? (formData.country || undefined) : undefined}
                     onValueChange={(value) => handleChange('country', value)}
                   >
                     <Select.Trigger
@@ -324,7 +324,7 @@ const ProfileForm = ({ existingProfile = null, onSuccess }) => {
                     <Select.Content position="popper" sideOffset={5}>
                       {countries.map((country) => (
                         <Select.Item key={country.code} value={country.code}>
-                          {country.name}
+                          {country.name} ({country.code})
                         </Select.Item>
                       ))}
                     </Select.Content>

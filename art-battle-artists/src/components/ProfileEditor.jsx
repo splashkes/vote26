@@ -455,13 +455,14 @@ const ProfileEditor = ({ onProfileSuccess }) => {
       )}
       
       {/* ===== PROFILE FORM ===== */}
-      <ProfileForm 
+      <ProfileForm
+        key={selectedProfile?.id || 'new'}
         existingProfile={selectedProfile}
         onSuccess={(profile) => {
           setSelectedProfile(profile);
           setArtistProfileId(profile.id);
           setIsCreatingNew(false);
-          
+
           // Trigger refresh of other tabs
           if (onProfileSuccess) {
             onProfileSuccess(profile);
