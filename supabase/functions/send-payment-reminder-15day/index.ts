@@ -54,6 +54,7 @@ serve(async (req) => {
 
     let emailsSent = 0;
     const errors = [];
+    const MAX_EMAILS = 5; // TESTING: Limit to 5 emails
 
     for (const event of events) {
       // Get artists from this event who have earnings
@@ -94,6 +95,12 @@ serve(async (req) => {
 
       // For each artist, check if they still have unpaid balance
       for (const [artistId, artistData] of artistsMap) {
+        // TESTING: Stop after 5 emails
+        if (emailsSent >= MAX_EMAILS) {
+          console.log(`Reached limit of ${MAX_EMAILS} emails, stopping`);
+          break;
+        }
+
         try {
           // Calculate amount owed
           const { data: ledger } = await supabase

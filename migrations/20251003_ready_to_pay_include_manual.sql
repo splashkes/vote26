@@ -22,7 +22,7 @@ LANGUAGE plpgsql
 AS $$
 BEGIN
   RETURN QUERY
-  -- ORIGINAL: Artists with verified Stripe accounts
+  -- Shared CTEs used by both queries
   WITH art_sales_by_currency AS (
     SELECT
       ap.id as artist_id,
@@ -153,7 +153,7 @@ BEGIN
         AND agp.stripe_recipient_id IS NOT NULL
     )
 
-  ORDER BY estimated_balance DESC;
+  ORDER BY 7 DESC;  -- Order by estimated_balance (column 7)
 END;
 $$;
 
