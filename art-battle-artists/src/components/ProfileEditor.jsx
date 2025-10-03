@@ -173,11 +173,15 @@ const ProfileEditor = ({ onProfileSuccess }) => {
         return;
       }
 
+      // Get active profiles (superseded_by IS NULL) ordered by set_primary_profile_at
+      // Priority: User-selected profile (set_primary_profile_at), then most recently created
       const { data: profilesData, error: profilesError } = await supabase
         .from('artist_profiles')
         .select('*')
         .eq('person_id', person.id)
-        .order('created_at', { ascending: true });
+        .is('superseded_by', null)
+        .order('set_primary_profile_at', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false });
 
       if (profilesError) {
         throw profilesError;

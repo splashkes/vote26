@@ -228,7 +228,7 @@ serve(async (req) => {
         } : null
       })) || [],
 
-      // Ready to pay artists with verified Stripe accounts only
+      // Ready to pay artists with verified Stripe accounts AND manual payment requests
       artists_ready_to_pay: readyToPayArtists?.map(artist => ({
         artist_profiles: {
           id: artist.artist_id,
@@ -240,7 +240,7 @@ serve(async (req) => {
           person_id: null,
           created_at: null
         },
-        payment_account_status: 'ready',
+        payment_account_status: artist.payment_account_status,
         stripe_recipient_id: artist.stripe_recipient_id,
         estimated_balance: Number(artist.estimated_balance),
         balance_currency: artist.balance_currency || 'USD',
