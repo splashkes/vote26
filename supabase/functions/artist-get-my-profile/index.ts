@@ -119,11 +119,13 @@ serve(async (req) => {
     console.log('Found person_id in JWT claims:', personId)
 
     // First try to get the authoritative artist profile linked to this person_id
+    // IMPORTANT: Exclude superseded profiles to get the active profile
     const { data: linkedProfile, error: linkedProfileError } = await supabase
       .from('artist_profiles')
       .select('*')
       .eq('person_id', personId)
-      .order('updated_at', { ascending: false })
+      .is('superseded_by', null)
+      .order('created_at', { ascending: false })
       .limit(1)
       .single()
 

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { Box, Container, Heading, Text, Card, Flex, Button, Dialog, Spinner, Badge, ScrollArea } from '@radix-ui/themes'
 import { fetchOffersForHash, redeemOffer, trackOfferView } from '../lib/api'
+import SmsMarketingOptIn from './SmsMarketingOptIn'
 import './PublicOfferViewer.css'
 
 export default function PublicOfferViewer() {
@@ -14,6 +15,7 @@ export default function PublicOfferViewer() {
   const [selectedOffer, setSelectedOffer] = useState(null)
   const [isRedeeming, setIsRedeeming] = useState(false)
   const [redemptionResult, setRedemptionResult] = useState(null)
+  const [showSmsModal, setShowSmsModal] = useState(false)
 
   useEffect(() => {
     if (!hash) {
@@ -353,7 +355,22 @@ export default function PublicOfferViewer() {
             </div>
           </Box>
         )}
+
+        {/* MOCK: SMS Marketing Preferences Link */}
+        <Box style={{ textAlign: 'center', marginTop: '3rem', paddingBottom: '2rem' }}>
+          <Button variant="ghost" size="2" onClick={() => setShowSmsModal(true)}>
+            Set Marketing Preferences
+          </Button>
+        </Box>
       </Container>
+
+      {/* SMS Marketing Modal - MOCK for screenshots */}
+      <Dialog.Root open={showSmsModal} onOpenChange={setShowSmsModal}>
+        <Dialog.Content style={{ maxWidth: '600px' }}>
+          <Dialog.Title>Marketing Preferences</Dialog.Title>
+          <SmsMarketingOptIn />
+        </Dialog.Content>
+      </Dialog.Root>
 
       {/* Offer detail modal */}
       <Dialog.Root open={!!selectedOffer && !redemptionResult} onOpenChange={(open) => !open && setSelectedOffer(null)}>
