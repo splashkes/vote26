@@ -79,7 +79,18 @@ const EventDetail = () => {
   const [peopleLoading, setPeopleLoading] = useState(false);
   const [editingProducerTickets, setEditingProducerTickets] = useState(false);
   const [producerTicketsValue, setProducerTicketsValue] = useState('');
+  const [producerTicketsCurrency, setProducerTicketsCurrency] = useState('USD');
   const [updatingProducerTickets, setUpdatingProducerTickets] = useState(false);
+
+  const [editingFoodBeverage, setEditingFoodBeverage] = useState(false);
+  const [foodBeverageValue, setFoodBeverageValue] = useState('');
+  const [foodBeverageCurrency, setFoodBeverageCurrency] = useState('USD');
+  const [updatingFoodBeverage, setUpdatingFoodBeverage] = useState(false);
+
+  const [editingOtherRevenue, setEditingOtherRevenue] = useState(false);
+  const [otherRevenueValue, setOtherRevenueValue] = useState('');
+  const [otherRevenueCurrency, setOtherRevenueCurrency] = useState('USD');
+  const [updatingOtherRevenue, setUpdatingOtherRevenue] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [personHistory, setPersonHistory] = useState(null);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -135,6 +146,9 @@ const EventDetail = () => {
   const [manualPaymentMethod, setManualPaymentMethod] = useState('bank_transfer');
   const [manualPaymentNotes, setManualPaymentNotes] = useState('');
   const [submittingManualPayment, setSubmittingManualPayment] = useState(false);
+  const [manualPaymentRequest, setManualPaymentRequest] = useState(null);
+  const [loadingManualPaymentRequest, setLoadingManualPaymentRequest] = useState(false);
+  const [revealedPaymentDetails, setRevealedPaymentDetails] = useState(false);
   const [artistPerformanceData, setArtistPerformanceData] = useState(new Map());
   const [sampleWorks, setSampleWorks] = useState([]);
   const [sampleWorksLoading, setSampleWorksLoading] = useState(false);
@@ -339,7 +353,7 @@ const EventDetail = () => {
         .from('events')
         .update({
           producer_tickets_sold: parseFloat(producerTicketsValue),
-          producer_tickets_currency: event.currency || 'USD',
+          producer_tickets_currency: producerTicketsCurrency,
           producer_tickets_updated_by: user.email,
           producer_tickets_updated_at: new Date().toISOString()
         })
@@ -351,7 +365,7 @@ const EventDetail = () => {
       setEvent(prev => ({
         ...prev,
         producer_tickets_sold: parseFloat(producerTicketsValue),
-        producer_tickets_currency: event.currency || 'USD',
+        producer_tickets_currency: producerTicketsCurrency,
         producer_tickets_updated_by: user.email,
         producer_tickets_updated_at: new Date().toISOString()
       }));
@@ -364,6 +378,92 @@ const EventDetail = () => {
       setError('Failed to update producer tickets: ' + err.message);
     } finally {
       setUpdatingProducerTickets(false);
+    }
+  };
+
+  const updateFoodBeverage = async () => {
+    if (!foodBeverageValue || isNaN(parseFloat(foodBeverageValue))) {
+      alert('Please enter a valid number');
+      return;
+    }
+
+    try {
+      setUpdatingFoodBeverage(true);
+
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+
+      const { error } = await supabase
+        .from('events')
+        .update({
+          food_beverage_revenue: parseFloat(foodBeverageValue),
+          food_beverage_currency: foodBeverageCurrency,
+          food_beverage_updated_by: user.email,
+          food_beverage_updated_at: new Date().toISOString()
+        })
+        .eq('id', eventId);
+
+      if (error) throw error;
+
+      setEvent(prev => ({
+        ...prev,
+        food_beverage_revenue: parseFloat(foodBeverageValue),
+        food_beverage_currency: foodBeverageCurrency,
+        food_beverage_updated_by: user.email,
+        food_beverage_updated_at: new Date().toISOString()
+      }));
+
+      setEditingFoodBeverage(false);
+      setFoodBeverageValue('');
+
+    } catch (err) {
+      console.error('Error updating food & beverage:', err);
+      setError('Failed to update food & beverage: ' + err.message);
+    } finally {
+      setUpdatingFoodBeverage(false);
+    }
+  };
+
+  const updateOtherRevenue = async () => {
+    if (!otherRevenueValue || isNaN(parseFloat(otherRevenueValue))) {
+      alert('Please enter a valid number');
+      return;
+    }
+
+    try {
+      setUpdatingOtherRevenue(true);
+
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+
+      const { error } = await supabase
+        .from('events')
+        .update({
+          other_revenue: parseFloat(otherRevenueValue),
+          other_revenue_currency: otherRevenueCurrency,
+          other_revenue_updated_by: user.email,
+          other_revenue_updated_at: new Date().toISOString()
+        })
+        .eq('id', eventId);
+
+      if (error) throw error;
+
+      setEvent(prev => ({
+        ...prev,
+        other_revenue: parseFloat(otherRevenueValue),
+        other_revenue_currency: otherRevenueCurrency,
+        other_revenue_updated_by: user.email,
+        other_revenue_updated_at: new Date().toISOString()
+      }));
+
+      setEditingOtherRevenue(false);
+      setOtherRevenueValue('');
+
+    } catch (err) {
+      console.error('Error updating other revenue:', err);
+      setError('Failed to update other revenue: ' + err.message);
+    } finally {
+      setUpdatingOtherRevenue(false);
     }
   };
 
@@ -733,14 +833,17 @@ const EventDetail = () => {
     setSelectedArtistForPayment(artist);
     setStripeDetails(null);
     setAccountLedger(null);
+    setManualPaymentRequest(null);
+    setRevealedPaymentDetails(false);
     setLoadingStripe(false);
     setLoadingLedger(true);
+    setLoadingManualPaymentRequest(true);
 
     // Open modal with loading state
     setShowArtistDetail(true);
 
     try {
-      // Fetch both Stripe details and account ledger in parallel
+      // Fetch Stripe details, account ledger, and manual payment request in parallel
       const promises = [];
 
       // Fetch Stripe details if account exists
@@ -750,6 +853,9 @@ const EventDetail = () => {
 
       // Always fetch account ledger
       promises.push(fetchArtistAccountLedger(false, artist.artist_id));
+
+      // Always fetch manual payment request
+      promises.push(fetchManualPaymentRequest(artist.artist_id));
 
       // Wait for all data to load
       await Promise.all(promises);
@@ -805,6 +911,112 @@ const EventDetail = () => {
       console.error('Failed to load account ledger:', err);
     } finally {
       setLoadingLedger(false);
+    }
+  };
+
+  const fetchManualPaymentRequest = async (artistProfileId) => {
+    if (!artistProfileId) {
+      console.error('No artist profile ID available for manual payment request fetch');
+      return;
+    }
+
+    try {
+      setLoadingManualPaymentRequest(true);
+
+      const session = await supabase.auth.getSession();
+      const response = await fetch('https://db.artb.art/functions/v1/admin-get-manual-payment-request', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.data.session?.access_token}`,
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcWRrdWJneXF3cHl2Zmx0bnJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjI1NDI0ODQsImV4cCI6MjAzODExODQ4NH0.x6JzxElYCf9lpkpc3RYX2XOQQ-v8QLPQOHWOzLj0a3M'
+        },
+        body: JSON.stringify({
+          artist_profile_id: artistProfileId,
+          reveal_details: false
+        })
+      });
+
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to fetch manual payment request');
+      }
+
+      if (result.has_request) {
+        setManualPaymentRequest(result);
+      }
+    } catch (err) {
+      console.error('Failed to load manual payment request:', err);
+      // Don't set error - this is optional data
+    } finally {
+      setLoadingManualPaymentRequest(false);
+    }
+  };
+
+  const revealPaymentDetails = async () => {
+    if (!selectedArtistForPayment?.artist_id) return;
+
+    try {
+      const session = await supabase.auth.getSession();
+      const response = await fetch('https://db.artb.art/functions/v1/admin-get-manual-payment-request', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.data.session?.access_token}`,
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcWRrdWJneXF3cHl2Zmx0bnJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjI1NDI0ODQsImV4cCI6MjAzODExODQ4NH0.x6JzxElYCf9lpkpc3RYX2XOQQ-v8QLPQOHWOzLj0a3M'
+        },
+        body: JSON.stringify({
+          artist_profile_id: selectedArtistForPayment.artist_id,
+          reveal_details: true
+        })
+      });
+
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to reveal payment details');
+      }
+
+      setManualPaymentRequest(result);
+      setRevealedPaymentDetails(true);
+    } catch (err) {
+      console.error('Failed to reveal payment details:', err);
+      setError('Failed to reveal payment details: ' + err.message);
+    }
+  };
+
+  const toggleManualPaymentOverride = async (artistProfileId, newValue) => {
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+
+      // Get person_id from user
+      const { data: personData } = await supabase
+        .from('people')
+        .select('id')
+        .eq('email', user.email)
+        .single();
+
+      const { error } = await supabase
+        .from('artist_profiles')
+        .update({
+          manual_payment_override: newValue,
+          manual_payment_override_at: newValue ? new Date().toISOString() : null,
+          manual_payment_override_by: newValue ? personData?.id : null
+        })
+        .eq('id', artistProfileId);
+
+      if (error) throw error;
+
+      // Update local state
+      setSelectedArtistForPayment(prev => ({
+        ...prev,
+        manual_payment_override: newValue
+      }));
+
+      alert(`Manual payment override ${newValue ? 'enabled' : 'disabled'} successfully!`);
+    } catch (err) {
+      console.error('Failed to toggle manual payment override:', err);
+      setError('Failed to update override setting: ' + err.message);
     }
   };
 
@@ -2275,7 +2487,370 @@ The Art Battle Team`);
                   </Flex>
                 ) : (
                   <>
-                    <div className="card-grid card-grid-3">
+                    {/* Ticket Sales Row */}
+                    <Card>
+                      <Box p="3">
+                        <Flex justify="between" align="center" mb="3">
+                          <Text size="2" weight="medium">
+                            Ticket Sales
+                          </Text>
+                          {postEventData?.ticket_sales?.data_source && (
+                            <Badge size="1" color={postEventData.ticket_sales.data_source.includes('API') ? 'green' : 'yellow'}>
+                              {postEventData.ticket_sales.data_source}
+                            </Badge>
+                          )}
+                        </Flex>
+
+                        {/* Eventbrite Event Verification */}
+                        {postEventData?.ticket_sales?.eventbrite_event_name && (
+                          <Box mb="3" p="2" style={{ backgroundColor: 'var(--blue-2)', borderRadius: '6px' }}>
+                            <Text size="1" color="blue" style={{ display: 'block' }}>
+                              <strong>Eventbrite Event:</strong> {postEventData.ticket_sales.eventbrite_event_name}
+                              {postEventData.ticket_sales.currency_code && (
+                                <Badge size="1" ml="2" color="blue">{postEventData.ticket_sales.currency_code}</Badge>
+                              )}
+                            </Text>
+                            {postEventData.ticket_sales.eventbrite_start_date && (
+                              <Text size="1" color="gray" style={{ display: 'block', marginTop: '0.25rem' }}>
+                                {new Date(postEventData.ticket_sales.eventbrite_start_date).toLocaleDateString('en-US', {
+                                  weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                                })}
+                              </Text>
+                            )}
+                          </Box>
+                        )}
+
+                        {postEventData?.ticket_sales ? (
+                          <>
+                            <Grid columns="4" gap="3" mb="3">
+                              <Box>
+                                <Text size="1" color="gray" style={{ display: 'block' }}>Tickets Sold</Text>
+                                <Text size="4" weight="bold">
+                                  {postEventData.ticket_sales.total_sold || 0}
+                                  {postEventData.ticket_sales.total_capacity > 0 && (
+                                    <Text size="2" color="gray"> / {postEventData.ticket_sales.total_capacity}</Text>
+                                  )}
+                                </Text>
+                                {postEventData.ticket_sales.percentage_sold && (
+                                  <Text size="1" color="gray">{postEventData.ticket_sales.percentage_sold}% sold</Text>
+                                )}
+                              </Box>
+                              <Box>
+                                <Text size="1" color="gray" style={{ display: 'block' }}>Gross Revenue</Text>
+                                <Text size="4" weight="bold" color="green">
+                                  {postEventData.ticket_sales.currency_symbol || postEventData.auction_summary?.currency_symbol || '$'}
+                                  {postEventData.ticket_sales.gross_revenue?.toFixed(2) || postEventData.ticket_sales.total_revenue?.toFixed(2) || '0.00'}
+                                </Text>
+                              </Box>
+                              <Box>
+                                <Text size="1" color="gray" style={{ display: 'block' }}>Total Fees</Text>
+                                <Text size="4" weight="bold" color="red">
+                                  {postEventData.ticket_sales.currency_symbol || postEventData.auction_summary?.currency_symbol || '$'}
+                                  {postEventData.ticket_sales.total_fees?.toFixed(2) || '0.00'}
+                                </Text>
+                                {postEventData.ticket_sales.eventbrite_fees > 0 && (
+                                  <Text size="1" color="gray">
+                                    EB: {postEventData.ticket_sales.currency_symbol}{postEventData.ticket_sales.eventbrite_fees.toFixed(2)}
+                                  </Text>
+                                )}
+                              </Box>
+                              <Box>
+                                <Text size="1" color="gray" style={{ display: 'block' }}>Net Deposit</Text>
+                                <Text size="4" weight="bold" color="blue">
+                                  {postEventData.ticket_sales.currency_symbol || postEventData.auction_summary?.currency_symbol || '$'}
+                                  {postEventData.ticket_sales.net_deposit?.toFixed(2) || '0.00'}
+                                </Text>
+                                {postEventData.ticket_sales.average_net_per_ticket && (
+                                  <Text size="1" color="gray">
+                                    Avg: {postEventData.ticket_sales.currency_symbol}{postEventData.ticket_sales.average_net_per_ticket}/ticket
+                                  </Text>
+                                )}
+                              </Box>
+                            </Grid>
+
+                            {postEventData.ticket_sales.data_quality_score && (
+                              <Flex gap="2" align="center" mt="2">
+                                <Text size="1" color="gray">
+                                  Quality: {postEventData.ticket_sales.data_quality_score}/100
+                                </Text>
+                                {postEventData.ticket_sales.cache_age_hours && (
+                                  <Text size="1" color="gray">
+                                    • Cache: {parseFloat(postEventData.ticket_sales.cache_age_hours).toFixed(1)}h old
+                                  </Text>
+                                )}
+                              </Flex>
+                            )}
+                          </>
+                        ) : (
+                          <Grid columns="4" gap="3">
+                            <Box>
+                              <Text size="1" color="gray" style={{ display: 'block' }}>Total Sold</Text>
+                              <Text size="4" weight="bold">--</Text>
+                            </Box>
+                            <Box>
+                              <Text size="1" color="gray" style={{ display: 'block' }}>Total Revenue</Text>
+                              <Text size="4" weight="bold" color="green">--</Text>
+                            </Box>
+                            <Box>
+                              <Text size="1" color="gray" style={{ display: 'block' }}>Fees</Text>
+                              <Text size="4" weight="bold">--</Text>
+                            </Box>
+                            <Box>
+                              <Text size="1" color="gray" style={{ display: 'block' }}>Net Deposit</Text>
+                              <Text size="4" weight="bold">--</Text>
+                            </Box>
+                          </Grid>
+                        )}
+
+                        {/* Collected by Producer */}
+                        <Separator my="3" />
+                        <Box>
+                          <Text size="2" weight="medium" mb="3" style={{ display: 'block' }}>
+                            Collected by Producer
+                          </Text>
+                          <Grid columns="3" gap="4">
+                            {/* Tickets Sold */}
+                            <Box>
+                              <Text size="1" color="gray" mb="2" style={{ display: 'block' }}>
+                                Tickets Sold
+                              </Text>
+                              {editingProducerTickets ? (
+                                <Flex direction="column" gap="2">
+                                  <Flex gap="2">
+                                    <Select.Root
+                                      value={producerTicketsCurrency}
+                                      onValueChange={setProducerTicketsCurrency}
+                                    >
+                                      <Select.Trigger style={{ width: '80px' }} />
+                                      <Select.Content>
+                                        <Select.Item value="USD">USD</Select.Item>
+                                        <Select.Item value="CAD">CAD</Select.Item>
+                                        <Select.Item value="EUR">EUR</Select.Item>
+                                        <Select.Item value="GBP">GBP</Select.Item>
+                                        <Select.Item value="AUD">AUD</Select.Item>
+                                      </Select.Content>
+                                    </Select.Root>
+                                    <TextField.Root
+                                      type="number"
+                                      step="0.01"
+                                      placeholder="0.00"
+                                      value={producerTicketsValue}
+                                      onChange={(e) => setProducerTicketsValue(e.target.value)}
+                                      style={{ width: '120px' }}
+                                    />
+                                  </Flex>
+                                  <Flex gap="2">
+                                    <Button
+                                      size="1"
+                                      onClick={updateProducerTickets}
+                                      disabled={updatingProducerTickets}
+                                    >
+                                      {updatingProducerTickets ? 'Saving...' : 'Save'}
+                                    </Button>
+                                    <Button
+                                      size="1"
+                                      variant="soft"
+                                      color="gray"
+                                      onClick={() => {
+                                        setEditingProducerTickets(false);
+                                        setProducerTicketsValue('');
+                                      }}
+                                    >
+                                      Cancel
+                                    </Button>
+                                  </Flex>
+                                </Flex>
+                              ) : (
+                                <Flex align="center" gap="2">
+                                  <Button
+                                    size="1"
+                                    variant="soft"
+                                    onClick={() => {
+                                      setEditingProducerTickets(true);
+                                      setProducerTicketsValue(event.producer_tickets_sold || '0');
+                                      setProducerTicketsCurrency(event.producer_tickets_currency || event.currency || 'USD');
+                                    }}
+                                  >
+                                    SET
+                                  </Button>
+                                  <Flex direction="column" gap="1">
+                                    <Text size="3" weight="bold">
+                                      {event.producer_tickets_currency || event.currency || '$'}{(event.producer_tickets_sold || 0).toFixed(2)}
+                                    </Text>
+                                    {event.producer_tickets_updated_by && (
+                                      <Text size="1" color="gray">
+                                        Confirmed by {event.producer_tickets_updated_by}
+                                        {event.producer_tickets_updated_at && ` on ${new Date(event.producer_tickets_updated_at).toLocaleString()}`}
+                                      </Text>
+                                    )}
+                                  </Flex>
+                                </Flex>
+                              )}
+                            </Box>
+
+                            {/* Food & Beverage */}
+                            <Box>
+                              <Text size="1" color="gray" mb="2" style={{ display: 'block' }}>
+                                Food & Beverage
+                              </Text>
+                              {editingFoodBeverage ? (
+                                <Flex direction="column" gap="2">
+                                  <Flex gap="2">
+                                    <Select.Root
+                                      value={foodBeverageCurrency}
+                                      onValueChange={setFoodBeverageCurrency}
+                                    >
+                                      <Select.Trigger style={{ width: '80px' }} />
+                                      <Select.Content>
+                                        <Select.Item value="USD">USD</Select.Item>
+                                        <Select.Item value="CAD">CAD</Select.Item>
+                                        <Select.Item value="EUR">EUR</Select.Item>
+                                        <Select.Item value="GBP">GBP</Select.Item>
+                                        <Select.Item value="AUD">AUD</Select.Item>
+                                      </Select.Content>
+                                    </Select.Root>
+                                    <TextField.Root
+                                      type="number"
+                                      step="0.01"
+                                      placeholder="0.00"
+                                      value={foodBeverageValue}
+                                      onChange={(e) => setFoodBeverageValue(e.target.value)}
+                                      style={{ width: '120px' }}
+                                    />
+                                  </Flex>
+                                  <Flex gap="2">
+                                    <Button
+                                      size="1"
+                                      onClick={updateFoodBeverage}
+                                      disabled={updatingFoodBeverage}
+                                    >
+                                      {updatingFoodBeverage ? 'Saving...' : 'Save'}
+                                    </Button>
+                                    <Button
+                                      size="1"
+                                      variant="soft"
+                                      color="gray"
+                                      onClick={() => {
+                                        setEditingFoodBeverage(false);
+                                        setFoodBeverageValue('');
+                                      }}
+                                    >
+                                      Cancel
+                                    </Button>
+                                  </Flex>
+                                </Flex>
+                              ) : (
+                                <Flex align="center" gap="2">
+                                  <Button
+                                    size="1"
+                                    variant="soft"
+                                    onClick={() => {
+                                      setEditingFoodBeverage(true);
+                                      setFoodBeverageValue(event.food_beverage_revenue || '0');
+                                      setFoodBeverageCurrency(event.food_beverage_currency || event.currency || 'USD');
+                                    }}
+                                  >
+                                    SET
+                                  </Button>
+                                  <Flex direction="column" gap="1">
+                                    <Text size="3" weight="bold">
+                                      {event.food_beverage_currency || event.currency || '$'}{(event.food_beverage_revenue || 0).toFixed(2)}
+                                    </Text>
+                                    {event.food_beverage_updated_by && (
+                                      <Text size="1" color="gray">
+                                        Confirmed by {event.food_beverage_updated_by}
+                                        {event.food_beverage_updated_at && ` on ${new Date(event.food_beverage_updated_at).toLocaleString()}`}
+                                      </Text>
+                                    )}
+                                  </Flex>
+                                </Flex>
+                              )}
+                            </Box>
+
+                            {/* Other */}
+                            <Box>
+                              <Text size="1" color="gray" mb="2" style={{ display: 'block' }}>
+                                Other (e.g. merch / funding / sponsorship)
+                              </Text>
+                              {editingOtherRevenue ? (
+                                <Flex direction="column" gap="2">
+                                  <Flex gap="2">
+                                    <Select.Root
+                                      value={otherRevenueCurrency}
+                                      onValueChange={setOtherRevenueCurrency}
+                                    >
+                                      <Select.Trigger style={{ width: '80px' }} />
+                                      <Select.Content>
+                                        <Select.Item value="USD">USD</Select.Item>
+                                        <Select.Item value="CAD">CAD</Select.Item>
+                                        <Select.Item value="EUR">EUR</Select.Item>
+                                        <Select.Item value="GBP">GBP</Select.Item>
+                                        <Select.Item value="AUD">AUD</Select.Item>
+                                      </Select.Content>
+                                    </Select.Root>
+                                    <TextField.Root
+                                      type="number"
+                                      step="0.01"
+                                      placeholder="0.00"
+                                      value={otherRevenueValue}
+                                      onChange={(e) => setOtherRevenueValue(e.target.value)}
+                                      style={{ width: '120px' }}
+                                    />
+                                  </Flex>
+                                  <Flex gap="2">
+                                    <Button
+                                      size="1"
+                                      onClick={updateOtherRevenue}
+                                      disabled={updatingOtherRevenue}
+                                    >
+                                      {updatingOtherRevenue ? 'Saving...' : 'Save'}
+                                    </Button>
+                                    <Button
+                                      size="1"
+                                      variant="soft"
+                                      color="gray"
+                                      onClick={() => {
+                                        setEditingOtherRevenue(false);
+                                        setOtherRevenueValue('');
+                                      }}
+                                    >
+                                      Cancel
+                                    </Button>
+                                  </Flex>
+                                </Flex>
+                              ) : (
+                                <Flex align="center" gap="2">
+                                  <Button
+                                    size="1"
+                                    variant="soft"
+                                    onClick={() => {
+                                      setEditingOtherRevenue(true);
+                                      setOtherRevenueValue(event.other_revenue || '0');
+                                      setOtherRevenueCurrency(event.other_revenue_currency || event.currency || 'USD');
+                                    }}
+                                  >
+                                    SET
+                                  </Button>
+                                  <Flex direction="column" gap="1">
+                                    <Text size="3" weight="bold">
+                                      {event.other_revenue_currency || event.currency || '$'}{(event.other_revenue || 0).toFixed(2)}
+                                    </Text>
+                                    {event.other_revenue_updated_by && (
+                                      <Text size="1" color="gray">
+                                        Confirmed by {event.other_revenue_updated_by}
+                                        {event.other_revenue_updated_at && ` on ${new Date(event.other_revenue_updated_at).toLocaleString()}`}
+                                      </Text>
+                                    )}
+                                  </Flex>
+                                </Flex>
+                              )}
+                            </Box>
+                          </Grid>
+                        </Box>
+                      </Box>
+                    </Card>
+
+                    <div className="card-grid card-grid-3" style={{ marginTop: '1rem' }}>
                       {/* Sales Summary Card */}
                       <Card>
                         <Box p="3">
@@ -2444,187 +3019,6 @@ The Art Battle Team`);
                     </div>
                   </>
                 )}
-
-                {/* Ticket Sales Row */}
-                <Card mt="3">
-                  <Box p="3">
-                    <Flex justify="between" align="center" mb="3">
-                      <Text size="2" weight="medium">
-                        Ticket Sales
-                      </Text>
-                      {postEventData?.ticket_sales?.data_source && (
-                        <Badge size="1" color={postEventData.ticket_sales.data_source.includes('API') ? 'green' : 'yellow'}>
-                          {postEventData.ticket_sales.data_source}
-                        </Badge>
-                      )}
-                    </Flex>
-
-                    {/* Eventbrite Event Verification */}
-                    {postEventData?.ticket_sales?.eventbrite_event_name && (
-                      <Box mb="3" p="2" style={{ backgroundColor: 'var(--blue-2)', borderRadius: '6px' }}>
-                        <Text size="1" color="blue" style={{ display: 'block' }}>
-                          <strong>Eventbrite Event:</strong> {postEventData.ticket_sales.eventbrite_event_name}
-                          {postEventData.ticket_sales.currency_code && (
-                            <Badge size="1" ml="2" color="blue">{postEventData.ticket_sales.currency_code}</Badge>
-                          )}
-                        </Text>
-                        {postEventData.ticket_sales.eventbrite_start_date && (
-                          <Text size="1" color="gray" style={{ display: 'block', marginTop: '0.25rem' }}>
-                            {new Date(postEventData.ticket_sales.eventbrite_start_date).toLocaleDateString('en-US', {
-                              weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-                            })}
-                          </Text>
-                        )}
-                      </Box>
-                    )}
-
-                    {postEventData?.ticket_sales ? (
-                      <>
-                        <Grid columns="4" gap="3" mb="3">
-                          <Box>
-                            <Text size="1" color="gray" style={{ display: 'block' }}>Tickets Sold</Text>
-                            <Text size="4" weight="bold">
-                              {postEventData.ticket_sales.total_sold || 0}
-                              {postEventData.ticket_sales.total_capacity > 0 && (
-                                <Text size="2" color="gray"> / {postEventData.ticket_sales.total_capacity}</Text>
-                              )}
-                            </Text>
-                            {postEventData.ticket_sales.percentage_sold && (
-                              <Text size="1" color="gray">{postEventData.ticket_sales.percentage_sold}% sold</Text>
-                            )}
-                          </Box>
-                          <Box>
-                            <Text size="1" color="gray" style={{ display: 'block' }}>Gross Revenue</Text>
-                            <Text size="4" weight="bold" color="green">
-                              {postEventData.ticket_sales.currency_symbol || postEventData.auction_summary?.currency_symbol || '$'}
-                              {postEventData.ticket_sales.gross_revenue?.toFixed(2) || postEventData.ticket_sales.total_revenue?.toFixed(2) || '0.00'}
-                            </Text>
-                          </Box>
-                          <Box>
-                            <Text size="1" color="gray" style={{ display: 'block' }}>Total Fees</Text>
-                            <Text size="4" weight="bold" color="red">
-                              {postEventData.ticket_sales.currency_symbol || postEventData.auction_summary?.currency_symbol || '$'}
-                              {postEventData.ticket_sales.total_fees?.toFixed(2) || '0.00'}
-                            </Text>
-                            {postEventData.ticket_sales.eventbrite_fees > 0 && (
-                              <Text size="1" color="gray">
-                                EB: {postEventData.ticket_sales.currency_symbol}{postEventData.ticket_sales.eventbrite_fees.toFixed(2)}
-                              </Text>
-                            )}
-                          </Box>
-                          <Box>
-                            <Text size="1" color="gray" style={{ display: 'block' }}>Net Deposit</Text>
-                            <Text size="4" weight="bold" color="blue">
-                              {postEventData.ticket_sales.currency_symbol || postEventData.auction_summary?.currency_symbol || '$'}
-                              {postEventData.ticket_sales.net_deposit?.toFixed(2) || '0.00'}
-                            </Text>
-                            {postEventData.ticket_sales.average_net_per_ticket && (
-                              <Text size="1" color="gray">
-                                Avg: {postEventData.ticket_sales.currency_symbol}{postEventData.ticket_sales.average_net_per_ticket}/ticket
-                              </Text>
-                            )}
-                          </Box>
-                        </Grid>
-
-                        {postEventData.ticket_sales.data_quality_score && (
-                          <Flex gap="2" align="center" mt="2">
-                            <Text size="1" color="gray">
-                              Quality: {postEventData.ticket_sales.data_quality_score}/100
-                            </Text>
-                            {postEventData.ticket_sales.cache_age_hours && (
-                              <Text size="1" color="gray">
-                                • Cache: {parseFloat(postEventData.ticket_sales.cache_age_hours).toFixed(1)}h old
-                              </Text>
-                            )}
-                          </Flex>
-                        )}
-                      </>
-                    ) : (
-                      <Grid columns="4" gap="3">
-                        <Box>
-                          <Text size="1" color="gray" style={{ display: 'block' }}>Total Sold</Text>
-                          <Text size="4" weight="bold">--</Text>
-                        </Box>
-                        <Box>
-                          <Text size="1" color="gray" style={{ display: 'block' }}>Total Revenue</Text>
-                          <Text size="4" weight="bold" color="green">--</Text>
-                        </Box>
-                        <Box>
-                          <Text size="1" color="gray" style={{ display: 'block' }}>Fees</Text>
-                          <Text size="4" weight="bold">--</Text>
-                        </Box>
-                        <Box>
-                          <Text size="1" color="gray" style={{ display: 'block' }}>Net Deposit</Text>
-                          <Text size="4" weight="bold">--</Text>
-                        </Box>
-                      </Grid>
-                    )}
-
-                    {/* Producer Tickets Sold */}
-                    <Separator my="3" />
-                    <Box>
-                      <Flex align="center" justify="between" gap="2" mb="2">
-                        <Text size="2" weight="medium">
-                          Tickets Sold by Producer
-                        </Text>
-                        {!editingProducerTickets && (
-                          <Button
-                            size="1"
-                            variant="soft"
-                            onClick={() => {
-                              setEditingProducerTickets(true);
-                              setProducerTicketsValue(event.producer_tickets_sold || '0');
-                            }}
-                          >
-                            Edit
-                          </Button>
-                        )}
-                      </Flex>
-                      {editingProducerTickets ? (
-                        <Flex gap="2" mt="1">
-                          <TextField.Root
-                            type="number"
-                            step="0.01"
-                            placeholder="0.00"
-                            value={producerTicketsValue}
-                            onChange={(e) => setProducerTicketsValue(e.target.value)}
-                            style={{ flex: 1 }}
-                          />
-                          <Button
-                            size="1"
-                            onClick={updateProducerTickets}
-                            disabled={updatingProducerTickets}
-                          >
-                            {updatingProducerTickets ? 'Saving...' : 'Save'}
-                          </Button>
-                          <Button
-                            size="1"
-                            variant="soft"
-                            color="gray"
-                            onClick={() => {
-                              setEditingProducerTickets(false);
-                              setProducerTicketsValue('');
-                            }}
-                          >
-                            Cancel
-                          </Button>
-                        </Flex>
-                      ) : (
-                        <Flex direction="column" gap="1">
-                          <Text size="3" weight="bold">
-                            {event.producer_tickets_currency || event.currency || '$'}{(event.producer_tickets_sold || 0).toFixed(2)}
-                          </Text>
-                          {event.producer_tickets_updated_by && (
-                            <Text size="1" color="gray">
-                              Last updated by {event.producer_tickets_updated_by}
-                              {event.producer_tickets_updated_at && ` on ${new Date(event.producer_tickets_updated_at).toLocaleString()}`}
-                            </Text>
-                          )}
-                        </Flex>
-                      )}
-                    </Box>
-                  </Box>
-                </Card>
 
                 {/* Meta Advertising Row */}
                 <Card mt="3">
@@ -5041,6 +5435,21 @@ The Art Battle Team`);
                       <Text weight="medium">Email:</Text>
                       <Text>{selectedArtistForPayment.email}</Text>
                     </Flex>
+                    <Separator />
+                    <Flex justify="between" align="center">
+                      <Flex direction="column" gap="1">
+                        <Text weight="medium">Allow Early Manual Payment</Text>
+                        <Text size="1" color="gray">Bypass 14-day wait for manual payment requests</Text>
+                      </Flex>
+                      <Button
+                        size="2"
+                        variant={selectedArtistForPayment.manual_payment_override ? "solid" : "outline"}
+                        color={selectedArtistForPayment.manual_payment_override ? "green" : "gray"}
+                        onClick={() => toggleManualPaymentOverride(selectedArtistForPayment.artist_id, !selectedArtistForPayment.manual_payment_override)}
+                      >
+                        {selectedArtistForPayment.manual_payment_override ? "Enabled" : "Disabled"}
+                      </Button>
+                    </Flex>
                   </Flex>
                 </Card>
 
@@ -5091,6 +5500,112 @@ The Art Battle Team`);
                     )}
                   </Card>
                 )}
+
+                {/* Manual Payment Request */}
+                {loadingManualPaymentRequest ? (
+                  <Card>
+                    <Skeleton height="80px" />
+                  </Card>
+                ) : manualPaymentRequest && manualPaymentRequest.has_request ? (
+                  <Card>
+                    <Flex direction="column" gap="3">
+                      <Flex justify="between" align="center">
+                        <Heading size="3">Manual Payment Request</Heading>
+                        <Badge
+                          color={
+                            manualPaymentRequest.metadata.status === 'paid' ? 'green' :
+                            manualPaymentRequest.metadata.status === 'approved' ? 'blue' :
+                            manualPaymentRequest.metadata.status === 'rejected' ? 'red' :
+                            'orange'
+                          }
+                        >
+                          {manualPaymentRequest.metadata.status.toUpperCase()}
+                        </Badge>
+                      </Flex>
+
+                      {/* Metadata - always visible */}
+                      <Flex direction="column" gap="2">
+                        <Flex justify="between">
+                          <Text size="2" color="gray">Payment Method:</Text>
+                          <Badge variant="outline">{manualPaymentRequest.metadata.payment_method || 'Not specified'}</Badge>
+                        </Flex>
+                        <Flex justify="between">
+                          <Text size="2" color="gray">Requested Amount:</Text>
+                          <Text size="2" weight="bold">
+                            {manualPaymentRequest.metadata.requested_amount
+                              ? `$${manualPaymentRequest.metadata.requested_amount.toFixed(2)} ${manualPaymentRequest.metadata.preferred_currency || 'USD'}`
+                              : 'Not specified'}
+                          </Text>
+                        </Flex>
+                        <Flex justify="between">
+                          <Text size="2" color="gray">Country:</Text>
+                          <Text size="2">{manualPaymentRequest.metadata.country_code || 'Not specified'}</Text>
+                        </Flex>
+                        <Flex justify="between">
+                          <Text size="2" color="gray">Events:</Text>
+                          <Text size="2">{manualPaymentRequest.metadata.events_referenced?.join(', ') || 'None'}</Text>
+                        </Flex>
+                        <Flex justify="between">
+                          <Text size="2" color="gray">Submitted:</Text>
+                          <Text size="2">{new Date(manualPaymentRequest.metadata.created_at).toLocaleDateString()}</Text>
+                        </Flex>
+                        {manualPaymentRequest.metadata.processed_at && (
+                          <Flex justify="between">
+                            <Text size="2" color="gray">Processed:</Text>
+                            <Text size="2">{new Date(manualPaymentRequest.metadata.processed_at).toLocaleDateString()}</Text>
+                          </Flex>
+                        )}
+                      </Flex>
+
+                      {/* Reveal sensitive details */}
+                      {!revealedPaymentDetails ? (
+                        <Callout.Root color="orange">
+                          <Callout.Icon>
+                            <InfoCircledIcon />
+                          </Callout.Icon>
+                          <Callout.Text>
+                            <Flex justify="between" align="center">
+                              <Text size="2">
+                                Banking details are hidden for security. Click to reveal and audit log the access.
+                              </Text>
+                              <Button
+                                size="1"
+                                variant="soft"
+                                onClick={revealPaymentDetails}
+                              >
+                                Reveal Details
+                              </Button>
+                            </Flex>
+                          </Callout.Text>
+                        </Callout.Root>
+                      ) : (
+                        <Card variant="surface" style={{ backgroundColor: 'var(--yellow-2)', border: '1px solid var(--yellow-6)' }}>
+                          <Flex direction="column" gap="2">
+                            <Flex align="center" gap="2">
+                              <Badge color="yellow">🔓 Sensitive Data Revealed</Badge>
+                              <Text size="1" color="gray">(Audit logged)</Text>
+                            </Flex>
+                            <Separator />
+                            <Box>
+                              <Text size="2" weight="bold" mb="1" style={{ display: 'block' }}>Payment Details:</Text>
+                              <Text size="2" style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', display: 'block' }}>
+                                {manualPaymentRequest.sensitive_details?.payment_details || 'No details provided'}
+                              </Text>
+                            </Box>
+                            {manualPaymentRequest.sensitive_details?.admin_notes && (
+                              <Box>
+                                <Text size="2" weight="bold" mb="1" style={{ display: 'block' }}>Admin Notes:</Text>
+                                <Text size="2" style={{ whiteSpace: 'pre-wrap', display: 'block' }}>
+                                  {manualPaymentRequest.sensitive_details.admin_notes}
+                                </Text>
+                              </Box>
+                            )}
+                          </Flex>
+                        </Card>
+                      )}
+                    </Flex>
+                  </Card>
+                ) : null}
 
                 {/* Account Ledger */}
                 <Card>
