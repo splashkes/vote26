@@ -197,7 +197,11 @@ serve(async (req) => {
           entry_id: artist.artist_entry_id,
           country: artist.artist_country,
           person_id: null,
-          created_at: null
+          created_at: null,
+          manual_payment_override: artist.manual_payment_override || false
+        },
+        manual_payment_request: {
+          has_request: artist.has_manual_request || false
         },
         payment_account_status: artist.payment_account_status,
         stripe_recipient_id: artist.stripe_recipient_id,

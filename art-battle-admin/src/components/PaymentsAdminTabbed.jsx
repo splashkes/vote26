@@ -375,26 +375,24 @@ const PaymentsAdminTabbed = () => {
 
   const toggleManualPaymentOverride = async (artistProfileId, newValue) => {
     try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError) throw userError;
-
-      // Get person_id from user
-      const { data: personData } = await supabase
-        .from('people')
-        .select('id')
-        .eq('email', user.email)
-        .single();
-
-      const { error } = await supabase
-        .from('artist_profiles')
-        .update({
-          manual_payment_override: newValue,
-          manual_payment_override_at: newValue ? new Date().toISOString() : null,
-          manual_payment_override_by: newValue ? personData?.id : null
+      const session = await supabase.auth.getSession();
+      const response = await fetch('https://db.artb.art/functions/v1/admin-toggle-manual-payment-override', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.data.session?.access_token}`,
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcWRrdWJneXF3cHl2Zmx0bnJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjI1NDI0ODQsImV4cCI6MjAzODExODQ4NH0.x6JzxElYCf9lpkpc3RYX2XOQQ-v8QLPQOHWOzLj0a3M'
+        },
+        body: JSON.stringify({
+          artist_profile_id: artistProfileId,
+          enable: newValue
         })
-        .eq('id', artistProfileId);
+      });
 
-      if (error) throw error;
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to toggle manual payment override');
+      }
 
       // Update local state
       setSelectedArtist(prev => ({
@@ -1132,15 +1130,27 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                         </Text>
                       </Table.Cell>
                       <Table.Cell>
-                        <Badge color={
-                          artist.payment_account_status === 'ready' ? 'green' :
-                          artist.payment_account_status === 'in_progress' ? 'orange' :
-                          artist.payment_account_status === 'invited' ? 'blue' : 'red'
-                        }>
-                          {artist.payment_account_status === 'ready' ? 'Ready' :
-                           artist.payment_account_status === 'in_progress' ? 'In Progress' :
-                           artist.payment_account_status === 'invited' ? 'Invited' : 'No Account'}
-                        </Badge>
+                        <Flex gap="1" wrap="wrap">
+                          <Badge color={
+                            artist.payment_account_status === 'ready' ? 'green' :
+                            artist.payment_account_status === 'in_progress' ? 'orange' :
+                            artist.payment_account_status === 'invited' ? 'blue' : 'red'
+                          }>
+                            {artist.payment_account_status === 'ready' ? 'Ready' :
+                             artist.payment_account_status === 'in_progress' ? 'In Progress' :
+                             artist.payment_account_status === 'invited' ? 'Invited' : 'No Account'}
+                          </Badge>
+                          {artist.artist_profiles?.manual_payment_override && (
+                            <Badge color="yellow" size="1">
+                              Manual Approved
+                            </Badge>
+                          )}
+                          {artist.manual_payment_request?.has_request && (
+                            <Badge color="green" size="1">
+                              Manual Provided
+                            </Badge>
+                          )}
+                        </Flex>
                       </Table.Cell>
                       <Table.Cell>
                         <Text size="2" color="gray">{artist.recent_city || 'No recent events'}</Text>
@@ -1957,34 +1967,6 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                               </Flex>
                             )}
                           </Flex>
-                          {!revealedPaymentDetails ? (
-                            <Button
-                              size="1"
-                              variant="soft"
-                              onClick={() => revealPaymentDetails(selectedArtist.artist_profiles.id)}
-                            >
-                              Reveal Payment Details
-                            </Button>
-                          ) : manualPaymentRequest.sensitive_details && (
-                            <Box p="2" style={{ backgroundColor: 'var(--gray-3)', borderRadius: '6px' }}>
-                              <Text size="1" weight="bold" style={{ display: 'block', marginBottom: '0.5rem' }}>
-                                Payment Details:
-                              </Text>
-                              <Text size="1" style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
-                                {manualPaymentRequest.sensitive_details.payment_details}
-                              </Text>
-                              {manualPaymentRequest.sensitive_details.admin_notes && (
-                                <>
-                                  <Text size="1" weight="bold" style={{ display: 'block', marginTop: '1rem', marginBottom: '0.5rem' }}>
-                                    Admin Notes:
-                                  </Text>
-                                  <Text size="1" style={{ whiteSpace: 'pre-wrap' }}>
-                                    {manualPaymentRequest.sensitive_details.admin_notes}
-                                  </Text>
-                                </>
-                              )}
-                            </Box>
-                          )}
                         </Flex>
                       </>
                     )}
@@ -2389,6 +2371,9 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                   <Select.Item value="cash">Cash</Select.Item>
                   <Select.Item value="paypal">PayPal</Select.Item>
                   <Select.Item value="zelle">Zelle</Select.Item>
+                  <Select.Item value="interac">Interac</Select.Item>
+                  <Select.Item value="wise_swift">WISE - SWIFT</Select.Item>
+                  <Select.Item value="wise_other">WISE - OTHER</Select.Item>
                   <Select.Item value="other">Other</Select.Item>
                 </Select.Content>
               </Select.Root>
@@ -2416,6 +2401,46 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                 onChange={(e) => setManualPaymentData({...manualPaymentData, reference: e.target.value})}
               />
             </Box>
+
+            {/* Artist's Payment Details */}
+            {manualPaymentRequest?.has_request && (
+              <Box>
+                <Text size="2" weight="medium" mb="1">Artist's Banking Info</Text>
+                {!revealedPaymentDetails ? (
+                  <Callout.Root color="orange" size="1">
+                    <Callout.Icon>
+                      <InfoCircledIcon />
+                    </Callout.Icon>
+                    <Callout.Text>
+                      <Flex justify="between" align="center">
+                        <Text size="1">
+                          Banking details are hidden for security
+                        </Text>
+                        <Button
+                          size="1"
+                          variant="soft"
+                          onClick={revealPaymentDetails}
+                        >
+                          Reveal Payment Info
+                        </Button>
+                      </Flex>
+                    </Callout.Text>
+                  </Callout.Root>
+                ) : (
+                  <Card variant="surface" style={{ backgroundColor: 'var(--yellow-2)', border: '1px solid var(--yellow-6)' }}>
+                    <Flex direction="column" gap="2">
+                      <Flex align="center" gap="2">
+                        <Badge color="yellow" size="1">🔓 Revealed</Badge>
+                        <Text size="1" color="gray">(Audit logged)</Text>
+                      </Flex>
+                      <Text size="1" style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
+                        {manualPaymentRequest.sensitive_details?.payment_details || 'No details provided'}
+                      </Text>
+                    </Flex>
+                  </Card>
+                )}
+              </Box>
+            )}
 
             <Box>
               <Text size="2" weight="medium" mb="1">Description</Text>

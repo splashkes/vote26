@@ -497,25 +497,14 @@ const EventDetail = () => {
           `)
           .eq('art.event_id', eventId)
           .not('person_id', 'is', null)
-          .not('people', 'is', null),
-          
-        // People who scanned QR codes at this event
-        supabase
-          .from('people_qr_scans')
-          .select(`
-            person_id,
-            people(id, first_name, last_name, email, phone, created_at)
-          `)
-          .eq('event_id', eventId)
-          .not('person_id', 'is', null)
           .not('people', 'is', null)
       ]);
 
       // Combine all people and deduplicate by person ID
       const allPeople = [];
       const seenIds = new Set();
-      
-      [votersResult, biddersResult, scannersResult].forEach(result => {
+
+      [votersResult, biddersResult].forEach(result => {
         if (result.data) {
           result.data.forEach(item => {
             if (item.people && !seenIds.has(item.people.id)) {
@@ -524,8 +513,7 @@ const EventDetail = () => {
                 ...item.people,
                 // Add activity flags
                 voted: votersResult.data?.some(v => v.person_id === item.people.id),
-                bid: biddersResult.data?.some(b => b.person_id === item.people.id),
-                scanned: scannersResult.data?.some(s => s.person_id === item.people.id)
+                bid: biddersResult.data?.some(b => b.person_id === item.people.id)
               });
             }
           });
@@ -986,26 +974,24 @@ const EventDetail = () => {
 
   const toggleManualPaymentOverride = async (artistProfileId, newValue) => {
     try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError) throw userError;
-
-      // Get person_id from user
-      const { data: personData } = await supabase
-        .from('people')
-        .select('id')
-        .eq('email', user.email)
-        .single();
-
-      const { error } = await supabase
-        .from('artist_profiles')
-        .update({
-          manual_payment_override: newValue,
-          manual_payment_override_at: newValue ? new Date().toISOString() : null,
-          manual_payment_override_by: newValue ? personData?.id : null
+      const session = await supabase.auth.getSession();
+      const response = await fetch('https://db.artb.art/functions/v1/admin-toggle-manual-payment-override', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.data.session?.access_token}`,
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcWRrdWJneXF3cHl2Zmx0bnJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjI1NDI0ODQsImV4cCI6MjAzODExODQ4NH0.x6JzxElYCf9lpkpc3RYX2XOQQ-v8QLPQOHWOzLj0a3M'
+        },
+        body: JSON.stringify({
+          artist_profile_id: artistProfileId,
+          enable: newValue
         })
-        .eq('id', artistProfileId);
+      });
 
-      if (error) throw error;
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to toggle manual payment override');
+      }
 
       // Update local state
       setSelectedArtistForPayment(prev => ({
@@ -1324,12 +1310,9 @@ const EventDetail = () => {
 
     setBioSaving(true);
     try {
-      const { error } = await supabase
-        .from('artist_profiles')
-        .update({ abhq_bio: bioText })
-        .eq('id', selectedArtist.artist_profiles.id);
-
-      if (error) throw error;
+      // TODO: Convert to edge function to avoid RLS timeout
+      // For now, show error message
+      throw new Error('Bio update temporarily disabled - please contact developer to enable edge function');
 
       // Update the selected artist in state
       setSelectedArtist(prev => ({
@@ -1380,22 +1363,29 @@ const EventDetail = () => {
     try {
       setSampleWorksLoading(true);
       
+      // TODO: Convert to edge function to avoid RLS timeout
+      // For now, just disable sample works loading
+      console.log('Sample works loading disabled - direct query removed to prevent RLS timeout');
+      setSampleWorks([]);
+      return;
+
+      // OLD CODE - DISABLED:
       // First get the profile_id from artist_number
-      const { data: profileData, error: profileError } = await supabase
-        .from('artist_profiles')
-        .select('id')
-        .eq('entry_id', artistNumber)
-        .single();
-      
-      if (profileError || !profileData) {
-        console.error('Error finding profile for artist_number:', artistNumber, profileError);
-        setSampleWorks([]);
-        return;
-      }
-      
+      // const { data: profileData, error: profileError } = await supabase
+      //   .from('artist_profiles')
+      //   .select('id')
+      //   .eq('entry_id', artistNumber)
+      //   .single();
+      //
+      // if (profileError || !profileData) {
+      //   console.error('Error finding profile for artist_number:', artistNumber, profileError);
+      //   setSampleWorks([]);
+      //   return;
+      // }
+      //
       // Then get sample works using profile_id
-      const { data: sampleWorksData, error: worksError } = await supabase
-        .rpc('get_unified_sample_works', { profile_id: profileData.id });
+      // const { data: sampleWorksData, error: worksError } = await supabase
+      //   .rpc('get_unified_sample_works', { profile_id: profileData.id });
       
       if (worksError) {
         console.error('Error fetching sample works:', worksError);
@@ -2033,32 +2023,35 @@ The Art Battle Team`);
     
     const name = artist?.artist_profiles?.name;
     
-    // First try to get auth phone from people table via artist_number
-    let phone = null;
-    
-    try {
-      // Query people table to get auth_phone for this artist
-      const { data: personData, error: personError } = await supabase
-        .from('people')
-        .select('auth_phone, phone')
-        .eq('artist_number', artist.artist_number)
-        .single();
-        
-      if (!personError && personData) {
-        // Use auth_phone from user account (preferred)
-        phone = personData.auth_phone || personData.phone;
-        console.log('Using auth phone from user account:', phone);
-      } else {
-        console.log('No person record found, falling back to artist profile phone');
-        // Fallback to artist profile phone
-        phone = artist?.artist_profiles?.phone_number || artist?.artist_profiles?.phone || artist?.phone_number;
-      }
-    } catch (err) {
-      console.error('Error fetching person auth_phone:', err);
-      // Fallback to artist profile phone
-      phone = artist?.artist_profiles?.phone_number || artist?.artist_profiles?.phone || artist?.phone_number;
-    }
-    
+    // Direct query to people table removed to avoid RLS timeout
+    // Use artist profile phone directly
+    let phone = artist?.artist_profiles?.phone_number || artist?.artist_profiles?.phone || artist?.phone_number;
+    console.log('Using artist profile phone:', phone);
+
+    // OLD CODE - DISABLED:
+    // try {
+    //   // Query people table to get auth_phone for this artist
+    //   const { data: personData, error: personError } = await supabase
+    //     .from('people')
+    //     .select('auth_phone, phone')
+    //     .eq('artist_number', artist.artist_number)
+    //     .single();
+    //
+    //   if (!personError && personData) {
+    //     // Use auth_phone from user account (preferred)
+    //     phone = personData.auth_phone || personData.phone;
+    //     console.log('Using auth phone from user account:', phone);
+    //   } else {
+    //     console.log('No person record found, falling back to artist profile phone');
+    //     // Fallback to artist profile phone
+    //     phone = artist?.artist_profiles?.phone_number || artist?.artist_profiles?.phone || artist?.phone_number;
+    //   }
+    // } catch (err) {
+    //   console.error('Error fetching person auth_phone:', err);
+    //   // Fallback to artist profile phone
+    //   phone = artist?.artist_profiles?.phone_number || artist?.artist_profiles?.phone || artist?.phone_number;
+    // }
+
     if (!name || !phone) {
       console.error('Missing artist data:', { 
         name: name, 
@@ -2128,24 +2121,31 @@ The Art Battle Team`);
   };
 
   const searchPeopleByPhone = async (phoneQuery) => {
-    if (phoneQuery.length < 3) {
-      setPeopleSearchResults([]);
-      return;
-    }
+    // Direct query to people table removed to avoid RLS timeout
+    // People search feature disabled for now
+    console.log('People search disabled - direct query removed to prevent RLS timeout');
+    setPeopleSearchResults([]);
+    return;
 
-    try {
-      const { data, error } = await supabase
-        .from('people')
-        .select('id, first_name, last_name, phone, email')
-        .or(`phone.ilike.%${phoneQuery}%,first_name.ilike.%${phoneQuery}%,last_name.ilike.%${phoneQuery}%`)
-        .limit(5);
-
-      if (error) throw error;
-      setPeopleSearchResults(data || []);
-    } catch (err) {
-      console.error('Error searching people:', err);
-      setPeopleSearchResults([]);
-    }
+    // OLD CODE - DISABLED:
+    // if (phoneQuery.length < 3) {
+    //   setPeopleSearchResults([]);
+    //   return;
+    // }
+    //
+    // try {
+    //   const { data, error } = await supabase
+    //     .from('people')
+    //     .select('id, first_name, last_name, phone, email')
+    //     .or(`phone.ilike.%${phoneQuery}%,first_name.ilike.%${phoneQuery}%,last_name.ilike.%${phoneQuery}%`)
+    //     .limit(5);
+    //
+    //   if (error) throw error;
+    //   setPeopleSearchResults(data || []);
+    // } catch (err) {
+    //   console.error('Error searching people:', err);
+    //   setPeopleSearchResults([]);
+    // }
   };
 
   // Real-time phone validation as user types
