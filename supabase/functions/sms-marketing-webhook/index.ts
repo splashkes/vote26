@@ -135,11 +135,14 @@ serve(async (req) => {
 // Handle inbound SMS messages
 async function handleInboundMessage(supabase: any, data: any) {
   try {
-    const messageId = data.id;
+    // Handle both Telnyx formats:
+    // 1. Event format: data.id, data.from.phone_number, data.to[0].phone_number, data.text
+    // 2. Simple format: data.sms_id, data.from, data.to, data.body
+    const messageId = data.id || data.sms_id;
     const fromPhone = data.from?.phone_number || data.from;
     const toPhone = data.to?.[0]?.phone_number || data.to;
     const messageBody = data.text || data.body || '';
-    
+
     console.log(`Inbound SMS: ${fromPhone} -> ${toPhone}: "${messageBody}"`);
 
     // Check for opt-out keywords
