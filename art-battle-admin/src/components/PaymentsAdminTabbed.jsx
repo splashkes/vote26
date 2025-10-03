@@ -1920,6 +1920,72 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                         {selectedArtist.artist_profiles.manual_payment_override ? "Enabled" : "Disabled"}
                       </Button>
                     </Flex>
+
+                    {/* Manual Payment Request */}
+                    {manualPaymentRequest?.has_request && (
+                      <>
+                        <Separator />
+                        <Flex direction="column" gap="2">
+                          <Text weight="medium">Manual Payment Request</Text>
+                          <Flex direction="column" gap="1">
+                            <Flex justify="between">
+                              <Text size="2" color="gray">Status:</Text>
+                              <Badge color={manualPaymentRequest.metadata.status === 'pending' ? 'yellow' : 'green'}>
+                                {manualPaymentRequest.metadata.status}
+                              </Badge>
+                            </Flex>
+                            <Flex justify="between">
+                              <Text size="2" color="gray">Payment Method:</Text>
+                              <Text size="2">{manualPaymentRequest.metadata.payment_method}</Text>
+                            </Flex>
+                            <Flex justify="between">
+                              <Text size="2" color="gray">Amount:</Text>
+                              <Text size="2" weight="bold">
+                                {manualPaymentRequest.metadata.preferred_currency} {manualPaymentRequest.metadata.requested_amount?.toFixed(2)}
+                              </Text>
+                            </Flex>
+                            <Flex justify="between">
+                              <Text size="2" color="gray">Requested:</Text>
+                              <Text size="2">{new Date(manualPaymentRequest.metadata.created_at).toLocaleDateString()}</Text>
+                            </Flex>
+                            {manualPaymentRequest.metadata.events_referenced && (
+                              <Flex justify="between">
+                                <Text size="2" color="gray">Events:</Text>
+                                <Text size="2">{manualPaymentRequest.metadata.events_referenced.join(', ')}</Text>
+                              </Flex>
+                            )}
+                          </Flex>
+                          {!revealedPaymentDetails ? (
+                            <Button
+                              size="1"
+                              variant="soft"
+                              onClick={() => revealPaymentDetails(selectedArtist.artist_profiles.id)}
+                            >
+                              Reveal Payment Details
+                            </Button>
+                          ) : manualPaymentRequest.sensitive_details && (
+                            <Box p="2" style={{ backgroundColor: 'var(--gray-3)', borderRadius: '6px' }}>
+                              <Text size="1" weight="bold" style={{ display: 'block', marginBottom: '0.5rem' }}>
+                                Payment Details:
+                              </Text>
+                              <Text size="1" style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
+                                {manualPaymentRequest.sensitive_details.payment_details}
+                              </Text>
+                              {manualPaymentRequest.sensitive_details.admin_notes && (
+                                <>
+                                  <Text size="1" weight="bold" style={{ display: 'block', marginTop: '1rem', marginBottom: '0.5rem' }}>
+                                    Admin Notes:
+                                  </Text>
+                                  <Text size="1" style={{ whiteSpace: 'pre-wrap' }}>
+                                    {manualPaymentRequest.sensitive_details.admin_notes}
+                                  </Text>
+                                </>
+                              )}
+                            </Box>
+                          )}
+                        </Flex>
+                      </>
+                    )}
                   </Flex>
                 </Card>
 

@@ -52,8 +52,22 @@ serve(async (req) => {
     const eventType = payload.event_type || payload.data?.event_type;
     const webhookData = payload.data || payload;
 
+    // Handle Telnyx inbound SMS format (doesn't have event_type, uses direction field)
+    if (!eventType && payload.direction === 'inbound') {
+      console.log('Processing inbound SMS in simple format');
+      await handleInboundMessage(supabase, payload);
+      return new Response(JSON.stringify({
+        received: true,
+        event_type: 'inbound_sms',
+        processed: true
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
     if (!eventType) {
-      console.log('No event_type found in webhook payload');
+      console.log('No event_type found in webhook payload:', JSON.stringify(payload));
       return new Response(JSON.stringify({ received: true }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
