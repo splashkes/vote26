@@ -104,7 +104,13 @@ export default function PublicOfferViewer() {
   function getInventoryDisplay(offer) {
     const remaining = offer.totalInventory - (offer.redeemedCount || 0)
     if (remaining <= 0) return { text: 'SOLD OUT', color: 'red' }
-    return { text: `${remaining} remaining`, color: 'blue' }
+
+    const percentRemaining = (remaining / offer.totalInventory) * 100
+    if (percentRemaining < 40) {
+      return { text: `${Math.round(percentRemaining)}% remaining`, color: 'red' }
+    }
+
+    return null // Don't show inventory if >= 40%
   }
 
   // Loading state
@@ -116,21 +122,17 @@ export default function PublicOfferViewer() {
       <Box className="public-viewer">
         <Box className="header">
           <Container size="3">
-            <Flex justify="between" align="center">
-              <Box>
-                <img
-                  src="https://artb.tor1.cdn.digitaloceanspaces.com/img/AB-HWOT1.png"
-                  alt="Art Battle"
-                  style={{ height: '48px', width: 'auto' }}
-                />
-                <Text size="2" color="gray" style={{ display: 'block', marginTop: '4px' }}>
-                  Exclusive Offers
-                </Text>
-              </Box>
+            <Flex direction="column" align="center" gap="1" style={{ textAlign: 'center' }}>
+              <img
+                src="https://artb.tor1.cdn.digitaloceanspaces.com/img/AB-HWOT1.png"
+                alt="Art Battle"
+                style={{ height: '36px', width: 'auto' }}
+              />
+              <Text size="1" color="gray">
+                Exclusive Offers
+              </Text>
               {greeting && (
-                <Box style={{ textAlign: 'right' }}>
-                  <Heading size="5">{greeting}</Heading>
-                </Box>
+                <Heading size="4">{greeting}</Heading>
               )}
             </Flex>
           </Container>
@@ -217,17 +219,15 @@ export default function PublicOfferViewer() {
       {/* Header */}
       <Box className="header">
         <Container size="4">
-          <Flex justify="between" align="center">
-            <Box>
-              <img
-                src="https://artb.tor1.cdn.digitaloceanspaces.com/img/AB-HWOT1.png"
-                alt="Art Battle"
-                style={{ height: '48px', width: 'auto' }}
-              />
-              <Text size="2" color="gray" style={{ display: 'block', marginTop: '4px' }}>
-                Exclusive Offers
-              </Text>
-            </Box>
+          <Flex direction="column" align="center" gap="1" style={{ textAlign: 'center' }}>
+            <img
+              src="https://artb.tor1.cdn.digitaloceanspaces.com/img/AB-HWOT1.png"
+              alt="Art Battle"
+              style={{ height: '36px', width: 'auto' }}
+            />
+            <Text size="1" color="gray">
+              Exclusive Offers
+            </Text>
           </Flex>
         </Container>
       </Box>
@@ -236,19 +236,17 @@ export default function PublicOfferViewer() {
       <Container size="4" style={{ padding: '2rem 1rem' }}>
         {/* Greeting */}
         {firstName && (
-          <Box style={{ textAlign: 'center', marginBottom: '3rem' }}>
-            <Heading size="8" mb="2">Hi {firstName}!</Heading>
-            <Text size="4" color="gray">Here are your personalized offers</Text>
+          <Box style={{ textAlign: 'center', marginBottom: '1rem' }}>
+            <Heading size="8" mb="2">Hi {firstName}</Heading>
           </Box>
         )}
 
         {/* Eligible offers */}
         {eligibleOffers.length > 0 && (
           <Box mb="6">
-            <Flex align="center" gap="2" mb="4">
-              <Text size="2">✨</Text>
-              <Heading size="6">Available Offers</Heading>
-              <Badge color="green">{eligibleOffers.length}</Badge>
+            <Flex justify="center" align="center" gap="2" mb="4">
+              <Text size="5">✨</Text>
+              <Text size="5">{eligibleOffers.length} Available Offers!</Text>
             </Flex>
 
             <div className="offers-grid">
@@ -289,16 +287,23 @@ export default function PublicOfferViewer() {
                             <Text style={{ color: 'rgba(255,255,255,0.8)' }}>{expiry}</Text>
                           </Flex>
                         )}
-                        <Flex align="center" gap="1">
-                          <Text>📦</Text>
-                          <Text style={{ color: inventory.color === 'red' ? '#fca5a5' : 'rgba(255,255,255,0.8)' }}>
-                            {inventory.text}
-                          </Text>
-                        </Flex>
+                        {inventory && (
+                          <Flex align="center" gap="1">
+                            <Text>📦</Text>
+                            <Text style={{ color: inventory.color === 'red' ? '#fca5a5' : 'rgba(255,255,255,0.8)' }}>
+                              {inventory.text}
+                            </Text>
+                          </Flex>
+                        )}
                       </Flex>
 
-                      <Flex justify="between" align="center" mt="2">
-                        <Text size="2" style={{ color: 'rgba(255,255,255,0.7)' }}>
+                      <Flex justify="between" align="center" mt="2" style={{
+                        color: 'white',
+                        background: 'rgba(0,0,0,0.3)',
+                        padding: '12px 16px',
+                        borderRadius: '6px'
+                      }}>
+                        <Text size="2" weight="bold">
                           {expired ? 'Expired' : 'Claim Now'}
                         </Text>
                         <Text size="4">→</Text>

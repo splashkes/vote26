@@ -373,6 +373,45 @@ const PaymentsAdminTabbed = () => {
     }
   };
 
+  const toggleManualPaymentOverride = async (artistProfileId, newValue) => {
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+
+      // Get person_id from user
+      const { data: personData } = await supabase
+        .from('people')
+        .select('id')
+        .eq('email', user.email)
+        .single();
+
+      const { error } = await supabase
+        .from('artist_profiles')
+        .update({
+          manual_payment_override: newValue,
+          manual_payment_override_at: newValue ? new Date().toISOString() : null,
+          manual_payment_override_by: newValue ? personData?.id : null
+        })
+        .eq('id', artistProfileId);
+
+      if (error) throw error;
+
+      // Update local state
+      setSelectedArtist(prev => ({
+        ...prev,
+        artist_profiles: {
+          ...prev.artist_profiles,
+          manual_payment_override: newValue
+        }
+      }));
+
+      alert(`Manual payment override ${newValue ? 'enabled' : 'disabled'} successfully!`);
+    } catch (err) {
+      console.error('Failed to toggle manual payment override:', err);
+      setError('Failed to update override setting: ' + err.message);
+    }
+  };
+
   const handleManualPayment = async () => {
     try {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -1865,6 +1904,21 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                     <Flex justify="between">
                       <Text weight="medium">Country:</Text>
                       <Badge variant="outline">{selectedArtist.artist_profiles.country || 'Not specified'}</Badge>
+                    </Flex>
+                    <Separator />
+                    <Flex justify="between" align="center">
+                      <Flex direction="column" gap="1">
+                        <Text weight="medium">Allow Early Manual Payment</Text>
+                        <Text size="1" color="gray">Bypass 14-day wait for manual payment requests</Text>
+                      </Flex>
+                      <Button
+                        size="2"
+                        variant={selectedArtist.artist_profiles.manual_payment_override ? "solid" : "outline"}
+                        color={selectedArtist.artist_profiles.manual_payment_override ? "green" : "gray"}
+                        onClick={() => toggleManualPaymentOverride(selectedArtist.artist_profiles.id, !selectedArtist.artist_profiles.manual_payment_override)}
+                      >
+                        {selectedArtist.artist_profiles.manual_payment_override ? "Enabled" : "Disabled"}
+                      </Button>
                     </Flex>
                   </Flex>
                 </Card>

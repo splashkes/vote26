@@ -30,6 +30,43 @@ const ManualPaymentRequest = ({ artistProfile, noteId, serverEligibility }) => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
 
+  // Get country-specific form configuration
+  const getCountryFormConfig = (country) => {
+    const countryUpper = (country || '').toUpperCase();
+
+    if (countryUpper === 'US' || countryUpper === 'USA' || countryUpper === 'UNITED STATES') {
+      return {
+        methods: ['PayPal', 'Zelle'],
+        placeholder: 'Please provide your payment information:\n\nPreferred Method: PayPal or Zelle\n\nFor PayPal:\nEmail: your-paypal@example.com\n\nFor Zelle:\nPhone or Email: your-zelle@example.com\nName on Account: Your Full Name',
+        instructions: 'We can pay via PayPal or Zelle. Please provide your email/phone for the method you prefer.'
+      };
+    } else if (countryUpper === 'CA' || countryUpper === 'CAN' || countryUpper === 'CANADA') {
+      return {
+        methods: ['Interac e-Transfer'],
+        placeholder: 'Please provide your Interac e-Transfer information:\n\nEmail or Phone: your-email@example.com or 555-123-4567\nName on Account: Your Full Name\nBank Name (optional): TD Bank',
+        instructions: 'We can pay via Interac e-Transfer. Please provide your email or phone number registered with your bank.'
+      };
+    } else if (['GB', 'UK', 'DE', 'FR', 'IT', 'ES', 'NL', 'BE', 'AT', 'CH', 'SE', 'NO', 'DK', 'FI', 'IE', 'PT', 'GR', 'PL'].includes(countryUpper)) {
+      return {
+        methods: ['IBAN/SWIFT Transfer'],
+        placeholder: 'Please provide your IBAN information:\n\nFull Name: Your Full Name\nIBAN: DE89 3704 0044 0532 0130 00\nBIC/SWIFT (if required): COBADEFFXXX\nBank Name: Your Bank Name\nBank Address: City, Country',
+        instructions: 'We can pay via IBAN/SWIFT bank transfer. Please provide your complete IBAN details.'
+      };
+    } else if (countryUpper === 'AU' || countryUpper === 'AUS' || countryUpper === 'AUSTRALIA' || countryUpper === 'NZ' || countryUpper === 'NZL' || countryUpper === 'NEW ZEALAND') {
+      return {
+        methods: ['Bank Transfer', 'PayPal', 'Other'],
+        placeholder: 'Please provide your payment information:\n\nPreferred Method: (e.g., Bank Transfer, PayPal, etc.)\n\nFor Bank Transfer:\nAccount Name: Your Full Name\nBSB: 123-456\nAccount Number: 12345678\n\nFor PayPal:\nEmail: your-paypal@example.com\n\nOr provide alternative method details',
+        instructions: 'Please provide your preferred payment method and all necessary details.'
+      };
+    } else {
+      return {
+        methods: ['Various'],
+        placeholder: 'Please provide your payment information:\n\nPreferred Method: (e.g., PayPal, Bank Transfer, etc.)\n\nPlease include:\n- Full Name\n- Payment method details\n- Account numbers or email\n- Any other required information',
+        instructions: 'Please provide your preferred payment method and all necessary account details.'
+      };
+    }
+  };
+
   useEffect(() => {
     if (serverEligibility) {
       // Use server-provided eligibility data
@@ -268,31 +305,38 @@ const ManualPaymentRequest = ({ artistProfile, noteId, serverEligibility }) => {
                 ))}
               </Box>
 
-              <Callout.Root color="blue" size="1">
-                <Callout.Icon>
-                  <InfoCircledIcon />
-                </Callout.Icon>
-                <Callout.Text>
-                  <Text size="1">
-                    Please provide your payment details below. Include your preferred method
-                    (Zelle, PayPal, Interac, bank transfer, etc.) and all necessary information
-                    for us to send your payment.
-                  </Text>
-                </Callout.Text>
-              </Callout.Root>
+              {(() => {
+                const formConfig = getCountryFormConfig(eligibilityData.country);
+                return (
+                  <>
+                    <Callout.Root color="blue" size="1">
+                      <Callout.Icon>
+                        <InfoCircledIcon />
+                      </Callout.Icon>
+                      <Callout.Text>
+                        <Text size="1">
+                          <strong>Available methods:</strong> {formConfig.methods.join(', ')}
+                          <br />
+                          {formConfig.instructions}
+                        </Text>
+                      </Callout.Text>
+                    </Callout.Root>
 
-              <Box>
-                <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>
-                  Payment Details *
-                </Text>
-                <TextArea
-                  placeholder="Example:&#10;&#10;Method: PayPal&#10;Email: artist@example.com&#10;&#10;OR&#10;&#10;Method: Bank Transfer&#10;Bank Name: ABC Bank&#10;Account Number: 123456789&#10;Routing Number: 987654321&#10;Account Holder: Jane Smith"
-                  value={paymentDetails}
-                  onChange={(e) => setPaymentDetails(e.target.value)}
-                  rows={8}
-                  style={{ width: '100%' }}
-                />
-              </Box>
+                    <Box>
+                      <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>
+                        Payment Details *
+                      </Text>
+                      <TextArea
+                        placeholder={formConfig.placeholder}
+                        value={paymentDetails}
+                        onChange={(e) => setPaymentDetails(e.target.value)}
+                        rows={10}
+                        style={{ width: '100%' }}
+                      />
+                    </Box>
+                  </>
+                );
+              })()}
 
               {error && (
                 <Callout.Root color="red" size="1">

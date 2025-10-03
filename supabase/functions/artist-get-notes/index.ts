@@ -63,10 +63,17 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Get artist profile
-    const { data: artistProfile } = await serviceClient
+    // Get artist profile with country information and admin overrides
+    const { data: artistProfile, error: profileError } = await serviceClient
       .from('artist_profiles')
-      .select('id')
+      .select(`
+        id,
+        country,
+        manual_payment_override,
+        people!inner (
+          id
+        )
+      `)
       .eq('person_id', personId)
       .single();
 
@@ -78,6 +85,10 @@ serve(async (req) => {
         status: 200
       });
     }
+
+    // Determine country from artist profile
+    const artistCountry = artistProfile.country || null;
+    const hasAdminOverride = artistProfile.manual_payment_override || false;
 
     // Get dismissed notes for this user
     const { data: dismissedNotes } = await serviceClient
@@ -137,7 +148,11 @@ serve(async (req) => {
             return eventDate < fourteenDaysAgo;
           }) || [];
 
-          if (oldEvents.length > 0) {
+          // Show manual payment option if events are old enough OR admin has enabled override
+          if (oldEvents.length > 0 || hasAdminOverride) {
+            // If admin override is active but no old events, use all confirmed events
+            const eligibleEvents = oldEvents.length > 0 ? oldEvents : events || [];
+
             notes.push({
               id: 'manual-payment-eligible-2025-10',
               variant: 'warning',
@@ -146,7 +161,8 @@ serve(async (req) => {
                 type: 'manual-payment-request',
                 balance: balance,
                 currency: currency,
-                events: oldEvents.map(e => ({
+                country: artistCountry,
+                events: eligibleEvents.map(e => ({
                   id: e.id,
                   eid: e.eid,
                   name: e.name,
@@ -202,7 +218,7 @@ serve(async (req) => {
               type: 'callout',
               color: 'amber',
               title: "Don't see your balance?",
-              text: 'Contact artists@artbattle.com with your name, phone number, and most recent event to link your sales.'
+              text: '**If you believe you are owed money from participating in a recent event, but it does not show above, please contact artists@artbattle.com with your name, phone number, and most recent event city/date**'
             }
           ]
         }

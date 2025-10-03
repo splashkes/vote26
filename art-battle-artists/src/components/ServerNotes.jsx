@@ -141,6 +141,7 @@ const ServerNotes = ({ artistProfile, onNavigateToTab }) => {
               serverEligibility={{
                 balance: note.content.balance,
                 currency: note.content.currency,
+                country: note.content.country,
                 events: note.content.events
               }}
             />

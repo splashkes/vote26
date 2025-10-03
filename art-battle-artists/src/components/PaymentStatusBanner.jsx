@@ -66,6 +66,12 @@ const PaymentStatusBanner = ({ artistProfile, confirmations, hasRecentActivity, 
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
 
+  // Error state for profile validation
+  const [profileError, setProfileError] = useState(null);
+
+  // Manual payment request state
+  const [hasPendingManualRequest, setHasPendingManualRequest] = useState(false);
+
   // Instant payout state
   const [instantPayoutEligibility, setInstantPayoutEligibility] = useState(null);
   const [checkingEligibility, setCheckingEligibility] = useState(false);
@@ -105,10 +111,11 @@ const PaymentStatusBanner = ({ artistProfile, confirmations, hasRecentActivity, 
         return;
       }
 
-      // Load payment account status and outstanding payments
+      // Load payment account status, outstanding payments, and manual request status
       await Promise.all([
         loadPaymentAccount(),
-        loadPaymentData()
+        loadPaymentData(),
+        checkPendingManualRequest()
       ]);
 
       setShowBanner(true);
@@ -220,6 +227,24 @@ const PaymentStatusBanner = ({ artistProfile, confirmations, hasRecentActivity, 
     } catch (err) {
       console.error('Error loading payment data:', err);
       setPaymentData({ pendingPayments: 0, unpaidBids: 0, currency: 'USD', hasEarnings: false, hasPotentialEarnings: false });
+    }
+  };
+
+  const checkPendingManualRequest = async () => {
+    try {
+      if (!artistProfile?.id) return;
+
+      const { data, error } = await supabase
+        .from('artist_manual_payment_requests')
+        .select('id')
+        .eq('artist_profile_id', artistProfile.id)
+        .eq('status', 'pending')
+        .maybeSingle();
+
+      setHasPendingManualRequest(!!data);
+    } catch (err) {
+      console.error('Error checking pending manual request:', err);
+      setHasPendingManualRequest(false);
     }
   };
 
@@ -378,6 +403,13 @@ const PaymentStatusBanner = ({ artistProfile, confirmations, hasRecentActivity, 
 
   const handleStartOnboarding = async () => {
     try {
+      // Safety check: ensure person is available
+      if (!person || !person.id) {
+        console.error('Cannot start onboarding: person data not available', { person });
+        setProfileError('Unable to start onboarding. Please refresh the page and try again.');
+        return;
+      }
+
       // Set redirecting state immediately for instant UI feedback
       setRedirecting(true);
 
@@ -393,6 +425,11 @@ const PaymentStatusBanner = ({ artistProfile, confirmations, hasRecentActivity, 
 
       if (error) throw error;
 
+      // Check if we got an error response in the data
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+
       if ((data.onboarding_type === 'direct_redirect' && data.onboarding_url) || data.onboarding_url) {
         // Immediate redirect without delay
         window.location.replace(data.onboarding_url);
@@ -401,6 +438,34 @@ const PaymentStatusBanner = ({ artistProfile, confirmations, hasRecentActivity, 
     } catch (err) {
       console.error('Onboarding error:', err);
       setRedirecting(false);
+
+      // Extract error message - try multiple sources
+      let errorMessage = 'Unknown error occurred';
+
+      // Try to parse error.context if it exists (edge function response body)
+      if (err?.context) {
+        try {
+          const responseText = await err.context.text();
+          console.log('Edge function raw response:', responseText);
+          const parsed = JSON.parse(responseText);
+          if (parsed.error) {
+            errorMessage = parsed.error;
+          }
+          if (parsed.debug) {
+            console.log('Edge function debug info:', parsed.debug);
+          }
+        } catch (parseError) {
+          console.error('Could not parse edge function response:', parseError);
+        }
+      }
+
+      // Fallback to standard error properties
+      if (errorMessage === 'Unknown error occurred') {
+        errorMessage = err?.message || err?.error || JSON.stringify(err);
+      }
+
+      // Set error state to show in UI
+      setProfileError(errorMessage);
     }
   };
 
@@ -426,12 +491,49 @@ const PaymentStatusBanner = ({ artistProfile, confirmations, hasRecentActivity, 
     const instantPayoutProcessed = mostRecentPayment.metadata?.instant_payout_processed;
 
     return (
-      <Card size="3" style={{
-        marginBottom: '1.5rem',
-        border: `2px solid var(--${instantPayoutEligibility?.eligible && !instantPayoutProcessed ? 'blue' : 'green'}-8)`,
-        backgroundColor: `var(--${instantPayoutEligibility?.eligible && !instantPayoutProcessed ? 'blue' : 'green'}-2)`
-      }}>
-        <Flex justify="between" align="start">
+      <>
+        {/* Profile Error Callout */}
+        {profileError && (
+          <Callout.Root color="red" size="2" style={{ marginBottom: '1rem' }}>
+            <Callout.Icon>
+              <ExclamationTriangleIcon />
+            </Callout.Icon>
+            <Callout.Text>
+              <Text weight="bold" size="2" style={{ display: 'block', marginBottom: '0.5rem' }}>
+                Profile Incomplete
+              </Text>
+              <Text size="2" style={{ display: 'block', marginBottom: '0.5rem' }}>
+                {profileError}
+              </Text>
+              {(profileError.includes('country') || profileError.includes('email') ||
+                profileError.includes('name') || profileError.includes('phone')) && (
+                <Flex gap="2" mt="2">
+                  <Button
+                    size="1"
+                    variant="soft"
+                    onClick={() => onNavigateToTab('profile')}
+                  >
+                    Add Country to Profile
+                  </Button>
+                  <Button
+                    size="1"
+                    variant="ghost"
+                    onClick={() => setProfileError(null)}
+                  >
+                    Dismiss
+                  </Button>
+                </Flex>
+              )}
+            </Callout.Text>
+          </Callout.Root>
+        )}
+
+        <Card size="3" style={{
+          marginBottom: '1.5rem',
+          border: `2px solid var(--${instantPayoutEligibility?.eligible && !instantPayoutProcessed ? 'blue' : 'green'}-8)`,
+          backgroundColor: `var(--${instantPayoutEligibility?.eligible && !instantPayoutProcessed ? 'blue' : 'green'}-2)`
+        }}>
+          <Flex justify="between" align="start">
           <Flex direction="column" gap="3" style={{ flex: 1 }}>
             <Flex align="center" gap="2">
               <Badge color={instantPayoutEligibility?.eligible && !instantPayoutProcessed ? "blue" : "green"} variant="soft" size="2">
@@ -496,11 +598,29 @@ const PaymentStatusBanner = ({ artistProfile, confirmations, hasRecentActivity, 
           </IconButton>
         </Flex>
       </Card>
+      </>
     );
   };
 
   const getActionButtons = (status) => {
     const isDisabled = redirecting;
+
+    // If there's a pending manual payment request, show message instead of setup button
+    if (hasPendingManualRequest && status !== 'ready') {
+      return (
+        <Callout.Root color="amber" size="1" style={{ marginTop: '0.5rem' }}>
+          <Callout.Icon>
+            <InfoCircledIcon />
+          </Callout.Icon>
+          <Callout.Text>
+            <Text size="1">
+              Stripe setup is disabled while you have a pending manual payment request.
+              Once your manual payment is processed, you can set up Stripe for faster future payments.
+            </Text>
+          </Callout.Text>
+        </Callout.Root>
+      );
+    }
 
     switch (status) {
       case 'ready':
@@ -711,6 +831,42 @@ const PaymentStatusBanner = ({ artistProfile, confirmations, hasRecentActivity, 
 
     return (
       <>
+        {/* Profile Error Callout */}
+        {profileError && (
+          <Callout.Root color="red" size="2" style={{ marginBottom: '1rem' }}>
+            <Callout.Icon>
+              <ExclamationTriangleIcon />
+            </Callout.Icon>
+            <Callout.Text>
+              <Text weight="bold" size="2" style={{ display: 'block', marginBottom: '0.5rem' }}>
+                Profile Incomplete
+              </Text>
+              <Text size="2" style={{ display: 'block', marginBottom: '0.5rem' }}>
+                {profileError}
+              </Text>
+              {(profileError.includes('country') || profileError.includes('email') ||
+                profileError.includes('name') || profileError.includes('phone')) && (
+                <Flex gap="2" mt="2">
+                  <Button
+                    size="1"
+                    variant="soft"
+                    onClick={() => onNavigateToTab('profile')}
+                  >
+                    Add Country to Profile
+                  </Button>
+                  <Button
+                    size="1"
+                    variant="ghost"
+                    onClick={() => setProfileError(null)}
+                  >
+                    Dismiss
+                  </Button>
+                </Flex>
+              )}
+            </Callout.Text>
+          </Callout.Root>
+        )}
+
         <Card size="3" style={{
           marginBottom: '1.5rem',
           border: `2px solid var(--${paymentStatus.color === 'gray' ? 'blue' : paymentStatus.color}-8)`,

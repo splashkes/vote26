@@ -77,7 +77,8 @@ serve(async (req) => {
           name,
           entry_id,
           email,
-          phone
+          phone,
+          manual_payment_override
         )
       `)
       .eq('event_id', event.id);
@@ -326,6 +327,7 @@ serve(async (req) => {
       const entryId = artistWorks[0].artist_profiles.entry_id;
       const email = artistWorks[0].artist_profiles.email;
       const phone = artistWorks[0].artist_profiles.phone;
+      const manualPaymentOverride = artistWorks[0].artist_profiles.manual_payment_override || false;
 
       // Get artist_number from confirmation if available (supplementary data)
       const confirmation = confirmationByArtistId.get(artistId);
@@ -414,6 +416,7 @@ serve(async (req) => {
         entry_id: entryId,
         email: email,
         phone: phone,
+        manual_payment_override: manualPaymentOverride,
         artworks_paid: paidArtworks,
         artworks_unpaid: unpaidArtworks,
         artworks_no_bid: noBidArtworks,

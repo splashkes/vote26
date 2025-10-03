@@ -69,42 +69,52 @@ serve(async (req) => {
 
     // Extract person data from JWT claims (V2 auth system support)
     let authenticatedPersonId = null;
+    let jwtPayload = null;
+
+    // Try to parse JWT payload
     try {
       const tokenParts = token.split('.');
       if (tokenParts.length === 3) {
-        const payload = JSON.parse(atob(tokenParts[1]));
+        jwtPayload = JSON.parse(atob(tokenParts[1]));
         console.log('JWT payload extracted:', {
-          auth_version: payload.auth_version,
-          person_id: payload.person_id,
+          auth_version: jwtPayload.auth_version,
+          person_id: jwtPayload.person_id,
           user_id: user.id
         });
-
-        if (payload.auth_version === 'v2-http') {
-          if (payload.person_pending === true) {
-            throw new Error('User profile not fully initialized - person pending');
-          }
-          if (!payload.person_id) {
-            throw new Error('No person data found in authentication token');
-          }
-          authenticatedPersonId = payload.person_id;
-        } else {
-          // Fallback to V1 auth system - lookup by auth_user_id
-          const { data: person, error: personError } = await supabase
-            .from('people')
-            .select('id, first_name, last_name, name, email, phone')
-            .eq('auth_user_id', user.id)
-            .single();
-
-          if (personError || !person) {
-            console.error('Person lookup error:', personError);
-            throw new Error('Person not found for authenticated user: ' + (personError?.message || 'No person found'));
-          }
-          authenticatedPersonId = person.id;
-        }
       }
-    } catch (jwtError) {
-      console.error('Failed to extract person data from JWT:', jwtError);
-      throw new Error('Authentication token invalid: ' + jwtError.message);
+    } catch (parseError) {
+      console.warn('JWT parsing failed (non-fatal):', parseError);
+      // Continue with V1 fallback
+    }
+
+    // Check if V2 auth
+    if (jwtPayload?.auth_version === 'v2-http') {
+      if (jwtPayload.person_pending === true) {
+        throw new Error('User profile not fully initialized - person pending');
+      }
+      if (!jwtPayload.person_id) {
+        throw new Error('No person data found in authentication token');
+      }
+      authenticatedPersonId = jwtPayload.person_id;
+    } else {
+      // V1 auth system - lookup by auth_user_id
+      console.log('Using V1 auth fallback - looking up by auth_user_id:', user.id);
+      const { data: person, error: personError } = await supabase
+        .from('people')
+        .select('id, first_name, last_name, name, email, phone')
+        .eq('auth_user_id', user.id)
+        .single();
+
+      if (personError || !person) {
+        console.error('Person lookup error:', personError);
+        throw new Error('Person not found for authenticated user: ' + (personError?.message || 'No person found'));
+      }
+      authenticatedPersonId = person.id;
+    }
+
+    // Final verification
+    if (!authenticatedPersonId) {
+      throw new Error('Failed to determine authenticated person ID');
     }
 
     // Verify the person_id matches (security check)
