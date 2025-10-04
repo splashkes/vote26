@@ -24,7 +24,8 @@ import {
   PaperPlaneIcon,
   ChatBubbleIcon,
   FileTextIcon,
-  CardStackIcon
+  CardStackIcon,
+  CheckCircledIcon
 } from '@radix-ui/react-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -109,6 +110,13 @@ const AdminSidebar = ({ collapsed = false, onToggleCollapse, hideToggleAndSignOu
       label: 'Health',
       description: 'AI recommendations across all events',
       color: 'crimson'
+    },
+    {
+      to: '/event-linter',
+      icon: CheckCircledIcon,
+      label: 'Event Linter',
+      description: 'Automated event health checks and warnings',
+      color: 'violet'
     },
     {
       to: '/settings',

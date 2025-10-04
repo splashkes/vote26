@@ -891,10 +891,10 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
                             {confirmation.event?.name}
                           </Text>
                           <Text size="2" color="gray">
-                            📅 {confirmation.event?.event_start_datetime && 
+                            📅 {confirmation.event?.event_start_datetime &&
                               formatDateTime(confirmation.event.event_start_datetime)}
                             {confirmation.event?.venue && ` • 📍 ${confirmation.event.venue}`}
-                            {confirmation.event?.city?.name && `, ${confirmation.event.city.name}`}
+                            {confirmation.event?.city && `, ${confirmation.event.city}`}
                           </Text>
                           <Text size="2" color="gray">
                             Artist #{confirmation.artist_number}
@@ -957,10 +957,10 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
                             {invitation.event?.name}
                           </Text>
                           <Text size="2" color="gray">
-                            📅 {invitation.event?.event_start_datetime && 
+                            📅 {invitation.event?.event_start_datetime &&
                               formatDateTime(invitation.event.event_start_datetime)}
                             {invitation.event?.venue && ` • 📍 ${invitation.event.venue}`}
-                            {invitation.event?.city?.name && `, ${invitation.event.city.name}`}
+                            {invitation.event?.city && `, ${invitation.event.city}`}
                           </Text>
                           <Text size="2" color="gray">
                             Artist #{invitation.artist_number}
@@ -1034,10 +1034,10 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
                           {application.event?.name}
                         </Text>
                         <Text size="2" color="gray">
-                          {application.event?.event_start_datetime && 
+                          {application.event?.event_start_datetime &&
                             formatDateTime(application.event.event_start_datetime)}
                           {application.event?.venue && ` • ${application.event.venue}`}
-                          {application.event?.city?.name && ` • ${application.event.city.name}`}
+                          {application.event?.city && ` • ${application.event.city}`}
                         </Text>
                       </Flex>
                       

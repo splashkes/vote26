@@ -246,6 +246,7 @@ serve(async (req) => {
     let totalPaidPartner = 0;
     let taxCollectedOnline = 0;
     let taxCollectedPartner = 0;
+    let paidOnlineCount = 0;
 
     const unpaidPaintings = [];
     const noBidPaintings = [];
@@ -282,6 +283,7 @@ serve(async (req) => {
             const taxAmount = parseFloat(stripePayment.tax_amount) || 0;
             totalPaidOnline += amountWithTax;
             taxCollectedOnline += taxAmount;
+            paidOnlineCount++;
           }
           // Admin-marked payment (partner/cash)
           else if (hasPartnerPayment) {
@@ -329,7 +331,6 @@ serve(async (req) => {
       .filter(url => url);
 
     const noBidThumbnails = noBidPaintings
-      .slice(0, 3)
       .map(p => p.image_url)
       .filter(url => url);
 
@@ -348,9 +349,13 @@ serve(async (req) => {
           total_top_bids_amount: totalTopBids,
           total_paid_online: totalPaidOnline,
           total_paid_partner: totalPaidPartner,
+          paid_online_count: paidOnlineCount,
 
           tax_collected_online: taxCollectedOnline,
           tax_collected_partner: taxCollectedPartner,
+
+          // Processing fees: $1 + 2.9% per online transaction
+          processing_fees: (paidOnlineCount * 1) + (totalPaidOnline * 0.029),
 
           currency_code: currencyCode,
           currency_symbol: currencySymbol,

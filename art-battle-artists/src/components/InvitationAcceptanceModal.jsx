@@ -176,13 +176,14 @@ const InvitationAcceptanceModal = ({
     const submissionData = {
       artistProfileId: artistProfile.id,
       eventEid: invitation.event_eid,
-      artistNumber: invitation.artist_number,
-      
+      artistNumber: artistProfile.entry_id?.toString(), // Use logged-in profile's entry_id, NOT invitation's artist_number
+      invitedArtistNumber: invitation.artist_number, // Track original for audit trail
+
       // Update artist profile with pronouns
       profileUpdates: {
         pronouns: formData.pronouns === 'Other' ? formData.pronounsOther : formData.pronouns
       },
-      
+
       // Confirmation entry data
       confirmationData: {
         legalName: formData.legalName,

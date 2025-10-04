@@ -309,7 +309,9 @@ serve(async (req)=>{
       metadata: {
         accepted_invitation_at: new Date().toISOString(),
         original_invitation_id: invitationId,
-        accepted_via: 'artist_portal_enhanced_home'
+        accepted_via: 'artist_portal_enhanced_home',
+        invited_artist_number: submissionData.invitedArtistNumber, // Track if invitation was for different profile
+        confirmed_artist_number: submissionData.artistNumber // Track which profile actually confirmed
       }
     };
     const { data: newConfirmation, error: confirmError } = await supabase.from('artist_confirmations').insert(confirmationData).select().single();

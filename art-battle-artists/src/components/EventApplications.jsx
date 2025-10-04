@@ -61,10 +61,8 @@ const EventApplications = () => {
 
   useEffect(() => {
     if (artistProfileId) {
-      fetchEvents();
-      fetchApplications();
-      fetchInvitations();
-      fetchConfirmations();
+      fetchArtistData();
+      fetchAllEvents();
     }
   }, [artistProfileId]);
 
@@ -92,7 +90,7 @@ const EventApplications = () => {
       }
 
       setArtistProfileId(result.profile_id);
-      
+
       // Also fetch the full artist profile data
       const { data: profileData, error: profileError } = await supabase
         .from('artist_profiles')
@@ -110,10 +108,34 @@ const EventApplications = () => {
     }
   };
 
-  const fetchEvents = async () => {
+  // Fetch artist-specific data (applications, invitations, confirmations) from edge function
+  // This ensures consistent filtering logic for future events and non-withdrawn items
+  const fetchArtistData = async () => {
+    if (!artistProfileId) return;
+
+    try {
+      const { data, error } = await supabase.functions.invoke('get-artist-profile-data', {
+        body: { artist_profile_id: artistProfileId }
+      });
+
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error || 'Failed to load artist data');
+
+      // Set data from edge function (already filtered for future events)
+      setApplications(data.data.applications || []);
+      setInvitations(data.data.invitations || []);
+      setConfirmations(data.data.confirmations || []);
+    } catch (err) {
+      console.error('Failed to load artist data:', err.message);
+      setError('Failed to load your event data: ' + err.message);
+    }
+  };
+
+  // Fetch ALL future events for browsing/applying
+  const fetchAllEvents = async () => {
     try {
       const now = new Date();
-      
+
       // Get upcoming events (from now onwards)
       const { data, error } = await supabase
         .from('events')
@@ -134,66 +156,12 @@ const EventApplications = () => {
         .order('event_start_datetime', { ascending: true });
 
       if (error) throw error;
-      
+
       setEvents(data || []);
     } catch (err) {
       setError('Failed to load events: ' + err.message);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchApplications = async () => {
-    if (!artistProfileId) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('artist_applications')
-        .select('*')
-        .eq('artist_profile_id', artistProfileId);
-
-      if (error) throw error;
-      
-      setApplications(data || []);
-    } catch (err) {
-      console.error('Failed to load applications:', err.message);
-    }
-  };
-
-  const fetchInvitations = async () => {
-    if (!artistProfileId) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('artist_invitations')
-        .select('*')
-        .eq('artist_profile_id', artistProfileId)
-        .eq('status', 'pending')
-        .is('accepted_at', null);
-
-      if (error) throw error;
-      
-      setInvitations(data || []);
-    } catch (err) {
-      console.error('Failed to load invitations:', err.message);
-    }
-  };
-
-  const fetchConfirmations = async () => {
-    if (!artistProfileId) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('artist_confirmations')
-        .select('*')
-        .eq('artist_profile_id', artistProfileId)
-        .eq('confirmation_status', 'confirmed');
-
-      if (error) throw error;
-      
-      setConfirmations(data || []);
-    } catch (err) {
-      console.error('Failed to load confirmations:', err.message);
     }
   };
 
@@ -228,7 +196,7 @@ const EventApplications = () => {
       if (error) throw error;
       if (!data.success) throw new Error(data.error || 'Failed to submit application');
 
-      await fetchApplications();
+      await fetchArtistData();
       setShowApplicationModal(false);
       setSelectedEvent(null);
       setApplicationMessage('');
@@ -258,7 +226,7 @@ const EventApplications = () => {
 
       if (error) throw error;
 
-      await fetchApplications();
+      await fetchArtistData();
     } catch (err) {
       setError('Failed to remove application: ' + err.message);
     } finally {
@@ -384,12 +352,8 @@ const EventApplications = () => {
       if (!data.success) {
         throw new Error(data.error || 'Unknown error from accept-invitation function');
       }
-      
-      await Promise.all([
-        fetchInvitations(),
-        fetchConfirmations(),
-        fetchApplications()
-      ]);
+
+      await fetchArtistData();
 
       setShowInvitationModal(false);
       setSelectedEvent(null);
@@ -578,13 +542,14 @@ const EventApplications = () => {
               Events you are confirmed to participate in
             </Text>
           </Flex>
-          
+
           <Flex direction="column" gap="4">
             {confirmations.map((confirmation) => {
-              const event = events.find(e => e.eid === confirmation.event_eid);
-              
+              // Event data is already embedded in confirmation from edge function
+              const event = confirmation.event;
+
               if (!event) return null;
-              
+
               return (
                 <Card key={confirmation.id} size="3" style={{ border: '2px solid var(--green-9)' }}>
                   <Flex direction="column" gap="3">
@@ -598,7 +563,7 @@ const EventApplications = () => {
                             CONFIRMED
                           </Badge>
                         </Flex>
-                        
+
                         <Flex direction="column" gap="1" mb="3">
                           <Text size="3" color="gray">
                             📅 {formatDateTime(event.event_start_datetime)}
@@ -606,21 +571,10 @@ const EventApplications = () => {
                           {event.venue && (
                             <Text size="3" color="gray">
                               📍 {event.venue}
-                              {event.city?.name && ` • ${event.city.name}`}
+                              {event.city && ` • ${event.city}`}
                             </Text>
                           )}
                         </Flex>
-
-                        {event.description && (
-                          <Text size="2" color="gray" style={{ 
-                            display: '-webkit-box',
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: 'vertical',
-                            overflow: 'hidden'
-                          }}>
-                            {event.description}
-                          </Text>
-                        )}
                       </Box>
                     </Flex>
 

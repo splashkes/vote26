@@ -1,0 +1,324 @@
+# Event Linter Rules Configuration
+# This file defines the rules for checking event health and operational readiness
+# Rules are evaluated against events and generate severity-based findings
+
+# Severity levels with emoji mappings:
+# - error: ❌ (critical issues that block operations)
+# - warning: ⚠️  (issues that should be addressed)
+# - info: 📊 (metrics and informational items)
+# - success: ✅ (things that are going well)
+
+# Rule structure:
+# - id: unique identifier
+# - name: human-readable name
+# - description: what this rule checks
+# - severity: error | warning | info | success
+# - category: timing | data_completeness | operational | comparative | live_event
+# - context: pre_event | during_event | post_event | always
+# - conditions: array of conditions to evaluate
+# - message: template for the output message (can use {{placeholders}})
+
+rules:
+  # ==================== LIVE EVENT RULES ====================
+
+  - id: live_event_photos_missing
+    name: Event Started - No Photos
+    description: Event has started but no photos have been uploaded
+    severity: error
+    category: live_event
+    context: during_event
+    conditions:
+      - field: event_start_datetime
+        operator: past_minutes
+        value: 15
+      - field: photos_count
+        operator: equals
+        value: 0
+    message: "Event started {{minutes_ago}} minutes ago but no photos uploaded"
+
+  - id: live_round_3_auction_not_closed
+    name: Round 3 Ended - Auction Still Open
+    description: Round 3 ended but auction has no close time
+    severity: warning
+    category: live_event
+    context: during_event
+    conditions:
+      - field: rounds.3.end_time
+        operator: past_minutes
+        value: 10
+      - field: auction_close_time
+        operator: is_null
+    message: "Round 3 ended {{minutes_ago}} minutes ago but auction not closed"
+
+  - id: live_door_time_no_qr
+    name: Door Time Soon - No QR Codes
+    description: Door time approaching but no QR codes generated
+    severity: warning
+    category: live_event
+    context: pre_event
+    conditions:
+      - field: door_time
+        operator: upcoming_minutes
+        value: 60
+      - field: qr_codes_generated
+        operator: equals
+        value: 0
+    message: "Door time in {{minutes_until}} minutes but no QR codes generated (testing not done?)"
+
+  - id: live_event_no_timer_set
+    name: Event Active - No Round Timer
+    description: Event is active but round timer not set
+    severity: error
+    category: live_event
+    context: during_event
+    conditions:
+      - field: event_start_datetime
+        operator: past_minutes
+        value: 5
+      - field: round_timer_active
+        operator: equals
+        value: false
+    message: "Event started {{minutes_ago}} minutes ago but round timer not activated"
+
+  # ==================== PRE-EVENT COMPLETENESS ====================
+
+  - id: event_tomorrow_no_venue
+    name: Event Tomorrow - No Venue
+    description: Event is tomorrow but venue information is missing
+    severity: error
+    category: data_completeness
+    context: pre_event
+    conditions:
+      - field: event_start_datetime
+        operator: upcoming_hours
+        value: 24
+      - field: venue
+        operator: is_empty
+    message: "Event in {{hours_until}} hours but venue not set"
+
+  - id: event_soon_low_artists
+    name: Event Soon - Low Artist Count
+    description: Event in 3 days with fewer than 6 confirmed artists
+    severity: warning
+    category: data_completeness
+    context: pre_event
+    conditions:
+      - field: event_start_datetime
+        operator: upcoming_days
+        value: 3
+      - field: confirmed_artists_count
+        operator: less_than
+        value: 6
+    message: "Event in {{days_until}} days with only {{confirmed_artists_count}} confirmed artists"
+
+  - id: applications_open_no_city
+    name: Applications Open - No City Set
+    description: Applications are open but city is not configured
+    severity: error
+    category: data_completeness
+    context: always
+    conditions:
+      - field: applications_open
+        operator: equals
+        value: true
+      - field: cities.id
+        operator: is_null
+    message: "Applications open but city not configured"
+
+  - id: event_week_away_no_promo
+    name: Event Week Away - No Promo Materials
+    description: Event is within a week but no promotional materials uploaded
+    severity: warning
+    category: data_completeness
+    context: pre_event
+    conditions:
+      - field: event_start_datetime
+        operator: upcoming_days
+        value: 7
+      - field: promo_materials_count
+        operator: equals
+        value: 0
+    message: "Event in {{days_until}} days but no promo materials uploaded"
+
+  # ==================== POST-EVENT COMPLETENESS ====================
+
+  - id: event_ended_no_food_beverage
+    name: Event Ended - Revenue Not Recorded
+    description: Event ended 2+ days ago but food/beverage revenue not recorded
+    severity: info
+    category: data_completeness
+    context: post_event
+    conditions:
+      - field: event_end_datetime
+        operator: past_days
+        value: 2
+      - field: food_beverage_revenue
+        operator: is_null
+    message: "Event ended {{days_ago}} days ago - food/beverage revenue not recorded"
+
+  - id: event_ended_no_other_revenue
+    name: Event Ended - Other Revenue Not Recorded
+    description: Event ended but other revenue fields not updated
+    severity: info
+    category: data_completeness
+    context: post_event
+    conditions:
+      - field: event_end_datetime
+        operator: past_days
+        value: 2
+      - field: other_revenue
+        operator: is_null
+    message: "Event ended {{days_ago}} days ago - other revenue not recorded"
+
+  - id: event_ended_no_producer_tickets
+    name: Event Ended - Producer Tickets Not Recorded
+    description: Event ended but producer ticket sales not recorded
+    severity: info
+    category: data_completeness
+    context: post_event
+    conditions:
+      - field: event_end_datetime
+        operator: past_days
+        value: 2
+      - field: producer_tickets_sold
+        operator: is_null
+    message: "Event ended {{days_ago}} days ago - producer ticket sales not recorded"
+
+  # ==================== COMPARATIVE ANALYSIS ====================
+
+  - id: ticket_sales_below_average
+    name: Ticket Sales Below City Average
+    description: Ticket sales are significantly below the city historical average
+    severity: info
+    category: comparative
+    context: pre_event
+    conditions:
+      - field: ticket_sales
+        operator: less_than_percent
+        value: 70
+        compare_to: city_average
+    message: "Ticket sales {{percent_of_average}}% of city average ({{ticket_sales}} vs {{city_average}})"
+
+  - id: applications_closed_low_count
+    name: Applications Closed - Below Typical Count
+    description: Applications closed but artist count below city typical
+    severity: warning
+    category: comparative
+    context: pre_event
+    conditions:
+      - field: applications_open
+        operator: equals
+        value: false
+      - field: applied_artists_count
+        operator: less_than_percent
+        value: 50
+        compare_to: city_typical
+    message: "Applications closed with {{applied_artists_count}} artists ({{percent_of_typical}}% of typical {{city_typical}})"
+
+  - id: food_beverage_above_average
+    name: Food/Beverage Revenue Above Average
+    description: Food and beverage revenue exceeded city average
+    severity: success
+    category: comparative
+    context: post_event
+    conditions:
+      - field: food_beverage_revenue
+        operator: greater_than_percent
+        value: 110
+        compare_to: city_average
+    message: "Food/beverage revenue {{percent_of_average}}% of city average! ({{food_beverage_revenue}} vs {{city_average}})"
+
+  # ==================== OPERATIONAL TIMING ====================
+
+  - id: event_enabled_check
+    name: Event Disabled
+    description: Event is disabled and won't appear in public listings
+    severity: warning
+    category: operational
+    context: always
+    conditions:
+      - field: enabled
+        operator: equals
+        value: false
+    message: "Event is disabled - not visible to public"
+
+  - id: timezone_not_set
+    name: Timezone Not Configured
+    description: Event timezone not set
+    severity: error
+    category: operational
+    context: always
+    conditions:
+      - field: timezone_icann
+        operator: is_empty
+    message: "Event timezone not configured"
+
+  - id: slack_channel_not_set
+    name: No Slack Channel
+    description: Event has no Slack channel configured
+    severity: info
+    category: operational
+    context: always
+    conditions:
+      - field: slack_channel
+        operator: is_empty
+    message: "No Slack channel configured for event communication"
+
+  - id: eventbrite_not_linked
+    name: No Eventbrite Link
+    description: Event approaching but no Eventbrite integration
+    severity: warning
+    category: operational
+    context: pre_event
+    conditions:
+      - field: event_start_datetime
+        operator: upcoming_days
+        value: 14
+      - field: eventbrite_id
+        operator: is_empty
+    message: "Event in {{days_until}} days but no Eventbrite link configured"
+
+  # ==================== SUCCESS METRICS ====================
+
+  - id: early_preparation_success
+    name: Well Prepared Event
+    description: Event is well prepared ahead of time
+    severity: success
+    category: operational
+    context: pre_event
+    conditions:
+      - field: event_start_datetime
+        operator: upcoming_days
+        value: 3
+      - field: confirmed_artists_count
+        operator: greater_than
+        value: 10
+      - field: venue
+        operator: is_not_empty
+      - field: promo_materials_count
+        operator: greater_than
+        value: 2
+    message: "Event well prepared! {{confirmed_artists_count}} artists, venue set, {{promo_materials_count}} promo materials"
+
+  - id: sold_out_event
+    name: Event Sold Out
+    description: Event has sold out
+    severity: success
+    category: comparative
+    context: pre_event
+    conditions:
+      - field: sold_out
+        operator: equals
+        value: true
+    message: "Event SOLD OUT! 🎉"
+
+# Configuration for comparative analysis
+comparison_settings:
+  # How far back to look for city historical data (in days)
+  city_lookback_days: 365
+
+  # Minimum number of events needed for valid city average
+  min_city_events: 3
+
+  # How to handle missing comparative data
+  missing_data_behavior: skip  # options: skip | info | warning

@@ -33,15 +33,67 @@ serve(async (req) => {
 
     const now = new Date().toISOString();
 
-    // Get applications with future events only
-    const { data: applicationsRaw, error: appsError } = await supabase
-      .from('artist_applications')
-      .select('*')
-      .eq('artist_profile_id', artist_profile_id)
-      .order('applied_at', { ascending: false })
-      .limit(10);
+    // Get invitations/confirmations/applications across ALL profiles with same person_id OR phone number (handles duplicate profiles)
+    // First, get the phone number and person_id for this profile
+    const { data: profileData, error: profileError } = await supabase
+      .from('artist_profiles')
+      .select('phone, person_id')
+      .eq('id', artist_profile_id)
+      .single();
 
-    if (appsError) throw appsError;
+    if (profileError) throw profileError;
+
+    const profilePhone = profileData?.phone;
+    const profilePersonId = profileData?.person_id;
+    let invitationsRaw = [];
+    let relatedProfileIds = []; // Declare at higher scope for use in confirmations
+
+    // Collect all related profile IDs (same person_id OR same phone)
+    const relatedProfileIdsSet = new Set([artist_profile_id]); // Start with current profile
+
+    // Match by person_id (catches linked profiles)
+    if (profilePersonId) {
+      const { data: personProfiles, error: personError } = await supabase
+        .from('artist_profiles')
+        .select('id')
+        .eq('person_id', profilePersonId);
+
+      if (!personError && personProfiles) {
+        personProfiles.forEach(p => relatedProfileIdsSet.add(p.id));
+      }
+    }
+
+    // Match by phone number (catches unlinked duplicates)
+    if (profilePhone) {
+      const phoneDigitsOnly = profilePhone.replace(/\D/g, '');
+
+      const { data: matchingProfiles, error: profilesError } = await supabase
+        .from('artist_profiles')
+        .select('id, phone')
+        .filter('phone', 'not.is', null);
+
+      if (!profilesError && matchingProfiles) {
+        matchingProfiles
+          .filter(p => p.phone && p.phone.replace(/\D/g, '') === phoneDigitsOnly)
+          .forEach(p => relatedProfileIdsSet.add(p.id));
+      }
+    }
+
+    relatedProfileIds = Array.from(relatedProfileIdsSet);
+
+    // Get applications across ALL related profiles
+    let applicationsRaw = [];
+    if (relatedProfileIds.length > 0) {
+      const { data: allApplications, error: appsError } = await supabase
+        .from('artist_applications')
+        .select('*')
+        .in('artist_profile_id', relatedProfileIds)
+        .order('applied_at', { ascending: false })
+        .limit(10);
+
+      if (appsError) throw appsError;
+      applicationsRaw = allApplications || [];
+    }
 
     // Get future event details for applications
     const applications = [];
@@ -69,21 +121,37 @@ serve(async (req) => {
       }
     }
 
-    // Get invitations with future events only
-    const { data: invitationsRaw, error: invitationsError } = await supabase
-      .from('artist_invitations')
-      .select('*')
-      .eq('artist_profile_id', artist_profile_id)
-      .eq('status', 'pending')
-      .is('accepted_at', null)
-      .order('created_at', { ascending: false });
+    // Get invitations for ALL related profiles
+    if (relatedProfileIds.length > 0) {
+      const { data: allInvitations, error: invitationsError } = await supabase
+        .from('artist_invitations')
+        .select('*')
+        .in('artist_profile_id', relatedProfileIds)
+        .eq('status', 'pending')
+        .is('accepted_at', null)
+        .order('created_at', { ascending: false });
 
-    if (invitationsError) throw invitationsError;
+      if (invitationsError) throw invitationsError;
+      invitationsRaw = allInvitations || [];
+    }
+
+    // Deduplicate invitations by event_eid (keep most recent per event)
+    const deduplicatedInvitations = [];
+    const seenEvents = new Map();
+
+    for (const invitation of invitationsRaw) {
+      const existing = seenEvents.get(invitation.event_eid);
+      if (!existing || new Date(invitation.created_at) > new Date(existing.created_at)) {
+        seenEvents.set(invitation.event_eid, invitation);
+      }
+    }
+
+    const uniqueInvitations = Array.from(seenEvents.values());
 
     // Get future event details for invitations
     const invitations = [];
-    if (invitationsRaw) {
-      for (const invitation of invitationsRaw) {
+    if (uniqueInvitations) {
+      for (const invitation of uniqueInvitations) {
         if (invitation.event_eid && invitation.event_eid.trim()) {
           const { data: eventData, error: eventError } = await supabase
             .from('events')
@@ -105,20 +173,40 @@ serve(async (req) => {
       }
     }
 
-    // Get confirmations with future events only
-    const { data: confirmationsRaw, error: confirmationsError } = await supabase
-      .from('artist_confirmations')
-      .select('*')
-      .eq('artist_profile_id', artist_profile_id)
-      .eq('confirmation_status', 'confirmed')
-      .order('created_at', { ascending: false });
+    // Get confirmations across ALL related profiles (same person_id OR phone number)
+    // Use the same relatedProfileIds from invitations query above
+    let confirmationsRaw = [];
 
-    if (confirmationsError) throw confirmationsError;
+    if (relatedProfileIds && relatedProfileIds.length > 0) {
+      // Get confirmations for ALL related profiles
+      const { data: allConfirmations, error: confirmationsError } = await supabase
+        .from('artist_confirmations')
+        .select('*')
+        .in('artist_profile_id', relatedProfileIds)
+        .eq('confirmation_status', 'confirmed')
+        .order('created_at', { ascending: false });
+
+      if (confirmationsError) throw confirmationsError;
+      confirmationsRaw = allConfirmations || [];
+    }
+
+    // Deduplicate confirmations by event_eid (keep most recent per event)
+    const deduplicatedConfirmations = [];
+    const seenConfirmationEvents = new Map();
+
+    for (const confirmation of confirmationsRaw) {
+      const existing = seenConfirmationEvents.get(confirmation.event_eid);
+      if (!existing || new Date(confirmation.created_at) > new Date(existing.created_at)) {
+        seenConfirmationEvents.set(confirmation.event_eid, confirmation);
+      }
+    }
+
+    const uniqueConfirmations = Array.from(seenConfirmationEvents.values());
 
     // Get future event details for confirmations
     const confirmations = [];
-    if (confirmationsRaw) {
-      for (const confirmation of confirmationsRaw) {
+    if (uniqueConfirmations) {
+      for (const confirmation of uniqueConfirmations) {
         if (confirmation.event_eid && confirmation.event_eid.trim()) {
           const { data: eventData, error: eventError } = await supabase
             .from('events')

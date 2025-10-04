@@ -129,6 +129,7 @@ const EventDetail = () => {
   const [postEventLoading, setPostEventLoading] = useState(false);
   const [unpaidModalOpen, setUnpaidModalOpen] = useState(false);
   const [noBidModalOpen, setNoBidModalOpen] = useState(false);
+  const [selectedNoBidPainting, setSelectedNoBidPainting] = useState(null);
   const [metaAdsData, setMetaAdsData] = useState(null);
   const [metaAdsLoading, setMetaAdsLoading] = useState(false);
   const [artistModalOpen, setArtistModalOpen] = useState(false);
@@ -1404,39 +1405,25 @@ const EventDetail = () => {
 
   const fetchSampleWorks = async (artistNumber) => {
     if (!artistNumber) return;
-    
+
     try {
       setSampleWorksLoading(true);
-      
-      // TODO: Convert to edge function to avoid RLS timeout
-      // For now, just disable sample works loading
-      console.log('Sample works loading disabled - direct query removed to prevent RLS timeout');
-      setSampleWorks([]);
-      return;
 
-      // OLD CODE - DISABLED:
-      // First get the profile_id from artist_number
-      // const { data: profileData, error: profileError } = await supabase
-      //   .from('artist_profiles')
-      //   .select('id')
-      //   .eq('entry_id', artistNumber)
-      //   .single();
-      //
-      // if (profileError || !profileData) {
-      //   console.error('Error finding profile for artist_number:', artistNumber, profileError);
-      //   setSampleWorks([]);
-      //   return;
-      // }
-      //
-      // Then get sample works using profile_id
-      // const { data: sampleWorksData, error: worksError } = await supabase
-      //   .rpc('get_unified_sample_works', { profile_id: profileData.id });
-      
-      if (worksError) {
-        console.error('Error fetching sample works:', worksError);
+      // Use edge function to avoid RLS timeout
+      const { data, error } = await supabase.functions.invoke('admin-get-sample-works', {
+        body: {
+          artist_number: artistNumber
+        }
+      });
+
+      if (error) {
+        console.error('Error fetching sample works:', error);
         setSampleWorks([]);
+      } else if (data?.success) {
+        setSampleWorks(data.sample_works || []);
       } else {
-        setSampleWorks(sampleWorksData || []);
+        console.error('Sample works fetch failed:', data);
+        setSampleWorks([]);
       }
     } catch (err) {
       console.error('Error fetching sample works:', err);
@@ -2311,52 +2298,6 @@ The Art Battle Team`);
     navigate('/events');
   };
 
-  const handleCsvExport = async () => {
-    try {
-      // Get the current session for authentication
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        throw new Error('Not authenticated');
-      }
-
-      // Call the auction CSV export function with proper auth headers
-      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/auction-csv-export/${event.eid}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        // Check if response is CSV
-        const contentType = response.headers.get('content-type');
-        if (contentType && contentType.includes('text/csv')) {
-          const blob = await response.blob();
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `${event.eid}_auction_export.csv`;
-          document.body.appendChild(a);
-          a.click();
-          window.URL.revokeObjectURL(url);
-          document.body.removeChild(a);
-        } else {
-          const text = await response.text();
-          console.error('Unexpected response:', text);
-          alert('Error: Unexpected response format');
-        }
-      } else {
-        const errorData = await response.json();
-        console.error('CSV export error:', errorData);
-        alert(`Error ${response.status}: ${errorData.error || 'Failed to export CSV'}`);
-      }
-    } catch (error) {
-      console.error('CSV export error:', error);
-      alert(`Error: ${error.message}`);
-    }
-  };
-
   const fetchPersonHistory = async (person) => {
     try {
       setHistoryLoading(true);
@@ -2493,12 +2434,6 @@ The Art Battle Team`);
           <Flex gap="2">
             <Button onClick={() => navigate(`/events/create?edit=${eventId}`)}>
               Edit Event
-            </Button>
-            <Button
-              variant="outline"
-              onClick={handleCsvExport}
-            >
-              Export CSV
             </Button>
             {isSuperAdmin && (
               <Button
@@ -2713,7 +2648,7 @@ The Art Battle Team`);
                                     onClick={() => {
                                       setEditingProducerTickets(true);
                                       setProducerTicketsValue(event.producer_tickets_sold || '0');
-                                      setProducerTicketsCurrency(event.producer_tickets_currency || event.currency || 'USD');
+                                      setProducerTicketsCurrency(event.producer_tickets_currency || event.cities?.countries?.currency_code || event.currency || 'USD');
                                     }}
                                   >
                                     SET
@@ -2725,7 +2660,12 @@ The Art Battle Team`);
                                     {event.producer_tickets_updated_by && (
                                       <Text size="1" color="gray">
                                         Confirmed by {event.producer_tickets_updated_by}
-                                        {event.producer_tickets_updated_at && ` on ${new Date(event.producer_tickets_updated_at).toLocaleString()}`}
+                                        {event.producer_tickets_updated_at && (
+                                          <>
+                                            <br />
+                                            on {new Date(event.producer_tickets_updated_at).toLocaleString()}
+                                          </>
+                                        )}
                                       </Text>
                                     )}
                                   </Flex>
@@ -2792,7 +2732,7 @@ The Art Battle Team`);
                                     onClick={() => {
                                       setEditingFoodBeverage(true);
                                       setFoodBeverageValue(event.food_beverage_revenue || '0');
-                                      setFoodBeverageCurrency(event.food_beverage_currency || event.currency || 'USD');
+                                      setFoodBeverageCurrency(event.food_beverage_currency || event.cities?.countries?.currency_code || event.currency || 'USD');
                                     }}
                                   >
                                     SET
@@ -2804,7 +2744,12 @@ The Art Battle Team`);
                                     {event.food_beverage_updated_by && (
                                       <Text size="1" color="gray">
                                         Confirmed by {event.food_beverage_updated_by}
-                                        {event.food_beverage_updated_at && ` on ${new Date(event.food_beverage_updated_at).toLocaleString()}`}
+                                        {event.food_beverage_updated_at && (
+                                          <>
+                                            <br />
+                                            on {new Date(event.food_beverage_updated_at).toLocaleString()}
+                                          </>
+                                        )}
                                       </Text>
                                     )}
                                   </Flex>
@@ -2871,7 +2816,7 @@ The Art Battle Team`);
                                     onClick={() => {
                                       setEditingOtherRevenue(true);
                                       setOtherRevenueValue(event.other_revenue || '0');
-                                      setOtherRevenueCurrency(event.other_revenue_currency || event.currency || 'USD');
+                                      setOtherRevenueCurrency(event.other_revenue_currency || event.cities?.countries?.currency_code || event.currency || 'USD');
                                     }}
                                   >
                                     SET
@@ -2883,7 +2828,12 @@ The Art Battle Team`);
                                     {event.other_revenue_updated_by && (
                                       <Text size="1" color="gray">
                                         Confirmed by {event.other_revenue_updated_by}
-                                        {event.other_revenue_updated_at && ` on ${new Date(event.other_revenue_updated_at).toLocaleString()}`}
+                                        {event.other_revenue_updated_at && (
+                                          <>
+                                            <br />
+                                            on {new Date(event.other_revenue_updated_at).toLocaleString()}
+                                          </>
+                                        )}
                                       </Text>
                                     )}
                                   </Flex>
@@ -2946,6 +2896,17 @@ The Art Battle Team`);
                                 {postEventData?.auction_summary?.tax_collected_partner?.toFixed(2) || '0.00'}
                               </Text>
                             </Flex>
+                            <Separator size="4" />
+                            <Flex justify="between">
+                              <Text size="2" color="gray">CC Processing Fees:</Text>
+                              <Text size="2" weight="bold" color="red">
+                                {postEventData?.auction_summary?.currency_symbol}
+                                {postEventData?.auction_summary?.processing_fees?.toFixed(2) || '0.00'}
+                              </Text>
+                            </Flex>
+                            <Text size="1" color="gray" style={{ fontStyle: 'italic' }}>
+                              $1.00 + 2.9% per transaction
+                            </Text>
                           </Flex>
                         </Box>
                       </Card>
@@ -3034,7 +2995,7 @@ The Art Battle Team`);
                             {postEventData?.no_bid_paintings?.sample_thumbnails &&
                              postEventData.no_bid_paintings.sample_thumbnails.length > 0 && (
                               <Flex gap="1" mt="2" wrap="wrap">
-                                {postEventData.no_bid_paintings.sample_thumbnails.slice(0, 3).map((thumb, idx) => (
+                                {postEventData.no_bid_paintings.sample_thumbnails.map((thumb, idx) => (
                                   <Box
                                     key={idx}
                                     style={{
@@ -5420,16 +5381,20 @@ The Art Battle Team`);
       </Dialog.Root>
 
       {/* No Bid Paintings Modal */}
-      <Dialog.Root open={noBidModalOpen} onOpenChange={setNoBidModalOpen}>
-        <Dialog.Content maxWidth="700px">
+      <Dialog.Root open={noBidModalOpen} onOpenChange={(open) => {
+        setNoBidModalOpen(open);
+        if (!open) setSelectedNoBidPainting(null);
+      }}>
+        <Dialog.Content maxWidth="900px">
           <Dialog.Title>Paintings With No Bids</Dialog.Title>
           <Dialog.Description size="2" mb="3">
             These paintings received no bids during the auction
           </Dialog.Description>
-          <ScrollArea style={{ maxHeight: '60vh' }}>
+          <ScrollArea style={{ maxHeight: '40vh' }}>
             <Table.Root>
               <Table.Header>
                 <Table.Row>
+                  <Table.ColumnHeaderCell>Image</Table.ColumnHeaderCell>
                   <Table.ColumnHeaderCell>Art Code</Table.ColumnHeaderCell>
                   <Table.ColumnHeaderCell>Artist</Table.ColumnHeaderCell>
                   <Table.ColumnHeaderCell>Round</Table.ColumnHeaderCell>
@@ -5438,7 +5403,39 @@ The Art Battle Team`);
               </Table.Header>
               <Table.Body>
                 {postEventData?.no_bid_paintings?.list?.map(painting => (
-                  <Table.Row key={painting.art_id}>
+                  <Table.Row
+                    key={painting.art_id}
+                    onClick={() => setSelectedNoBidPainting(painting)}
+                    style={{
+                      cursor: 'pointer',
+                      backgroundColor: selectedNoBidPainting?.art_id === painting.art_id ? 'var(--accent-3)' : undefined
+                    }}
+                  >
+                    <Table.Cell>
+                      {painting.image_url ? (
+                        <Box
+                          style={{
+                            width: '60px',
+                            height: '60px',
+                            borderRadius: '4px',
+                            overflow: 'hidden',
+                            border: '1px solid var(--gray-6)'
+                          }}
+                        >
+                          <img
+                            src={painting.image_url}
+                            alt={painting.art_code}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover'
+                            }}
+                          />
+                        </Box>
+                      ) : (
+                        <Text size="1" color="gray">No image</Text>
+                      )}
+                    </Table.Cell>
                     <Table.Cell>
                       <Text weight="bold">{painting.art_code}</Text>
                     </Table.Cell>
@@ -5450,6 +5447,43 @@ The Art Battle Team`);
               </Table.Body>
             </Table.Root>
           </ScrollArea>
+
+          {selectedNoBidPainting && (
+            <Box mt="4">
+              <Separator size="4" mb="3" />
+              <Heading size="4" mb="3">Artwork Details - {selectedNoBidPainting.art_code}</Heading>
+              <Flex gap="4" align="start">
+                {selectedNoBidPainting.image_url && (
+                  <Box style={{ flex: '0 0 300px' }}>
+                    <img
+                      src={selectedNoBidPainting.image_url}
+                      alt={selectedNoBidPainting.art_code}
+                      style={{
+                        width: '100%',
+                        height: 'auto',
+                        borderRadius: '8px',
+                        border: '1px solid var(--gray-6)'
+                      }}
+                    />
+                  </Box>
+                )}
+                <Flex direction="column" gap="2" style={{ flex: 1 }}>
+                  <Flex direction="column" gap="1">
+                    <Text size="2" color="gray">Artist</Text>
+                    <Text size="3" weight="bold">{selectedNoBidPainting.artist_name}</Text>
+                  </Flex>
+                  <Flex direction="column" gap="1">
+                    <Text size="2" color="gray">Location</Text>
+                    <Text size="3">Round {selectedNoBidPainting.round}, Easel {selectedNoBidPainting.easel}</Text>
+                  </Flex>
+                  <Flex direction="column" gap="1">
+                    <Text size="2" color="gray">Status</Text>
+                    <Badge color="gray">No Bids Received</Badge>
+                  </Flex>
+                </Flex>
+              </Flex>
+            </Box>
+          )}
         </Dialog.Content>
       </Dialog.Root>
 
