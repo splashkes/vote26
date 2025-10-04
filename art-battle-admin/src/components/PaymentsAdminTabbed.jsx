@@ -49,6 +49,8 @@ const PaymentsAdminTabbed = () => {
   const [loadingLedger, setLoadingLedger] = useState(false);
   const [manualPaymentRequest, setManualPaymentRequest] = useState(null);
   const [loadingManualPaymentRequest, setLoadingManualPaymentRequest] = useState(false);
+  const [lastEventInfo, setLastEventInfo] = useState(null);
+  const [loadingLastEvent, setLoadingLastEvent] = useState(false);
   const [revealedPaymentDetails, setRevealedPaymentDetails] = useState(false);
   const [showZeroAccount, setShowZeroAccount] = useState(false);
   const [showPayNowDialog, setShowPayNowDialog] = useState(false);
@@ -221,16 +223,18 @@ const PaymentsAdminTabbed = () => {
     setStripeDetails(null);
     setAccountLedger(null);
     setManualPaymentRequest(null);
+    setLastEventInfo(null);
     setRevealedPaymentDetails(false);
     setLoadingStripe(false);
     setLoadingLedger(true);
     setLoadingManualPaymentRequest(true);
+    setLoadingLastEvent(true);
 
     // Open modal with loading state
     setShowArtistDetail(true);
 
     try {
-      // Fetch Stripe details, account ledger, and manual payment request in parallel
+      // Fetch Stripe details, account ledger, manual payment request, and last event in parallel
       const promises = [];
 
       // Fetch Stripe details if account exists
@@ -243,6 +247,9 @@ const PaymentsAdminTabbed = () => {
 
       // Always fetch manual payment request
       promises.push(fetchManualPaymentRequest(artist.artist_profiles.id));
+
+      // Always fetch last event info
+      promises.push(fetchLastEventInfo(artist.artist_profiles.entry_id));
 
       // Wait for all data to load
       await Promise.all(promises);
@@ -339,6 +346,35 @@ const PaymentsAdminTabbed = () => {
       // Don't set error - this is optional data
     } finally {
       setLoadingManualPaymentRequest(false);
+    }
+  };
+
+  const fetchLastEventInfo = async (entryId) => {
+    if (!entryId) {
+      console.error('No entry ID available for last event fetch');
+      setLoadingLastEvent(false);
+      return;
+    }
+
+    try {
+      setLoadingLastEvent(true);
+
+      const { data, error } = await supabase.rpc('get_artist_last_event', {
+        p_entry_id: entryId
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data && data.length > 0) {
+        setLastEventInfo(data[0]);
+      }
+    } catch (err) {
+      console.error('Failed to load last event info:', err);
+      // Don't set error - this is optional data
+    } finally {
+      setLoadingLastEvent(false);
     }
   };
 
@@ -1920,16 +1956,39 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                     <Separator />
                     <Flex justify="between" align="center">
                       <Flex direction="column" gap="1">
-                        <Text weight="medium">Allow Early Manual Payment</Text>
-                        <Text size="1" color="gray">Bypass 14-day wait for manual payment requests</Text>
+                        <Text weight="medium">Manual Payments</Text>
+                        {loadingLastEvent ? (
+                          <Text size="1" color="gray">Loading event information...</Text>
+                        ) : lastEventInfo ? (
+                          <Flex direction="column" gap="1">
+                            <Text size="1" color="gray">
+                              Last Event: {lastEventInfo.event_eid} ({lastEventInfo.city_name})
+                            </Text>
+                            <Text size="1" weight="bold" color={lastEventInfo.days_since_event >= 14 ? "green" : "amber"}>
+                              Days since event: {lastEventInfo.days_since_event}
+                            </Text>
+                          </Flex>
+                        ) : (
+                          <Text size="1" color="gray">No recent events found</Text>
+                        )}
                       </Flex>
                       <Button
                         size="2"
-                        variant={selectedArtist.artist_profiles.manual_payment_override ? "solid" : "outline"}
-                        color={selectedArtist.artist_profiles.manual_payment_override ? "green" : "gray"}
+                        variant="solid"
+                        color={
+                          selectedArtist.artist_profiles.manual_payment_override
+                            ? "green"
+                            : lastEventInfo && lastEventInfo.days_since_event >= 14
+                            ? "blue"
+                            : "gray"
+                        }
                         onClick={() => toggleManualPaymentOverride(selectedArtist.artist_profiles.id, !selectedArtist.artist_profiles.manual_payment_override)}
                       >
-                        {selectedArtist.artist_profiles.manual_payment_override ? "Enabled" : "Disabled"}
+                        {selectedArtist.artist_profiles.manual_payment_override
+                          ? "MANUALLY ENABLED"
+                          : lastEventInfo && lastEventInfo.days_since_event >= 14
+                          ? "AUTOMATICALLY ENABLED"
+                          : "ENABLE EARLY"}
                       </Button>
                     </Flex>
 

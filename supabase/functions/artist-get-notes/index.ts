@@ -63,19 +63,22 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Get artist profile with country information and admin overrides
-    const { data: artistProfile, error: profileError } = await serviceClient
-      .from('artist_profiles')
-      .select(`
-        id,
-        country,
-        manual_payment_override,
-        people!inner (
-          id
-        )
-      `)
-      .eq('person_id', personId)
-      .single();
+    // Get primary artist profile using the authoritative selection function
+    const { data: profileData, error: profileError } = await serviceClient
+      .rpc('get_primary_artist_profile', { p_person_id: personId });
+
+    if (profileError) {
+      console.error('Error getting primary artist profile:', profileError);
+      return new Response(JSON.stringify({
+        error: 'Failed to get artist profile',
+        notes: []
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 500
+      });
+    }
+
+    const artistProfile = profileData?.[0];
 
     if (!artistProfile) {
       return new Response(JSON.stringify({
@@ -102,57 +105,64 @@ serve(async (req) => {
 
     // Note 1: Manual payment eligibility (check balance and event age) - PRIORITY: Show first
     if (!dismissedNoteIds.has('manual-payment-eligible-2025-10')) {
-      // Calculate balance directly (credits - debits)
-      const { data: artSales } = await serviceClient
-        .from('art')
-        .select('final_price, current_bid, status')
-        .eq('artist_id', artistProfile.id)
-        .in('status', ['sold', 'paid']);
+      // Get balance and currency using the DB function (based on event location)
+      const { data: balanceData, error: balanceError } = await serviceClient
+        .rpc('get_artist_balance_and_currency', { p_entry_id: artistProfile.entry_id });
 
-      const totalEarned = artSales?.reduce((sum, art) => {
-        const salePrice = art.final_price || art.current_bid || 0;
-        return sum + (salePrice * 0.5); // 50% artist commission
-      }, 0) || 0;
+      if (balanceError) {
+        console.error('Error getting artist balance:', balanceError);
+      }
 
-      const { data: payments } = await serviceClient
-        .from('artist_payments')
-        .select('gross_amount')
-        .eq('artist_profile_id', artistProfile.id)
-        .in('status', ['completed', 'paid', 'verified']);
-
-      const totalPaid = payments?.reduce((sum, p) => sum + (p.gross_amount || 0), 0) || 0;
-
-      const balance = totalEarned - totalPaid;
-      const currency = 'USD'; // Default for now
+      const balance = balanceData?.[0]?.balance || 0;
+      const currency = balanceData?.[0]?.currency || 'USD';
 
       if (balance > 0) {
-        // Check for events older than 14 days
-        const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+        // Get events from event_artists (actual participation, not just confirmations)
+        const { data: eventArtists } = await serviceClient
+          .from('event_artists')
+          .select('event_id')
+          .eq('artist_id', artistProfile.id);
 
-        const { data: confirmations } = await serviceClient
-          .from('artist_confirmations')
-          .select('id, event_eid')
-          .eq('artist_profile_id', artistProfile.id)
-          .eq('confirmation_status', 'confirmed');
-
-        if (confirmations && confirmations.length > 0) {
-          // Get event details separately to avoid join issues
-          const eventEids = confirmations.map(c => c.event_eid);
-          const { data: events } = await serviceClient
+        let events = [];
+        if (eventArtists && eventArtists.length > 0) {
+          const eventIds = eventArtists.map(ea => ea.event_id);
+          const { data: eventData } = await serviceClient
             .from('events')
             .select('id, eid, name, event_start_datetime')
-            .in('eid', eventEids);
+            .in('id', eventIds);
+          events = eventData || [];
+        }
 
-          const oldEvents = events?.filter(e => {
+        // If admin override is enabled, show note immediately (bypass age checks)
+        if (hasAdminOverride) {
+          notes.push({
+            id: 'manual-payment-eligible-2025-10',
+            variant: 'warning',
+            title: 'Manual Payment Available',
+            content: {
+              type: 'manual-payment-request',
+              balance: balance,
+              currency: currency,
+              country: artistCountry,
+              events: events.map(e => ({
+                id: e.id,
+                eid: e.eid,
+                name: e.name,
+                date: e.event_start_datetime
+              }))
+            }
+          });
+        } else if (events.length > 0) {
+          // Normal flow: check for events older than 14 days
+          const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+
+          const oldEvents = events.filter(e => {
             const eventDate = new Date(e.event_start_datetime);
             return eventDate < fourteenDaysAgo;
-          }) || [];
+          });
 
-          // Show manual payment option if events are old enough OR admin has enabled override
-          if (oldEvents.length > 0 || hasAdminOverride) {
-            // If admin override is active but no old events, use all confirmed events
-            const eligibleEvents = oldEvents.length > 0 ? oldEvents : events || [];
-
+          // Show manual payment option only if events are old enough
+          if (oldEvents.length > 0) {
             notes.push({
               id: 'manual-payment-eligible-2025-10',
               variant: 'warning',
@@ -162,7 +172,7 @@ serve(async (req) => {
                 balance: balance,
                 currency: currency,
                 country: artistCountry,
-                events: eligibleEvents.map(e => ({
+                events: oldEvents.map(e => ({
                   id: e.id,
                   eid: e.eid,
                   name: e.name,

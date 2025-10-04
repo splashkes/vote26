@@ -66,13 +66,24 @@ serve(async (req) => {
       });
     }
 
-    const { data: artistProfile, error: profileError } = await supabaseClient
-      .from('artist_profiles')
-      .select('id, name')
-      .eq('person_id', personId)
-      .single();
+    // Get primary artist profile using the authoritative selection function
+    const { data: profileData, error: profileError } = await supabaseClient
+      .rpc('get_primary_artist_profile', { p_person_id: personId });
 
-    if (profileError || !artistProfile) {
+    if (profileError) {
+      console.error('Error getting primary artist profile:', profileError);
+      return new Response(JSON.stringify({
+        error: 'Failed to retrieve artist profile',
+        success: false
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 500
+      });
+    }
+
+    const artistProfile = profileData?.[0];
+
+    if (!artistProfile) {
       return new Response(JSON.stringify({
         error: 'Artist profile not found',
         success: false

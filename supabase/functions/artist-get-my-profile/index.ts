@@ -118,28 +118,23 @@ serve(async (req) => {
 
     console.log('Found person_id in JWT claims:', personId)
 
-    // First try to get the authoritative artist profile linked to this person_id
-    // PRIORITY: Profile with set_primary_profile_at (user selected), then most recently created
-    const { data: linkedProfile, error: linkedProfileError } = await supabase
-      .from('artist_profiles')
-      .select('*')
-      .eq('person_id', personId)
-      .is('superseded_by', null)
-      .order('set_primary_profile_at', { ascending: false, nullsFirst: false })
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single()
+    // Get the authoritative artist profile using the centralized function
+    // PRIORITY: Profile with set_primary_profile_at (user selected) > active (superseded_by IS NULL) > most recent
+    const { data: profileData, error: linkedProfileError } = await supabase
+      .rpc('get_primary_artist_profile', { p_person_id: personId })
 
-    if (linkedProfileError && linkedProfileError.code !== 'PGRST116') {
-      console.error('Database error getting linked artist profile:', linkedProfileError)
+    if (linkedProfileError) {
+      console.error('Database error getting primary artist profile:', linkedProfileError)
       return new Response(
-        JSON.stringify({ error: 'Failed to retrieve linked artist profile' }),
-        { 
-          status: 500, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        JSON.stringify({ error: 'Failed to retrieve artist profile' }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       )
     }
+
+    const linkedProfile = profileData?.[0]
 
     if (linkedProfile) {
       // Found the authoritative profile - return it directly

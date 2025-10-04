@@ -141,6 +141,8 @@ const EventDetail = () => {
   const [loadingLedger, setLoadingLedger] = useState(false);
   const [stripeDetails, setStripeDetails] = useState(null);
   const [loadingStripe, setLoadingStripe] = useState(false);
+  const [lastEventInfo, setLastEventInfo] = useState(null);
+  const [loadingLastEvent, setLoadingLastEvent] = useState(false);
   const [showManualPayment, setShowManualPayment] = useState(false);
   const [manualPaymentAmount, setManualPaymentAmount] = useState('');
   const [manualPaymentMethod, setManualPaymentMethod] = useState('bank_transfer');
@@ -179,6 +181,15 @@ const EventDetail = () => {
   const [showOfferHistory, setShowOfferHistory] = useState(null);
   const [reminderHistory, setReminderHistory] = useState(null);
   const [offerHistory, setOfferHistory] = useState(null);
+
+  // Payment Collection Modal State
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentFormData, setPaymentFormData] = useState({
+    actualAmount: '',
+    actualTax: '',
+    paymentMethod: 'cash',
+    collectionNotes: ''
+  });
   const [artworkHistoryLoading, setArtworkHistoryLoading] = useState(false);
   const [paymentReminderLoading, setPaymentReminderLoading] = useState(false);
   const [offerLoading, setOfferLoading] = useState(false);
@@ -822,16 +833,18 @@ const EventDetail = () => {
     setStripeDetails(null);
     setAccountLedger(null);
     setManualPaymentRequest(null);
+    setLastEventInfo(null);
     setRevealedPaymentDetails(false);
     setLoadingStripe(false);
     setLoadingLedger(true);
     setLoadingManualPaymentRequest(true);
+    setLoadingLastEvent(true);
 
     // Open modal with loading state
     setShowArtistDetail(true);
 
     try {
-      // Fetch Stripe details, account ledger, and manual payment request in parallel
+      // Fetch Stripe details, account ledger, manual payment request, and last event in parallel
       const promises = [];
 
       // Fetch Stripe details if account exists
@@ -845,11 +858,43 @@ const EventDetail = () => {
       // Always fetch manual payment request
       promises.push(fetchManualPaymentRequest(artist.artist_id));
 
+      // Always fetch last event info
+      promises.push(fetchLastEventInfo(artist.entry_id));
+
       // Wait for all data to load
       await Promise.all(promises);
     } catch (error) {
       console.error('Error loading artist details:', error);
       setError('Failed to load artist details: ' + error.message);
+    }
+  };
+
+  const fetchLastEventInfo = async (entryId) => {
+    if (!entryId) {
+      console.error('No entry ID available for last event fetch');
+      setLoadingLastEvent(false);
+      return;
+    }
+
+    try {
+      setLoadingLastEvent(true);
+
+      const { data, error } = await supabase.rpc('get_artist_last_event', {
+        p_entry_id: entryId
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data && data.length > 0) {
+        setLastEventInfo(data[0]);
+      }
+    } catch (err) {
+      console.error('Failed to load last event info:', err);
+      // Don't set error - this is optional data
+    } finally {
+      setLoadingLastEvent(false);
     }
   };
 
@@ -5438,16 +5483,39 @@ The Art Battle Team`);
                     <Separator />
                     <Flex justify="between" align="center">
                       <Flex direction="column" gap="1">
-                        <Text weight="medium">Allow Early Manual Payment</Text>
-                        <Text size="1" color="gray">Bypass 14-day wait for manual payment requests</Text>
+                        <Text weight="medium">Manual Payments</Text>
+                        {loadingLastEvent ? (
+                          <Text size="1" color="gray">Loading event information...</Text>
+                        ) : lastEventInfo ? (
+                          <Flex direction="column" gap="1">
+                            <Text size="1" color="gray">
+                              Last Event: {lastEventInfo.event_eid} ({lastEventInfo.city_name})
+                            </Text>
+                            <Text size="1" weight="bold" color={lastEventInfo.days_since_event >= 14 ? "green" : "amber"}>
+                              Days since event: {lastEventInfo.days_since_event}
+                            </Text>
+                          </Flex>
+                        ) : (
+                          <Text size="1" color="gray">No recent events found</Text>
+                        )}
                       </Flex>
                       <Button
                         size="2"
-                        variant={selectedArtistForPayment.manual_payment_override ? "solid" : "outline"}
-                        color={selectedArtistForPayment.manual_payment_override ? "green" : "gray"}
+                        variant="solid"
+                        color={
+                          selectedArtistForPayment.manual_payment_override
+                            ? "green"
+                            : lastEventInfo && lastEventInfo.days_since_event >= 14
+                            ? "blue"
+                            : "gray"
+                        }
                         onClick={() => toggleManualPaymentOverride(selectedArtistForPayment.artist_id, !selectedArtistForPayment.manual_payment_override)}
                       >
-                        {selectedArtistForPayment.manual_payment_override ? "Enabled" : "Disabled"}
+                        {selectedArtistForPayment.manual_payment_override
+                          ? "MANUALLY ENABLED"
+                          : lastEventInfo && lastEventInfo.days_since_event >= 14
+                          ? "AUTOMATICALLY ENABLED"
+                          : "ENABLE EARLY"}
                       </Button>
                     </Flex>
                   </Flex>
@@ -5870,6 +5938,35 @@ The Art Battle Team`);
                 </Flex>
               </Card>
 
+              {/* Mark as Paid Button - Only show if artwork is unpaid */}
+              {!selectedArtworkForBids.is_paid && selectedArtworkForBids.winning_bid > 0 && (
+                <Card mb="4">
+                  <Flex direction="column" gap="3" p="3">
+                    <Text size="2" weight="bold">Collect Payment</Text>
+                    <Button
+                      onClick={() => {
+                        // Calculate suggested values
+                        const winningBid = selectedArtworkForBids.winning_bid || 0;
+                        const taxRate = selectedArtworkForBids.tax || 0;
+                        const suggestedTax = Math.round((winningBid * taxRate / 100) * 100) / 100;
+                        const suggestedTotal = winningBid + suggestedTax;
+
+                        setPaymentFormData({
+                          actualAmount: suggestedTotal.toString(),
+                          actualTax: suggestedTax.toString(),
+                          paymentMethod: 'cash',
+                          collectionNotes: ''
+                        });
+
+                        setShowPaymentModal(true);
+                      }}
+                    >
+                      Mark as Paid
+                    </Button>
+                  </Flex>
+                </Card>
+              )}
+
               {/* Bidders List */}
               <Text size="2" weight="bold" mb="2" style={{ display: 'block' }}>
                 All Bidders ({artworkBids.length})
@@ -6238,6 +6335,173 @@ The Art Battle Team`);
               {sendingPaymentInvite ? 'Sending...' : `Send ${inviteType === 'email' ? 'Email' : 'SMS'}`}
             </Button>
           </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
+
+      {/* Payment Collection Modal */}
+      <Dialog.Root open={showPaymentModal} onOpenChange={setShowPaymentModal}>
+        <Dialog.Content style={{ maxWidth: '500px' }}>
+          <Dialog.Title>Collect Payment</Dialog.Title>
+
+          {selectedArtworkForBids && (
+            <Flex direction="column" gap="4" mt="3">
+              {/* Artwork Summary */}
+              <Card size="2" style={{ backgroundColor: 'var(--gray-2)' }}>
+                <Flex direction="column" gap="2">
+                  <Text size="3" weight="bold">
+                    Art Code: {selectedArtworkForBids.art_code}
+                  </Text>
+                  <Text size="2" color="gray">
+                    Round {selectedArtworkForBids.round}, Easel {selectedArtworkForBids.easel}
+                  </Text>
+                  <Text size="2" weight="medium">
+                    Winning Bid: ${selectedArtworkForBids.winning_bid?.toFixed(2) || '0.00'}
+                  </Text>
+                </Flex>
+              </Card>
+
+              {/* Payment Form */}
+              <Flex direction="column" gap="3">
+                <Box>
+                  <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>
+                    Actual Amount Collected *
+                  </Text>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={paymentFormData.actualAmount}
+                    onChange={(e) => setPaymentFormData(prev => ({ ...prev, actualAmount: e.target.value }))}
+                    placeholder="Enter total amount collected"
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      border: '1px solid var(--gray-6)',
+                      backgroundColor: 'var(--gray-1)',
+                      color: 'var(--gray-12)'
+                    }}
+                  />
+                </Box>
+
+                <Box>
+                  <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>
+                    Tax Amount Collected
+                  </Text>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={paymentFormData.actualTax}
+                    onChange={(e) => setPaymentFormData(prev => ({ ...prev, actualTax: e.target.value }))}
+                    placeholder="Enter tax amount collected"
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      border: '1px solid var(--gray-6)',
+                      backgroundColor: 'var(--gray-1)',
+                      color: 'var(--gray-12)'
+                    }}
+                  />
+                </Box>
+
+                <Box>
+                  <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>
+                    Payment Method *
+                  </Text>
+                  <Select.Root
+                    value={paymentFormData.paymentMethod}
+                    onValueChange={(value) => setPaymentFormData(prev => ({ ...prev, paymentMethod: value }))}
+                  >
+                    <Select.Trigger style={{ width: '100%' }} />
+                    <Select.Content>
+                      <Select.Item value="cash">Cash</Select.Item>
+                      <Select.Item value="card">Card</Select.Item>
+                      <Select.Item value="etransfer">E-Transfer</Select.Item>
+                      <Select.Item value="check">Check</Select.Item>
+                      <Select.Item value="other">Other</Select.Item>
+                    </Select.Content>
+                  </Select.Root>
+                </Box>
+
+                <Box>
+                  <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>
+                    Collection Notes
+                  </Text>
+                  <textarea
+                    value={paymentFormData.collectionNotes}
+                    onChange={(e) => setPaymentFormData(prev => ({ ...prev, collectionNotes: e.target.value }))}
+                    placeholder="Any additional notes about this payment"
+                    rows={3}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      border: '1px solid var(--gray-6)',
+                      backgroundColor: 'var(--gray-1)',
+                      color: 'var(--gray-12)',
+                      fontFamily: 'inherit',
+                      resize: 'vertical'
+                    }}
+                  />
+                </Box>
+              </Flex>
+
+              {/* Action Buttons */}
+              <Flex gap="3" justify="end" mt="2">
+                <Button variant="soft" color="gray" onClick={() => setShowPaymentModal(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="solid"
+                  disabled={!paymentFormData.actualAmount}
+                  onClick={async () => {
+                    try {
+                      const actualAmount = parseFloat(paymentFormData.actualAmount);
+                      const actualTax = parseFloat(paymentFormData.actualTax) || 0;
+
+                      if (isNaN(actualAmount) || actualAmount <= 0) {
+                        alert('Please enter a valid amount collected');
+                        return;
+                      }
+
+                      const { data: { user } } = await supabase.auth.getUser();
+                      const adminPhone = user?.phone || 'admin';
+
+                      // Call the admin function to mark as paid
+                      const { data, error } = await supabase
+                        .rpc('admin_update_art_status', {
+                          p_art_code: selectedArtworkForBids.art_code,
+                          p_new_status: 'paid',
+                          p_admin_phone: adminPhone,
+                          p_actual_amount_collected: actualAmount,
+                          p_actual_tax_collected: actualTax || null,
+                          p_payment_method: paymentFormData.paymentMethod,
+                          p_collection_notes: paymentFormData.collectionNotes || null
+                        });
+
+                      if (error) throw error;
+
+                      if (data?.success) {
+                        // Refresh event data
+                        const eventData = await fetchEventDetail();
+                        await fetchArtistData(0, eventData);
+                        setShowPaymentModal(false);
+                        setShowArtworkDetail(false);
+                        alert(`Payment recorded: $${actualAmount} via ${paymentFormData.paymentMethod} by ${adminPhone}`);
+                      } else {
+                        throw new Error(data?.error || 'Failed to record payment');
+                      }
+                    } catch (error) {
+                      console.error('Error recording payment:', error);
+                      alert('Failed to record payment: ' + error.message);
+                    }
+                  }}
+                >
+                  Record Payment
+                </Button>
+              </Flex>
+            </Flex>
+          )}
         </Dialog.Content>
       </Dialog.Root>
     </Box>

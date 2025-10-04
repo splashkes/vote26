@@ -136,14 +136,18 @@ serve(async (req) => {
 
     console.log('Person verified:', person);
 
-    // Get artist profile
-    const { data: artistProfile, error: profileError } = await supabase
-      .from('artist_profiles')
-      .select('id, name, email, phone, country')
-      .eq('person_id', person.id)
-      .single();
+    // Get primary artist profile using the authoritative selection function
+    const { data: profileData, error: profileError } = await supabase
+      .rpc('get_primary_artist_profile', { p_person_id: person.id });
 
-    if (profileError || !artistProfile) {
+    if (profileError) {
+      console.error('Error getting primary artist profile:', profileError);
+      throw new Error('Failed to retrieve artist profile');
+    }
+
+    const artistProfile = profileData?.[0];
+
+    if (!artistProfile) {
       throw new Error('Artist profile not found');
     }
 
