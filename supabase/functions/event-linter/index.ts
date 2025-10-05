@@ -396,6 +396,18 @@ serve(async (req) => {
       return eidNum < 4000 || eidNum >= 7000;
     });
 
+    // Filter to events from the last 45 days (unless filtering by specific EID)
+    if (!filterEid) {
+      const now = new Date();
+      const fortyFiveDaysAgo = new Date(now.getTime() - 45 * 24 * 60 * 60 * 1000);
+      eventsToLint = eventsToLint.filter(e => {
+        if (!e.event_start_datetime) return true;
+        const eventStart = new Date(e.event_start_datetime);
+        return eventStart >= fortyFiveDaysAgo;
+      });
+      debugInfo.forty_five_day_filtered = eventsToLint.length;
+    }
+
     // Filter by EID if specified
     if (filterEid) {
       eventsToLint = eventsToLint.filter(e => e.eid === filterEid);
@@ -874,6 +886,7 @@ serve(async (req) => {
               eventEid: null,
               eventName: null,
               artistId: artist.artist_id,
+              artistNumber: artist.artist_entry_id,
               artistName: artist.artist_name,
               artistEmail: artist.artist_email,
               balanceOwed: artist.balance_owed,
@@ -931,14 +944,34 @@ serve(async (req) => {
             let severity = '';
 
             if (counts.total <= 1) {
-              rule = adminRules.find(r => r.id === 'event_admins_critical');
-              severity = 'error';
+              // Critical admin rule only fires within 7 days of event
+              const now = new Date();
+              if (event.event_start_datetime) {
+                const eventStart = new Date(event.event_start_datetime);
+                const daysDiff = Math.abs((eventStart.getTime() - now.getTime()) / 1000 / 60 / 60 / 24);
+                if (daysDiff <= 7) {
+                  rule = adminRules.find(r => r.id === 'event_admins_critical');
+                  severity = 'error';
+                }
+              }
             } else if (counts.total === 2) {
               rule = adminRules.find(r => r.id === 'event_admins_warning');
               severity = 'warning';
             } else {
-              rule = adminRules.find(r => r.id === 'event_admins_info');
-              severity = 'info';
+              // Info admin rule only fires until 1 day after event
+              const now = new Date();
+              if (event.event_end_datetime) {
+                const eventEnd = new Date(event.event_end_datetime);
+                const daysSinceEnd = (now.getTime() - eventEnd.getTime()) / 1000 / 60 / 60 / 24;
+                if (daysSinceEnd <= 1) {
+                  rule = adminRules.find(r => r.id === 'event_admins_info');
+                  severity = 'info';
+                }
+              } else {
+                // No end date, fire the rule
+                rule = adminRules.find(r => r.id === 'event_admins_info');
+                severity = 'info';
+              }
             }
 
             if (rule) {
@@ -980,6 +1013,320 @@ serve(async (req) => {
         }
       } catch (adminCheckError: any) {
         debugInfo.admin_check_error = adminCheckError.message;
+      }
+    }
+
+    // Run smart photo reminder check (only fire if photos are actually missing)
+    const photoReminderRule = rules.find((r: any) => r.id === 'reminder_upload_photos_smart');
+    if (photoReminderRule) {
+      try {
+        const now = new Date();
+        const activeEvents = eventsToLint.filter(e => {
+          if (!e.event_start_datetime || !e.event_end_datetime) return false;
+          const eventStart = new Date(e.event_start_datetime);
+          const eventEnd = new Date(e.event_end_datetime);
+          const minutesSinceStart = (now.getTime() - eventStart.getTime()) / 1000 / 60;
+          const hoursUntilEnd = (eventEnd.getTime() - now.getTime()) / 1000 / 60 / 60;
+          return minutesSinceStart >= 30 && hoursUntilEnd > 0 && hoursUntilEnd <= 12;
+        });
+
+        if (activeEvents.length > 0) {
+          const eventIds = activeEvents.map(e => e.id);
+
+          // Fetch art and photo counts by round
+          const { data: photoData } = await supabaseClient
+            .from('art')
+            .select('event_id, round, art_media!inner(id)')
+            .in('event_id', eventIds);
+
+          // Build photo count map
+          const photoCountMap = new Map();
+          photoData?.forEach((art: any) => {
+            const key = `${art.event_id}_${art.round}`;
+            photoCountMap.set(key, (photoCountMap.get(key) || 0) + 1);
+          });
+
+          // Check each active event
+          for (const event of activeEvents) {
+            // Determine which round to check (prioritize current round, or round 1 if early)
+            const minutesSinceStart = (now.getTime() - new Date(event.event_start_datetime).getTime()) / 1000 / 60;
+            let roundToCheck = 1;
+            if (minutesSinceStart > 90) roundToCheck = 2; // Likely in round 2 if 90+ min
+            if (minutesSinceStart > 150) roundToCheck = 3; // Likely in round 3 if 150+ min
+
+            const key = `${event.id}_${roundToCheck}`;
+            const photoCount = photoCountMap.get(key) || 0;
+
+            // Only fire reminder if fewer than 5 photos
+            if (photoCount < 5) {
+              incrementRuleHit(supabaseClient, 'reminder_upload_photos_smart');
+
+              const message = photoReminderRule.message
+                .replace('{round_number}', roundToCheck.toString());
+
+              findings.push({
+                ruleId: 'reminder_upload_photos_smart',
+                ruleName: photoReminderRule.name,
+                severity: 'reminder',
+                category: photoReminderRule.category,
+                context: photoReminderRule.context,
+                emoji: '🔔',
+                message: message,
+                eventId: event.id,
+                eventEid: event.eid,
+                eventName: event.name,
+                roundChecked: roundToCheck,
+                photoCount: photoCount,
+                timestamp: new Date().toISOString()
+              });
+            }
+          }
+
+          debugInfo.photo_reminder_checked = activeEvents.length;
+        }
+      } catch (photoCheckError: any) {
+        debugInfo.photo_check_error = photoCheckError.message;
+      }
+    }
+
+    // Run live event statistics check (QR scans, votes, photos)
+    const liveEventStatsRules = rules.filter((r: any) => r.category === 'live-event-stats');
+    if (liveEventStatsRules.length > 0 && eventsToLint.length > 0) {
+      try {
+        const now = new Date();
+        const activeEvents = eventsToLint.filter(e => {
+          if (!e.event_start_datetime || !e.event_end_datetime) return false;
+          const eventStart = new Date(e.event_start_datetime);
+          const eventEnd = new Date(e.event_end_datetime);
+          const minutesSinceStart = (now.getTime() - eventStart.getTime()) / 1000 / 60;
+          const hoursUntilEnd = (eventEnd.getTime() - now.getTime()) / 1000 / 60 / 60;
+          return minutesSinceStart >= 30 && hoursUntilEnd > 0 && hoursUntilEnd <= 12;
+        });
+
+        if (activeEvents.length > 0) {
+          const eventIds = activeEvents.map(e => e.id);
+
+          // Fetch QR scan counts
+          const { data: qrData } = await supabaseClient
+            .from('people_qr_scans')
+            .select('event_id, id')
+            .in('event_id', eventIds);
+
+          const qrCountMap = new Map();
+          qrData?.forEach((scan: any) => {
+            qrCountMap.set(scan.event_id, (qrCountMap.get(scan.event_id) || 0) + 1);
+          });
+
+          // Fetch vote counts
+          const { data: voteData } = await supabaseClient
+            .from('votes')
+            .select('event_id, id')
+            .in('event_id', eventIds);
+
+          const voteCountMap = new Map();
+          voteData?.forEach((vote: any) => {
+            voteCountMap.set(vote.event_id, (voteCountMap.get(vote.event_id) || 0) + 1);
+          });
+
+          // Fetch photo counts by round
+          const { data: photoData } = await supabaseClient
+            .from('art')
+            .select('event_id, round, art_media!inner(id)')
+            .in('event_id', eventIds);
+
+          const photosByEventMap = new Map();
+          photoData?.forEach((art: any) => {
+            if (!photosByEventMap.has(art.event_id)) {
+              photosByEventMap.set(art.event_id, { 1: 0, 2: 0, 3: 0 });
+            }
+            const rounds = photosByEventMap.get(art.event_id);
+            rounds[art.round] = (rounds[art.round] || 0) + 1;
+          });
+
+          // Generate findings for each active event
+          for (const event of activeEvents) {
+            const qrScanRule = liveEventStatsRules.find((r: any) => r.id === 'live_event_qr_scans_info');
+            if (qrScanRule) {
+              const qrCount = qrCountMap.get(event.id) || 0;
+              incrementRuleHit(supabaseClient, 'live_event_qr_scans_info');
+
+              findings.push({
+                ruleId: 'live_event_qr_scans_info',
+                ruleName: qrScanRule.name,
+                severity: 'info',
+                category: qrScanRule.category,
+                context: qrScanRule.context,
+                emoji: '📊',
+                message: qrScanRule.message.replace('{qr_scan_count}', qrCount.toString()),
+                eventId: event.id,
+                eventEid: event.eid,
+                eventName: event.name,
+                qrScanCount: qrCount,
+                timestamp: new Date().toISOString()
+              });
+            }
+
+            const voteRule = liveEventStatsRules.find((r: any) => r.id === 'live_event_votes_info');
+            if (voteRule) {
+              const voteCount = voteCountMap.get(event.id) || 0;
+              incrementRuleHit(supabaseClient, 'live_event_votes_info');
+
+              findings.push({
+                ruleId: 'live_event_votes_info',
+                ruleName: voteRule.name,
+                severity: 'info',
+                category: voteRule.category,
+                context: voteRule.context,
+                emoji: '📊',
+                message: voteRule.message.replace('{vote_count}', voteCount.toString()),
+                eventId: event.id,
+                eventEid: event.eid,
+                eventName: event.name,
+                voteCount: voteCount,
+                timestamp: new Date().toISOString()
+              });
+            }
+
+            const photoRule = liveEventStatsRules.find((r: any) => r.id === 'live_event_photos_info');
+            if (photoRule) {
+              const photosByRound = photosByEventMap.get(event.id) || { 1: 0, 2: 0, 3: 0 };
+              const photosText = `R1: ${photosByRound[1]}, R2: ${photosByRound[2]}, R3: ${photosByRound[3]}`;
+              incrementRuleHit(supabaseClient, 'live_event_photos_info');
+
+              findings.push({
+                ruleId: 'live_event_photos_info',
+                ruleName: photoRule.name,
+                severity: 'info',
+                category: photoRule.category,
+                context: photoRule.context,
+                emoji: '📊',
+                message: photoRule.message.replace('{photos_by_round}', photosText),
+                eventId: event.id,
+                eventEid: event.eid,
+                eventName: event.name,
+                photosByRound: photosByRound,
+                timestamp: new Date().toISOString()
+              });
+            }
+          }
+
+          debugInfo.live_event_stats_checked = activeEvents.length;
+        }
+      } catch (statsError: any) {
+        debugInfo.live_event_stats_error = statsError.message;
+      }
+    }
+
+    // Run unpaid paintings check (check for artworks with winning bids but no payment and no reminder sent)
+    const unpaidPaintingsRule = rules.find((r: any) => r.id === 'unpaid_paintings_no_reminder');
+    if (unpaidPaintingsRule && eventsToLint.length > 0) {
+      try {
+        const now = new Date();
+        // Check events that have ended (even 1 minute after)
+        const postEvents = eventsToLint.filter(e => {
+          if (!e.event_end_datetime) return false;
+          const eventEnd = new Date(e.event_end_datetime);
+          const daysSinceEnd = (now.getTime() - eventEnd.getTime()) / 1000 / 60 / 60 / 24;
+          return daysSinceEnd > 0 && daysSinceEnd <= 30;
+        });
+
+        if (postEvents.length > 0) {
+          const eventIds = postEvents.map(e => e.id);
+
+          // Get all artworks with bids for these events
+          const { data: artData } = await supabaseClient
+            .from('art')
+            .select('id, event_id, art_code')
+            .in('event_id', eventIds);
+
+          if (artData && artData.length > 0) {
+            const artIds = artData.map(a => a.id);
+
+            // Get all bids to determine winning bids
+            const { data: bidsData } = await supabaseClient
+              .from('bids')
+              .select('art_id, amount')
+              .in('art_id', artIds);
+
+            // Build winning bid map
+            const winningBidMap = new Map();
+            bidsData?.forEach((bid: any) => {
+              const current = winningBidMap.get(bid.art_id) || 0;
+              winningBidMap.set(bid.art_id, Math.max(current, bid.amount));
+            });
+
+            // Get payment records (Stripe)
+            const { data: paymentsData } = await supabaseClient
+              .from('payment_processing')
+              .select('art_id')
+              .in('art_id', artIds)
+              .eq('status', 'completed');
+
+            const paidArtIds = new Set(paymentsData?.map((p: any) => p.art_id) || []);
+
+            // Get manual payment records
+            const { data: manualPaymentsData } = await supabaseClient
+              .from('payment_logs')
+              .select('art_id')
+              .in('art_id', artIds)
+              .eq('payment_type', 'admin_marked');
+
+            manualPaymentsData?.forEach((p: any) => {
+              paidArtIds.add(p.art_id);
+            });
+
+            // Get payment reminder records
+            const { data: remindersData } = await supabaseClient
+              .from('payment_reminders')
+              .select('art_id')
+              .in('art_id', artIds);
+
+            const artIdsWithReminders = new Set(remindersData?.map((r: any) => r.art_id) || []);
+
+            // Check each event
+            for (const event of postEvents) {
+              const eventArtworks = artData.filter(a => a.event_id === event.id);
+
+              // Find unpaid artworks with winning bids and no reminders
+              const unpaidNoReminderArtworks = eventArtworks.filter(art => {
+                const hasWinningBid = winningBidMap.has(art.id) && winningBidMap.get(art.id) > 0;
+                const isPaid = paidArtIds.has(art.id);
+                const hasReminder = artIdsWithReminders.has(art.id);
+
+                return hasWinningBid && !isPaid && !hasReminder;
+              });
+
+              if (unpaidNoReminderArtworks.length > 0) {
+                incrementRuleHit(supabaseClient, 'unpaid_paintings_no_reminder');
+
+                const artCodes = unpaidNoReminderArtworks.map(a => a.art_code).join(', ');
+                const message = unpaidPaintingsRule.message
+                  .replace('{unpaid_count}', unpaidNoReminderArtworks.length.toString())
+                  + ` (${artCodes})`;
+
+                findings.push({
+                  ruleId: 'unpaid_paintings_no_reminder',
+                  ruleName: unpaidPaintingsRule.name,
+                  severity: 'warning',
+                  category: unpaidPaintingsRule.category,
+                  context: unpaidPaintingsRule.context,
+                  emoji: '⚠️',
+                  message: message,
+                  eventId: event.id,
+                  eventEid: event.eid,
+                  eventName: event.name,
+                  unpaidCount: unpaidNoReminderArtworks.length,
+                  unpaidArtworks: unpaidNoReminderArtworks.map(a => a.art_code),
+                  timestamp: new Date().toISOString()
+                });
+              }
+            }
+
+            debugInfo.unpaid_paintings_checked = postEvents.length;
+          }
+        }
+      } catch (unpaidError: any) {
+        debugInfo.unpaid_paintings_error = unpaidError.message;
       }
     }
 

@@ -426,8 +426,8 @@ const EventLinter = () => {
                         style={{ padding: '4px 8px', cursor: 'pointer' }}
                         onClick={(e) => handleEidClick(e, finding)}
                       >
-                        <Badge color="gray" variant="soft" size="1">
-                          {finding.eventEid || 'N/A'}
+                        <Badge color={finding.artistNumber ? 'purple' : 'gray'} variant="soft" size="1">
+                          {finding.eventEid || (finding.artistNumber ? `#${finding.artistNumber}` : 'N/A')}
                         </Badge>
                       </Table.Cell>
                       <Table.Cell style={{ padding: '4px 8px' }}>
@@ -595,23 +595,58 @@ const EventLinter = () => {
                 </Flex>
               </Card>
 
-              {/* Event Information */}
-              <Card>
-                <Flex direction="column" gap="2">
-                  <Text size="1" weight="bold" color="gray">Event</Text>
-                  <Flex align="center" gap="2">
-                    <Badge color="gray" variant="soft" size="1">
-                      {selectedFinding.eventEid || 'N/A'}
-                    </Badge>
-                    <Text size="2">{selectedFinding.eventName}</Text>
+              {/* Event or Artist Information */}
+              {selectedFinding.artistId ? (
+                <Card>
+                  <Flex direction="column" gap="3">
+                    <Text size="1" weight="bold" color="gray">Artist</Text>
+                    <Flex align="center" gap="2">
+                      <Badge color="purple" variant="soft" size="1">
+                        #{selectedFinding.artistNumber}
+                      </Badge>
+                      <Text size="2" weight="medium">{selectedFinding.artistName}</Text>
+                    </Flex>
+                    <Flex gap="2">
+                      <Button
+                        size="2"
+                        variant="soft"
+                        onClick={() => window.open(`/artists/${selectedFinding.artistId}`, '_blank')}
+                      >
+                        View Profile
+                      </Button>
+                      <Button
+                        size="2"
+                        variant="soft"
+                        onClick={() => window.open(`/artist-payments/${selectedFinding.artistId}`, '_blank')}
+                      >
+                        Payment Account
+                      </Button>
+                    </Flex>
+                    {selectedFinding.artistId && (
+                      <Text size="1" color="gray" style={{ fontFamily: 'monospace' }}>
+                        ID: {selectedFinding.artistId}
+                      </Text>
+                    )}
                   </Flex>
-                  {selectedFinding.eventId && (
-                    <Text size="1" color="gray" style={{ fontFamily: 'monospace' }}>
-                      ID: {selectedFinding.eventId}
-                    </Text>
-                  )}
-                </Flex>
-              </Card>
+                </Card>
+              ) : (
+                <Card>
+                  <Flex direction="column" gap="2">
+                    <Text size="1" weight="bold" color="gray">Event</Text>
+                    <Flex align="center" gap="2">
+                      <Badge color="gray" variant="soft" size="1">
+                        {selectedFinding.eventEid || 'N/A'}
+                      </Badge>
+                      <Text size="2">{selectedFinding.eventName}</Text>
+                    </Flex>
+                    {selectedFinding.eventId && (
+                      <Text size="1" color="gray" style={{ fontFamily: 'monospace' }}>
+                        ID: {selectedFinding.eventId}
+                      </Text>
+                    )}
+                  </Flex>
+                </Card>
+              )}
 
               {/* Message */}
               <Card>
