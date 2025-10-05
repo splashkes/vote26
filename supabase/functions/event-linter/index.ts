@@ -146,12 +146,14 @@ function evaluateCondition(condition: any, event: any, comparativeData: any = {}
   let evaluatedValue = value;
   if (typeof value === 'string' && value.includes('_ago')) {
     const now = new Date();
-    if (value === '7_days_ago') {
+    if (value === '1_day_ago') {
+      evaluatedValue = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    } else if (value === '3_days_ago') {
+      evaluatedValue = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+    } else if (value === '7_days_ago') {
       evaluatedValue = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     } else if (value === '30_days_ago') {
       evaluatedValue = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    } else if (value === '1_day_ago') {
-      evaluatedValue = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     }
   }
 
