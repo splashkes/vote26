@@ -283,10 +283,14 @@ const EventDetail = () => {
 
   // Auto-expand post-event section if event is completed
   useEffect(() => {
-    if (status.label === 'Completed') {
-      setPostEventCollapsed(false);
+    if (event?.event_end_datetime) {
+      const now = new Date();
+      const endTime = new Date(event.event_end_datetime);
+      if (now > endTime) {
+        setPostEventCollapsed(false);
+      }
     }
-  }, [status.label]);
+  }, [event?.event_end_datetime]);
 
   const fetchEventDetail = async () => {
     try {
@@ -3114,6 +3118,7 @@ The Art Battle Team`);
 
                     {metaAdsData && metaAdsData.total_spend > 0 ? (
                       <>
+                        {/* Budget & Spend Row */}
                         <Grid columns="4" gap="3" mb="3">
                           <Box>
                             <Text size="1" color="gray" style={{ display: 'block' }}>Total Spend</Text>
@@ -3121,6 +3126,28 @@ The Art Battle Team`);
                               {metaAdsData.currency} ${metaAdsData.total_spend?.toFixed(2) || '0.00'}
                             </Text>
                           </Box>
+                          <Box>
+                            <Text size="1" color="gray" style={{ display: 'block' }}>Budget Allocated</Text>
+                            <Text size="4" weight="bold">
+                              {metaAdsData.total_budget > 0 ? `${metaAdsData.currency} $${metaAdsData.total_budget?.toFixed(2)}` : 'N/A'}
+                            </Text>
+                          </Box>
+                          <Box>
+                            <Text size="1" color="gray" style={{ display: 'block' }}>Budget Remaining</Text>
+                            <Text size="4" weight="bold">
+                              {metaAdsData.budget_remaining !== undefined ? `$${metaAdsData.budget_remaining?.toFixed(2)}` : 'N/A'}
+                            </Text>
+                          </Box>
+                          <Box>
+                            <Text size="1" color="gray" style={{ display: 'block' }}>Budget Utilization</Text>
+                            <Text size="4" weight="bold" color={metaAdsData.budget_utilization > 90 ? 'red' : metaAdsData.budget_utilization > 75 ? 'orange' : 'green'}>
+                              {metaAdsData.budget_utilization > 0 ? `${metaAdsData.budget_utilization?.toFixed(1)}%` : 'N/A'}
+                            </Text>
+                          </Box>
+                        </Grid>
+
+                        {/* Performance Metrics Row */}
+                        <Grid columns="4" gap="3" mb="3">
                           <Box>
                             <Text size="1" color="gray" style={{ display: 'block' }}>Total Reach</Text>
                             <Text size="4" weight="bold">
@@ -3140,9 +3167,51 @@ The Art Battle Team`);
                             )}
                           </Box>
                           <Box>
+                            <Text size="1" color="gray" style={{ display: 'block' }}>Conversions</Text>
+                            <Text size="4" weight="bold" color="green">
+                              {metaAdsData.conversions?.toLocaleString() || '0'}
+                            </Text>
+                            <Text size="1" color="gray">purchases</Text>
+                          </Box>
+                          <Box>
+                            <Text size="1" color="gray" style={{ display: 'block' }}>ROAS</Text>
+                            <Text size="4" weight="bold" color={metaAdsData.roas >= 1 ? 'green' : 'red'}>
+                              {metaAdsData.roas > 0 ? `${metaAdsData.roas?.toFixed(2)}x` : 'N/A'}
+                            </Text>
+                            {metaAdsData.conversion_value > 0 && (
+                              <Text size="1" color="gray">
+                                ${metaAdsData.conversion_value?.toFixed(2)} revenue
+                              </Text>
+                            )}
+                          </Box>
+                        </Grid>
+
+                        {/* Cost Metrics Row */}
+                        <Grid columns="4" gap="3" mb="3">
+                          <Box>
                             <Text size="1" color="gray" style={{ display: 'block' }}>Cost Per Click</Text>
-                            <Text size="4" weight="bold">
+                            <Text size="3" weight="bold">
                               ${metaAdsData.total_clicks > 0 ? (metaAdsData.total_spend / metaAdsData.total_clicks).toFixed(2) : '0.00'}
+                            </Text>
+                          </Box>
+                          <Box>
+                            <Text size="1" color="gray" style={{ display: 'block' }}>Cost Per Conversion</Text>
+                            <Text size="3" weight="bold">
+                              ${metaAdsData.conversions > 0 ? (metaAdsData.total_spend / metaAdsData.conversions).toFixed(2) : 'N/A'}
+                            </Text>
+                          </Box>
+                          <Box>
+                            <Text size="1" color="gray" style={{ display: 'block' }}>Conversion Rate</Text>
+                            <Text size="3" weight="bold">
+                              {metaAdsData.total_clicks > 0 && metaAdsData.conversions > 0
+                                ? `${((metaAdsData.conversions / metaAdsData.total_clicks) * 100).toFixed(2)}%`
+                                : 'N/A'}
+                            </Text>
+                          </Box>
+                          <Box>
+                            <Text size="1" color="gray" style={{ display: 'block' }}>Avg Order Value</Text>
+                            <Text size="3" weight="bold">
+                              ${metaAdsData.conversions > 0 ? (metaAdsData.conversion_value / metaAdsData.conversions).toFixed(2) : 'N/A'}
                             </Text>
                           </Box>
                         </Grid>
@@ -3190,7 +3259,6 @@ The Art Battle Team`);
               </Box>
             )}
           </Card>
-        )}
 
         {/* Event Linter - Collapsible (ABHQ super admins only) */}
         {isSuperAdmin && event?.eid && (
@@ -3209,6 +3277,7 @@ The Art Battle Team`);
               </Box>
             )}
           </Card>
+        )}
 
         {/* Artist Payments - Collapsible (only show if event is in the past) */}
         {status.label === 'Completed' && (

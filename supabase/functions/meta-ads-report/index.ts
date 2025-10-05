@@ -87,7 +87,7 @@ async function fetchMetaAdsFromAPI(eventEID: string, debug = false) {
           'budget_remaining',
           'campaign{id,name,created_time,start_time,stop_time,daily_budget,lifetime_budget,budget_remaining}',
           'targeting{age_min,age_max,genders,geo_locations{cities,regions,countries},interests,custom_audiences}',
-          'insights{spend,reach,clicks,actions,action_values}'
+          'insights{spend,reach,clicks,actions,action_values,website_purchase_roas,purchase_roas}'
         ].join(','),
         filtering: JSON.stringify([{
           field: 'campaign.name',
@@ -161,10 +161,13 @@ async function fetchMetaAdsFromAPI(eventEID: string, debug = false) {
       event_eid: eventEID,
       total_spend: 0,
       total_budget: 0,
+      budget_remaining: 0,
+      budget_utilization: 0,
       total_reach: 0,
       total_clicks: 0,
       conversions: 0,
       conversion_value: 0,
+      roas: 0,
       currency: 'USD',
       campaigns: [],
       adsets: [],
@@ -184,13 +187,17 @@ async function fetchMetaAdsFromAPI(eventEID: string, debug = false) {
 function processMetaAPIResponse(data: any, eventEID: string, currency: string) {
   const campaigns: any = {};
   const adsets: any[] = [];
+  const budgetTracked = new Set(); // Track which campaign budgets we've counted
   let totalSpend = 0;
   let totalBudget = 0;
+  let totalBudgetRemaining = 0;
   let totalReach = 0;
   let totalClicks = 0;
   let totalConversions = 0;
   let totalConversionValue = 0;
-  
+  let totalRoas = 0;
+  let roasCount = 0;
+
   for (const adset of data.data) {
     // Process campaign data
     if (adset.campaign && !campaigns[adset.campaign.id]) {
@@ -199,53 +206,79 @@ function processMetaAPIResponse(data: any, eventEID: string, currency: string) {
         name: adset.campaign.name,
         spend: 0,
         reach: 0,
-        clicks: 0
+        clicks: 0,
+        conversions: 0,
+        conversion_value: 0
       };
     }
-    
+
     // Process insights data
     const insights = adset.insights?.data?.[0];
     const spend = insights ? parseFloat(insights.spend || '0') : 0;
     const reach = insights ? parseInt(insights.reach || '0') : 0;
     const clicks = insights ? parseInt(insights.clicks || '0') : 0;
-    
-    // Process conversions (purchases)
+
+    // Process conversions (purchases) - use purchase action_type as canonical
     let conversions = 0;
     let conversionValue = 0;
-    
+
     if (insights?.actions) {
       for (const action of insights.actions) {
-        if (action.action_type === 'purchase' || action.action_type === 'offsite_conversion.fb_pixel_purchase') {
-          conversions += parseInt(action.value || '0');
+        // Use 'purchase' as canonical purchase count (all platforms)
+        if (action.action_type === 'purchase') {
+          conversions = parseInt(action.value || '0');
+          break; // Found canonical purchase, stop looking
         }
       }
     }
-    
+
     if (insights?.action_values) {
       for (const actionValue of insights.action_values) {
-        if (actionValue.action_type === 'purchase' || actionValue.action_type === 'offsite_conversion.fb_pixel_purchase') {
-          conversionValue += parseFloat(actionValue.value || '0');
+        // Use 'purchase' as canonical purchase value (all platforms)
+        if (actionValue.action_type === 'purchase') {
+          conversionValue = parseFloat(actionValue.value || '0');
+          break; // Found canonical purchase value, stop looking
         }
       }
     }
-    
+
+    // Extract ROAS from Meta's pre-calculated field (if available)
+    let adsetRoas = 0;
+    if (insights?.purchase_roas && insights.purchase_roas.length > 0) {
+      adsetRoas = parseFloat(insights.purchase_roas[0].value || '0');
+    } else if (insights?.website_purchase_roas && insights.website_purchase_roas.length > 0) {
+      adsetRoas = parseFloat(insights.website_purchase_roas[0].value || '0');
+    }
+
+    if (adsetRoas > 0) {
+      totalRoas += adsetRoas;
+      roasCount++;
+    }
+
     // Add to campaign totals
     if (adset.campaign && campaigns[adset.campaign.id]) {
       campaigns[adset.campaign.id].spend += spend;
       campaigns[adset.campaign.id].reach += reach;
       campaigns[adset.campaign.id].clicks += clicks;
+      campaigns[adset.campaign.id].conversions += conversions;
+      campaigns[adset.campaign.id].conversion_value += conversionValue;
     }
-    
-    // Process budget
-    let budget = 0;
-    if (adset.lifetime_budget) {
-      budget = parseFloat(adset.lifetime_budget) / 100; // Convert from cents
-    } else if (adset.campaign?.lifetime_budget) {
-      budget = parseFloat(adset.campaign.lifetime_budget) / 100;
-    } else if (adset.daily_budget) {
-      budget = parseFloat(adset.daily_budget) / 100 * 30; // Estimate monthly budget
+
+    // Process budget at campaign level (avoid double-counting)
+    if (adset.campaign && !budgetTracked.has(adset.campaign.id)) {
+      budgetTracked.add(adset.campaign.id);
+
+      if (adset.campaign.lifetime_budget) {
+        const budget = parseFloat(adset.campaign.lifetime_budget) / 100;
+        totalBudget += budget;
+      }
+
+      if (adset.campaign.budget_remaining) {
+        const remaining = parseFloat(adset.campaign.budget_remaining) / 100;
+        totalBudgetRemaining += remaining;
+      }
     }
-    
+
     // Add adset data
     adsets.push({
       id: adset.id,
@@ -254,26 +287,40 @@ function processMetaAPIResponse(data: any, eventEID: string, currency: string) {
       spend,
       reach,
       clicks,
+      conversions,
+      conversion_value: conversionValue,
       status: adset.status
     });
-    
+
     // Add to totals
     totalSpend += spend;
-    totalBudget += budget;
     totalReach += reach;
     totalClicks += clicks;
     totalConversions += conversions;
     totalConversionValue += conversionValue;
   }
   
+  // Calculate overall ROAS
+  const calculatedRoas = totalSpend > 0 ? totalConversionValue / totalSpend : 0;
+  const averageMetaRoas = roasCount > 0 ? totalRoas / roasCount : 0;
+
+  // Use Meta's ROAS if available, otherwise calculate
+  const roas = averageMetaRoas > 0 ? averageMetaRoas : calculatedRoas;
+
+  // Calculate budget utilization
+  const budgetUtilization = totalBudget > 0 ? (totalSpend / totalBudget) * 100 : 0;
+
   return {
     event_eid: eventEID,
     total_spend: totalSpend,
     total_budget: totalBudget,
+    budget_remaining: totalBudgetRemaining,
+    budget_utilization: budgetUtilization,
     total_reach: totalReach,
     total_clicks: totalClicks,
     conversions: totalConversions,
     conversion_value: totalConversionValue,
+    roas: roas,
     currency,
     campaigns: Object.values(campaigns),
     adsets,
