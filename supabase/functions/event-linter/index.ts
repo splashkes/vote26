@@ -4,28 +4,48 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
-import { parse as parseYAML } from 'https://deno.land/std@0.177.0/encoding/yaml.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Load YAML rules from CDN
-async function loadRules() {
+// Load rules from database
+async function loadRules(supabaseClient: any) {
   try {
-    // Add cache-busting timestamp (rounds to nearest 5 minutes to allow some caching)
-    const cacheBuster = Math.floor(Date.now() / (5 * 60 * 1000));
-    const response = await fetch(`https://artb.tor1.digitaloceanspaces.com/admin/eventLinterRules.yaml?v=${cacheBuster}`);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch rules: ${response.status}`);
+    const { data: rules, error } = await supabaseClient
+      .from('event_linter_rules')
+      .select('*')
+      .eq('status', 'active')
+      .order('category', { ascending: true });
+
+    if (error) {
+      throw new Error(`Database error: ${error.message}`);
     }
-    const yamlText = await response.text();
-    const config = parseYAML(yamlText) as any;
-    return config.rules || [];
+
+    // Transform DB format to internal format
+    return (rules || []).map((rule: any) => ({
+      id: rule.rule_id,
+      name: rule.name,
+      description: rule.description,
+      severity: rule.severity,
+      category: rule.category,
+      context: rule.context,
+      conditions: rule.conditions || [],
+      message: rule.message
+    }));
   } catch (error) {
-    throw new Error(`Failed to load rules: ${error.message}`);
+    throw new Error(`Failed to load rules from database: ${error.message}`);
   }
+}
+
+// Increment hit count for a rule (fire and forget - don't wait)
+function incrementRuleHit(supabaseClient: any, ruleId: string) {
+  supabaseClient.rpc('increment_rule_hit_count', { p_rule_id: ruleId }).then(() => {
+    // Success - no action needed
+  }).catch(() => {
+    // Ignore errors - this is just telemetry
+  });
 }
 
 // Get nested field value
@@ -235,12 +255,17 @@ function interpolateMessage(template: string, event: any, comparativeData: any =
 }
 
 // Evaluate rule
-function evaluateRule(rule: any, event: any, comparativeData: any = {}): any | null {
+function evaluateRule(rule: any, event: any, comparativeData: any = {}, supabaseClient: any = null): any | null {
   const allConditionsMet = rule.conditions.every((condition: any) =>
     evaluateCondition(condition, event, comparativeData)
   );
 
   if (!allConditionsMet) return null;
+
+  // Increment hit count for this rule (fire and forget)
+  if (supabaseClient) {
+    incrementRuleHit(supabaseClient, rule.id);
+  }
 
   const severityEmoji: any = {
     error: '❌',
@@ -301,7 +326,7 @@ serve(async (req) => {
     );
 
     // Load rules
-    const rules = await loadRules();
+    const rules = await loadRules(supabaseClient);
     debugInfo.rules_loaded = rules.length;
 
     // Fetch events
@@ -336,6 +361,15 @@ serve(async (req) => {
 
     // Filter events
     let eventsToLint = events || [];
+
+    // Filter out test/internal events (AB4000-AB7000 range)
+    eventsToLint = eventsToLint.filter(e => {
+      if (!e.eid) return true;
+      const match = e.eid.match(/^AB(\d+)$/);
+      if (!match) return true;
+      const eidNum = parseInt(match[1]);
+      return eidNum < 4000 || eidNum >= 7000;
+    });
 
     // Filter by EID if specified
     if (filterEid) {
@@ -585,12 +619,33 @@ serve(async (req) => {
     // Run linter on events
     const findings: any[] = [];
     for (const event of eventsToLint) {
+      // Check EID format (special validation)
+      if (event.eid && !/^AB\d{3,4}$/.test(event.eid)) {
+        const eidRule = rules.find((r: any) => r.id === 'invalid_eid_format');
+        if (eidRule) {
+          incrementRuleHit(supabaseClient, 'invalid_eid_format');
+          findings.push({
+            ruleId: 'invalid_eid_format',
+            ruleName: eidRule.name,
+            severity: 'error',
+            category: 'data_completeness',
+            context: 'always',
+            emoji: '❌',
+            message: `Event ${event.eid} has invalid format - must be AB### or AB#### (e.g., AB123 or AB3049)`,
+            eventId: event.id,
+            eventEid: event.eid,
+            eventName: event.name,
+            timestamp: new Date().toISOString()
+          });
+        }
+      }
+
       for (const rule of rules) {
-        // Skip rules with no conditions - these are handled separately (e.g., artist_payment_overdue)
+        // Skip rules with no conditions - these are handled separately (e.g., artist_payment_overdue, invalid_eid_format)
         if (!rule.conditions || rule.conditions.length === 0) {
           continue;
         }
-        const finding = evaluateRule(rule, event, {});
+        const finding = evaluateRule(rule, event, {}, supabaseClient);
         if (finding) {
           findings.push(finding);
         }
