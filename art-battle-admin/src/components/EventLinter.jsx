@@ -39,6 +39,8 @@ const EventLinter = () => {
   const [activeOnly, setActiveOnly] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedFinding, setSelectedFinding] = useState(null);
+  const [findingDialogOpen, setFindingDialogOpen] = useState(false);
   const [rules, setRules] = useState([]);
 
   // Load events and run linter via edge function
@@ -131,8 +133,9 @@ const EventLinter = () => {
     return Array.from(ctxs).sort();
   }, [allFindings]);
 
-  // Handle row click to show event details
-  const handleRowClick = async (finding) => {
+  // Handle EID click to show event details
+  const handleEidClick = async (e, finding) => {
+    e.stopPropagation();
     try {
       const { data: event, error } = await supabase
         .from('events')
@@ -150,6 +153,13 @@ const EventLinter = () => {
     } catch (err) {
       console.error('Error loading event:', err);
     }
+  };
+
+  // Handle message click to show finding details
+  const handleMessageClick = (e, finding) => {
+    e.stopPropagation();
+    setSelectedFinding(finding);
+    setFindingDialogOpen(true);
   };
 
   // Calculate days until/since event
@@ -174,30 +184,30 @@ const EventLinter = () => {
   };
 
   return (
-    <Box p="4">
-      <Flex direction="column" gap="4">
+    <Box p="3">
+      <Flex direction="column" gap="3">
         {/* Header */}
         <Flex justify="between" align="center">
           <Box>
-            <Heading size="6">Event Linter</Heading>
-            <Text size="2" color="gray">
+            <Heading size="5">Event Linter</Heading>
+            <Text size="1" color="gray">
               Automated event health checks and operational warnings
             </Text>
           </Box>
-          <Button onClick={runLinter} disabled={loading}>
+          <Button size="1" onClick={runLinter} disabled={loading}>
             <ReloadIcon />
             Refresh
           </Button>
         </Flex>
 
         {/* Summary Stats - Clickable Filters */}
-        <Card>
-          <Flex gap="3" align="center" wrap="wrap">
-            <Text size="2" weight="medium">Filters:</Text>
+        <Card size="1">
+          <Flex gap="2" align="center" wrap="wrap">
+            <Text size="1" weight="medium">Filters:</Text>
 
             <Badge
               color="red"
-              size="2"
+              size="1"
               style={{ cursor: 'pointer' }}
               variant={severityFilters.has('error') ? 'solid' : 'soft'}
               onClick={() => {
@@ -215,7 +225,7 @@ const EventLinter = () => {
 
             <Badge
               color="orange"
-              size="2"
+              size="1"
               style={{ cursor: 'pointer' }}
               variant={severityFilters.has('warning') ? 'solid' : 'soft'}
               onClick={() => {
@@ -233,7 +243,7 @@ const EventLinter = () => {
 
             <Badge
               color="blue"
-              size="2"
+              size="1"
               style={{ cursor: 'pointer' }}
               variant={severityFilters.has('info') ? 'solid' : 'soft'}
               onClick={() => {
@@ -251,7 +261,7 @@ const EventLinter = () => {
 
             <Badge
               color="green"
-              size="2"
+              size="1"
               style={{ cursor: 'pointer' }}
               variant={severityFilters.has('success') ? 'solid' : 'soft'}
               onClick={() => {
@@ -269,7 +279,7 @@ const EventLinter = () => {
 
             <Badge
               color="purple"
-              size="2"
+              size="1"
               style={{ cursor: 'pointer' }}
               variant={futureOnly ? 'solid' : 'soft'}
               onClick={() => setFutureOnly(!futureOnly)}
@@ -279,7 +289,7 @@ const EventLinter = () => {
 
             <Badge
               color="cyan"
-              size="2"
+              size="1"
               style={{ cursor: 'pointer' }}
               variant={activeOnly ? 'solid' : 'soft'}
               onClick={() => setActiveOnly(!activeOnly)}
@@ -287,34 +297,33 @@ const EventLinter = () => {
               ⚡ Active (±24h)
             </Badge>
 
-            <Text size="2" color="gray">
+            <Text size="1" color="gray">
               ({allFindings.length} total)
             </Text>
           </Flex>
         </Card>
 
         {/* Filters */}
-        <Card>
-          <Flex gap="3" wrap="wrap" align="end">
+        <Card size="1">
+          <Flex gap="2" wrap="wrap" align="end">
             <Box style={{ flex: '1 1 300px', minWidth: '200px' }}>
-              <Text size="2" mb="1" weight="medium">Search</Text>
               <TextField.Root
+                size="1"
                 placeholder="Search by EID, event name, message..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               >
                 <TextField.Slot>
-                  <MagnifyingGlassIcon height="16" width="16" />
+                  <MagnifyingGlassIcon height="14" width="14" />
                 </TextField.Slot>
               </TextField.Root>
             </Box>
 
-            <Box style={{ flex: '0 1 150px', minWidth: '120px' }}>
-              <Text size="2" mb="1" weight="medium">Category</Text>
+            <Box style={{ flex: '0 1 120px', minWidth: '100px' }}>
               <Select.Root value={categoryFilter} onValueChange={setCategoryFilter}>
-                <Select.Trigger style={{ width: '100%' }} />
+                <Select.Trigger size="1" style={{ width: '100%' }} />
                 <Select.Content>
-                  <Select.Item value="all">All</Select.Item>
+                  <Select.Item value="all">All Categories</Select.Item>
                   {categories.map(cat => (
                     <Select.Item key={cat} value={cat}>
                       {cat.replace(/_/g, ' ')}
@@ -324,12 +333,11 @@ const EventLinter = () => {
               </Select.Root>
             </Box>
 
-            <Box style={{ flex: '0 1 150px', minWidth: '120px' }}>
-              <Text size="2" mb="1" weight="medium">Context</Text>
+            <Box style={{ flex: '0 1 120px', minWidth: '100px' }}>
               <Select.Root value={contextFilter} onValueChange={setContextFilter}>
-                <Select.Trigger style={{ width: '100%' }} />
+                <Select.Trigger size="1" style={{ width: '100%' }} />
                 <Select.Content>
-                  <Select.Item value="all">All</Select.Item>
+                  <Select.Item value="all">All Contexts</Select.Item>
                   {contexts.map(ctx => (
                     <Select.Item key={ctx} value={ctx}>
                       {ctx.replace(/_/g, ' ')}
@@ -341,6 +349,7 @@ const EventLinter = () => {
 
             {(searchQuery || severityFilters.size > 0 || categoryFilter !== 'all' || contextFilter !== 'all' || futureOnly || activeOnly) && (
               <Button
+                size="1"
                 variant="ghost"
                 color="gray"
                 onClick={() => {
@@ -353,7 +362,7 @@ const EventLinter = () => {
                 }}
               >
                 <CrossCircledIcon />
-                Clear All Filters
+                Clear
               </Button>
             )}
           </Flex>
@@ -375,15 +384,15 @@ const EventLinter = () => {
             </Flex>
           ) : (
             <ScrollArea style={{ maxHeight: 'calc(100vh - 400px)' }}>
-              <Table.Root variant="surface">
+              <Table.Root variant="surface" size="1">
                 <Table.Header>
                   <Table.Row>
-                    <Table.ColumnHeaderCell style={{ width: '40px' }}></Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell style={{ width: '100px' }}>EID</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell style={{ width: '200px' }}>Event</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell style={{ width: '120px' }}>Severity</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell style={{ minWidth: '300px' }}>Message</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell style={{ width: '150px' }}>Category</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell style={{ width: '30px', padding: '4px 8px' }}></Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell style={{ width: '80px', padding: '4px 8px' }}>EID</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell style={{ width: '180px', padding: '4px 8px' }}>Event</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell style={{ width: '90px', padding: '4px 8px' }}>Severity</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell style={{ minWidth: '300px', padding: '4px 8px' }}>Message</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell style={{ width: '120px', padding: '4px 8px' }}>Category</Table.ColumnHeaderCell>
                   </Table.Row>
                 </Table.Header>
 
@@ -391,24 +400,21 @@ const EventLinter = () => {
                   {findings.map((finding, index) => (
                     <Table.Row
                       key={`${finding.eventId}-${finding.ruleId}-${index}`}
-                      onClick={() => handleRowClick(finding)}
-                      style={{
-                        cursor: 'pointer',
-                        transition: 'background-color 0.15s ease'
-                      }}
-                      className="hover-row"
                     >
-                      <Table.Cell>
-                        <Text size="3">{finding.emoji}</Text>
+                      <Table.Cell style={{ padding: '4px 8px' }}>
+                        <Text size="2">{finding.emoji}</Text>
                       </Table.Cell>
-                      <Table.Cell>
-                        <Badge color="gray" variant="soft">
+                      <Table.Cell
+                        style={{ padding: '4px 8px', cursor: 'pointer' }}
+                        onClick={(e) => handleEidClick(e, finding)}
+                      >
+                        <Badge color="gray" variant="soft" size="1">
                           {finding.eventEid || 'N/A'}
                         </Badge>
                       </Table.Cell>
-                      <Table.Cell>
-                        <Text size="2" weight="medium" style={{
-                          maxWidth: '200px',
+                      <Table.Cell style={{ padding: '4px 8px' }}>
+                        <Text size="1" weight="medium" style={{
+                          maxWidth: '180px',
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
                           whiteSpace: 'nowrap',
@@ -417,17 +423,20 @@ const EventLinter = () => {
                           {finding.eventName}
                         </Text>
                       </Table.Cell>
-                      <Table.Cell>
-                        <Badge color={getSeverityColor(finding.severity)} variant="soft">
+                      <Table.Cell style={{ padding: '4px 8px' }}>
+                        <Badge color={getSeverityColor(finding.severity)} variant="soft" size="1">
                           {finding.severity}
                         </Badge>
                       </Table.Cell>
-                      <Table.Cell>
-                        <Text size="2" style={{ fontFamily: 'inherit' }}>
+                      <Table.Cell
+                        style={{ padding: '4px 8px', cursor: 'pointer' }}
+                        onClick={(e) => handleMessageClick(e, finding)}
+                      >
+                        <Text size="1" style={{ fontFamily: 'inherit' }}>
                           {finding.message}
                         </Text>
                       </Table.Cell>
-                      <Table.Cell>
+                      <Table.Cell style={{ padding: '4px 8px' }}>
                         <Text size="1" color="gray" style={{
                           textTransform: 'capitalize',
                           fontFamily: 'inherit'
@@ -444,12 +453,12 @@ const EventLinter = () => {
         </Card>
 
         {/* Footer Info */}
-        <Flex justify="between" align="center">
+        <Flex justify="between" align="center" style={{ fontSize: '11px' }}>
           <Text size="1" color="gray">
-            {findings.length} findings displayed • {rules.length || 0} rules active
+            {findings.length} findings • {rules.length || 0} rules
           </Text>
           <Text size="1" color="gray">
-            Last updated: {new Date().toLocaleTimeString()}
+            {new Date().toLocaleTimeString()}
           </Text>
         </Flex>
       </Flex>
@@ -537,6 +546,155 @@ const EventLinter = () => {
           <Flex gap="3" mt="4" justify="end">
             <Dialog.Close>
               <Button variant="soft" color="gray">
+                Close
+              </Button>
+            </Dialog.Close>
+          </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
+
+      {/* Finding Details Modal */}
+      <Dialog.Root open={findingDialogOpen} onOpenChange={setFindingDialogOpen}>
+        <Dialog.Content style={{ maxWidth: 600 }}>
+          <Dialog.Title>Finding Details</Dialog.Title>
+          <Dialog.Description size="1" mb="4">
+            Complete information about this linter finding
+          </Dialog.Description>
+
+          {selectedFinding && (
+            <Flex direction="column" gap="3">
+              {/* Rule Information */}
+              <Card>
+                <Flex direction="column" gap="2">
+                  <Flex justify="between" align="center">
+                    <Text size="1" weight="bold" color="gray">Rule</Text>
+                    <Badge color={getSeverityColor(selectedFinding.severity)} size="1">
+                      {selectedFinding.severity}
+                    </Badge>
+                  </Flex>
+                  <Text size="2" weight="medium">{selectedFinding.ruleName}</Text>
+                  <Text size="1" color="gray">Rule ID: {selectedFinding.ruleId}</Text>
+                </Flex>
+              </Card>
+
+              {/* Event Information */}
+              <Card>
+                <Flex direction="column" gap="2">
+                  <Text size="1" weight="bold" color="gray">Event</Text>
+                  <Flex align="center" gap="2">
+                    <Badge color="gray" variant="soft" size="1">
+                      {selectedFinding.eventEid || 'N/A'}
+                    </Badge>
+                    <Text size="2">{selectedFinding.eventName}</Text>
+                  </Flex>
+                  {selectedFinding.eventId && (
+                    <Text size="1" color="gray" style={{ fontFamily: 'monospace' }}>
+                      ID: {selectedFinding.eventId}
+                    </Text>
+                  )}
+                </Flex>
+              </Card>
+
+              {/* Message */}
+              <Card>
+                <Flex direction="column" gap="2">
+                  <Text size="1" weight="bold" color="gray">Message</Text>
+                  <Text size="2" style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+                    {selectedFinding.emoji} {selectedFinding.message}
+                  </Text>
+                </Flex>
+              </Card>
+
+              {/* Metadata */}
+              <Card>
+                <Flex direction="column" gap="2">
+                  <Text size="1" weight="bold" color="gray">Metadata</Text>
+                  <Flex gap="4" wrap="wrap">
+                    <Box>
+                      <Text size="1" color="gray">Category</Text>
+                      <Text size="2" style={{ textTransform: 'capitalize' }}>
+                        {selectedFinding.category.replace(/_/g, ' ')}
+                      </Text>
+                    </Box>
+                    <Box>
+                      <Text size="1" color="gray">Context</Text>
+                      <Text size="2" style={{ textTransform: 'capitalize' }}>
+                        {selectedFinding.context.replace(/_/g, ' ')}
+                      </Text>
+                    </Box>
+                    {selectedFinding.timestamp && (
+                      <Box>
+                        <Text size="1" color="gray">Detected</Text>
+                        <Text size="2">
+                          {new Date(selectedFinding.timestamp).toLocaleString()}
+                        </Text>
+                      </Box>
+                    )}
+                  </Flex>
+                </Flex>
+              </Card>
+
+              {/* Artist Payment Info if available */}
+              {selectedFinding.artistName && (
+                <Card>
+                  <Flex direction="column" gap="2">
+                    <Text size="1" weight="bold" color="gray">Artist Payment Details</Text>
+                    <Flex gap="4" wrap="wrap">
+                      <Box>
+                        <Text size="1" color="gray">Artist</Text>
+                        <Text size="2">{selectedFinding.artistName}</Text>
+                      </Box>
+                      {selectedFinding.balanceOwed && (
+                        <Box>
+                          <Text size="1" color="gray">Amount Owed</Text>
+                          <Text size="2">
+                            {selectedFinding.currency} ${selectedFinding.balanceOwed.toFixed(2)}
+                          </Text>
+                        </Box>
+                      )}
+                      {selectedFinding.daysOverdue && (
+                        <Box>
+                          <Text size="1" color="gray">Days Overdue</Text>
+                          <Badge color="red" size="1">
+                            {selectedFinding.daysOverdue} days
+                          </Badge>
+                        </Box>
+                      )}
+                    </Flex>
+                    {selectedFinding.artistEmail && (
+                      <Box>
+                        <Text size="1" color="gray">Email</Text>
+                        <Text size="2" style={{ fontFamily: 'monospace' }}>
+                          {selectedFinding.artistEmail}
+                        </Text>
+                      </Box>
+                    )}
+                  </Flex>
+                </Card>
+              )}
+
+              {/* Raw Data (Debug) */}
+              <details>
+                <summary style={{ cursor: 'pointer', fontSize: '12px', color: 'var(--gray-10)' }}>
+                  Show Raw Data
+                </summary>
+                <Box mt="2" p="2" style={{
+                  backgroundColor: 'var(--gray-2)',
+                  borderRadius: '4px',
+                  fontSize: '11px',
+                  fontFamily: 'monospace',
+                  overflow: 'auto',
+                  maxHeight: '200px'
+                }}>
+                  <pre>{JSON.stringify(selectedFinding, null, 2)}</pre>
+                </Box>
+              </details>
+            </Flex>
+          )}
+
+          <Flex gap="3" mt="4" justify="end">
+            <Dialog.Close>
+              <Button size="1" variant="soft" color="gray">
                 Close
               </Button>
             </Dialog.Close>
