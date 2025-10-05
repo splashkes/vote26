@@ -64,6 +64,7 @@ import PersonTile from './PersonTile';
 import { parsePhoneNumber, isValidPhoneNumber } from 'libphonenumber-js';
 import EventDeleteModal from './EventDeleteModal';
 import EventPaymentWrapper from './EventPaymentWrapper';
+import EventLinterEmbed from './EventLinterEmbed';
 import { useAdmin } from '../contexts/AdminContext';
 import { checkEventAdminPermission } from '../lib/adminHelpers';
 import { formatDateForDisplay, sortByNewestFirst, getRecentActivityColor } from '../lib/dateUtils';
@@ -122,6 +123,7 @@ const EventDetail = () => {
   const [selectedArtist, setSelectedArtist] = useState(null);
   const [preEventCollapsed, setPreEventCollapsed] = useState(false);
   const [postEventCollapsed, setPostEventCollapsed] = useState(false);
+  const [linterCollapsed, setLinterCollapsed] = useState(false);
   const [artistPaymentsCollapsed, setArtistPaymentsCollapsed] = useState(false);
   const [artistPaymentsData, setArtistPaymentsData] = useState([]);
   const [artistPaymentsLoading, setArtistPaymentsLoading] = useState(false);
@@ -3179,6 +3181,25 @@ The Art Battle Team`);
                     )}
                   </Box>
                 </Card>
+              </Box>
+            )}
+          </Card>
+        )}
+
+        {/* Event Linter - Collapsible (ABHQ super admins only) */}
+        {isSuperAdmin && event?.eid && (
+          <Card>
+            <Box p="3">
+              <Flex justify="between" align="center" style={{ cursor: 'pointer' }} onClick={() => setLinterCollapsed(!linterCollapsed)}>
+                <Heading size="4">Event Health Checks</Heading>
+                <IconButton size="1" variant="ghost">
+                  {linterCollapsed ? <ChevronDownIcon /> : <ChevronUpIcon />}
+                </IconButton>
+              </Flex>
+            </Box>
+            {!linterCollapsed && (
+              <Box p="3" pt="0">
+                <EventLinterEmbed eventEid={event.eid} />
               </Box>
             )}
           </Card>
