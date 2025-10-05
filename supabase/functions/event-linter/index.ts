@@ -676,6 +676,180 @@ serve(async (req) => {
       }
     }
 
+    // Run timing-based checks for live/recent events
+    const timingRules = rules.filter((r: any) => r.category === 'live_event_timing');
+    if (timingRules.length > 0) {
+      // Get events within 48 hours (active or recently ended)
+      const now = new Date();
+      const activeEvents = eventsToLint.filter(e => {
+        if (!e.event_start_datetime) return false;
+        const eventStart = new Date(e.event_start_datetime);
+        const hoursSinceStart = (now.getTime() - eventStart.getTime()) / 1000 / 60 / 60;
+        return hoursSinceStart >= -2 && hoursSinceStart <= 48;
+      });
+
+      if (activeEvents.length > 0) {
+        const eventIds = activeEvents.map(e => e.id);
+
+        // Fetch round data
+        const { data: roundsData } = await supabaseClient
+          .from('rounds')
+          .select('event_id, round_number, closing_time')
+          .in('event_id', eventIds)
+          .order('event_id', { ascending: true })
+          .order('round_number', { ascending: true });
+
+        // Fetch photo counts by round
+        const { data: photoData } = await supabaseClient
+          .from('art_media')
+          .select('art_id, created_at')
+          .in('art_id',
+            await supabaseClient
+              .from('art')
+              .select('id')
+              .in('event_id', eventIds)
+              .then(res => res.data?.map((a: any) => a.id) || [])
+          );
+
+        // Build round map
+        const roundMap = new Map();
+        roundsData?.forEach((r: any) => {
+          if (!roundMap.has(r.event_id)) {
+            roundMap.set(r.event_id, {});
+          }
+          roundMap.get(r.event_id)[`round${r.round_number}`] = r.closing_time;
+        });
+
+        // Evaluate timing rules
+        for (const event of activeEvents) {
+          const rounds = roundMap.get(event.id) || {};
+          const eventStart = new Date(event.event_start_datetime);
+
+          // Round 1 start time check
+          if (rounds.round1) {
+            const r1Close = new Date(rounds.round1);
+            const gapMinutes = (r1Close.getTime() - eventStart.getTime()) / 1000 / 60;
+
+            if (gapMinutes > 90) {
+              const rule = timingRules.find(r => r.id === 'round1_start_time_high');
+              if (rule) {
+                incrementRuleHit(supabaseClient, 'round1_start_time_high');
+                findings.push({
+                  ruleId: 'round1_start_time_high',
+                  ruleName: rule.name,
+                  severity: 'warning',
+                  category: 'live_event_timing',
+                  context: 'during_event',
+                  emoji: '⚠️',
+                  message: `Event start to Round 1 close time is high (${Math.round(gapMinutes)} min) - typical is ~77 min`,
+                  eventId: event.id,
+                  eventEid: event.eid,
+                  eventName: event.name,
+                  timestamp: new Date().toISOString()
+                });
+              }
+            }
+          }
+
+          // Round 1 to Round 2 gap check
+          if (rounds.round1 && rounds.round2) {
+            const r1Close = new Date(rounds.round1);
+            const r2Close = new Date(rounds.round2);
+            const gapMinutes = (r2Close.getTime() - r1Close.getTime()) / 1000 / 60;
+
+            if (gapMinutes > 50) {
+              const rule = timingRules.find(r => r.id === 'round1_to_round2_gap_high');
+              if (rule) {
+                incrementRuleHit(supabaseClient, 'round1_to_round2_gap_high');
+                findings.push({
+                  ruleId: 'round1_to_round2_gap_high',
+                  ruleName: rule.name,
+                  severity: 'warning',
+                  category: 'live_event_timing',
+                  context: 'during_event',
+                  emoji: '⚠️',
+                  message: `Round 1 to Round 2 gap is high (${Math.round(gapMinutes)} min) - typical is ~40 min`,
+                  eventId: event.id,
+                  eventEid: event.eid,
+                  eventName: event.name,
+                  timestamp: new Date().toISOString()
+                });
+              }
+            }
+          }
+
+          // Round 2 to Round 3 gap check
+          if (rounds.round2 && rounds.round3) {
+            const r2Close = new Date(rounds.round2);
+            const r3Close = new Date(rounds.round3);
+            const gapMinutes = (r3Close.getTime() - r2Close.getTime()) / 1000 / 60;
+
+            if (gapMinutes > 60) {
+              const rule = timingRules.find(r => r.id === 'round2_to_round3_gap_high');
+              if (rule) {
+                incrementRuleHit(supabaseClient, 'round2_to_round3_gap_high');
+                findings.push({
+                  ruleId: 'round2_to_round3_gap_high',
+                  ruleName: rule.name,
+                  severity: 'warning',
+                  category: 'live_event_timing',
+                  context: 'during_event',
+                  emoji: '⚠️',
+                  message: `Round 2 to Round 3 gap is high (${Math.round(gapMinutes)} min) - typical is ~48 min`,
+                  eventId: event.id,
+                  eventEid: event.eid,
+                  eventName: event.name,
+                  timestamp: new Date().toISOString()
+                });
+              }
+            }
+          }
+
+          // No photos for Round 1 check (if round 1 has closed)
+          if (rounds.round1) {
+            const r1Close = new Date(rounds.round1);
+            if (r1Close < now) {
+              // Check if there are photos for this event's round 1 art
+              const { data: round1Art } = await supabaseClient
+                .from('art')
+                .select('id')
+                .eq('event_id', event.id)
+                .eq('round', 1);
+
+              if (round1Art && round1Art.length > 0) {
+                const round1ArtIds = round1Art.map(a => a.id);
+                const { data: round1Photos } = await supabaseClient
+                  .from('art_media')
+                  .select('id')
+                  .in('art_id', round1ArtIds)
+                  .limit(1);
+
+                if (!round1Photos || round1Photos.length === 0) {
+                  const rule = timingRules.find(r => r.id === 'no_photos_round1');
+                  if (rule) {
+                    incrementRuleHit(supabaseClient, 'no_photos_round1');
+                    findings.push({
+                      ruleId: 'no_photos_round1',
+                      ruleName: rule.name,
+                      severity: 'warning',
+                      category: 'live_event_timing',
+                      context: 'during_event',
+                      emoji: '⚠️',
+                      message: 'No photos uploaded for Round 1!',
+                      eventId: event.id,
+                      eventEid: event.eid,
+                      eventName: event.name,
+                      timestamp: new Date().toISOString()
+                    });
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
     // Run global/artist-level checks (Rule #14 and similar)
     // These are not event-specific
     const artistRules = rules.filter((r: any) => r.id === 'artist_payment_overdue');
@@ -716,7 +890,7 @@ serve(async (req) => {
     }
 
     // Sort by severity
-    const severityOrder: any = { error: 0, warning: 1, info: 2, success: 3 };
+    const severityOrder: any = { error: 0, warning: 1, reminder: 2, info: 3, success: 4 };
     findings.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
 
     // Filter by severity if specified
@@ -728,7 +902,7 @@ serve(async (req) => {
     const summary = filteredFindings.reduce((acc: any, f) => {
       acc[f.severity] = (acc[f.severity] || 0) + 1;
       return acc;
-    }, { error: 0, warning: 0, info: 0, success: 0 });
+    }, { error: 0, warning: 0, reminder: 0, info: 0, success: 0 });
 
     debugInfo.findings_count = filteredFindings.length;
     debugInfo.summary = summary;
