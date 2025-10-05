@@ -142,19 +142,41 @@ function evaluateCondition(condition: any, event: any, comparativeData: any = {}
   const { field, operator, value, compare_to } = condition;
   const fieldValue = getNestedField(event, field);
 
+  // Handle special values
+  let evaluatedValue = value;
+  if (typeof value === 'string' && value.includes('_ago')) {
+    const now = new Date();
+    if (value === '7_days_ago') {
+      evaluatedValue = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    } else if (value === '30_days_ago') {
+      evaluatedValue = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    } else if (value === '1_day_ago') {
+      evaluatedValue = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    }
+  }
+
   switch (operator) {
     case 'equals':
-      return fieldValue === value;
+      return fieldValue === evaluatedValue;
     case 'not_equals':
-      return fieldValue !== value;
+      return fieldValue !== evaluatedValue;
     case 'is_null':
       return fieldValue === null || fieldValue === undefined;
     case 'is_not_null':
       return fieldValue !== null && fieldValue !== undefined;
     case 'greater_than':
-      return Number(fieldValue) > Number(value);
+      return Number(fieldValue) > Number(evaluatedValue);
     case 'less_than':
-      return Number(fieldValue) < Number(value);
+      return Number(fieldValue) < Number(evaluatedValue);
+    case 'gte':
+      return Number(fieldValue) >= Number(evaluatedValue);
+    case 'lte':
+      return Number(fieldValue) <= Number(evaluatedValue);
+    case 'before':
+      if (!fieldValue) return false;
+      const fieldDate = new Date(fieldValue);
+      const compareDate = evaluatedValue instanceof Date ? evaluatedValue : new Date(evaluatedValue);
+      return fieldDate < compareDate;
     case 'greater_than_percent':
       // Try comparativeData first, then event object field
       const compareValue = comparativeData[compare_to] || getNestedField(event, compare_to) || 0;

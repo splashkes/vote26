@@ -265,6 +265,8 @@ Deno.serve(async (req)=>{
       current_round: eventData.current_round ?? 0,
       capacity: eventData.capacity || 200,
       eventbrite_id: eventData.eventbrite_id || null,
+      slack_channel: eventData.slack_channel || null,
+      ticket_link: eventData.ticket_link || null,
       artist_auction_portion: eventData.artist_auction_portion ?? 0.5,
       updated_at: new Date().toISOString()
     };

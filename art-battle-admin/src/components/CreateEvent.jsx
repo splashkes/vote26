@@ -49,6 +49,7 @@ const CreateEvent = () => {
     eid: '',
     eventbrite_id: '',
     slack_channel: '',
+    ticket_link: '',
     artist_auction_portion: 0.5
   });
 
@@ -196,6 +197,7 @@ const CreateEvent = () => {
           eid: eventData.eid || '',
           eventbrite_id: eventData.eventbrite_id || '',
           slack_channel: eventData.slack_channel || '',
+          ticket_link: eventData.ticket_link || '',
           artist_auction_portion: eventData.artist_auction_portion || 0.5
         });
       }
@@ -339,14 +341,16 @@ const CreateEvent = () => {
   const commonTimezones = [
     'America/Toronto',
     'America/New_York',
-    'America/Chicago', 
+    'America/Chicago',
     'America/Denver',
     'America/Los_Angeles',
     'America/Vancouver',
     'Europe/London',
+    'Europe/Amsterdam',
     'Europe/Paris',
     'Australia/Sydney',
-    'Asia/Tokyo'
+    'Asia/Tokyo',
+    'Asia/Bangkok'
   ];
 
   return (
@@ -497,6 +501,20 @@ const CreateEvent = () => {
                       />
                       <Text size="2" color="gray" mt="1" style={{ display: 'block' }}>
                         Optional. Slack channel name for event notifications (with or without #).
+                      </Text>
+                    </Box>
+
+                    <Box>
+                      <Text as="label" size="2" weight="medium" mb="1" style={{ display: 'block' }}>
+                        Ticket Link
+                      </Text>
+                      <TextField.Root
+                        placeholder="e.g., https://www.eventbrite.com/e/123456789012"
+                        value={formData.ticket_link}
+                        onChange={(e) => handleInputChange('ticket_link', e.target.value)}
+                      />
+                      <Text size="2" color="gray" mt="1" style={{ display: 'block' }}>
+                        Optional. Direct link to purchase tickets for this event.
                       </Text>
                     </Box>
 
