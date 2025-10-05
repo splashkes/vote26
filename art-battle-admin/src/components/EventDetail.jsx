@@ -1356,9 +1356,47 @@ const EventDetail = () => {
 
     setBioSaving(true);
     try {
-      // TODO: Convert to edge function to avoid RLS timeout
-      // For now, show error message
-      throw new Error('Bio update temporarily disabled - please contact developer to enable edge function');
+      // Get the current session for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Not authenticated');
+      }
+
+      // Use edge function to update abhq_bio
+      const { data, error } = await supabase.functions.invoke('admin-update-abhq-bio', {
+        body: {
+          profile_id: selectedArtist.artist_profiles.id,
+          abhq_bio: bioText
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
+
+      if (error) {
+        // Log debug info if available
+        if (error.context) {
+          try {
+            const responseText = await error.context.text();
+            console.log('Edge function error response:', responseText);
+            const parsed = JSON.parse(responseText);
+            if (parsed.debug) {
+              console.log('Debug info:', parsed.debug);
+            }
+          } catch (e) {
+            console.log('Could not parse error response:', e);
+          }
+        }
+        throw error;
+      }
+
+      if (!data?.success) {
+        // Log debug info if available
+        if (data?.debug) {
+          console.log('Edge function debug info:', data.debug);
+        }
+        throw new Error(data?.error || 'Failed to update bio');
+      }
 
       // Update the selected artist in state
       setSelectedArtist(prev => ({
@@ -1371,8 +1409,8 @@ const EventDetail = () => {
 
       // Update the artist in all relevant lists
       const updateArtistInList = (list, setList) => {
-        setList(prev => prev.map(artist => 
-          artist.artist_number === selectedArtist.artist_number 
+        setList(prev => prev.map(artist =>
+          artist.artist_number === selectedArtist.artist_number
             ? {
                 ...artist,
                 artist_profiles: {
@@ -1392,7 +1430,7 @@ const EventDetail = () => {
       console.log('Bio saved successfully');
     } catch (error) {
       console.error('Error saving bio:', error);
-      alert('Error saving bio. Please try again.');
+      alert(`Error saving bio: ${error.message || 'Please try again.'}`);
     } finally {
       setBioSaving(false);
     }
@@ -1409,20 +1447,45 @@ const EventDetail = () => {
     try {
       setSampleWorksLoading(true);
 
+      // Get the current session for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Not authenticated');
+      }
+
       // Use edge function to avoid RLS timeout
       const { data, error } = await supabase.functions.invoke('admin-get-sample-works', {
         body: {
           artist_number: artistNumber
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
         }
       });
 
       if (error) {
         console.error('Error fetching sample works:', error);
+        // Log debug info if available
+        if (error.context) {
+          try {
+            const responseText = await error.context.text();
+            console.log('Edge function error response:', responseText);
+            const parsed = JSON.parse(responseText);
+            if (parsed.debug) {
+              console.log('Sample works debug info:', parsed.debug);
+            }
+          } catch (e) {
+            console.log('Could not parse error response:', e);
+          }
+        }
         setSampleWorks([]);
       } else if (data?.success) {
         setSampleWorks(data.sample_works || []);
       } else {
         console.error('Sample works fetch failed:', data);
+        if (data?.debug) {
+          console.log('Sample works debug info:', data.debug);
+        }
         setSampleWorks([]);
       }
     } catch (err) {

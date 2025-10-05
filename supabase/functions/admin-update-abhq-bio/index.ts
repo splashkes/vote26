@@ -20,7 +20,7 @@ Deno.serve(async (req) => {
           success: false,
           debug: {
             timestamp: new Date().toISOString(),
-            function_name: 'admin-get-sample-works'
+            function_name: 'admin-update-abhq-bio'
           }
         }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -30,16 +30,17 @@ Deno.serve(async (req) => {
     // Extract JWT from Authorization header
     const jwt = authHeader.replace('Bearer ', '');
 
-    // Create client with anon key
+    // Create client with anon key AND the user's JWT in global headers
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
-    );
-
-    // Use service role to bypass RLS
-    const supabaseService = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      {
+        global: {
+          headers: {
+            Authorization: authHeader
+          }
+        }
+      }
     );
 
     // Get user from JWT token by passing the JWT directly
@@ -52,18 +53,20 @@ Deno.serve(async (req) => {
           success: false,
           debug: {
             timestamp: new Date().toISOString(),
-            function_name: 'admin-get-sample-works',
-            user_error: userError?.message,
-            user_error_status: userError?.status,
-            auth_header_received: !!authHeader,
-            auth_header_length: authHeader?.length
+            function_name: 'admin-update-abhq-bio',
+            user_error: userError?.message
           }
         }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Check if user is an ABHQ admin using service role
+    // Check if user is an ABHQ admin (using service role for this check)
+    const supabaseService = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
     const { data: adminCheck, error: adminError } = await supabaseService
       .from('abhq_admin_users')
       .select('active')
@@ -78,7 +81,7 @@ Deno.serve(async (req) => {
           success: false,
           debug: {
             timestamp: new Date().toISOString(),
-            function_name: 'admin-get-sample-works',
+            function_name: 'admin-update-abhq-bio',
             user_id: user.id,
             admin_error: adminError?.message,
             admin_check_result: adminCheck
@@ -88,62 +91,52 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Get the artist_number from request
-    const { artist_number } = await req.json();
+    // Get the profile_id and abhq_bio from request
+    const { profile_id, abhq_bio } = await req.json();
 
-    if (!artist_number) {
+    if (!profile_id) {
       return new Response(
-        JSON.stringify({ error: 'artist_number is required' }),
+        JSON.stringify({ error: 'profile_id is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Get the profile_id from artist_number (entry_id)
-    const { data: profileData, error: profileError } = await supabaseService
+    // Use service role to bypass RLS timeout (we already verified user is ABHQ admin above)
+    const { data, error } = await supabaseService
       .from('artist_profiles')
-      .select('id')
-      .eq('entry_id', artist_number)
+      .update({ abhq_bio })
+      .eq('id', profile_id)
+      .select()
       .single();
 
-    if (profileError || !profileData) {
-      console.error('Error finding profile for artist_number:', artist_number, profileError);
+    if (error) {
+      console.error('Error updating abhq_bio:', error);
       return new Response(
         JSON.stringify({
-          success: true,
-          sample_works: [],
-          message: 'No profile found for this artist number'
+          error: error.message,
+          success: false,
+          debug: {
+            timestamp: new Date().toISOString(),
+            function_name: 'admin-update-abhq-bio',
+            user_id: user.id,
+            profile_id: profile_id,
+            abhq_bio_length: abhq_bio?.length || 0,
+            error_details: error.details,
+            error_hint: error.hint,
+            error_code: error.code
+          }
         }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Get sample works using the RPC function
-    const { data: sampleWorksData, error: worksError } = await supabaseService
-      .rpc('get_unified_sample_works', { profile_id: profileData.id });
-
-    if (worksError) {
-      console.error('Error fetching sample works:', worksError);
-      return new Response(
-        JSON.stringify({
-          success: true,
-          sample_works: [],
-          error: worksError.message
-        }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     return new Response(
-      JSON.stringify({
-        success: true,
-        sample_works: sampleWorksData || [],
-        profile_id: profileData.id
-      }),
+      JSON.stringify({ success: true, data }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('Error in admin-get-sample-works:', error);
+    console.error('Error in admin-update-abhq-bio:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
