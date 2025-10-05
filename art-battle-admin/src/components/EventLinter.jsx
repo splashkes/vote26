@@ -242,6 +242,24 @@ const EventLinter = () => {
             </Badge>
 
             <Badge
+              color="amber"
+              size="1"
+              style={{ cursor: 'pointer' }}
+              variant={severityFilters.has('reminder') ? 'solid' : 'soft'}
+              onClick={() => {
+                const newFilters = new Set(severityFilters);
+                if (newFilters.has('reminder')) {
+                  newFilters.delete('reminder');
+                } else {
+                  newFilters.add('reminder');
+                }
+                setSeverityFilters(newFilters);
+              }}
+            >
+              🔔 {severityCounts.reminder} Reminders
+            </Badge>
+
+            <Badge
               color="blue"
               size="1"
               style={{ cursor: 'pointer' }}

@@ -7,6 +7,7 @@ import { parse as parseYAML } from 'yaml';
 const SEVERITY_EMOJI = {
   error: '❌',
   warning: '⚠️',
+  reminder: '🔔',
   info: '📊',
   success: '✅'
 };
@@ -316,8 +317,8 @@ export const lintEvents = async (events, rules = null) => {
     }
   }
 
-  // Sort findings by severity (error > warning > info > success)
-  const severityOrder = { error: 0, warning: 1, info: 2, success: 3 };
+  // Sort findings by severity (error > warning > reminder > info > success)
+  const severityOrder = { error: 0, warning: 1, reminder: 2, info: 3, success: 4 };
   findings.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
 
   return findings;
@@ -339,7 +340,7 @@ export const lintEvent = async (event, allEvents = null, rules = null) => {
     }
   }
 
-  const severityOrder = { error: 0, warning: 1, info: 2, success: 3 };
+  const severityOrder = { error: 0, warning: 1, reminder: 2, info: 3, success: 4 };
   findings.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
 
   return findings;
@@ -350,7 +351,7 @@ export const getSeverityCounts = (findings) => {
   return findings.reduce((counts, finding) => {
     counts[finding.severity] = (counts[finding.severity] || 0) + 1;
     return counts;
-  }, { error: 0, warning: 0, info: 0, success: 0 });
+  }, { error: 0, warning: 0, reminder: 0, info: 0, success: 0 });
 };
 
 // Filter findings by severity, category, or context

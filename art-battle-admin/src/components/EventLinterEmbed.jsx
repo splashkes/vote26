@@ -69,6 +69,7 @@ const EventLinterEmbed = ({ eventEid }) => {
     switch (severity) {
       case 'error': return 'red';
       case 'warning': return 'orange';
+      case 'reminder': return 'amber';
       case 'info': return 'blue';
       case 'success': return 'green';
       default: return 'gray';
@@ -111,6 +112,11 @@ const EventLinterEmbed = ({ eventEid }) => {
         {severityCounts.warning > 0 && (
           <Badge color="orange" size="1">
             ⚠️ {severityCounts.warning} Warning{severityCounts.warning !== 1 ? 's' : ''}
+          </Badge>
+        )}
+        {severityCounts.reminder > 0 && (
+          <Badge color="amber" size="1">
+            🔔 {severityCounts.reminder} Reminder{severityCounts.reminder !== 1 ? 's' : ''}
           </Badge>
         )}
         {severityCounts.info > 0 && (

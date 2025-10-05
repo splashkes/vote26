@@ -294,6 +294,7 @@ function evaluateRule(rule: any, event: any, comparativeData: any = {}, supabase
   const severityEmoji: any = {
     error: '❌',
     warning: '⚠️',
+    reminder: '🔔',
     info: '📊',
     success: '✅'
   };
