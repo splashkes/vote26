@@ -122,7 +122,7 @@ const EventDetail = () => {
   const [artistsLoading, setArtistsLoading] = useState(false);
   const [selectedArtist, setSelectedArtist] = useState(null);
   const [preEventCollapsed, setPreEventCollapsed] = useState(false);
-  const [postEventCollapsed, setPostEventCollapsed] = useState(false);
+  const [postEventCollapsed, setPostEventCollapsed] = useState(true); // Start minimized, will expand if event is completed
   const [linterCollapsed, setLinterCollapsed] = useState(false);
   const [artistPaymentsCollapsed, setArtistPaymentsCollapsed] = useState(false);
   const [artistPaymentsData, setArtistPaymentsData] = useState([]);
@@ -280,6 +280,13 @@ const EventDetail = () => {
 
     fetchPostEventDataIfNeeded();
   }, [event, artistConfirmations]);
+
+  // Auto-expand post-event section if event is completed
+  useEffect(() => {
+    if (status.label === 'Completed') {
+      setPostEventCollapsed(false);
+    }
+  }, [status.label]);
 
   const fetchEventDetail = async () => {
     try {
@@ -2513,9 +2520,8 @@ The Art Battle Team`);
           </Flex>
         </Flex>
 
-        {/* Post-Event Summary - Collapsible (only show if event is in the past) */}
-        {status.label === 'Completed' && (
-          <Card>
+        {/* Post-Event Summary - Collapsible (always visible, minimized for non-completed events) */}
+        <Card>
             <Box p="3">
               <Flex justify="between" align="center" style={{ cursor: 'pointer' }} onClick={() => setPostEventCollapsed(!postEventCollapsed)}>
                 <Heading size="4">Post-Event Summary</Heading>
@@ -3203,7 +3209,6 @@ The Art Battle Team`);
               </Box>
             )}
           </Card>
-        )}
 
         {/* Artist Payments - Collapsible (only show if event is in the past) */}
         {status.label === 'Completed' && (

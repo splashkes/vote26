@@ -890,6 +890,99 @@ serve(async (req) => {
       }
     }
 
+    // Run event admin checks
+    const adminRules = rules.filter((r: any) => r.id.startsWith('event_admins_'));
+    if (adminRules.length > 0 && eventsToLint.length > 0) {
+      try {
+        const eventIds = eventsToLint.map(e => e.id);
+
+        // Fetch admin counts for all events
+        const { data: adminData, error: adminError } = await supabaseClient
+          .from('event_admins')
+          .select('event_id, admin_level')
+          .in('event_id', eventIds);
+
+        if (!adminError && adminData) {
+          // Build admin count map
+          const adminCounts = new Map();
+          adminData.forEach((admin: any) => {
+            if (!adminCounts.has(admin.event_id)) {
+              adminCounts.set(admin.event_id, {
+                total: 0,
+                super: 0,
+                producer: 0,
+                photo: 0,
+                voting: 0
+              });
+            }
+            const counts = adminCounts.get(admin.event_id);
+            counts.total++;
+            if (admin.admin_level === 'super') counts.super++;
+            else if (admin.admin_level === 'producer') counts.producer++;
+            else if (admin.admin_level === 'photo') counts.photo++;
+            else if (admin.admin_level === 'voting') counts.voting++;
+          });
+
+          // Generate findings for each event
+          for (const event of eventsToLint) {
+            const counts = adminCounts.get(event.id) || { total: 0, super: 0, producer: 0, photo: 0, voting: 0 };
+
+            let rule = null;
+            let severity = '';
+
+            if (counts.total <= 1) {
+              rule = adminRules.find(r => r.id === 'event_admins_critical');
+              severity = 'error';
+            } else if (counts.total === 2) {
+              rule = adminRules.find(r => r.id === 'event_admins_warning');
+              severity = 'warning';
+            } else {
+              rule = adminRules.find(r => r.id === 'event_admins_info');
+              severity = 'info';
+            }
+
+            if (rule) {
+              incrementRuleHit(supabaseClient, rule.id);
+
+              const message = rule.message
+                .replace('{total_admins}', counts.total.toString())
+                .replace('{super_count}', counts.super.toString())
+                .replace('{producer_count}', counts.producer.toString())
+                .replace('{photo_count}', counts.photo.toString())
+                .replace('{voting_count}', counts.voting.toString());
+
+              const severityEmoji: any = {
+                error: '❌',
+                warning: '⚠️',
+                reminder: '🔔',
+                info: '📊',
+                success: '✅'
+              };
+
+              findings.push({
+                ruleId: rule.id,
+                ruleName: rule.name,
+                severity: severity,
+                category: rule.category,
+                context: rule.context,
+                emoji: severityEmoji[severity],
+                message: message,
+                eventId: event.id,
+                eventEid: event.eid,
+                eventName: event.name,
+                adminCounts: counts,
+                timestamp: new Date().toISOString()
+              });
+            }
+          }
+
+          debugInfo.event_admins_checked = eventsToLint.length;
+        }
+      } catch (adminCheckError: any) {
+        debugInfo.admin_check_error = adminCheckError.message;
+      }
+    }
+
     // Sort by severity
     const severityOrder: any = { error: 0, warning: 1, reminder: 2, info: 3, success: 4 };
     findings.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
