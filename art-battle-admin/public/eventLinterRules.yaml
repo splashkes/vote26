@@ -19,6 +19,18 @@
 # - message: template for the output message (can use {{placeholders}})
 
 rules:
+  # ==================== ARTIST PAYMENT RULES ====================
+  # Note: These rules check artist payment status globally, not per-event
+
+  - id: artist_payment_overdue
+    name: Artist Payment Overdue
+    description: Artist hasn't been paid 14+ days after sale
+    severity: error
+    category: data_completeness
+    context: post_event
+    conditions: []  # Handled by database function
+    message: "Artist payment overdue - handled by get_overdue_artist_payments()"
+
   # ==================== LIVE EVENT RULES ====================
 
   - id: live_event_photos_missing
@@ -139,6 +151,185 @@ rules:
         operator: equals
         value: 0
     message: "Event in {{days_until}} days but no promo materials uploaded"
+
+  # ==================== FUTURE EVENT CRITICAL (7 DAYS) ====================
+
+  - id: event_week_no_artists
+    name: Event Week Away - No Artists Confirmed
+    description: Event in 7 days or less with no confirmed artists
+    severity: error
+    category: data_completeness
+    context: pre_event
+    conditions:
+      - field: event_start_datetime
+        operator: upcoming_days
+        value: 7
+      - field: confirmed_artists_count
+        operator: equals
+        value: 0
+    message: "Event in {{days_until}} days with NO confirmed artists!"
+
+  - id: event_week_few_artists
+    name: Event Week Away - Low Artist Count
+    description: Event in 7 days or less with fewer than 8 confirmed artists
+    severity: warning
+    category: data_completeness
+    context: pre_event
+    conditions:
+      - field: event_start_datetime
+        operator: upcoming_days
+        value: 7
+      - field: confirmed_artists_count
+        operator: greater_than
+        value: 0
+      - field: confirmed_artists_count
+        operator: less_than
+        value: 8
+    message: "Event in {{days_until}} days with only {{confirmed_artists_count}} confirmed artists"
+
+  - id: event_week_no_ticket_link
+    name: Event Week Away - No Ticket Link
+    description: Event in 7 days or less without ticket link
+    severity: error
+    category: data_completeness
+    context: pre_event
+    conditions:
+      - field: event_start_datetime
+        operator: upcoming_days
+        value: 7
+      - field: ticket_link
+        operator: is_empty
+    message: "Event in {{days_until}} days but no ticket link configured"
+
+  - id: event_week_no_description
+    name: Event Week Away - No Description
+    description: Event in 7 days or less without description
+    severity: warning
+    category: data_completeness
+    context: pre_event
+    conditions:
+      - field: event_start_datetime
+        operator: upcoming_days
+        value: 7
+      - field: description
+        operator: is_empty
+    message: "Event in {{days_until}} days but no description configured"
+
+  # ==================== FUTURE EVENT WARNING (14 DAYS) ====================
+
+  - id: event_2weeks_no_artists
+    name: Event 2 Weeks Away - No Artists
+    description: Event in 14 days or less with no confirmed artists
+    severity: warning
+    category: data_completeness
+    context: pre_event
+    conditions:
+      - field: event_start_datetime
+        operator: upcoming_days
+        value: 14
+      - field: event_start_datetime
+        operator: upcoming_days_more_than
+        value: 7
+      - field: confirmed_artists_count
+        operator: equals
+        value: 0
+    message: "Event in {{days_until}} days with no confirmed artists yet"
+
+  - id: event_2weeks_few_artists
+    name: Event 2 Weeks Away - Low Artist Count
+    description: Event in 14 days or less with fewer than 4 artists
+    severity: info
+    category: data_completeness
+    context: pre_event
+    conditions:
+      - field: event_start_datetime
+        operator: upcoming_days
+        value: 14
+      - field: event_start_datetime
+        operator: upcoming_days_more_than
+        value: 7
+      - field: confirmed_artists_count
+        operator: greater_than
+        value: 0
+      - field: confirmed_artists_count
+        operator: less_than
+        value: 4
+    message: "Event in {{days_until}} days with only {{confirmed_artists_count}} confirmed artists"
+
+  - id: event_2weeks_no_ticket_link
+    name: Event 2 Weeks Away - No Ticket Link
+    description: Event in 14 days or less without ticket link
+    severity: warning
+    category: data_completeness
+    context: pre_event
+    conditions:
+      - field: event_start_datetime
+        operator: upcoming_days
+        value: 14
+      - field: event_start_datetime
+        operator: upcoming_days_more_than
+        value: 7
+      - field: ticket_link
+        operator: is_empty
+    message: "Event in {{days_until}} days but no ticket link configured yet"
+
+  # ==================== FUTURE EVENT SUCCESS ====================
+
+  - id: event_well_prepared
+    name: Event Well Prepared
+    description: Event in next 14 days is fully configured
+    severity: success
+    category: data_completeness
+    context: pre_event
+    conditions:
+      - field: event_start_datetime
+        operator: upcoming_days
+        value: 14
+      - field: confirmed_artists_count
+        operator: greater_than
+        value: 8
+      - field: ticket_link
+        operator: is_not_empty
+      - field: description
+        operator: is_not_empty
+      - field: venue
+        operator: is_not_empty
+    message: "Event ready! {{confirmed_artists_count}} artists confirmed, tickets live, venue set"
+
+  # ==================== EVENT ARTISTS ASSIGNMENTS (7 DAYS ONLY) ====================
+
+  - id: event_artists_not_assigned_7days
+    name: Event Week - Artists Not Assigned
+    description: Event in 7 days or less with no artists assigned in event_artists table
+    severity: error
+    category: operational
+    context: pre_event
+    conditions:
+      - field: event_start_datetime
+        operator: upcoming_days
+        value: 7
+      - field: event_artists_confirmed_count
+        operator: equals
+        value: 0
+    message: "Event in {{days_until}} days - no artists assigned in event_artists table!"
+
+  - id: event_artists_low_7days
+    name: Event Week - Low Artist Assignments
+    description: Event in 7 days or less with fewer than 8 artists assigned in event_artists table
+    severity: warning
+    category: operational
+    context: pre_event
+    conditions:
+      - field: event_start_datetime
+        operator: upcoming_days
+        value: 7
+      - field: event_artists_confirmed_count
+        operator: greater_than
+        value: 0
+      - field: event_artists_confirmed_count
+        operator: less_than
+        value: 8
+    message: "Event in {{days_until}} days - only {{event_artists_confirmed_count}} artists assigned in event_artists table"
 
   # ==================== POST-EVENT COMPLETENESS ====================
 
@@ -311,6 +502,165 @@ rules:
         operator: equals
         value: true
     message: "Event SOLD OUT! 🎉"
+
+  # ==================== REVENUE COMPARATIVE ANALYSIS ====================
+
+  - id: ticket_revenue_success
+    name: Ticket Revenue Exceeded Last Event
+    description: Ticket revenue exceeded the last event in this city
+    severity: success
+    category: comparative
+    context: post_event
+    conditions:
+      - field: event_end_datetime
+        operator: past_days
+        value: 1
+      - field: ticket_revenue
+        operator: greater_than
+        value: 0
+      - field: prev_ticket_revenue
+        operator: is_not_null
+      - field: ticket_revenue
+        operator: greater_than_percent
+        value: 100
+        compare_to: prev_ticket_revenue
+    message: "Ticket revenue ${{ticket_revenue}} exceeded last event ${{prev_ticket_revenue}} ({{prev_event_eid}})!"
+
+  - id: ticket_revenue_decline_warning
+    name: Ticket Revenue Below Last Event
+    description: Ticket revenue is 20%+ lower than last event
+    severity: warning
+    category: comparative
+    context: post_event
+    conditions:
+      - field: event_end_datetime
+        operator: past_days
+        value: 1
+      - field: prev_ticket_revenue
+        operator: greater_than
+        value: 0
+      - field: ticket_revenue
+        operator: less_than_percent
+        value: 80
+        compare_to: prev_ticket_revenue
+    message: "Ticket revenue ${{ticket_revenue}} is {{percent_of_previous}}% of last event ${{prev_ticket_revenue}} ({{prev_event_eid}})"
+
+  - id: ticket_revenue_decline_error
+    name: Significant Ticket Revenue Drop
+    description: Ticket revenue is 50%+ lower than last event
+    severity: error
+    category: comparative
+    context: post_event
+    conditions:
+      - field: event_end_datetime
+        operator: past_days
+        value: 1
+      - field: prev_ticket_revenue
+        operator: greater_than
+        value: 0
+      - field: ticket_revenue
+        operator: less_than_percent
+        value: 50
+        compare_to: prev_ticket_revenue
+    message: "CRITICAL: Ticket revenue ${{ticket_revenue}} is only {{percent_of_previous}}% of last event ${{prev_ticket_revenue}} ({{prev_event_eid}})"
+
+  - id: auction_revenue_success
+    name: Auction Revenue Exceeded Last Event
+    description: Auction revenue exceeded the last event in this city
+    severity: success
+    category: comparative
+    context: post_event
+    conditions:
+      - field: event_end_datetime
+        operator: past_days
+        value: 1
+      - field: auction_revenue
+        operator: greater_than
+        value: 0
+      - field: prev_auction_revenue
+        operator: is_not_null
+      - field: auction_revenue
+        operator: greater_than_percent
+        value: 100
+        compare_to: prev_auction_revenue
+    message: "Auction revenue ${{auction_revenue}} exceeded last event ${{prev_auction_revenue}} ({{prev_event_eid}})!"
+
+  # ==================== ENGAGEMENT COMPARATIVE ANALYSIS ====================
+
+  - id: total_votes_success
+    name: Total Votes Exceeded Last Event
+    description: Total votes exceeded the last event in this city (recently ended events only)
+    severity: success
+    category: comparative
+    context: post_event
+    conditions:
+      - field: event_end_datetime
+        operator: past_days
+        value: 1
+      - field: event_end_datetime
+        operator: within_days
+        value: 30
+      - field: total_votes
+        operator: greater_than
+        value: 10
+      - field: prev_total_votes
+        operator: greater_than
+        value: 10
+      - field: total_votes
+        operator: greater_than_percent
+        value: 100
+        compare_to: prev_total_votes
+    message: "Total votes {{total_votes}} exceeded last event {{prev_total_votes}} ({{prev_event_eid}})! 🎉"
+
+  - id: total_votes_decline_warning
+    name: Total Votes Below Last Event
+    description: Total votes are 20%+ lower than last event (recently ended events only)
+    severity: warning
+    category: comparative
+    context: post_event
+    conditions:
+      - field: event_end_datetime
+        operator: past_days
+        value: 1
+      - field: event_end_datetime
+        operator: within_days
+        value: 30
+      - field: total_votes
+        operator: greater_than
+        value: 0
+      - field: prev_total_votes
+        operator: greater_than
+        value: 10
+      - field: total_votes
+        operator: less_than_percent
+        value: 80
+        compare_to: prev_total_votes
+    message: "Total votes {{total_votes}} is {{percent_of_previous}}% of last event {{prev_total_votes}} ({{prev_event_eid}})"
+
+  - id: total_votes_decline_error
+    name: Significant Vote Decline
+    description: Total votes are 50%+ lower than last event (recently ended events only)
+    severity: error
+    category: comparative
+    context: post_event
+    conditions:
+      - field: event_end_datetime
+        operator: past_days
+        value: 1
+      - field: event_end_datetime
+        operator: within_days
+        value: 30
+      - field: total_votes
+        operator: greater_than
+        value: 0
+      - field: prev_total_votes
+        operator: greater_than
+        value: 10
+      - field: total_votes
+        operator: less_than_percent
+        value: 50
+        compare_to: prev_total_votes
+    message: "CRITICAL: Total votes {{total_votes}} is only {{percent_of_previous}}% of last event {{prev_total_votes}} ({{prev_event_eid}})"
 
 # Configuration for comparative analysis
 comparison_settings:

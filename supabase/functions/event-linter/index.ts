@@ -14,7 +14,9 @@ const corsHeaders = {
 // Load YAML rules from CDN
 async function loadRules() {
   try {
-    const response = await fetch('https://artb.tor1.cdn.digitaloceanspaces.com/admin/eventLinterRules.yaml');
+    // Add cache-busting timestamp (rounds to nearest 5 minutes to allow some caching)
+    const cacheBuster = Math.floor(Date.now() / (5 * 60 * 1000));
+    const response = await fetch(`https://artb.tor1.digitaloceanspaces.com/admin/eventLinterRules.yaml?v=${cacheBuster}`);
     if (!response.ok) {
       throw new Error(`Failed to fetch rules: ${response.status}`);
     }
@@ -67,6 +69,14 @@ function isPastDays(datetime: string | null, days: number): boolean {
   return diffDays >= days;
 }
 
+function isWithinDays(datetime: string | null, days: number): boolean {
+  if (!datetime) return false;
+  const then = new Date(datetime);
+  const now = new Date();
+  const diffDays = (now.getTime() - then.getTime()) / 1000 / 60 / 60 / 24;
+  return diffDays >= 0 && diffDays <= days;
+}
+
 function isUpcomingMinutes(datetime: string | null, minutes: number): boolean {
   if (!datetime) return false;
   const then = new Date(datetime);
@@ -91,6 +101,22 @@ function isUpcomingDays(datetime: string | null, days: number): boolean {
   return diffDays > 0 && diffDays <= days;
 }
 
+function isUpcomingDaysMoreThan(datetime: string | null, days: number): boolean {
+  if (!datetime) return false;
+  const then = new Date(datetime);
+  const now = new Date();
+  const diffDays = (then.getTime() - now.getTime()) / 1000 / 60 / 60 / 24;
+  return diffDays > days;
+}
+
+function isEmpty(value: any): boolean {
+  return value === null || value === undefined || value === '';
+}
+
+function isNotEmpty(value: any): boolean {
+  return value !== null && value !== undefined && value !== '';
+}
+
 // Evaluate condition
 function evaluateCondition(condition: any, event: any, comparativeData: any = {}): boolean {
   const { field, operator, value, compare_to } = condition;
@@ -105,21 +131,19 @@ function evaluateCondition(condition: any, event: any, comparativeData: any = {}
       return fieldValue === null || fieldValue === undefined;
     case 'is_not_null':
       return fieldValue !== null && fieldValue !== undefined;
-    case 'is_empty':
-      return !fieldValue || fieldValue === '' || (Array.isArray(fieldValue) && fieldValue.length === 0);
-    case 'is_not_empty':
-      return fieldValue && fieldValue !== '' && (!Array.isArray(fieldValue) || fieldValue.length > 0);
     case 'greater_than':
       return Number(fieldValue) > Number(value);
     case 'less_than':
       return Number(fieldValue) < Number(value);
     case 'greater_than_percent':
-      const compareValue = comparativeData[compare_to] || 0;
+      // Try comparativeData first, then event object field
+      const compareValue = comparativeData[compare_to] || getNestedField(event, compare_to) || 0;
       if (compareValue === 0) return false;
       const percent = (Number(fieldValue) / compareValue) * 100;
       return percent > Number(value);
     case 'less_than_percent':
-      const compareVal = comparativeData[compare_to] || 0;
+      // Try comparativeData first, then event object field
+      const compareVal = comparativeData[compare_to] || getNestedField(event, compare_to) || 0;
       if (compareVal === 0) return false;
       const pct = (Number(fieldValue) / compareVal) * 100;
       return pct < Number(value);
@@ -129,12 +153,20 @@ function evaluateCondition(condition: any, event: any, comparativeData: any = {}
       return isPastHours(fieldValue, value);
     case 'past_days':
       return isPastDays(fieldValue, value);
+    case 'within_days':
+      return isWithinDays(fieldValue, value);
     case 'upcoming_minutes':
       return isUpcomingMinutes(fieldValue, value);
     case 'upcoming_hours':
       return isUpcomingHours(fieldValue, value);
     case 'upcoming_days':
       return isUpcomingDays(fieldValue, value);
+    case 'upcoming_days_more_than':
+      return isUpcomingDaysMoreThan(fieldValue, value);
+    case 'is_empty':
+      return isEmpty(fieldValue);
+    case 'is_not_empty':
+      return isNotEmpty(fieldValue);
     default:
       return false;
   }
@@ -179,7 +211,20 @@ function getTimeContext(event: any): any {
 function interpolateMessage(template: string, event: any, comparativeData: any = {}): string {
   let message = template;
   const timeContext = getTimeContext(event);
-  const context = { ...event, ...timeContext, ...comparativeData };
+
+  // Add percentage calculations for comparative messages
+  const percentContext: any = {};
+  if (event.prev_ticket_revenue !== undefined && event.prev_ticket_revenue > 0) {
+    percentContext.percent_of_previous = Math.round(((event.ticket_revenue || 0) / event.prev_ticket_revenue) * 100);
+  }
+  if (event.prev_total_votes !== undefined && event.prev_total_votes > 0) {
+    percentContext.percent_of_previous = Math.round(((event.total_votes || 0) / event.prev_total_votes) * 100);
+  }
+  if (event.prev_auction_revenue !== undefined && event.prev_auction_revenue > 0) {
+    percentContext.percent_of_previous = Math.round(((event.auction_revenue || 0) / event.prev_auction_revenue) * 100);
+  }
+
+  const context = { ...event, ...timeContext, ...comparativeData, ...percentContext };
 
   message = message.replace(/\{\{([^}]+)\}\}/g, (match, field) => {
     const value = getNestedField(context, field.trim());
@@ -324,14 +369,270 @@ serve(async (req) => {
 
     debugInfo.events_to_lint = eventsToLint.length;
 
-    // Run linter
+    // Only enrich recently ended events (last 30 days) to improve performance
+    const recentlyEndedEvents = eventsToLint.filter(e => {
+      if (!e.event_end_datetime) return false;
+      const endDate = new Date(e.event_end_datetime);
+      const now = new Date();
+      const daysSinceEnd = (now.getTime() - endDate.getTime()) / 1000 / 60 / 60 / 24;
+      return daysSinceEnd >= 1 && daysSinceEnd <= 30;
+    });
+
+    debugInfo.events_to_enrich = recentlyEndedEvents.length;
+
+    // Batch fetch Eventbrite data for all events needing enrichment
+    if (recentlyEndedEvents.length > 0) {
+      const eventIds = recentlyEndedEvents.map(e => e.id);
+
+      // Get Eventbrite ticket revenue in batch
+      const { data: ebCacheData } = await supabaseClient
+        .from('eventbrite_api_cache')
+        .select('event_id, ticket_revenue, total_tickets_sold')
+        .in('event_id', eventIds);
+
+      const ebCacheMap = new Map();
+      ebCacheData?.forEach((eb: any) => {
+        ebCacheMap.set(eb.event_id, eb);
+      });
+
+      // Get auction revenue in batch (sum of final_price for sold/paid art)
+      const { data: artData } = await supabaseClient
+        .from('art')
+        .select('event_id, final_price, status')
+        .in('event_id', eventIds)
+        .in('status', ['sold', 'paid'])
+        .limit(5000);
+
+      const auctionRevenueMap = new Map();
+      artData?.forEach((art: any) => {
+        const current = auctionRevenueMap.get(art.event_id) || 0;
+        auctionRevenueMap.set(art.event_id, current + (Number(art.final_price) || 0));
+      });
+
+      // Get vote counts with pagination (Supabase has 1000 row limit per query)
+      const voteCountsMap = new Map();
+      let voteOffset = 0;
+      let hasMoreVotes = true;
+      let totalVotesRetrieved = 0;
+
+      while (hasMoreVotes) {
+        const { data: voteData, error: voteError } = await supabaseClient
+          .from('votes')
+          .select('event_id, id, round')
+          .in('event_id', eventIds)
+          .range(voteOffset, voteOffset + 999);
+
+        if (voteError) {
+          debugInfo.vote_query_error = voteError.message;
+          break;
+        }
+
+        if (!voteData || voteData.length === 0) {
+          hasMoreVotes = false;
+          break;
+        }
+
+        totalVotesRetrieved += voteData.length;
+
+        voteData.forEach((vote: any) => {
+          if (!voteCountsMap.has(vote.event_id)) {
+            voteCountsMap.set(vote.event_id, { total: 0, r1: 0, r2: 0, r3: 0 });
+          }
+          const counts = voteCountsMap.get(vote.event_id);
+          counts.total++;
+          if (vote.round === 1) counts.r1++;
+          if (vote.round === 2) counts.r2++;
+          if (vote.round === 3) counts.r3++;
+        });
+
+        // If we got less than 1000, we're done
+        if (voteData.length < 1000) {
+          hasMoreVotes = false;
+        } else {
+          voteOffset += 1000;
+        }
+      }
+
+      debugInfo.vote_rows_retrieved = totalVotesRetrieved;
+
+      // Enrich events with current metrics
+      for (const event of recentlyEndedEvents) {
+        const eb = ebCacheMap.get(event.id);
+        event.ticket_revenue = eb?.ticket_revenue || 0;
+        event.total_tickets_sold = eb?.total_tickets_sold || 0;
+        event.auction_revenue = auctionRevenueMap.get(event.id) || 0;
+
+        const votes = voteCountsMap.get(event.id) || { total: 0, r1: 0, r2: 0, r3: 0 };
+        event.total_votes = votes.total;
+        event.round1_votes = votes.r1;
+        event.round2_votes = votes.r2;
+        event.round3_votes = votes.r3;
+
+        // Get previous event metrics
+        try {
+          const { data: prevMetrics } = await supabaseClient
+            .rpc('get_previous_event_metrics', { p_event_id: event.id });
+
+          if (prevMetrics && prevMetrics.length > 0) {
+            const prev = prevMetrics[0];
+            event.prev_ticket_revenue = prev.ticket_revenue;
+            event.prev_auction_revenue = prev.auction_revenue;
+            event.prev_total_votes = prev.total_votes;
+            event.prev_round1_votes = prev.round1_votes;
+            event.prev_round2_votes = prev.round2_votes;
+            event.prev_round3_votes = prev.round3_votes;
+            event.prev_qr_registrations = prev.qr_registrations;
+            event.prev_online_registrations = prev.online_registrations;
+            event.prev_event_eid = prev.previous_event_eid;
+          }
+        } catch (prevError: any) {
+          // Skip prev metrics errors
+        }
+      }
+    }
+
+    // Enrich future events with artist confirmation counts (from artist_confirmations table)
+    const futureEvents = eventsToLint.filter(e => {
+      if (!e.event_start_datetime) return false;
+      const startDate = new Date(e.event_start_datetime);
+      const now = new Date();
+      return startDate > now;
+    });
+
+    if (futureEvents.length > 0) {
+      const futureEventEids = futureEvents.map(e => e.eid).filter(eid => eid);
+
+      try {
+        // Get confirmed artists from artist_confirmations table
+        const { data: confirmationData, error: confirmationError } = await supabaseClient
+          .from('artist_confirmations')
+          .select('event_eid, confirmation_status, withdrawn_at')
+          .in('event_eid', futureEventEids);
+
+        if (!confirmationError && confirmationData) {
+          // Group confirmation counts by event_eid
+          const confirmationCountMap = new Map();
+          confirmationData.forEach((ac: any) => {
+            if (!confirmationCountMap.has(ac.event_eid)) {
+              confirmationCountMap.set(ac.event_eid, { confirmed: 0, withdrawn: 0 });
+            }
+            const counts = confirmationCountMap.get(ac.event_eid);
+            if (ac.confirmation_status === 'confirmed' && !ac.withdrawn_at) {
+              counts.confirmed++;
+            }
+            if (ac.withdrawn_at) {
+              counts.withdrawn++;
+            }
+          });
+
+          // Enrich future events with confirmation counts
+          for (const event of futureEvents) {
+            const counts = confirmationCountMap.get(event.eid) || { confirmed: 0, withdrawn: 0 };
+            event.confirmed_artists_count = counts.confirmed;
+            event.withdrawn_artists_count = counts.withdrawn;
+          }
+
+          debugInfo.future_events_enriched = futureEvents.length;
+          debugInfo.confirmation_rows = confirmationData.length;
+        } else if (confirmationError) {
+          debugInfo.confirmation_query_error = confirmationError.message;
+        }
+
+        // Get event_artists counts for events within 7 days (separate check)
+        const eventsWithin7Days = futureEvents.filter(e => {
+          if (!e.event_start_datetime) return false;
+          const startDate = new Date(e.event_start_datetime);
+          const now = new Date();
+          const daysUntil = (startDate.getTime() - now.getTime()) / 1000 / 60 / 60 / 24;
+          return daysUntil <= 7;
+        });
+
+        if (eventsWithin7Days.length > 0) {
+          const eventIdsWithin7Days = eventsWithin7Days.map(e => e.id);
+          const { data: eventArtistData, error: eventArtistError } = await supabaseClient
+            .from('event_artists')
+            .select('event_id, status')
+            .in('event_id', eventIdsWithin7Days);
+
+          if (!eventArtistError && eventArtistData) {
+            const eventArtistMap = new Map();
+            eventArtistData.forEach((ea: any) => {
+              if (!eventArtistMap.has(ea.event_id)) {
+                eventArtistMap.set(ea.event_id, { confirmed: 0, invited: 0 });
+              }
+              const counts = eventArtistMap.get(ea.event_id);
+              if (ea.status === 'confirmed') counts.confirmed++;
+              if (ea.status === 'invited') counts.invited++;
+            });
+
+            for (const event of eventsWithin7Days) {
+              const counts = eventArtistMap.get(event.id) || { confirmed: 0, invited: 0 };
+              event.event_artists_confirmed_count = counts.confirmed;
+              event.event_artists_invited_count = counts.invited;
+            }
+
+            debugInfo.event_artists_enriched = eventsWithin7Days.length;
+            debugInfo.event_artists_rows = eventArtistData.length;
+          } else if (eventArtistError) {
+            debugInfo.event_artist_query_error = eventArtistError.message;
+          }
+        }
+      } catch (artistFetchError: any) {
+        debugInfo.artist_fetch_error = artistFetchError.message;
+      }
+    }
+
+    // Run linter on events
     const findings: any[] = [];
     for (const event of eventsToLint) {
       for (const rule of rules) {
+        // Skip rules with no conditions - these are handled separately (e.g., artist_payment_overdue)
+        if (!rule.conditions || rule.conditions.length === 0) {
+          continue;
+        }
         const finding = evaluateRule(rule, event, {});
         if (finding) {
           findings.push(finding);
         }
+      }
+    }
+
+    // Run global/artist-level checks (Rule #14 and similar)
+    // These are not event-specific
+    const artistRules = rules.filter((r: any) => r.id === 'artist_payment_overdue');
+    if (artistRules.length > 0 && !filterEid && !futureOnly && !activeOnly) {
+      // Only run artist-level checks when not filtering by event/time
+      try {
+        const { data: overdueArtists, error: artistError } = await supabaseClient
+          .rpc('get_overdue_artist_payments', { days_threshold: 14 });
+
+        if (!artistError && overdueArtists) {
+          for (const artist of overdueArtists) {
+            findings.push({
+              ruleId: 'artist_payment_overdue',
+              ruleName: 'Artist Payment Overdue',
+              severity: 'error',
+              category: 'data_completeness',
+              context: 'post_event',
+              emoji: '❌',
+              message: `💸 ${artist.artist_name} owed ${artist.currency} $${artist.balance_owed.toFixed(2)} for ${artist.days_overdue} days - process payment urgently`,
+              eventId: null,
+              eventEid: null,
+              eventName: null,
+              artistId: artist.artist_id,
+              artistName: artist.artist_name,
+              artistEmail: artist.artist_email,
+              balanceOwed: artist.balance_owed,
+              currency: artist.currency,
+              daysOverdue: artist.days_overdue,
+              paymentAccountStatus: artist.payment_account_status,
+              timestamp: new Date().toISOString()
+            });
+          }
+          debugInfo.artist_payments_checked = overdueArtists.length;
+        }
+      } catch (artistCheckError: any) {
+        debugInfo.artist_check_error = artistCheckError.message;
       }
     }
 
