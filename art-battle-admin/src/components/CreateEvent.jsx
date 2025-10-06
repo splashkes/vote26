@@ -27,6 +27,7 @@ const CreateEvent = () => {
   const [loading, setLoading] = useState(false);
   const [cities, setCities] = useState([]);
   const [countries, setCountries] = useState([]);
+  const [venues, setVenues] = useState([]);
   const [loadingLocations, setLoadingLocations] = useState(true);
   const [nextEid, setNextEid] = useState('');
   const [loadingEid, setLoadingEid] = useState(true);
@@ -37,6 +38,7 @@ const CreateEvent = () => {
     name: '',
     description: '',
     venue: '',
+    venue_id: 'none',
     city_id: 'none',
     country_id: 'none',
     event_start_datetime: '',
@@ -50,6 +52,13 @@ const CreateEvent = () => {
     eventbrite_id: '',
     slack_channel: '',
     ticket_link: '',
+    ticket_price_notes: '',
+    meta_ads_budget: '',
+    other_ads_budget: '',
+    event_folder_link: '',
+    target_artists_booked: 12,
+    wildcard_expected: true,
+    expected_number_of_rounds: 3,
     artist_auction_portion: 0.5
   });
 
@@ -70,11 +79,12 @@ const CreateEvent = () => {
   const fetchLocations = async () => {
     try {
       setLoadingLocations(true);
-      
-      // Fetch countries and cities
-      const [countriesResponse, citiesResponse] = await Promise.all([
+
+      // Fetch countries, cities, and venues
+      const [countriesResponse, citiesResponse, venuesResponse] = await Promise.all([
         supabase.from('countries').select('*').order('name'),
-        supabase.from('cities').select('*, countries(name, code)').order('name')
+        supabase.from('cities').select('*, countries(name, code)').order('name'),
+        supabase.from('venues').select('*, cities(name, countries(code))').order('name')
       ]);
 
       if (countriesResponse.error) {
@@ -87,6 +97,12 @@ const CreateEvent = () => {
         console.error('Error fetching cities:', citiesResponse.error);
       } else {
         setCities(citiesResponse.data || []);
+      }
+
+      if (venuesResponse.error) {
+        console.error('Error fetching venues:', venuesResponse.error);
+      } else {
+        setVenues(venuesResponse.data || []);
       }
     } catch (err) {
       console.error('Error fetching locations:', err);
@@ -185,6 +201,7 @@ const CreateEvent = () => {
           name: eventData.name || '',
           description: eventData.description || '',
           venue: eventData.venue || '',
+          venue_id: eventData.venue_id || 'none',
           city_id: eventData.city_id || 'none',
           country_id: eventData.cities?.country_id || 'none',
           event_start_datetime: formatDateTimeForInput(eventData.event_start_datetime, eventData.timezone_icann),
@@ -198,6 +215,13 @@ const CreateEvent = () => {
           eventbrite_id: eventData.eventbrite_id || '',
           slack_channel: eventData.slack_channel || '',
           ticket_link: eventData.ticket_link || '',
+          ticket_price_notes: eventData.ticket_price_notes || '',
+          meta_ads_budget: eventData.meta_ads_budget || '',
+          other_ads_budget: eventData.other_ads_budget || '',
+          event_folder_link: eventData.event_folder_link || '',
+          target_artists_booked: eventData.target_artists_booked || '',
+          wildcard_expected: eventData.wildcard_expected || false,
+          expected_number_of_rounds: eventData.expected_number_of_rounds || '',
           artist_auction_portion: eventData.artist_auction_portion || 0.5
         });
       }
@@ -254,8 +278,16 @@ const CreateEvent = () => {
         ...formData,
         city_id: formData.city_id === 'none' ? null : formData.city_id,
         country_id: formData.country_id === 'none' ? null : formData.country_id,
+        venue_id: formData.venue_id === 'none' ? null : formData.venue_id,
         description: formData.description || null,
-        venue: formData.venue || null
+        venue: formData.venue || null,
+        ticket_price_notes: formData.ticket_price_notes || null,
+        meta_ads_budget: formData.meta_ads_budget ? parseFloat(formData.meta_ads_budget) : null,
+        other_ads_budget: formData.other_ads_budget ? parseFloat(formData.other_ads_budget) : null,
+        event_folder_link: formData.event_folder_link || null,
+        target_artists_booked: formData.target_artists_booked ? parseInt(formData.target_artists_booked) : null,
+        wildcard_expected: formData.wildcard_expected,
+        expected_number_of_rounds: formData.expected_number_of_rounds ? parseInt(formData.expected_number_of_rounds) : null
       };
 
       // Call appropriate function based on mode
@@ -467,13 +499,41 @@ const CreateEvent = () => {
 
                     <Box>
                       <Text as="label" size="2" weight="medium" mb="1" style={{ display: 'block' }}>
-                        Venue
+                        Venue (Managed)
+                      </Text>
+                      <Select.Root
+                        value={formData.venue_id}
+                        onValueChange={(value) => handleInputChange('venue_id', value)}
+                      >
+                        <Select.Trigger style={{ width: '100%' }} />
+                        <Select.Content>
+                          <Select.Item value="none">-- Select Venue or Use Manual --</Select.Item>
+                          {venues
+                            .filter(v => !formData.city_id || formData.city_id === 'none' || v.city_id === formData.city_id)
+                            .map(venue => (
+                              <Select.Item key={venue.id} value={venue.id}>
+                                {venue.name} - {venue.cities?.name}, {venue.cities?.countries?.code}
+                              </Select.Item>
+                            ))}
+                        </Select.Content>
+                      </Select.Root>
+                      <Text size="2" color="gray" mt="1" style={{ display: 'block' }}>
+                        Select from managed venues or use manual field below.
+                      </Text>
+                    </Box>
+
+                    <Box>
+                      <Text as="label" size="2" weight="medium" mb="1" style={{ display: 'block' }}>
+                        Venue (Manual Override)
                       </Text>
                       <TextField.Root
                         placeholder="e.g., Phoenix Concert Theatre"
                         value={formData.venue}
                         onChange={(e) => handleInputChange('venue', e.target.value)}
                       />
+                      <Text size="2" color="gray" mt="1" style={{ display: 'block' }}>
+                        Use this field only if venue is not in the managed list above.
+                      </Text>
                     </Box>
 
                     <Box>
@@ -515,6 +575,67 @@ const CreateEvent = () => {
                       />
                       <Text size="2" color="gray" mt="1" style={{ display: 'block' }}>
                         Optional. Direct link to purchase tickets for this event.
+                      </Text>
+                    </Box>
+
+                    <Box>
+                      <Text as="label" size="2" weight="medium" mb="1" style={{ display: 'block' }}>
+                        Ticket Price Notes
+                      </Text>
+                      <TextArea
+                        placeholder="e.g., Advance: $15, Door: $20, VIP: $35 includes drink ticket..."
+                        value={formData.ticket_price_notes}
+                        onChange={(e) => handleInputChange('ticket_price_notes', e.target.value)}
+                        rows={3}
+                      />
+                      <Text size="2" color="gray" mt="1" style={{ display: 'block' }}>
+                        Optional. Long-form notes about ticket pricing structure.
+                      </Text>
+                    </Box>
+
+                    <Box>
+                      <Text as="label" size="2" weight="medium" mb="1" style={{ display: 'block' }}>
+                        Meta Ads Budget
+                      </Text>
+                      <TextField.Root
+                        type="number"
+                        step="0.01"
+                        placeholder="e.g., 150.00"
+                        value={formData.meta_ads_budget}
+                        onChange={(e) => handleInputChange('meta_ads_budget', e.target.value)}
+                      />
+                      <Text size="2" color="gray" mt="1" style={{ display: 'block' }}>
+                        Optional. Budget allocated for Meta (Facebook/Instagram) advertising.
+                      </Text>
+                    </Box>
+
+                    <Box>
+                      <Text as="label" size="2" weight="medium" mb="1" style={{ display: 'block' }}>
+                        Other Ads Budget
+                      </Text>
+                      <TextField.Root
+                        type="number"
+                        step="0.01"
+                        placeholder="e.g., 75.00"
+                        value={formData.other_ads_budget}
+                        onChange={(e) => handleInputChange('other_ads_budget', e.target.value)}
+                      />
+                      <Text size="2" color="gray" mt="1" style={{ display: 'block' }}>
+                        Optional. Budget allocated for other advertising channels (Google, print, etc.).
+                      </Text>
+                    </Box>
+
+                    <Box>
+                      <Text as="label" size="2" weight="medium" mb="1" style={{ display: 'block' }}>
+                        Event Folder Link
+                      </Text>
+                      <TextField.Root
+                        placeholder="e.g., https://drive.google.com/drive/folders/..."
+                        value={formData.event_folder_link}
+                        onChange={(e) => handleInputChange('event_folder_link', e.target.value)}
+                      />
+                      <Text size="2" color="gray" mt="1" style={{ display: 'block' }}>
+                        Optional. Google Drive folder link for event materials and assets.
                       </Text>
                     </Box>
 
@@ -674,6 +795,46 @@ const CreateEvent = () => {
                         min="1"
                       />
                     </Box>
+
+                    <Box>
+                      <Text as="label" size="2" weight="medium" mb="1" style={{ display: 'block' }}>
+                        Target Number of Artists
+                      </Text>
+                      <TextField.Root
+                        type="number"
+                        placeholder="e.g., 12"
+                        value={formData.target_artists_booked}
+                        onChange={(e) => handleInputChange('target_artists_booked', e.target.value)}
+                        min="1"
+                      />
+                      <Text size="2" color="gray" mt="1" style={{ display: 'block' }}>
+                        Optional. Target number of artists to book for this event.
+                      </Text>
+                    </Box>
+
+                    <Box>
+                      <Text as="label" size="2" weight="medium" mb="1" style={{ display: 'block' }}>
+                        Expected Number of Rounds
+                      </Text>
+                      <TextField.Root
+                        type="number"
+                        placeholder="e.g., 3"
+                        value={formData.expected_number_of_rounds}
+                        onChange={(e) => handleInputChange('expected_number_of_rounds', e.target.value)}
+                        min="1"
+                      />
+                      <Text size="2" color="gray" mt="1" style={{ display: 'block' }}>
+                        Optional. Expected number of rounds for this event.
+                      </Text>
+                    </Box>
+
+                    <Flex align="center" gap="2">
+                      <Switch
+                        checked={formData.wildcard_expected}
+                        onCheckedChange={(checked) => handleInputChange('wildcard_expected', checked)}
+                      />
+                      <Text size="2">Wildcard Expected</Text>
+                    </Flex>
 
                     <Flex direction="column" gap="3">
                       <Text as="label" size="3" weight="medium">Status</Text>

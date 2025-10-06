@@ -92,6 +92,9 @@ const EventDetail = () => {
   const [otherRevenueValue, setOtherRevenueValue] = useState('');
   const [otherRevenueCurrency, setOtherRevenueCurrency] = useState('USD');
   const [updatingOtherRevenue, setUpdatingOtherRevenue] = useState(false);
+
+  const [approvingEventInfo, setApprovingEventInfo] = useState(false);
+
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [personHistory, setPersonHistory] = useState(null);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -489,6 +492,37 @@ const EventDetail = () => {
       setError('Failed to update other revenue: ' + err.message);
     } finally {
       setUpdatingOtherRevenue(false);
+    }
+  };
+
+  const approveEventInfo = async () => {
+    try {
+      setApprovingEventInfo(true);
+
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+
+      const { error } = await supabase
+        .from('events')
+        .update({
+          event_info_approved_by: user.email,
+          event_info_approved_at: new Date().toISOString()
+        })
+        .eq('id', eventId);
+
+      if (error) throw error;
+
+      setEvent(prev => ({
+        ...prev,
+        event_info_approved_by: user.email,
+        event_info_approved_at: new Date().toISOString()
+      }));
+
+    } catch (err) {
+      console.error('Error approving event info:', err);
+      setError('Failed to approve event info: ' + err.message);
+    } finally {
+      setApprovingEventInfo(false);
     }
   };
 
@@ -2473,40 +2507,18 @@ The Art Battle Team`);
     <Box p="4">
       <Flex direction="column" gap="4">
         {/* Header */}
-        <Flex justify="between" align="start">
-          <Box>
-            <Flex align="center" gap="3" mb="2">
-              <Heading size="6">
-                <DebugField 
-                  value={event.name} 
-                  fieldName="event.name"
-                  fallback="Unnamed Event"
-                />
-              </Heading>
-              <Badge color={status.color}>{status.label}</Badge>
-            </Flex>
-            <Text color="gray" size="2">
+        <Flex justify="between" align="start" mb="3">
+          <Flex align="center" gap="3">
+            <Badge variant="outline" size="3">{event.eid}</Badge>
+            <Heading size="6">
               <DebugField
-                value={event.eid}
-                fieldName="event.eid"
-                fallback="No EID"
+                value={event.name}
+                fieldName="event.name"
+                fallback="Unnamed Event"
               />
-              {' • '}
-              <DebugField
-                value={event.venue}
-                fieldName="event.venue"
-                fallback="No venue"
-              />
-              {event.slack_channel && (
-                <>
-                  {' • '}
-                  <Text color="blue" weight="medium">
-                    #{event.slack_channel.replace(/^#/, '')}
-                  </Text>
-                </>
-              )}
-            </Text>
-          </Box>
+            </Heading>
+            <Badge color={status.color}>{status.label}</Badge>
+          </Flex>
           <Flex gap="2">
             <Button onClick={() => navigate(`/events/create?edit=${eventId}`)}>
               Edit Event
@@ -2523,6 +2535,184 @@ The Art Battle Team`);
             )}
           </Flex>
         </Flex>
+
+        {/* Pre-Event Information */}
+        <Card>
+          <Box p="4">
+            {/* Event Listing Style */}
+            <Flex direction="column" gap="3">
+              {/* Title Line with Location */}
+              <Box>
+                <Text size="6" weight="bold" style={{ lineHeight: '1.3' }}>
+                  {event.name}
+                  {event.cities?.name && (
+                    <Text color="gray"> in {event.cities.name}</Text>
+                  )}
+                </Text>
+              </Box>
+
+              {/* Date & Venue Line */}
+              <Flex gap="2" wrap="wrap" align="center">
+                {event.event_start_datetime && (
+                  <Text size="3" weight="medium">
+                    {new Date(event.event_start_datetime).toLocaleDateString('en-US', {
+                      weekday: 'short',
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      timeZone: event.timezone_icann || 'UTC'
+                    })}
+                  </Text>
+                )}
+                {event.venue && (
+                  <>
+                    <Text color="gray">•</Text>
+                    <Text size="3">{event.venue}</Text>
+                  </>
+                )}
+                {event.capacity && (
+                  <>
+                    <Text color="gray">•</Text>
+                    <Text size="3" color="gray">Capacity: {event.capacity}</Text>
+                  </>
+                )}
+              </Flex>
+
+              {/* Structure Line */}
+              {(event.expected_number_of_rounds || event.target_artists_booked || event.wildcard_expected) && (
+                <Flex gap="2" wrap="wrap" align="center">
+                  <Text size="2" weight="medium" color="blue">Structure:</Text>
+                  {event.expected_number_of_rounds && (
+                    <Text size="2">{event.expected_number_of_rounds} Rounds</Text>
+                  )}
+                  {event.target_artists_booked && (
+                    <>
+                      {event.expected_number_of_rounds && <Text color="gray">•</Text>}
+                      <Text size="2">{event.target_artists_booked} Artists</Text>
+                    </>
+                  )}
+                  {event.wildcard_expected && (
+                    <>
+                      {(event.expected_number_of_rounds || event.target_artists_booked) && <Text color="gray">•</Text>}
+                      <Badge color="purple" size="1">Wildcard</Badge>
+                    </>
+                  )}
+                </Flex>
+              )}
+
+              {/* Description */}
+              {event.description && (
+                <Box>
+                  <Text size="2" style={{ lineHeight: '1.6' }}>{event.description}</Text>
+                </Box>
+              )}
+
+              <Separator size="4" />
+
+              {/* Details Grid */}
+              <Flex direction="column" gap="2">
+                {/* Eventbrite & Slack */}
+                {(event.eventbrite_id || event.slack_channel) && (
+                  <Flex gap="4" wrap="wrap">
+                    {event.eventbrite_id && (
+                      <Flex gap="2" align="center">
+                        <Text size="1" color="gray">Eventbrite:</Text>
+                        <Text size="2" weight="medium">{event.eventbrite_id}</Text>
+                      </Flex>
+                    )}
+                    {event.slack_channel && (
+                      <Flex gap="2" align="center">
+                        <Text size="1" color="gray">Slack:</Text>
+                        <Text size="2" weight="medium" color="blue">#{event.slack_channel.replace(/^#/, '')}</Text>
+                      </Flex>
+                    )}
+                  </Flex>
+                )}
+
+                {/* Ticket Info */}
+                {(event.ticket_link || event.ticket_price_notes) && (
+                  <Flex direction="column" gap="1">
+                    {event.ticket_link && (
+                      <Flex gap="2" align="center">
+                        <Text size="1" color="gray">Tickets:</Text>
+                        <a href={event.ticket_link} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.875rem', color: 'var(--accent-9)' }}>
+                          {(() => {
+                            try {
+                              const url = new URL(event.ticket_link);
+                              return url.hostname.replace(/^www\./, '');
+                            } catch {
+                              return event.ticket_link;
+                            }
+                          })()}
+                        </a>
+                      </Flex>
+                    )}
+                    {event.ticket_price_notes && (
+                      <Box>
+                        <Text size="2" style={{ whiteSpace: 'pre-wrap' }}>{event.ticket_price_notes}</Text>
+                      </Box>
+                    )}
+                  </Flex>
+                )}
+
+                {/* Budget Info */}
+                {(event.meta_ads_budget || event.other_ads_budget) && (
+                  <Flex gap="4" wrap="wrap">
+                    {event.meta_ads_budget && (
+                      <Flex gap="2" align="center">
+                        <Text size="1" color="gray">Meta Ads:</Text>
+                        <Text size="2" weight="medium">${event.meta_ads_budget.toFixed(2)}</Text>
+                      </Flex>
+                    )}
+                    {event.other_ads_budget && (
+                      <Flex gap="2" align="center">
+                        <Text size="1" color="gray">Other Ads:</Text>
+                        <Text size="2" weight="medium">${event.other_ads_budget.toFixed(2)}</Text>
+                      </Flex>
+                    )}
+                  </Flex>
+                )}
+
+                {/* Event Folder */}
+                {event.event_folder_link && (
+                  <Flex gap="2" align="center">
+                    <Text size="1" color="gray">Event Folder:</Text>
+                    <a href={event.event_folder_link} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.875rem', color: 'var(--accent-9)' }}>
+                      Open Drive Folder
+                    </a>
+                  </Flex>
+                )}
+              </Flex>
+
+              <Separator size="4" />
+
+              {/* Event Info Approval */}
+              <Flex gap="2" align="center">
+                {event.event_info_approved_by ? (
+                  <>
+                    <Badge color="green" size="2">APPROVED</Badge>
+                    <Text size="1" color="gray">
+                      by {event.event_info_approved_by}
+                      {event.event_info_approved_at && (
+                        <> on {new Date(event.event_info_approved_at).toLocaleString()}</>
+                      )}
+                    </Text>
+                  </>
+                ) : (
+                  <Button
+                    size="2"
+                    onClick={approveEventInfo}
+                    disabled={approvingEventInfo}
+                  >
+                    {approvingEventInfo ? 'Approving...' : 'APPROVE'}
+                  </Button>
+                )}
+              </Flex>
+            </Flex>
+          </Box>
+        </Card>
 
         {/* Post-Event Summary - Collapsible (always visible, minimized for non-completed events) */}
         <Card>
