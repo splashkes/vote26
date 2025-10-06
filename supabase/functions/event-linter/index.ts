@@ -1330,6 +1330,44 @@ serve(async (req) => {
       }
     }
 
+    // Filter out suppressed findings
+    try {
+      const { data: suppressions, error: suppressError } = await supabaseClient
+        .from('linter_suppressions')
+        .select('rule_id, event_id, artist_id, suppressed_until');
+
+      if (!suppressError && suppressions && suppressions.length > 0) {
+        const now = new Date();
+        const activeSuppressions = suppressions.filter((s: any) =>
+          !s.suppressed_until || new Date(s.suppressed_until) > now
+        );
+
+        findings = findings.filter((finding: any) => {
+          // Check if this finding is suppressed
+          return !activeSuppressions.some((s: any) => {
+            // Must match rule_id
+            if (s.rule_id !== finding.ruleId) return false;
+
+            // If suppression has event_id, finding must match
+            if (s.event_id && s.event_id !== finding.eventId) return false;
+
+            // If suppression has artist_id, finding must match
+            if (s.artist_id && s.artist_id !== finding.artistId) return false;
+
+            // If suppression has neither event_id nor artist_id, it shouldn't exist (DB constraint)
+            // But if it somehow does, don't match
+            if (!s.event_id && !s.artist_id) return false;
+
+            return true;
+          });
+        });
+
+        debugInfo.suppressions_checked = activeSuppressions.length;
+      }
+    } catch (suppressError: any) {
+      debugInfo.suppression_error = suppressError.message;
+    }
+
     // Sort by severity
     const severityOrder: any = { error: 0, warning: 1, reminder: 2, info: 3, success: 4 };
     findings.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);

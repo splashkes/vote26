@@ -42,6 +42,9 @@ const EventLinter = () => {
   const [selectedFinding, setSelectedFinding] = useState(null);
   const [findingDialogOpen, setFindingDialogOpen] = useState(false);
   const [rules, setRules] = useState([]);
+  const [suppressing, setSuppressing] = useState(false);
+  const [suppressReason, setSuppressReason] = useState('');
+  const [suppressDuration, setSuppressDuration] = useState('forever');
 
   // Load events and run linter via edge function
   const runLinter = async () => {
@@ -79,6 +82,56 @@ const EventLinter = () => {
       console.error('Error running linter:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSuppress = async () => {
+    if (!selectedFinding) return;
+
+    try {
+      setSuppressing(true);
+
+      // Calculate suppressed_until based on duration
+      let suppressedUntil = null;
+      if (suppressDuration !== 'forever') {
+        const now = new Date();
+        const days = parseInt(suppressDuration);
+        suppressedUntil = new Date(now.getTime() + days * 24 * 60 * 60 * 1000).toISOString();
+      }
+
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // Insert suppression
+      const { error } = await supabase
+        .from('linter_suppressions')
+        .insert({
+          rule_id: selectedFinding.ruleId,
+          event_id: selectedFinding.eventId || null,
+          artist_id: selectedFinding.artistId || null,
+          suppressed_by: user?.id,
+          suppressed_until: suppressedUntil,
+          reason: suppressReason || null
+        });
+
+      if (error) {
+        console.error('Error suppressing finding:', error);
+        alert(`Failed to suppress: ${error.message}`);
+        return;
+      }
+
+      alert('Finding suppressed successfully!');
+      setFindingDialogOpen(false);
+      setSuppressReason('');
+      setSuppressDuration('forever');
+
+      // Reload findings
+      await runLinter();
+    } catch (err) {
+      console.error('Error suppressing finding:', err);
+      alert(`Error: ${err.message}`);
+    } finally {
+      setSuppressing(false);
     }
   };
 
@@ -725,6 +778,54 @@ const EventLinter = () => {
                   </Flex>
                 </Card>
               )}
+
+              {/* Suppress Finding */}
+              <Card style={{ backgroundColor: 'var(--amber-2)', borderColor: 'var(--amber-6)' }}>
+                <Flex direction="column" gap="3">
+                  <Flex align="center" gap="2">
+                    <Text size="2" weight="bold">Suppress This Finding</Text>
+                    <Badge color="orange" size="1">Hide from future results</Badge>
+                  </Flex>
+
+                  <Text size="1" color="gray">
+                    Suppress this specific finding for this {selectedFinding.eventId ? 'event' : 'artist'}.
+                    It will no longer appear in linter results.
+                  </Text>
+
+                  <Flex direction="column" gap="2">
+                    <label>
+                      <Text size="1" weight="medium" mb="1" style={{ display: 'block' }}>Duration</Text>
+                      <Select.Root value={suppressDuration} onValueChange={setSuppressDuration}>
+                        <Select.Trigger style={{ width: '200px' }} />
+                        <Select.Content>
+                          <Select.Item value="forever">Forever</Select.Item>
+                          <Select.Item value="7">7 days</Select.Item>
+                          <Select.Item value="30">30 days</Select.Item>
+                          <Select.Item value="90">90 days</Select.Item>
+                        </Select.Content>
+                      </Select.Root>
+                    </label>
+
+                    <label>
+                      <Text size="1" weight="medium" mb="1" style={{ display: 'block' }}>Reason (optional)</Text>
+                      <TextField.Root
+                        placeholder="Why suppress this finding?"
+                        value={suppressReason}
+                        onChange={(e) => setSuppressReason(e.target.value)}
+                      />
+                    </label>
+                  </Flex>
+
+                  <Button
+                    size="2"
+                    color="orange"
+                    onClick={handleSuppress}
+                    disabled={suppressing}
+                  >
+                    {suppressing ? 'Suppressing...' : 'Suppress Finding'}
+                  </Button>
+                </Flex>
+              </Card>
 
               {/* Raw Data (Debug) */}
               <details>
