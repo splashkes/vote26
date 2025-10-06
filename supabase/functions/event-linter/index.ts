@@ -596,11 +596,19 @@ serve(async (req) => {
             }
           });
 
-          // Enrich future events with confirmation counts
+          // Enrich future events with confirmation counts and days until event
+          const now = new Date();
           for (const event of futureEvents) {
             const counts = confirmationCountMap.get(event.eid) || { confirmed: 0, withdrawn: 0 };
             event.confirmed_artists_count = counts.confirmed;
             event.withdrawn_artists_count = counts.withdrawn;
+
+            // Calculate days until event
+            if (event.event_start_datetime) {
+              const startDate = new Date(event.event_start_datetime);
+              const daysUntil = Math.ceil((startDate.getTime() - now.getTime()) / 1000 / 60 / 60 / 24);
+              event.days_until_event = daysUntil;
+            }
           }
 
           debugInfo.future_events_enriched = futureEvents.length;
