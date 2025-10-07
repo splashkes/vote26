@@ -14,9 +14,10 @@ const HeroSection = () => {
       <Box style={{
         background: 'linear-gradient(135deg, var(--accent-9) 0%, var(--accent-11) 100%)',
         position: 'relative',
-        minHeight: '70vh'
+        minHeight: '70vh',
+        padding: '0 1rem'
       }}>
-        <Container size="4" py="9">
+        <Container size="4" py="9" px="4">
           <Flex direction="column" align="center" gap="6" style={{ textAlign: 'center' }}>
             {/* Video Placeholder */}
             <Box style={{
@@ -94,9 +95,9 @@ const HeroSection = () => {
         background: 'var(--gray-2)',
         borderTop: '1px solid var(--gray-6)',
         borderBottom: '1px solid var(--gray-6)',
-        padding: '1.5rem 0'
+        padding: '1.5rem 1rem'
       }}>
-        <Container size="4">
+        <Container size="4" px="4">
           <Flex direction="column" gap="3" align="center">
             <Text size="2" weight="bold" style={{ color: 'var(--gray-11)' }}>
               TRUSTED BY LEADING BRANDS

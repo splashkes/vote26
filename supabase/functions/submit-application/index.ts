@@ -100,17 +100,11 @@ serve(async (req)=>{
     const artistEmail = profileData.person?.email;
     if (artistEmail) {
       try {
-        const eventDate = eventData.event_start_datetime ? new Date(eventData.event_start_datetime).toLocaleDateString('en-US', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric'
-        }) : 'TBD';
         const emailData = emailTemplates.applicationReceived({
           artistName: profileData.name || 'Artist',
           eventEid: eventData.eid,
           eventName: eventData.name || eventData.eid,
-          eventDate: eventDate,
+          eventStartDateTime: eventData.event_start_datetime || '',
           eventVenue: eventData.venue || 'TBD',
           cityName: eventData.cities?.name || 'Unknown'
         });

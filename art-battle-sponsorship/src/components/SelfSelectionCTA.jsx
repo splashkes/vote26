@@ -3,8 +3,8 @@ import { RocketIcon, TargetIcon } from '@radix-ui/react-icons';
 
 const SelfSelectionCTA = ({ onSelect }) => {
   return (
-    <Box py="9" style={{ background: 'var(--gray-2)' }}>
-      <Container size="3">
+    <Box py="9" style={{ background: 'var(--gray-2)', padding: '3rem 1rem' }}>
+      <Container size="3" px="4">
         <Flex direction="column" gap="6" align="center">
           <Box style={{ textAlign: 'center' }}>
             <Heading size="7" mb="2">Choose Your Sponsorship Level</Heading>

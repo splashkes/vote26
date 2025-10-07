@@ -122,16 +122,16 @@ function App() {
       <Box style={{ background: 'var(--gray-1)', minHeight: '100vh' }}>
         {/* Landing: Hero + Local Relevance + Self-Selection */}
         {currentStep === 'landing' && (
-          <>
+          <Box style={{ maxWidth: '1400px', margin: '0 auto' }}>
             <HeroSection />
             <LocalRelevanceSection inviteData={inviteData} />
             <SelfSelectionCTA onSelect={handleTierSelect} />
-          </>
+          </Box>
         )}
 
         {/* Package Selection */}
         {currentStep === 'selection' && (
-          <Container size="4" py="6">
+          <Box style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 1rem' }}>
             <PackageGrid
               packages={inviteData.packages}
               tier={selectedTier}
@@ -139,7 +139,7 @@ function App() {
               onSelect={handlePackageSelect}
               onBack={() => setCurrentStep('landing')}
             />
-          </Container>
+          </Box>
         )}
 
         {/* Addons Modal */}
@@ -156,13 +156,15 @@ function App() {
 
         {/* Multi-Event Discount Offer */}
         {currentStep === 'multi-event' && (
-          <MultiEventOffer
-            inviteData={inviteData}
-            selectedPackage={selectedPackage}
-            selectedAddons={selectedAddons}
-            onConfirm={handleCheckout}
-            onSkip={handleCheckout}
-          />
+          <Box style={{ maxWidth: '1400px', margin: '0 auto' }}>
+            <MultiEventOffer
+              inviteData={inviteData}
+              selectedPackage={selectedPackage}
+              selectedAddons={selectedAddons}
+              onConfirm={handleCheckout}
+              onSkip={handleCheckout}
+            />
+          </Box>
         )}
       </Box>
     </Theme>

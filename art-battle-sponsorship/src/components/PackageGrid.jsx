@@ -27,8 +27,7 @@ const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack }) => {
 
   return (
     <Box py="6">
-      <Container size="4">
-        <Flex direction="column" gap="6">
+      <Flex direction="column" gap="6">
           {/* Header */}
           <Flex justify="between" align="center">
             <Button variant="ghost" onClick={onBack}>
@@ -157,7 +156,6 @@ const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack }) => {
             </Card>
           )}
         </Flex>
-      </Container>
     </Box>
   );
 };

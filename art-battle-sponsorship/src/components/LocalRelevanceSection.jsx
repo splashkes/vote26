@@ -20,8 +20,8 @@ const LocalRelevanceSection = ({ inviteData }) => {
   ];
 
   return (
-    <Box py="9" style={{ background: 'var(--gray-1)' }}>
-      <Container size="4">
+    <Box py="9" style={{ background: 'var(--gray-1)', padding: '3rem 1rem' }}>
+      <Container size="4" px="4">
         <Flex direction="column" gap="6">
           {/* Main Headline */}
           <Box style={{ textAlign: 'center' }}>

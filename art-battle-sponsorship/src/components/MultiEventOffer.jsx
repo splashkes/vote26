@@ -100,8 +100,8 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
   const discount = getDiscount(totalEvents);
 
   return (
-    <Box style={{ minHeight: '100vh', background: 'var(--gray-1)' }}>
-      <Container size="3" py="8">
+    <Box style={{ minHeight: '100vh', background: 'var(--gray-1)', padding: '3rem 1rem' }}>
+      <Container size="3" py="8" px="4">
         <Flex direction="column" gap="6">
           {/* Header */}
           <Box style={{ textAlign: 'center' }}>
