@@ -3891,9 +3891,6 @@ The Art Battle Team`);
               <Tabs.Trigger value="recommendations">
                 Recommendations
               </Tabs.Trigger>
-              <Tabs.Trigger value="artists">
-                Artists ({artistApplications.length + artistInvites.length + artistConfirmations.length})
-              </Tabs.Trigger>
               <Tabs.Trigger value="people">
                 People ({eventPeople.length})
               </Tabs.Trigger>
@@ -3995,25 +3992,6 @@ The Art Battle Team`);
                       ))}
                     </Grid>
                     
-                    {/* Top Priorities */}
-                    {healthData.top_priorities && (
-                      <Card>
-                        <Box p="4">
-                          <Text size="4" weight="bold" mb="3" color="red" style={{ display: 'block' }}>
-                            🎯 Immediate Action Required
-                          </Text>
-                          <Grid columns="1" gap="3">
-                            {healthData.top_priorities.map((priority, index) => (
-                              <Box key={index} p="3" style={{ backgroundColor: 'var(--red-2)', borderLeft: '4px solid var(--red-9)', borderRadius: '6px' }}>
-                                <Text size="2" weight="medium">
-                                  {index + 1}. {priority}
-                                </Text>
-                              </Box>
-                            ))}
-                          </Grid>
-                        </Box>
-                      </Card>
-                    )}
                   </Box>
                 ) : (
                   <Box style={{ textAlign: 'center', padding: '3rem' }}>
@@ -4157,253 +4135,6 @@ The Art Battle Team`);
                 )}
               </Tabs.Content>
 
-              <Tabs.Content value="artists">
-                {artistsLoading ? (
-                  <Box style={{ textAlign: 'center', padding: '2rem' }}>
-                    <Spinner size="3" />
-                    <Text size="2" color="gray" style={{ display: 'block', marginTop: '1rem' }}>
-                      Loading artist data...
-                    </Text>
-                  </Box>
-                ) : (
-                  <Flex direction="column" gap="4">
-                    {/* Header with Progress and Refresh */}
-                    <Flex justify="between" align="center">
-                      <Box>
-                        <Text size="4" weight="bold" mb="1" style={{ display: 'block' }}>
-                          Artist Management Workflow
-                        </Text>
-                        <Text size="2" color="gray">
-                          Manage applications, invitations, and confirmations for this event
-                        </Text>
-                      </Box>
-                      <Flex align="center" gap="4">
-                        <Button 
-                          variant="outline" 
-                          size="2" 
-                          onClick={() => fetchArtistData(0)}
-                          disabled={artistsLoading}
-                        >
-                          <ReloadIcon />
-                          {artistsLoading ? 'Refreshing...' : 'Refresh'}
-                        </Button>
-                        <Badge color="blue" size="2">
-                          {getFilteredApplications().length} Applied
-                        </Badge>
-                        <Badge color="orange" size="2">
-                          {getFilteredInvitations().length} Invited
-                        </Badge>
-                        <Badge color="green" size="2">
-                          {getFilteredConfirmations().length} Confirmed
-                        </Badge>
-                        <Button 
-                          variant={showAllArtists ? "solid" : "outline"}
-                          color="gray"
-                          size="1"
-                          onClick={() => setShowAllArtists(!showAllArtists)}
-                        >
-                          {showAllArtists ? "Hide Duplicates" : "Show All"}
-                        </Button>
-                      </Flex>
-                    </Flex>
-
-                    {/* 3-Column Kanban Board - Responsive: 1 column on mobile, 3 on desktop */}
-                    <Grid columns={{ initial: "1", md: "3" }} gap="4">
-                      {/* APPLIED Column */}
-                      <Card>
-                        <Box p="4">
-                          <Flex justify="between" align="center" mb="3">
-                            <Text size="3" weight="bold">Applied</Text>
-                            <Badge color="blue">{getFilteredApplications().length}</Badge>
-                          </Flex>
-                          
-                          <Flex direction="column" gap="3">
-                            {getFilteredApplications().map((application) => (
-                              <Card 
-                                key={application.id}
-                                style={{ 
-                                  cursor: 'pointer',
-                                  border: '1px solid var(--blue-6)',
-                                  transition: 'all 0.2s ease'
-                                }}
-                                onClick={() => handleArtistCardClick(application, 'application')}
-                              >
-                                <Box p="3">
-                                  <Flex direction="column" gap="2">
-                                    <Flex align="center" gap="2">
-                                      <Text size="2" weight="bold">
-                                        {application.artist_profiles?.name || 'Unknown Artist'}
-                                      </Text>
-                                      {(() => {
-                                        const dateInfo = formatDateForDisplay(application.created_at);
-                                        return dateInfo.isRecent && (
-                                          <Box
-                                            style={{
-                                              width: '8px',
-                                              height: '8px',
-                                              borderRadius: '50%',
-                                              backgroundColor: getRecentActivityColor(true),
-                                              flexShrink: 0
-                                            }}
-                                            title="Recent activity (last 36 hours)"
-                                          />
-                                        );
-                                      })()}
-                                    </Flex>
-                                    <Flex justify="between" align="center" gap="2">
-                                      <Text size="1" color="gray">
-                                        #{application.artist_number}
-                                      </Text>
-                                      <Text size="1" color="gray" title={formatDateForDisplay(application.created_at).fullDate}>
-                                        {formatDateForDisplay(application.created_at).timeAgo}
-                                      </Text>
-                                    </Flex>
-                                  </Flex>
-                                </Box>
-                              </Card>
-                            ))}
-                            
-                            {getFilteredApplications().length === 0 && (
-                              <Text size="2" color="gray" style={{ textAlign: 'center', padding: '2rem' }}>
-                                {showAllArtists ? 'No applications received yet' : 'No new applications (all artists are invited or confirmed)'}
-                              </Text>
-                            )}
-                          </Flex>
-                        </Box>
-                      </Card>
-
-                      {/* INVITED Column */}
-                      <Card>
-                        <Box p="4">
-                          <Flex justify="between" align="center" mb="3">
-                            <Text size="3" weight="bold">Invited</Text>
-                            <Badge color="orange">{getFilteredInvitations().length}</Badge>
-                          </Flex>
-                          
-                          <Flex direction="column" gap="3">
-                            {getFilteredInvitations().map((invite) => {
-                              const status = getInvitationStatus(invite);
-                              return (
-                                <Card 
-                                  key={invite.id}
-                                  style={{ 
-                                    cursor: 'pointer',
-                                    border: `1px solid var(--${status.color}-6)`,
-                                    transition: 'all 0.2s ease'
-                                  }}
-                                  onClick={() => handleArtistCardClick(invite, 'invitation')}
-                                >
-                                  <Box p="3">
-                                    <Flex direction="column" gap="2">
-                                      <Flex align="center" gap="2">
-                                        <Text size="2" weight="bold">
-                                          {invite.artist_profiles?.name || 'Unknown Artist'}
-                                        </Text>
-                                        {(() => {
-                                          const dateInfo = formatDateForDisplay(invite.created_at);
-                                          return dateInfo.isRecent && (
-                                            <Box
-                                              style={{
-                                                width: '8px',
-                                                height: '8px',
-                                                borderRadius: '50%',
-                                                backgroundColor: getRecentActivityColor(true),
-                                                flexShrink: 0
-                                              }}
-                                              title="Recent activity (last 36 hours)"
-                                            />
-                                          );
-                                        })()}
-                                      </Flex>
-                                      <Flex justify="between" align="center" gap="2">
-                                        <Text size="1" color="gray">
-                                          #{invite.artist_number}
-                                        </Text>
-                                        <Text size="1" color="gray" title={formatDateForDisplay(invite.created_at).fullDate}>
-                                          {formatDateForDisplay(invite.created_at).timeAgo}
-                                        </Text>
-                                      </Flex>
-                                    </Flex>
-                                  </Box>
-                                </Card>
-                              );
-                            })}
-                            
-                            {getFilteredInvitations().length === 0 && (
-                              <Text size="2" color="gray" style={{ textAlign: 'center', padding: '2rem' }}>
-                                {showAllArtists ? 'No invitations sent yet' : 'No pending invitations (all are confirmed)'}
-                              </Text>
-                            )}
-                          </Flex>
-                        </Box>
-                      </Card>
-
-                      {/* CONFIRMED Column */}
-                      <Card>
-                        <Box p="4">
-                          <Flex justify="between" align="center" mb="3">
-                            <Text size="3" weight="bold">Confirmed</Text>
-                            <Badge color="green">{getFilteredConfirmations().length}</Badge>
-                          </Flex>
-                          
-                          <Flex direction="column" gap="3">
-                            {getFilteredConfirmations().map((confirmation) => (
-                              <Card 
-                                key={confirmation.id}
-                                style={{ 
-                                  cursor: 'pointer',
-                                  border: '1px solid var(--green-6)',
-                                  transition: 'all 0.2s ease'
-                                }}
-                                onClick={() => handleArtistCardClick(confirmation, 'confirmation')}
-                              >
-                                <Box p="3">
-                                  <Flex direction="column" gap="2">
-                                    <Flex align="center" gap="2">
-                                      <Text size="2" weight="bold">
-                                        {confirmation.artist_profiles?.name || 'Unknown Artist'}
-                                      </Text>
-                                      {(() => {
-                                        const dateInfo = formatDateForDisplay(confirmation.created_at);
-                                        return dateInfo.isRecent && (
-                                          <Box
-                                            style={{
-                                              width: '8px',
-                                              height: '8px',
-                                              borderRadius: '50%',
-                                              backgroundColor: getRecentActivityColor(true),
-                                              flexShrink: 0
-                                            }}
-                                            title="Recent activity (last 36 hours)"
-                                          />
-                                        );
-                                      })()}
-                                    </Flex>
-                                    <Flex justify="between" align="center" gap="2">
-                                      <Text size="1" color="gray">
-                                        #{confirmation.artist_number}
-                                      </Text>
-                                      <Text size="1" color="gray" title={formatDateForDisplay(confirmation.created_at).fullDate}>
-                                        {formatDateForDisplay(confirmation.created_at).timeAgo}
-                                      </Text>
-                                    </Flex>
-                                  </Flex>
-                                </Box>
-                              </Card>
-                            ))}
-                            
-                            {getFilteredConfirmations().length === 0 && (
-                              <Text size="2" color="gray" style={{ textAlign: 'center', padding: '2rem' }}>
-                                No confirmations received yet
-                              </Text>
-                            )}
-                          </Flex>
-                        </Box>
-                      </Card>
-                    </Grid>
-                  </Flex>
-                )}
-              </Tabs.Content>
 
               <Tabs.Content value="people">
                 <Flex justify="between" align="center" mb="3">
@@ -4641,6 +4372,255 @@ The Art Battle Team`);
 
             </Box>
           </Tabs.Root>
+        </Card>
+
+        {/* Artist Management Section */}
+        <Card>
+          <Box p="4">
+            <Flex direction="column" gap="4">
+              <Flex justify="between" align="center">
+                <Box>
+                  <Text size="4" weight="bold" mb="1" style={{ display: 'block' }}>
+                    Artist Management Workflow
+                  </Text>
+                  <Text size="2" color="gray">
+                    Manage applications, invitations, and confirmations for this event
+                  </Text>
+                </Box>
+                <Flex align="center" gap="4">
+                  <Button
+                    variant="outline"
+                    size="2"
+                    onClick={() => fetchArtistData(0)}
+                    disabled={artistsLoading}
+                  >
+                    <ReloadIcon />
+                    {artistsLoading ? 'Refreshing...' : 'Refresh'}
+                  </Button>
+                  <Badge color="blue" size="2">
+                    {getFilteredApplications().length} Applied
+                  </Badge>
+                  <Badge color="orange" size="2">
+                    {getFilteredInvitations().length} Invited
+                  </Badge>
+                  <Badge color="green" size="2">
+                    {getFilteredConfirmations().length} Confirmed
+                  </Badge>
+                  <Button
+                    variant={showAllArtists ? "solid" : "outline"}
+                    color="gray"
+                    size="1"
+                    onClick={() => setShowAllArtists(!showAllArtists)}
+                  >
+                    {showAllArtists ? "Hide Duplicates" : "Show All"}
+                  </Button>
+                </Flex>
+              </Flex>
+
+              {artistsLoading ? (
+                <Box style={{ textAlign: 'center', padding: '2rem' }}>
+                  <Spinner size="3" />
+                  <Text size="2" color="gray" style={{ display: 'block', marginTop: '1rem' }}>
+                    Loading artist data...
+                  </Text>
+                </Box>
+              ) : (
+                <Grid columns={{ initial: "1", md: "3" }} gap="4">
+                  {/* APPLIED Column */}
+                  <Card>
+                    <Box p="4">
+                      <Flex justify="between" align="center" mb="3">
+                        <Text size="3" weight="bold">Applied</Text>
+                        <Badge color="blue">{getFilteredApplications().length}</Badge>
+                      </Flex>
+
+                      <Flex direction="column" gap="3">
+                        {getFilteredApplications().map((application) => (
+                          <Card
+                            key={application.id}
+                            style={{
+                              cursor: 'pointer',
+                              border: '1px solid var(--blue-6)',
+                              transition: 'all 0.2s ease'
+                            }}
+                            onClick={() => handleArtistCardClick(application, 'application')}
+                          >
+                            <Box p="3">
+                              <Flex direction="column" gap="2">
+                                <Flex align="center" gap="2">
+                                  <Text size="2" weight="bold">
+                                    {application.artist_profiles?.name || 'Unknown Artist'}
+                                  </Text>
+                                  {(() => {
+                                    const dateInfo = formatDateForDisplay(application.created_at);
+                                    return dateInfo.isRecent && (
+                                      <Box
+                                        style={{
+                                          width: '8px',
+                                          height: '8px',
+                                          borderRadius: '50%',
+                                          backgroundColor: getRecentActivityColor(true),
+                                          flexShrink: 0
+                                        }}
+                                        title="Recent activity (last 36 hours)"
+                                      />
+                                    );
+                                  })()}
+                                </Flex>
+                                <Flex justify="between" align="center" gap="2">
+                                  <Text size="1" color="gray">
+                                    #{application.artist_number}
+                                  </Text>
+                                  <Text size="1" color="gray" title={formatDateForDisplay(application.created_at).fullDate}>
+                                    {formatDateForDisplay(application.created_at).timeAgo}
+                                  </Text>
+                                </Flex>
+                              </Flex>
+                            </Box>
+                          </Card>
+                        ))}
+
+                        {getFilteredApplications().length === 0 && (
+                          <Text size="2" color="gray" style={{ textAlign: 'center', padding: '2rem' }}>
+                            {showAllArtists ? 'No applications received yet' : 'No new applications (all artists are invited or confirmed)'}
+                          </Text>
+                        )}
+                      </Flex>
+                    </Box>
+                  </Card>
+
+                  {/* INVITED Column */}
+                  <Card>
+                    <Box p="4">
+                      <Flex justify="between" align="center" mb="3">
+                        <Text size="3" weight="bold">Invited</Text>
+                        <Badge color="orange">{getFilteredInvitations().length}</Badge>
+                      </Flex>
+
+                      <Flex direction="column" gap="3">
+                        {getFilteredInvitations().map((invite) => {
+                          const status = getInvitationStatus(invite);
+                          return (
+                            <Card
+                              key={invite.id}
+                              style={{
+                                cursor: 'pointer',
+                                border: `1px solid var(--${status.color}-6)`,
+                                transition: 'all 0.2s ease'
+                              }}
+                              onClick={() => handleArtistCardClick(invite, 'invitation')}
+                            >
+                              <Box p="3">
+                                <Flex direction="column" gap="2">
+                                  <Flex align="center" gap="2">
+                                    <Text size="2" weight="bold">
+                                      {invite.artist_profiles?.name || 'Unknown Artist'}
+                                    </Text>
+                                    {(() => {
+                                      const dateInfo = formatDateForDisplay(invite.created_at);
+                                      return dateInfo.isRecent && (
+                                        <Box
+                                          style={{
+                                            width: '8px',
+                                            height: '8px',
+                                            borderRadius: '50%',
+                                            backgroundColor: getRecentActivityColor(true),
+                                            flexShrink: 0
+                                          }}
+                                          title="Recent activity (last 36 hours)"
+                                        />
+                                      );
+                                    })()}
+                                  </Flex>
+                                  <Flex justify="between" align="center" gap="2">
+                                    <Text size="1" color="gray">
+                                      #{invite.artist_number}
+                                    </Text>
+                                    <Text size="1" color="gray" title={formatDateForDisplay(invite.created_at).fullDate}>
+                                      {formatDateForDisplay(invite.created_at).timeAgo}
+                                    </Text>
+                                  </Flex>
+                                </Flex>
+                              </Box>
+                            </Card>
+                          );
+                        })}
+
+                        {getFilteredInvitations().length === 0 && (
+                          <Text size="2" color="gray" style={{ textAlign: 'center', padding: '2rem' }}>
+                            {showAllArtists ? 'No invitations sent yet' : 'No pending invitations (all are confirmed)'}
+                          </Text>
+                        )}
+                      </Flex>
+                    </Box>
+                  </Card>
+
+                  {/* CONFIRMED Column */}
+                  <Card>
+                    <Box p="4">
+                      <Flex justify="between" align="center" mb="3">
+                        <Text size="3" weight="bold">Confirmed</Text>
+                        <Badge color="green">{getFilteredConfirmations().length}</Badge>
+                      </Flex>
+
+                      <Flex direction="column" gap="3">
+                        {getFilteredConfirmations().map((confirmation) => (
+                          <Card
+                            key={confirmation.id}
+                            style={{
+                              cursor: 'pointer',
+                              border: '1px solid var(--green-6)',
+                              transition: 'all 0.2s ease'
+                            }}
+                            onClick={() => handleArtistCardClick(confirmation, 'confirmation')}
+                          >
+                            <Box p="3">
+                              <Flex direction="column" gap="2">
+                                <Flex align="center" gap="2">
+                                  <Text size="2" weight="bold">
+                                    {confirmation.artist_profiles?.name || 'Unknown Artist'}
+                                  </Text>
+                                  {(() => {
+                                    const dateInfo = formatDateForDisplay(confirmation.created_at);
+                                    return dateInfo.isRecent && (
+                                      <Box
+                                        style={{
+                                          width: '8px',
+                                          height: '8px',
+                                          borderRadius: '50%',
+                                          backgroundColor: getRecentActivityColor(true),
+                                          flexShrink: 0
+                                        }}
+                                        title="Recent activity (last 36 hours)"
+                                      />
+                                    );
+                                  })()}
+                                </Flex>
+                                <Flex justify="between" align="center" gap="2">
+                                  <Text size="1" color="gray">
+                                    #{confirmation.artist_number}
+                                  </Text>
+                                  <Text size="1" color="gray" title={formatDateForDisplay(confirmation.created_at).fullDate}>
+                                    {formatDateForDisplay(confirmation.created_at).timeAgo}
+                                  </Text>
+                                </Flex>
+                              </Flex>
+                            </Box>
+                          </Card>
+                        ))}
+
+                        {getFilteredConfirmations().length === 0 && (
+                          <Text size="2" color="gray" style={{ textAlign: 'center', padding: '2rem' }}>
+                            No confirmations received yet
+                          </Text>
+                        )}
+                      </Flex>
+                    </Box>
+                  </Card>
+                </Grid>
+              )}
+            </Flex>
+          </Box>
         </Card>
       </Flex>
 
