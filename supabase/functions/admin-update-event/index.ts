@@ -255,6 +255,7 @@ Deno.serve(async (req)=>{
       name: eventData.name,
       description: eventData.description || '',
       venue: eventData.venue || '',
+      venue_id: eventData.venue_id || null,
       city_id: eventData.city_id || null,
       country_id: eventData.country_id || null,
       event_start_datetime: startTimestamp,
@@ -267,6 +268,13 @@ Deno.serve(async (req)=>{
       eventbrite_id: eventData.eventbrite_id || null,
       slack_channel: eventData.slack_channel || null,
       ticket_link: eventData.ticket_link || null,
+      ticket_price_notes: eventData.ticket_price_notes || null,
+      meta_ads_budget: eventData.meta_ads_budget || null,
+      other_ads_budget: eventData.other_ads_budget || null,
+      event_folder_link: eventData.event_folder_link || null,
+      target_artists_booked: eventData.target_artists_booked || null,
+      wildcard_expected: eventData.wildcard_expected ?? false,
+      expected_number_of_rounds: eventData.expected_number_of_rounds || null,
       artist_auction_portion: eventData.artist_auction_portion ?? 0.5,
       updated_at: new Date().toISOString()
     };

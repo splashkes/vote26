@@ -251,14 +251,22 @@ serve(async (req) => {
           first: artistProfile.name.split(' ')[0] || 'Artist',
           last: artistProfile.name.split(' ').slice(1).join(' ') || 'Profile'
         });
-        
-        const accountData = {
+
+        // Determine if US/Canada (full service agreement) or International (recipient service agreement)
+        const isUSorCA = (finalCountry === 'US' || finalCountry === 'CA' || finalCountry === 'Canada' || finalCountry === 'United States');
+        const serviceAgreement = isUSorCA ? 'full' : 'recipient';
+
+        console.log('=== SERVICE AGREEMENT SELECTION ===');
+        console.log('Country:', finalCountry);
+        console.log('Is US/CA:', isUSorCA);
+        console.log('Service Agreement:', serviceAgreement);
+
+        const accountData: any = {
           type: 'custom',
           country: finalCountry,
           email: artistProfile.email,
           capabilities: {
             transfers: { requested: true },
-            card_payments: { requested: true }, // Required for some countries like NL
           },
           business_type: 'individual',
           individual: {
@@ -275,6 +283,18 @@ serve(async (req) => {
             support_url: 'https://artbattle.com/contact'
           },
         };
+
+        // Add service agreement for recipient accounts (international)
+        if (!isUSorCA) {
+          accountData.tos_acceptance = {
+            service_agreement: 'recipient'
+          };
+          console.log('Added recipient service agreement for international artist');
+        } else {
+          // For US/CA, add card_payments capability (full service agreement - default)
+          accountData.capabilities.card_payments = { requested: true };
+          console.log('Using full service agreement (default) for US/CA artist');
+        }
         
         console.log('Account data being sent to Stripe:', JSON.stringify(accountData, null, 2));
         
@@ -317,7 +337,7 @@ serve(async (req) => {
               type: 'section',
               text: {
                 type: 'mrkdwn',
-                text: `*Artist:* ${artistProfile.name}\n*Email:* ${artistProfile.email}\n*Country:* ${finalCountry} (from profile: ${artistProfile.country})\n*Stripe Key:* ${useCanadaKey ? 'CANADA' : 'INTERNATIONAL'}\n*Stripe Account:* ${stripeAccount.id}\n*Profile ID:* ${artistProfile.id}`
+                text: `*Artist:* ${artistProfile.name}\n*Email:* ${artistProfile.email}\n*Country:* ${finalCountry} (from profile: ${artistProfile.country})\n*Service Agreement:* ${serviceAgreement}\n*Stripe Key:* ${useCanadaKey ? 'CANADA' : 'INTERNATIONAL'}\n*Stripe Account:* ${stripeAccount.id}\n*Profile ID:* ${artistProfile.id}`
               }
             },
             {
@@ -361,6 +381,7 @@ serve(async (req) => {
                 person_email: artistProfile.email,
                 person_name: artistProfile.name,
                 stripe_account_type: 'custom',
+                service_agreement: serviceAgreement,
                 onboarding_started_at: new Date().toISOString()
               }
             })
@@ -384,6 +405,7 @@ serve(async (req) => {
               metadata: {
                 ...globalPaymentRecord.metadata,
                 stripe_account_type: 'custom',
+                service_agreement: serviceAgreement,
                 onboarding_restarted_at: new Date().toISOString()
               }
             })

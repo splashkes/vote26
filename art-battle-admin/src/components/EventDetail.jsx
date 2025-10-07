@@ -305,6 +305,7 @@ const EventDetail = () => {
         .select(`
           *,
           cities(id, name, country_id, countries(id, name, code, currency_code, currency_symbol)),
+          venues(id, name, address, notes, default_capacity),
           event_admins(id, admin_level, phone),
           rounds(
             id,
@@ -2508,16 +2509,40 @@ The Art Battle Team`);
       <Flex direction="column" gap="4">
         {/* Header */}
         <Flex justify="between" align="start" mb="3">
-          <Flex align="center" gap="3">
-            <Badge variant="outline" size="3">{event.eid}</Badge>
-            <Heading size="6">
-              <DebugField
-                value={event.name}
-                fieldName="event.name"
-                fallback="Unnamed Event"
-              />
-            </Heading>
-            <Badge color={status.color}>{status.label}</Badge>
+          <Flex direction="column" gap="2">
+            <Flex align="center" gap="3">
+              <Heading size="6">
+                <DebugField
+                  value={event.name}
+                  fieldName="event.name"
+                  fallback="Unnamed Event"
+                />
+              </Heading>
+              <Badge color={status.color}>{status.label}</Badge>
+            </Flex>
+            {/* Status & Applications */}
+            <Flex gap="3" wrap="wrap" align="center">
+              <Flex gap="2" align="center">
+                <Text size="2">Status:</Text>
+                <Badge color={event.enabled ? 'green' : 'red'}>
+                  {event.enabled ? 'Enabled' : 'Disabled'}
+                </Badge>
+              </Flex>
+              <Flex gap="2" align="center">
+                <Text size="2">Applications:</Text>
+                <Badge color={event.applications_open ? 'green' : 'gray'}>
+                  {event.applications_open ? 'OPEN' : 'Closed'}
+                </Badge>
+                <Button
+                  size="1"
+                  onClick={toggleApplications}
+                  variant="soft"
+                  color={event.applications_open ? 'red' : 'green'}
+                >
+                  {event.applications_open ? 'Close' : 'Open'}
+                </Button>
+              </Flex>
+            </Flex>
           </Flex>
           <Flex gap="2">
             <Button onClick={() => navigate(`/events/create?edit=${eventId}`)}>
@@ -2542,48 +2567,64 @@ The Art Battle Team`);
             {/* Event Listing Style */}
             <Flex direction="column" gap="3">
               {/* Title Line with Location */}
-              <Box>
+              <Flex gap="3" align="center">
+                <Badge variant="outline" size="3">{event.eid}</Badge>
                 <Text size="6" weight="bold" style={{ lineHeight: '1.3' }}>
                   {event.name}
                   {event.cities?.name && (
                     <Text color="gray"> in {event.cities.name}</Text>
                   )}
                 </Text>
-              </Box>
+              </Flex>
 
-              {/* Date & Venue Line */}
+              {/* Date Line */}
               <Flex gap="2" wrap="wrap" align="center">
                 {event.event_start_datetime && (
-                  <Text size="3" weight="medium">
-                    {new Date(event.event_start_datetime).toLocaleDateString('en-US', {
-                      weekday: 'short',
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      timeZone: event.timezone_icann || 'UTC'
-                    })}
-                  </Text>
-                )}
-                {event.venue && (
                   <>
-                    <Text color="gray">•</Text>
-                    <Text size="3">{event.venue}</Text>
-                  </>
-                )}
-                {event.capacity && (
-                  <>
-                    <Text color="gray">•</Text>
-                    <Text size="3" color="gray">Capacity: {event.capacity}</Text>
+                    <Text size="3" weight="medium">
+                      {new Date(event.event_start_datetime).toLocaleDateString('en-US', {
+                        weekday: 'short',
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        timeZone: event.timezone_icann || 'UTC'
+                      })}
+                    </Text>
+                    {event.timezone_icann && (
+                      <Badge variant="soft" color="blue" size="1">
+                        {event.timezone_icann}
+                      </Badge>
+                    )}
                   </>
                 )}
               </Flex>
 
+              {/* Venue Line */}
+              {(event.venues?.name || event.venue) && (
+                <Flex direction="column" gap="1">
+                  <Flex gap="2" align="center">
+                    <Text size="3" weight="medium">
+                      {event.venues?.name || event.venue}
+                    </Text>
+                    {event.capacity && (
+                      <>
+                        <Text color="gray">•</Text>
+                        <Text size="3" color="gray">Capacity: {event.capacity}</Text>
+                      </>
+                    )}
+                  </Flex>
+                  {event.venues?.address && (
+                    <Text size="2" color="gray">
+                      {event.venues.address}
+                    </Text>
+                  )}
+                </Flex>
+              )}
               {/* Structure Line */}
               {(event.expected_number_of_rounds || event.target_artists_booked || event.wildcard_expected) && (
                 <Flex gap="2" wrap="wrap" align="center">
-                  <Text size="2" weight="medium" color="blue">Structure:</Text>
                   {event.expected_number_of_rounds && (
                     <Text size="2">{event.expected_number_of_rounds} Rounds</Text>
                   )}
@@ -2613,46 +2654,46 @@ The Art Battle Team`);
 
               {/* Details Grid */}
               <Flex direction="column" gap="2">
-                {/* Eventbrite & Slack */}
-                {(event.eventbrite_id || event.slack_channel) && (
-                  <Flex gap="4" wrap="wrap">
-                    {event.eventbrite_id && (
-                      <Flex gap="2" align="center">
-                        <Text size="1" color="gray">Eventbrite:</Text>
-                        <Text size="2" weight="medium">{event.eventbrite_id}</Text>
-                      </Flex>
+                {/* Tickets Line */}
+                {event.ticket_link && (
+                  <Flex gap="2" wrap="wrap" align="center">
+                    <Text size="2">Tickets:</Text>
+                    {event.ticket_price_notes && (
+                      <Text size="2" weight="bold">{event.ticket_price_notes}</Text>
                     )}
-                    {event.slack_channel && (
-                      <Flex gap="2" align="center">
-                        <Text size="1" color="gray">Slack:</Text>
-                        <Text size="2" weight="medium" color="blue">#{event.slack_channel.replace(/^#/, '')}</Text>
-                      </Flex>
+                    {event.ticket_price_notes && <Text size="2">@</Text>}
+                    <a href={event.ticket_link} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.875rem', color: 'var(--accent-9)' }}>
+                      {(() => {
+                        try {
+                          const url = new URL(event.ticket_link);
+                          return url.hostname.replace(/^www\./, '');
+                        } catch {
+                          return event.ticket_link;
+                        }
+                      })()}
+                    </a>
+                    {event.eventbrite_id && (
+                      <Text size="2" color="gray">({event.eventbrite_id})</Text>
                     )}
                   </Flex>
                 )}
 
-                {/* Ticket Info */}
-                {(event.ticket_link || event.ticket_price_notes) && (
-                  <Flex direction="column" gap="1">
-                    {event.ticket_link && (
-                      <Flex gap="2" align="center">
-                        <Text size="1" color="gray">Tickets:</Text>
-                        <a href={event.ticket_link} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.875rem', color: 'var(--accent-9)' }}>
-                          {(() => {
-                            try {
-                              const url = new URL(event.ticket_link);
-                              return url.hostname.replace(/^www\./, '');
-                            } catch {
-                              return event.ticket_link;
-                            }
-                          })()}
-                        </a>
-                      </Flex>
+                {/* Auction Line */}
+                {event.enable_auction && (
+                  <Flex gap="2" wrap="wrap" align="center">
+                    <Text size="2">Auction:</Text>
+                    <Text size="2">starts at</Text>
+                    <Text size="2" weight="bold">
+                      {event.cities?.countries?.currency_code || 'USD'} {event.cities?.countries?.currency_symbol || '$'}{event.auction_start_bid?.toFixed(2) || '0.00'}
+                    </Text>
+                    {(event.tax !== null && event.tax !== undefined) && (
+                      <>
+                        <Text size="2">+</Text>
+                        <Text size="2">{(event.tax * 100).toFixed(1)}% tax</Text>
+                      </>
                     )}
-                    {event.ticket_price_notes && (
-                      <Box>
-                        <Text size="2" style={{ whiteSpace: 'pre-wrap' }}>{event.ticket_price_notes}</Text>
-                      </Box>
+                    {event.artist_auction_portion && (
+                      <Text size="2" color="gray">({Math.round(event.artist_auction_portion * 100)}% to artists)</Text>
                     )}
                   </Flex>
                 )}
@@ -2689,26 +2730,54 @@ The Art Battle Team`);
               <Separator size="4" />
 
               {/* Event Info Approval */}
-              <Flex gap="2" align="center">
-                {event.event_info_approved_by ? (
-                  <>
-                    <Badge color="green" size="2">APPROVED</Badge>
-                    <Text size="1" color="gray">
-                      by {event.event_info_approved_by}
-                      {event.event_info_approved_at && (
-                        <> on {new Date(event.event_info_approved_at).toLocaleString()}</>
+              <Flex direction="column" gap="2">
+                {(() => {
+                  const missingFields = [];
+
+                  if (!event.event_start_datetime) missingFields.push('Start Date/Time');
+                  if (!event.event_end_datetime) missingFields.push('End Date/Time');
+                  if (!event.timezone_icann) missingFields.push('Timezone');
+                  if (!event.venue && !event.venue_id) missingFields.push('Venue');
+                  if (!event.city_id) missingFields.push('City');
+                  if (!event.capacity) missingFields.push('Capacity');
+                  if (!event.expected_number_of_rounds) missingFields.push('Expected Rounds');
+                  if (!event.target_artists_booked) missingFields.push('Target Artists');
+                  if (event.enable_auction && !event.auction_start_bid) missingFields.push('Auction Start Bid');
+                  if (!event.artist_auction_portion) missingFields.push('Artist Auction Portion');
+                  if (event.tax === null || event.tax === undefined) missingFields.push('Tax Rate');
+
+                  return (
+                    <>
+                      {missingFields.length > 0 && (
+                        <Text size="1" style={{ color: 'var(--red-9)', fontStyle: 'italic' }}>
+                          Missing: {missingFields.join(', ')}
+                        </Text>
                       )}
-                    </Text>
-                  </>
-                ) : (
-                  <Button
-                    size="2"
-                    onClick={approveEventInfo}
-                    disabled={approvingEventInfo}
-                  >
-                    {approvingEventInfo ? 'Approving...' : 'APPROVE'}
-                  </Button>
-                )}
+                      <Flex gap="2" align="center">
+                        {event.event_info_approved_by ? (
+                          <>
+                            <Badge color="green" size="2">APPROVED</Badge>
+                            <Text size="1" color="gray">
+                              by {event.event_info_approved_by}
+                              {event.event_info_approved_at && (
+                                <> on {new Date(event.event_info_approved_at).toLocaleString()}</>
+                              )}
+                            </Text>
+                          </>
+                        ) : (
+                          <Button
+                            size="2"
+                            onClick={approveEventInfo}
+                            disabled={approvingEventInfo || missingFields.length > 0}
+                            color={missingFields.length > 0 ? 'gray' : undefined}
+                          >
+                            {approvingEventInfo ? 'Approving...' : 'APPROVE'}
+                          </Button>
+                        )}
+                      </Flex>
+                    </>
+                  );
+                })()}
               </Flex>
             </Flex>
           </Box>

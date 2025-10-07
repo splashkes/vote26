@@ -69,15 +69,18 @@ const AdminLayout = () => {
   // Extract selected event from URL params and determine if context panel should show
   useEffect(() => {
     const eventId = params.eventId;
-    
-    // Hide context panel for admin-users and invitations pages
+
+    // Hide context panel for admin-users, invitations, and event detail pages
     const hideContextPanelRoutes = ['/admin-users', '/invitations'];
-    const shouldHideContext = hideContextPanelRoutes.some(route => 
+    const shouldHideContext = hideContextPanelRoutes.some(route =>
       location.pathname === route || location.pathname.startsWith(route + '/')
     );
-    
-    setShowContextPanel(!shouldHideContext && !!eventId);
-    
+
+    // Also hide context panel for main event detail page (but not sub-pages like /artists, /art, /health, /live)
+    const isEventDetailPage = eventId && location.pathname === `/events/${eventId}`;
+
+    setShowContextPanel(!shouldHideContext && !isEventDetailPage && !!eventId);
+
     if (eventId && adminEvents) {
       const event = adminEvents.find(e => e.event_id === eventId || e.id === eventId);
       setSelectedEvent(event || null);
