@@ -3519,8 +3519,8 @@ The Art Battle Team`);
             )}
           </Card>
 
-        {/* Event Linter - Collapsible (ABHQ super admins only) */}
-        {isSuperAdmin && event?.eid && (
+        {/* Event Linter - Collapsible */}
+        {event?.eid && (
           <Card>
             <Box p="3">
               <Flex justify="between" align="center" style={{ cursor: 'pointer' }} onClick={() => setLinterCollapsed(!linterCollapsed)}>

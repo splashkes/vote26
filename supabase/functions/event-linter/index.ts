@@ -1338,6 +1338,82 @@ serve(async (req) => {
       }
     }
 
+    // Run meta ads budget check (check for events with budget set but no active campaigns)
+    const metaAdsBudgetRule = rules.find((r: any) => r.id === 'meta_ads_budget_no_campaigns');
+    if (metaAdsBudgetRule && eventsToLint.length > 0) {
+      try {
+        const now = new Date();
+        // Check upcoming events (within 45 days) or recently past events (within 7 days after)
+        const relevantEvents = eventsToLint.filter(e => {
+          if (!e.event_start_datetime || !e.meta_ads_budget || e.meta_ads_budget <= 0) return false;
+          const eventStart = new Date(e.event_start_datetime);
+          const daysUntilEvent = (eventStart.getTime() - now.getTime()) / 1000 / 60 / 60 / 24;
+          const daysSinceEvent = (now.getTime() - eventStart.getTime()) / 1000 / 60 / 60 / 24;
+
+          // Include events within 45 days before or 7 days after start
+          return (daysUntilEvent > 0 && daysUntilEvent <= 45) || (daysSinceEvent >= 0 && daysSinceEvent <= 7);
+        });
+
+        if (relevantEvents.length > 0) {
+          // Check cache for meta ads data (24-hour cache for linter)
+          const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+          const eventEids = relevantEvents.map(e => e.eid);
+          const { data: cachedData } = await supabaseClient
+            .from('ai_analysis_cache')
+            .select('event_id, result, created_at')
+            .eq('analysis_type', 'meta_ads')
+            .in('event_id', eventEids)
+            .gte('created_at', twentyFourHoursAgo);
+
+          const cacheMap = new Map();
+          cachedData?.forEach((cache: any) => {
+            cacheMap.set(cache.event_id, cache.result);
+          });
+
+          // Check each event
+          for (const event of relevantEvents) {
+            const metaAdsData = cacheMap.get(event.eid);
+
+            // Generate warning if no cached data OR if campaigns array is empty
+            const shouldWarn = !metaAdsData || !metaAdsData.campaigns || metaAdsData.campaigns.length === 0;
+
+            if (shouldWarn) {
+              incrementRuleHit(supabaseClient, 'meta_ads_budget_no_campaigns');
+
+              const budgetAmount = event.meta_ads_budget;
+              const currencyCode = event.currency || 'USD';
+              const cacheStatus = !metaAdsData ? 'No data found' : 'No active campaigns';
+
+              const message = `Meta ads budget of $${budgetAmount} ${currencyCode} set but no active campaigns found. ${cacheStatus} (cache checked within 24h)`;
+
+              findings.push({
+                ruleId: 'meta_ads_budget_no_campaigns',
+                ruleName: metaAdsBudgetRule.name,
+                severity: 'warning',
+                category: metaAdsBudgetRule.category,
+                context: metaAdsBudgetRule.context,
+                emoji: '⚠️',
+                message: message,
+                eventId: event.id,
+                eventEid: event.eid,
+                eventName: event.name,
+                metaAdsBudget: budgetAmount,
+                metaAdsCurrency: currencyCode,
+                cacheStatus: cacheStatus,
+                timestamp: new Date().toISOString()
+              });
+            }
+          }
+
+          debugInfo.meta_ads_checked = relevantEvents.length;
+          debugInfo.meta_ads_cache_hits = cachedData?.length || 0;
+        }
+      } catch (metaAdsError: any) {
+        debugInfo.meta_ads_error = metaAdsError.message;
+      }
+    }
+
     // Filter out suppressed findings
     try {
       const { data: suppressions, error: suppressError } = await supabaseClient
