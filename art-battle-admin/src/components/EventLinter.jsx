@@ -12,7 +12,6 @@ import {
   Heading,
   Button,
   Dialog,
-  ScrollArea,
   Separator,
   Checkbox
 } from '@radix-ui/themes';
@@ -454,72 +453,70 @@ const EventLinter = () => {
               <Text color="gray">No findings match the current filters</Text>
             </Flex>
           ) : (
-            <ScrollArea style={{ maxHeight: 'calc(100vh - 400px)' }}>
-              <Table.Root variant="surface" size="1">
-                <Table.Header>
-                  <Table.Row>
-                    <Table.ColumnHeaderCell style={{ width: '30px', padding: '4px 8px' }}></Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell style={{ width: '80px', padding: '4px 8px' }}>EID</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell style={{ width: '180px', padding: '4px 8px' }}>Event</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell style={{ width: '90px', padding: '4px 8px' }}>Severity</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell style={{ minWidth: '300px', padding: '4px 8px' }}>Message</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell style={{ width: '120px', padding: '4px 8px' }}>Category</Table.ColumnHeaderCell>
-                  </Table.Row>
-                </Table.Header>
+            <Table.Root variant="surface" size="1">
+              <Table.Header>
+                <Table.Row>
+                  <Table.ColumnHeaderCell style={{ width: '30px', padding: '4px 8px' }}></Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell style={{ width: '80px', padding: '4px 8px' }}>EID</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell style={{ width: '180px', padding: '4px 8px' }}>Event</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell style={{ width: '90px', padding: '4px 8px' }}>Severity</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell style={{ minWidth: '300px', padding: '4px 8px' }}>Message</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell style={{ width: '120px', padding: '4px 8px' }}>Category</Table.ColumnHeaderCell>
+                </Table.Row>
+              </Table.Header>
 
-                <Table.Body>
-                  {findings.map((finding, index) => (
-                    <Table.Row
-                      key={`${finding.eventId}-${finding.ruleId}-${index}`}
+              <Table.Body>
+                {findings.map((finding, index) => (
+                  <Table.Row
+                    key={`${finding.eventId}-${finding.ruleId}-${index}`}
+                  >
+                    <Table.Cell style={{ padding: '4px 8px' }}>
+                      <Text size="2">{finding.emoji}</Text>
+                    </Table.Cell>
+                    <Table.Cell
+                      style={{ padding: '4px 8px', cursor: 'pointer' }}
+                      onClick={(e) => handleEidClick(e, finding)}
                     >
-                      <Table.Cell style={{ padding: '4px 8px' }}>
-                        <Text size="2">{finding.emoji}</Text>
-                      </Table.Cell>
-                      <Table.Cell
-                        style={{ padding: '4px 8px', cursor: 'pointer' }}
-                        onClick={(e) => handleEidClick(e, finding)}
-                      >
-                        <Badge color={finding.artistNumber ? 'purple' : 'gray'} variant="soft" size="1">
-                          {finding.eventEid || (finding.artistNumber ? `#${finding.artistNumber}` : 'N/A')}
-                        </Badge>
-                      </Table.Cell>
-                      <Table.Cell style={{ padding: '4px 8px' }}>
-                        <Text size="1" weight="medium" style={{
-                          maxWidth: '180px',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          display: 'block'
-                        }}>
-                          {finding.eventName}
-                        </Text>
-                      </Table.Cell>
-                      <Table.Cell style={{ padding: '4px 8px' }}>
-                        <Badge color={getSeverityColor(finding.severity)} variant="soft" size="1">
-                          {finding.severity}
-                        </Badge>
-                      </Table.Cell>
-                      <Table.Cell
-                        style={{ padding: '4px 8px', cursor: 'pointer' }}
-                        onClick={(e) => handleMessageClick(e, finding)}
-                      >
-                        <Text size="1" style={{ fontFamily: 'inherit' }}>
-                          {finding.message}
-                        </Text>
-                      </Table.Cell>
-                      <Table.Cell style={{ padding: '4px 8px' }}>
-                        <Text size="1" color="gray" style={{
-                          textTransform: 'capitalize',
-                          fontFamily: 'inherit'
-                        }}>
-                          {finding.category.replace(/_/g, ' ')}
-                        </Text>
-                      </Table.Cell>
-                    </Table.Row>
-                  ))}
-                </Table.Body>
-              </Table.Root>
-            </ScrollArea>
+                      <Badge color={finding.artistNumber ? 'purple' : 'gray'} variant="soft" size="1">
+                        {finding.eventEid || (finding.artistNumber ? `#${finding.artistNumber}` : 'N/A')}
+                      </Badge>
+                    </Table.Cell>
+                    <Table.Cell style={{ padding: '4px 8px' }}>
+                      <Text size="1" weight="medium" style={{
+                        maxWidth: '180px',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        display: 'block'
+                      }}>
+                        {finding.eventName}
+                      </Text>
+                    </Table.Cell>
+                    <Table.Cell style={{ padding: '4px 8px' }}>
+                      <Badge color={getSeverityColor(finding.severity)} variant="soft" size="1">
+                        {finding.severity}
+                      </Badge>
+                    </Table.Cell>
+                    <Table.Cell
+                      style={{ padding: '4px 8px', cursor: 'pointer' }}
+                      onClick={(e) => handleMessageClick(e, finding)}
+                    >
+                      <Text size="1" style={{ fontFamily: 'inherit' }}>
+                        {finding.message}
+                      </Text>
+                    </Table.Cell>
+                    <Table.Cell style={{ padding: '4px 8px' }}>
+                      <Text size="1" color="gray" style={{
+                        textTransform: 'capitalize',
+                        fontFamily: 'inherit'
+                      }}>
+                        {finding.category.replace(/_/g, ' ')}
+                      </Text>
+                    </Table.Cell>
+                  </Table.Row>
+                ))}
+              </Table.Body>
+            </Table.Root>
           )}
         </Card>
 

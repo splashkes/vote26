@@ -47,7 +47,6 @@ const CreateEvent = () => {
     enabled: false,
     show_in_app: false,
     current_round: 0,
-    capacity: 200,
     eid: '',
     eventbrite_id: '',
     slack_channel: '',
@@ -59,11 +58,14 @@ const CreateEvent = () => {
     target_artists_booked: 12,
     wildcard_expected: true,
     expected_number_of_rounds: 3,
-    artist_auction_portion: 0.5
+    artist_auction_portion: 0.5,
+    winner_prize: '',
+    winner_prize_currency: '',
+    other_prizes: ''
   });
 
   useEffect(() => {
-    fetchLocations();
+    // Don't auto-load locations - load on demand when dropdown opens
     if (!isEditMode) {
       fetchNextEid();
     }
@@ -170,6 +172,12 @@ const CreateEvent = () => {
       }
 
       if (eventData) {
+        console.log('Loading event data:', {
+          venue_id: eventData.venue_id,
+          venue: eventData.venue,
+          city_id: eventData.city_id
+        });
+
         // Format datetime for inputs (HTML datetime-local requires YYYY-MM-DDTHH:MM format)
         // Convert UTC database time to event's timezone for editing
         const formatDateTimeForInput = (datetime, timezone) => {
@@ -197,7 +205,7 @@ const CreateEvent = () => {
           return `${year}-${month}-${day}T${hour}:${minute}`;
         };
 
-        setFormData({
+        const newFormData = {
           name: eventData.name || '',
           description: eventData.description || '',
           venue: eventData.venue || '',
@@ -210,20 +218,32 @@ const CreateEvent = () => {
           enabled: eventData.enabled || false,
           show_in_app: eventData.show_in_app || false,
           current_round: eventData.current_round || 0,
-          capacity: eventData.capacity || 200,
           eid: eventData.eid || '',
           eventbrite_id: eventData.eventbrite_id || '',
           slack_channel: eventData.slack_channel || '',
           ticket_link: eventData.ticket_link || '',
           ticket_price_notes: eventData.ticket_price_notes || '',
-          meta_ads_budget: eventData.meta_ads_budget || '',
-          other_ads_budget: eventData.other_ads_budget || '',
+          meta_ads_budget: eventData.meta_ads_budget !== null && eventData.meta_ads_budget !== undefined ? String(eventData.meta_ads_budget) : '',
+          other_ads_budget: eventData.other_ads_budget !== null && eventData.other_ads_budget !== undefined ? String(eventData.other_ads_budget) : '',
           event_folder_link: eventData.event_folder_link || '',
           target_artists_booked: eventData.target_artists_booked || '',
           wildcard_expected: eventData.wildcard_expected || false,
           expected_number_of_rounds: eventData.expected_number_of_rounds || '',
-          artist_auction_portion: eventData.artist_auction_portion || 0.5
+          artist_auction_portion: eventData.artist_auction_portion || 0.5,
+          winner_prize: eventData.winner_prize || '',
+          winner_prize_currency: eventData.winner_prize_currency || '',
+          other_prizes: eventData.other_prizes || ''
+        };
+
+        console.log('Setting form data:', {
+          venue_id: newFormData.venue_id,
+          venue: newFormData.venue,
+          city_id: newFormData.city_id,
+          venuesLoaded: venues.length,
+          venueInList: venues.find(v => v.id === newFormData.venue_id)
         });
+
+        setFormData(newFormData);
       }
     } catch (err) {
       console.error('Error loading event:', err);
@@ -278,7 +298,6 @@ const CreateEvent = () => {
         ...formData,
         city_id: formData.city_id === 'none' ? null : formData.city_id,
         country_id: formData.country_id === 'none' ? null : formData.country_id,
-        venue_id: formData.venue_id === 'none' ? null : formData.venue_id,
         description: formData.description || null,
         venue: formData.venue || null,
         ticket_price_notes: formData.ticket_price_notes || null,
@@ -287,8 +306,16 @@ const CreateEvent = () => {
         event_folder_link: formData.event_folder_link || null,
         target_artists_booked: formData.target_artists_booked ? parseInt(formData.target_artists_booked) : null,
         wildcard_expected: formData.wildcard_expected,
-        expected_number_of_rounds: formData.expected_number_of_rounds ? parseInt(formData.expected_number_of_rounds) : null
+        expected_number_of_rounds: formData.expected_number_of_rounds ? parseInt(formData.expected_number_of_rounds) : null,
+        winner_prize: formData.winner_prize ? parseFloat(formData.winner_prize) : null,
+        winner_prize_currency: formData.winner_prize_currency || null,
+        other_prizes: formData.other_prizes || null
       };
+
+      // Only include venue_id if venues dropdown was opened/interacted with
+      if (venues.length > 0) {
+        requestData.venue_id = formData.venue_id === 'none' || !formData.venue_id ? null : formData.venue_id;
+      }
 
       // Call appropriate function based on mode
       const functionName = isEditMode ? 'admin-update-event' : 'admin-create-event';
@@ -508,19 +535,43 @@ const CreateEvent = () => {
                         Venue (Managed)
                       </Text>
                       <Select.Root
-                        value={formData.venue_id}
-                        onValueChange={(value) => handleInputChange('venue_id', value)}
+                        value={venues.length > 0 ? (formData.venue_id || 'none') : undefined}
+                        onValueChange={(value) => {
+                          handleInputChange('venue_id', value);
+                          // Clear venue_id from submission if "none" is selected
+                          if (value === 'none') {
+                            handleInputChange('venue_id', null);
+                          }
+                        }}
+                        onOpenChange={(open) => {
+                          // Load venues when dropdown opens if not already loaded
+                          if (open && venues.length === 0) {
+                            fetchLocations();
+                          }
+                        }}
                       >
-                        <Select.Trigger style={{ width: '100%' }} />
+                        <Select.Trigger
+                          placeholder={venues.length === 0 ? "Click to load venues..." : "Select venue or use manual"}
+                          style={{ width: '100%' }}
+                        />
                         <Select.Content>
                           <Select.Item value="none">-- Select Venue or Use Manual --</Select.Item>
-                          {venues
-                            .filter(v => !formData.city_id || formData.city_id === 'none' || v.city_id === formData.city_id)
-                            .map(venue => (
-                              <Select.Item key={venue.id} value={venue.id}>
-                                {venue.name} - {venue.cities?.name}, {venue.cities?.countries?.code}
-                              </Select.Item>
-                            ))}
+                          {venues.length === 0 ? (
+                            <Select.Item value="loading" disabled>Loading venues...</Select.Item>
+                          ) : (
+                            venues
+                              .filter(v =>
+                                !formData.city_id ||
+                                formData.city_id === 'none' ||
+                                v.city_id === formData.city_id ||
+                                v.id === formData.venue_id
+                              )
+                              .map(venue => (
+                                <Select.Item key={venue.id} value={venue.id}>
+                                  {venue.name} - {venue.cities?.name}, {venue.cities?.countries?.code}
+                                </Select.Item>
+                              ))
+                          )}
                         </Select.Content>
                       </Select.Root>
                       <Text size="2" color="gray" mt="1" style={{ display: 'block' }}>
@@ -791,19 +842,6 @@ const CreateEvent = () => {
                   <Flex direction="column" gap="3">
                     <Box>
                       <Text as="label" size="2" weight="medium" mb="1" style={{ display: 'block' }}>
-                        Capacity
-                      </Text>
-                      <TextField.Root
-                        type="number"
-                        placeholder="200"
-                        value={formData.capacity}
-                        onChange={(e) => handleInputChange('capacity', parseInt(e.target.value) || 200)}
-                        min="1"
-                      />
-                    </Box>
-
-                    <Box>
-                      <Text as="label" size="2" weight="medium" mb="1" style={{ display: 'block' }}>
                         Target Number of Artists
                       </Text>
                       <TextField.Root
@@ -841,6 +879,64 @@ const CreateEvent = () => {
                       />
                       <Text size="2">Wildcard Expected</Text>
                     </Flex>
+
+                    <Box>
+                      <Text as="label" size="3" weight="medium" mb="2" style={{ display: 'block' }}>
+                        Prize Information
+                      </Text>
+
+                      <Flex direction="column" gap="3">
+                        <Box>
+                          <Text as="label" size="2" weight="medium" mb="1" style={{ display: 'block' }}>
+                            Winner Prize
+                          </Text>
+                          <Flex gap="2">
+                            <Select.Root
+                              value={formData.winner_prize_currency || formData.cities?.countries?.currency_code || 'USD'}
+                              onValueChange={(value) => handleInputChange('winner_prize_currency', value)}
+                            >
+                              <Select.Trigger style={{ width: '80px' }} />
+                              <Select.Content>
+                                <Select.Item value="USD">USD</Select.Item>
+                                <Select.Item value="CAD">CAD</Select.Item>
+                                <Select.Item value="EUR">EUR</Select.Item>
+                                <Select.Item value="GBP">GBP</Select.Item>
+                                <Select.Item value="AUD">AUD</Select.Item>
+                                <Select.Item value="NZD">NZD</Select.Item>
+                                <Select.Item value="JPY">JPY</Select.Item>
+                                <Select.Item value="MXN">MXN</Select.Item>
+                              </Select.Content>
+                            </Select.Root>
+                            <TextField.Root
+                              type="number"
+                              step="0.01"
+                              placeholder="0.00"
+                              value={formData.winner_prize}
+                              onChange={(e) => handleInputChange('winner_prize', e.target.value)}
+                              style={{ flex: 1 }}
+                            />
+                          </Flex>
+                          <Text size="2" color="gray" mt="1" style={{ display: 'block' }}>
+                            Prize amount for the winner.
+                          </Text>
+                        </Box>
+
+                        <Box>
+                          <Text as="label" size="2" weight="medium" mb="1" style={{ display: 'block' }}>
+                            Other Prizes
+                          </Text>
+                          <TextArea
+                            placeholder="e.g., 2nd place: $200, 3rd place: $100, People's Choice: $50"
+                            value={formData.other_prizes}
+                            onChange={(e) => handleInputChange('other_prizes', e.target.value)}
+                            rows={2}
+                          />
+                          <Text size="2" color="gray" mt="1" style={{ display: 'block' }}>
+                            Describe other prizes (runner-up, people's choice, etc.)
+                          </Text>
+                        </Box>
+                      </Flex>
+                    </Box>
 
                     <Flex direction="column" gap="3">
                       <Text as="label" size="3" weight="medium">Status</Text>

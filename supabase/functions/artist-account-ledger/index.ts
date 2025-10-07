@@ -266,6 +266,7 @@ serve(async (req) => {
     }
 
     // 2. Get all artist payments (DEBITS from artist account - money paid out)
+    // Also includes manual credits (negative amounts - money owed TO artist)
     // Use service client for payment data as it may not have RLS policies for artists
     const { data: payments, error: paymentsError } = await serviceClient
       .from('artist_payments')
@@ -281,6 +282,7 @@ serve(async (req) => {
         payment_method,
         description,
         reference,
+        reason_category,
         created_at,
         paid_at,
         created_by
@@ -300,8 +302,17 @@ serve(async (req) => {
       }
 
       if (payment.payment_type === 'manual') {
-        // DEBIT: Manual payment made
-        let manualDescription = payment.description || `Manual ${payment.payment_method} payment`;
+        // Manual payment or credit
+        // Negative amounts = CREDIT (owed TO artist)
+        // Positive amounts = DEBIT (paid OUT to artist)
+        const isCredit = payment.net_amount < 0;
+        const absoluteAmount = Math.abs(payment.net_amount);
+
+        let manualDescription = payment.description || `Manual ${payment.payment_method} ${isCredit ? 'credit' : 'payment'}`;
+        if (payment.reason_category) {
+          const categoryLabel = payment.reason_category.replace('_', ' ');
+          manualDescription = `${categoryLabel}: ${manualDescription}`;
+        }
         if (payment.created_by) {
           manualDescription += ` (by ${payment.created_by})`;
         }
@@ -310,19 +321,22 @@ serve(async (req) => {
         }
 
         ledgerEntries.push({
-          id: `manual-payment-${payment.id}`,
+          id: `manual-${isCredit ? 'credit' : 'payment'}-${payment.id}`,
           date: paymentDate,
-          type: 'debit',
-          category: 'Manual Payment',
+          type: isCredit ? 'credit' : 'debit',
+          category: isCredit ? 'Manual Credit' : 'Manual Payment',
           description: manualDescription,
-          amount: payment.net_amount,
+          amount: absoluteAmount,
           currency: payment.currency,
           metadata: {
             payment_method: payment.payment_method,
+            reason_category: payment.reason_category,
             reference: payment.reference,
             created_by: payment.created_by,
             status: payment.status,
-            payment_type: 'manual'
+            payment_type: 'manual',
+            is_credit: isCredit,
+            original_amount: payment.net_amount
           }
         });
       } else {

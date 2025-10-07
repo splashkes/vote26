@@ -393,7 +393,7 @@ const EventDetail = () => {
         const isFutureEvent = eventStart > now;
 
         if (isFutureEvent && (!data.expected_number_of_rounds || !data.target_artists_booked)) {
-          const updates: any = {};
+          const updates = {};
 
           if (!data.expected_number_of_rounds) {
             updates.expected_number_of_rounds = 3;
@@ -2698,10 +2698,10 @@ The Art Battle Team`);
                     <Text size="3" weight="medium">
                       {event.venues?.name || event.venue}
                     </Text>
-                    {event.capacity && (
+                    {event.venues?.default_capacity && (
                       <>
                         <Text color="gray">•</Text>
-                        <Text size="3" color="gray">Capacity: {event.capacity}</Text>
+                        <Text size="3" color="gray">Capacity: {event.venues.default_capacity}</Text>
                       </>
                     )}
                   </Flex>
@@ -2738,6 +2738,26 @@ The Art Battle Team`);
                 <Box>
                   <Text size="2" style={{ lineHeight: '1.6' }}>{event.description}</Text>
                 </Box>
+              )}
+
+              {/* Prize Information */}
+              {(event.winner_prize || event.other_prizes) && (
+                <Flex gap="2" wrap="wrap" align="center">
+                  {event.winner_prize && (
+                    <>
+                      <Text size="2">Winner Prize:</Text>
+                      <Text size="2" weight="bold">
+                        {event.winner_prize_currency || event.cities?.countries?.currency_code || 'USD'} {event.cities?.countries?.currency_symbol || '$'}{event.winner_prize.toFixed(2)}
+                      </Text>
+                    </>
+                  )}
+                  {event.other_prizes && (
+                    <>
+                      {event.winner_prize && <Text color="gray">•</Text>}
+                      <Text size="2" color="gray">{event.other_prizes}</Text>
+                    </>
+                  )}
+                </Flex>
               )}
 
               <Separator size="4" />
@@ -2841,9 +2861,8 @@ The Art Battle Team`);
                   if (!event.event_start_datetime) missingFields.push('Start Date/Time');
                   if (!event.event_end_datetime) missingFields.push('End Date/Time');
                   if (!event.timezone_icann) missingFields.push('Timezone');
-                  if (!event.venue && !event.venue_id) missingFields.push('Venue');
+                  if (!event.venue && !event.venue_id && !event.venues?.name) missingFields.push('Venue');
                   if (!event.city_id) missingFields.push('City');
-                  if (!event.capacity) missingFields.push('Capacity');
                   if (!event.expected_number_of_rounds) missingFields.push('Expected Rounds');
                   if (!event.target_artists_booked) missingFields.push('Target Artists');
                   if (event.enable_auction && !event.auction_start_bid) missingFields.push('Auction Start Bid');

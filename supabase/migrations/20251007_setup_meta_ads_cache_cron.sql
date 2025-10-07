@@ -34,9 +34,9 @@ BEGIN
 
     -- Call the meta-ads-report edge function via pg_net
     PERFORM net.http_get(
-      url := 'https://xsqdkubgyqwpyvfltnrf.supabase.co/functions/v1/meta-ads-report?event_eid=' || event_record.eid,
+      url := 'https://xsqdkubgyqwpyvfltnrf.supabase.co/functions/v1/meta-ads-report/' || event_record.eid,
       headers := jsonb_build_object(
-        'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key', true)
+        'X-Cron-Secret', (SELECT secret_value FROM cron_secrets WHERE name = 'meta_ads_cron')
       )
     );
 
@@ -77,6 +77,20 @@ SELECT cron.schedule(
   $$SELECT cache_meta_ads_data()$$
 );
 
+-- Create a table to store cron secrets (secure, not exposed via API)
+CREATE TABLE IF NOT EXISTS cron_secrets (
+  name text PRIMARY KEY,
+  secret_value text NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now()
+);
+
+-- Disable RLS to make it inaccessible via Supabase client
+ALTER TABLE cron_secrets ENABLE ROW LEVEL SECURITY;
+
+-- No policies = no access via API, only via SECURITY DEFINER functions
+-- This makes it secure from external access
+
 -- Create a table to store cron job execution logs
 CREATE TABLE IF NOT EXISTS meta_ads_cache_cron_log (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -95,5 +109,11 @@ CREATE TABLE IF NOT EXISTS meta_ads_cache_cron_log (
 CREATE INDEX IF NOT EXISTS idx_meta_ads_cache_cron_log_executed_at
   ON meta_ads_cache_cron_log(executed_at DESC);
 
--- Add comment
+-- Add comments
+COMMENT ON TABLE cron_secrets IS 'Secure storage for cron job secrets - not accessible via API';
 COMMENT ON TABLE meta_ads_cache_cron_log IS 'Logs for Meta Ads cache cron job execution';
+
+-- Insert the cron secret (run this separately after generating a secret)
+-- INSERT INTO cron_secrets (name, secret_value)
+-- VALUES ('meta_ads_cron', 'YOUR-GENERATED-SECRET-HERE')
+-- ON CONFLICT (name) DO UPDATE SET secret_value = EXCLUDED.secret_value, updated_at = now();

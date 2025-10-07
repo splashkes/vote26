@@ -32,17 +32,19 @@ async function getEventByIdentifier(identifier: string) {
 async function getMetaAdsDataFromCache(eventEID: string) {
   // Check for cached Meta ads data (6-hour cache)
   const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
-  
+
   const { data, error } = await supabase
-    .from('ai_analysis_cache') // Repurposing this table or create meta_ads_cache
+    .from('ai_analysis_cache')
     .select('*')
     .eq('event_id', eventEID)
     .eq('analysis_type', 'meta_ads')
     .gte('created_at', sixHoursAgo)
+    .order('created_at', { ascending: false })
+    .limit(1)
     .single();
-  
+
   if (error || !data) return null;
-  
+
   return data.result;
 }
 
@@ -329,12 +331,12 @@ function processMetaAPIResponse(data: any, eventEID: string, currency: string) {
 }
 
 async function cacheMetaAdsData(data: any) {
-  // Cache the data for 6 hours
+  // Cache the data for 6 hours - insert new row each time
   const expiresAt = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
-  
-  await supabase
+
+  const { error } = await supabase
     .from('ai_analysis_cache')
-    .upsert({
+    .insert({
       event_id: data.event_eid,
       analysis_type: 'meta_ads',
       result: data,
@@ -342,9 +344,11 @@ async function cacheMetaAdsData(data: any) {
       expires_at: expiresAt,
       event_name: `Meta Ads Data for ${data.event_eid}`,
       served_count: 0
-    }, {
-      onConflict: 'event_id,analysis_type'
     });
+
+  if (error) {
+    console.error('Error caching Meta Ads data:', error);
+  }
 }
 
 Deno.serve(async (req) => {
@@ -354,24 +358,48 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Verify authentication
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Missing authorization header' }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      );
+    // Check for cron secret header first (for scheduled cron jobs)
+    const cronSecret = req.headers.get('X-Cron-Secret');
+    const expectedCronSecret = Deno.env.get('CRON_SECRET_META_ADS');
+
+    let isAuthorized = false;
+
+    if (cronSecret && expectedCronSecret && cronSecret === expectedCronSecret) {
+      // Authorized via cron secret
+      isAuthorized = true;
+      console.log('Request authorized via cron secret');
+    } else {
+      // Fall back to JWT authentication
+      const authHeader = req.headers.get('Authorization');
+      if (!authHeader) {
+        return new Response(
+          JSON.stringify({ error: 'Missing authorization header' }),
+          {
+            status: 401,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          }
+        );
+      }
+
+      const token = authHeader.replace('Bearer ', '');
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+      if (authError || !user) {
+        return new Response(
+          JSON.stringify({ error: 'Unauthorized', details: authError?.message }),
+          {
+            status: 401,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          }
+        );
+      }
+
+      isAuthorized = true;
     }
 
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-
-    if (authError || !user) {
+    if (!isAuthorized) {
       return new Response(
-        JSON.stringify({ error: 'Unauthorized', details: authError?.message }),
+        JSON.stringify({ error: 'Unauthorized' }),
         {
           status: 401,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }

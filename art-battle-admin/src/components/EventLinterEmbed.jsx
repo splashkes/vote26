@@ -8,7 +8,6 @@ import {
   Spinner,
   Card,
   Dialog,
-  ScrollArea,
   Button
 } from '@radix-ui/themes';
 import { InfoCircledIcon } from '@radix-ui/react-icons';
@@ -135,36 +134,36 @@ const EventLinterEmbed = ({ eventEid }) => {
       <Box style={{
         backgroundColor: 'var(--color-panel-solid)',
         fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
-        borderRadius: '4px'
+        borderRadius: '4px',
+        overflow: 'visible',
+        width: '100%'
       }}>
-        <ScrollArea style={{ maxHeight: '400px' }}>
-          <Table.Root variant="surface" size="1">
-            <Table.Header>
-              <Table.Row>
-                <Table.ColumnHeaderCell style={{ width: '30px', padding: '4px 8px' }}></Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell style={{ minWidth: '300px', padding: '4px 8px' }}>Message</Table.ColumnHeaderCell>
-              </Table.Row>
-            </Table.Header>
+        <Table.Root variant="surface" size="1" style={{ width: '100%', tableLayout: 'fixed' }}>
+          <Table.Header>
+            <Table.Row>
+              <Table.ColumnHeaderCell style={{ width: '30px', padding: '4px 8px' }}></Table.ColumnHeaderCell>
+              <Table.ColumnHeaderCell style={{ padding: '4px 8px' }}>Message</Table.ColumnHeaderCell>
+            </Table.Row>
+          </Table.Header>
 
-            <Table.Body>
-              {findings.map((finding, index) => (
-                <Table.Row key={`${finding.ruleId}-${index}`}>
-                  <Table.Cell style={{ padding: '4px 8px' }}>
-                    <Text size="2">{finding.emoji}</Text>
-                  </Table.Cell>
-                  <Table.Cell
-                    style={{ padding: '4px 8px', cursor: 'pointer' }}
-                    onClick={() => handleMessageClick(finding)}
-                  >
-                    <Text size="1" style={{ fontFamily: 'inherit' }}>
-                      {finding.message}
-                    </Text>
-                  </Table.Cell>
-                </Table.Row>
-              ))}
-            </Table.Body>
-          </Table.Root>
-        </ScrollArea>
+          <Table.Body>
+            {findings.map((finding, index) => (
+              <Table.Row key={`${finding.ruleId}-${index}`}>
+                <Table.Cell style={{ padding: '4px 8px' }}>
+                  <Text size="2">{finding.emoji}</Text>
+                </Table.Cell>
+                <Table.Cell
+                  style={{ padding: '4px 8px', cursor: 'pointer' }}
+                  onClick={() => handleMessageClick(finding)}
+                >
+                  <Text size="1" style={{ fontFamily: 'inherit', wordBreak: 'break-word' }}>
+                    {finding.message}
+                  </Text>
+                </Table.Cell>
+              </Table.Row>
+            ))}
+          </Table.Body>
+        </Table.Root>
       </Box>
 
       {/* Finding Details Modal */}
