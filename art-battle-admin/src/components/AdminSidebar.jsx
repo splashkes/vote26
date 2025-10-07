@@ -26,7 +26,8 @@ import {
   FileTextIcon,
   CardStackIcon,
   CheckCircledIcon,
-  HomeIcon
+  HomeIcon,
+  CardStackIcon as SponsorshipIcon
 } from '@radix-ui/react-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -179,6 +180,13 @@ const AdminSidebar = ({ collapsed = false, onToggleCollapse, hideToggleAndSignOu
           label: 'Venues',
           description: 'Manage event venues and locations',
           color: 'cyan'
+        },
+        {
+          to: '/sponsorship-packages',
+          icon: SponsorshipIcon,
+          label: 'Sponsorship Packages',
+          description: 'Manage global sponsorship templates and pricing',
+          color: 'teal'
         },
         baseNavItems[baseNavItems.length - 1] // Settings at the end
       ]

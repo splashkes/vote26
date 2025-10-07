@@ -122,7 +122,8 @@ serve(async (req) => {
       bidsResult,
       paymentInvitationsResult,
       paymentSetupInvitationsResult,
-      paymentRequestsResult
+      paymentRequestsResult,
+      manualPaymentRequestsResult
     ] = await Promise.all([
 
       // Get all payments IN (from buyers) for this event - Stripe payments
@@ -169,7 +170,14 @@ serve(async (req) => {
       supabaseClient
         .from('artist_global_payments')
         .select('artist_profile_id, status, stripe_recipient_id')
+        .in('artist_profile_id', artistIds),
+
+      // Get manual payment requests
+      supabaseClient
+        .from('artist_manual_payment_requests')
+        .select('artist_profile_id, payment_method, country_code, status, created_at')
         .in('artist_profile_id', artistIds)
+        .order('created_at', { ascending: false })
     ]);
 
     const { data: paymentsIn, error: payInError } = paymentsInResult;
@@ -207,6 +215,11 @@ serve(async (req) => {
       console.error('Error fetching payment requests:', requestsError);
     }
 
+    const { data: manualPaymentRequests, error: manualRequestsError } = manualPaymentRequestsResult;
+    if (manualRequestsError) {
+      console.error('Error fetching manual payment requests:', manualRequestsError);
+    }
+
     // Create lookup maps
     const artworksByArtist = new Map();
     const paymentsInByArt = new Map();
@@ -215,6 +228,7 @@ serve(async (req) => {
     const invitationsByArtist = new Map();
     const paymentAccountByArtist = new Map();
     const confirmationByArtistId = new Map();
+    const manualPaymentRequestByArtist = new Map();
 
     // Map confirmations by artist_profile_id for later lookup
     artistConfirmations?.forEach(confirmation => {
@@ -309,6 +323,18 @@ serve(async (req) => {
         paymentAccountByArtist.set(account.artist_profile_id, {
           stripe_recipient_id: account.stripe_recipient_id,
           status: account.status  // Use actual status: 'ready', 'pending', 'blocked', etc.
+        });
+      }
+    });
+
+    // Map manual payment requests (get most recent for each artist)
+    manualPaymentRequests?.forEach(request => {
+      if (!manualPaymentRequestByArtist.has(request.artist_profile_id)) {
+        manualPaymentRequestByArtist.set(request.artist_profile_id, {
+          payment_method: request.payment_method,
+          country_code: request.country_code,
+          status: request.status,
+          created_at: request.created_at
         });
       }
     });
@@ -408,6 +434,7 @@ serve(async (req) => {
       // Get invitation and payment account info
       const invitation = invitationsByArtist.get(artistId);
       const paymentAccount = paymentAccountByArtist.get(artistId);
+      const manualPaymentRequest = manualPaymentRequestByArtist.get(artistId);
 
       return {
         artist_id: artistId,
@@ -417,6 +444,12 @@ serve(async (req) => {
         email: email,
         phone: phone,
         manual_payment_override: manualPaymentOverride,
+        manual_payment_request: manualPaymentRequest ? {
+          payment_method: manualPaymentRequest.payment_method,
+          country_code: manualPaymentRequest.country_code,
+          status: manualPaymentRequest.status,
+          created_at: manualPaymentRequest.created_at
+        } : null,
         artworks_paid: paidArtworks,
         artworks_unpaid: unpaidArtworks,
         artworks_no_bid: noBidArtworks,

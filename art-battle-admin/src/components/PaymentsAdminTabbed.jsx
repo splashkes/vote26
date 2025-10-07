@@ -561,10 +561,29 @@ const PaymentsAdminTabbed = () => {
       setProcessingPayment(true);
       setError(''); // Clear any previous errors
 
+      // CRITICAL FIX: Get the actual balance for THIS SPECIFIC CURRENCY
+      // The estimated_balance is the SUM of ALL currencies, which causes overpayments!
+      // We need to query the artist's balance for ONLY the selected currency
+      const { data: currencyBalance, error: balanceError } = await supabase.rpc('get_artist_balance_for_currency', {
+        p_artist_profile_id: selectedArtist.artist_profiles.id,
+        p_currency: currency
+      });
+
+      if (balanceError) {
+        console.error('Failed to get currency-specific balance:', balanceError);
+        throw new Error(`Failed to get balance for ${currency}: ${balanceError.message}`);
+      }
+
+      const actualAmount = currencyBalance || 0;
+
+      if (actualAmount <= 0) {
+        throw new Error(`No balance owed in ${currency}`);
+      }
+
       const { data, error } = await supabase.functions.invoke('process-artist-payment', {
         body: {
           artist_profile_id: selectedArtist.artist_profiles.id,
-          amount: selectedArtist.estimated_balance,
+          amount: actualAmount,
           currency: currency,
           payment_type: 'automated',
           description: `Payment for artwork sales - ${currency} balance`
@@ -1177,13 +1196,8 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                              artist.payment_account_status === 'invited' ? 'Invited' : 'No Account'}
                           </Badge>
                           {artist.artist_profiles?.manual_payment_override && (
-                            <Badge color="yellow" size="1">
-                              Manual Approved
-                            </Badge>
-                          )}
-                          {artist.manual_payment_request?.has_request && (
-                            <Badge color="green" size="1">
-                              Manual Provided
+                            <Badge color={artist.manual_payment_request?.has_request ? 'pink' : 'violet'} size="1">
+                              {artist.manual_payment_request?.has_request ? 'Manual Ready' : 'Manual Eligible'}
                             </Badge>
                           )}
                         </Flex>
@@ -1375,14 +1389,32 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                             <EyeOpenIcon width="12" height="12" />
                             View
                           </Button>
+                          {/* Show Pay Now button - opens different modal based on payment type */}
                           <Button
                             size="1"
                             variant="solid"
                             color="green"
-                            onClick={() => {
+                            onClick={async () => {
                               setSelectedArtist(artist);
-                              const currency = artist.balance_currency || 'USD';
-                              openPayNowDialog(currency);
+                              if (artist.payment_account_status === 'READY MANUAL') {
+                                // Pre-populate currency with artist's balance currency
+                                const currency = artist.balance_currency || 'USD';
+                                setManualPaymentData({
+                                  amount: '',
+                                  currency: currency,
+                                  description: '',
+                                  payment_method: 'bank_transfer',
+                                  reference: '',
+                                  paid_by: 'art_battle'
+                                });
+                                // Load manual payment request data and open manual payment modal
+                                await fetchManualPaymentRequest(artist.artist_profiles.id);
+                                setShowManualPayment(true);
+                              } else {
+                                // Open Stripe payment dialog
+                                const currency = artist.balance_currency || 'USD';
+                                openPayNowDialog(currency);
+                              }
                             }}
                             title={`Pay ${formatCurrency(artist.estimated_balance, artist.balance_currency || 'USD')} now`}
                           >
@@ -1858,15 +1890,22 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                               {artist.stripe_transfer_id.substring(0, 20)}...
                             </Text>
                           )}
-                          <Badge
-                            color="green"
-                            size="1"
-                            style={{ cursor: 'pointer' }}
-                            onClick={() => handleViewApiConversations(artist.payment_id)}
-                            title="Click to view API details"
-                          >
-                            ✅ Completed - View API Logs
-                          </Badge>
+                          {/* Only show API Logs link for automated payments, not manual */}
+                          {artist.payment_type === 'manual' ? (
+                            <Badge color="green" size="1">
+                              ✅ Completed (Manual)
+                            </Badge>
+                          ) : (
+                            <Badge
+                              color="green"
+                              size="1"
+                              style={{ cursor: 'pointer' }}
+                              onClick={() => handleViewApiConversations(artist.payment_id)}
+                              title="Click to view API details"
+                            >
+                              ✅ Completed - View API Logs
+                            </Badge>
+                          )}
                         </Flex>
                       </Table.Cell>
                       <Table.Cell>
@@ -2362,7 +2401,19 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                   <Button
                     variant="solid"
                     color="blue"
-                    onClick={() => setShowManualPayment(true)}
+                    onClick={() => {
+                      // Pre-populate currency with artist's balance currency
+                      const currency = selectedArtist?.balance_currency || selectedArtist?.artist_profiles?.country === 'CA' ? 'CAD' : 'USD';
+                      setManualPaymentData({
+                        amount: '',
+                        currency: currency,
+                        description: '',
+                        payment_method: 'bank_transfer',
+                        reference: '',
+                        paid_by: 'art_battle'
+                      });
+                      setShowManualPayment(true);
+                    }}
                   >
                     <PlusIcon width="16" height="16" />
                     Record Manual Payment
@@ -2387,6 +2438,18 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
           <Dialog.Description>
             Record a manual payment for {selectedArtist?.artist_profiles?.name}
           </Dialog.Description>
+
+          {/* Show artist's current balance */}
+          {selectedArtist?.estimated_balance && (
+            <Card mt="3" variant="surface">
+              <Flex direction="column" gap="1" p="2">
+                <Text size="1" color="gray">Current Balance Owed:</Text>
+                <Text size="4" weight="bold" color="green">
+                  {formatCurrency(selectedArtist.estimated_balance, selectedArtist.balance_currency || 'USD')}
+                </Text>
+              </Flex>
+            </Card>
+          )}
 
           <Flex direction="column" gap="3" mt="4">
             <Flex gap="3">

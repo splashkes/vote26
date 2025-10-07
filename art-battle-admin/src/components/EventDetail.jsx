@@ -180,10 +180,13 @@ const EventDetail = () => {
   const [manualPaymentAmount, setManualPaymentAmount] = useState('');
   const [manualPaymentMethod, setManualPaymentMethod] = useState('bank_transfer');
   const [manualPaymentNotes, setManualPaymentNotes] = useState('');
+  const [manualPaymentCurrency, setManualPaymentCurrency] = useState('USD');
+  const [manualPaymentReference, setManualPaymentReference] = useState('');
+  const [manualPaymentPaidBy, setManualPaymentPaidBy] = useState('art_battle');
   const [submittingManualPayment, setSubmittingManualPayment] = useState(false);
   const [manualPaymentRequest, setManualPaymentRequest] = useState(null);
-  const [loadingManualPaymentRequest, setLoadingManualPaymentRequest] = useState(false);
   const [revealedPaymentDetails, setRevealedPaymentDetails] = useState(false);
+  const [loadingManualPaymentRequest, setLoadingManualPaymentRequest] = useState(false);
   const [artistPerformanceData, setArtistPerformanceData] = useState(new Map());
   const [sampleWorks, setSampleWorks] = useState([]);
   const [sampleWorksLoading, setSampleWorksLoading] = useState(false);
@@ -1204,7 +1207,7 @@ const EventDetail = () => {
         throw new Error('Invalid payment amount');
       }
 
-      const { data, error } = await supabase
+      const { data, error} = await supabase
         .from('artist_payments')
         .insert({
           artist_profile_id: selectedArtistForPayment.artist_id,
@@ -1212,15 +1215,16 @@ const EventDetail = () => {
           net_amount: paymentAmount,
           platform_fee: 0.00,
           stripe_fee: 0.00,
-          currency: artistPaymentsData[0]?.totals?.primary_currency || 'USD',
+          currency: manualPaymentCurrency || artistPaymentsData[0]?.totals?.primary_currency || 'USD',
           description: manualPaymentNotes || 'Manual payment recorded via admin panel',
           payment_method: manualPaymentMethod,
-          reference: null,
+          reference: manualPaymentReference || null,
           status: 'paid',
           payment_type: 'manual',
           created_by: createdBy,
           metadata: {
             created_via: 'admin_panel',
+            paid_by: manualPaymentPaidBy,
             created_at: new Date().toISOString(),
             admin_user: createdBy,
             event_id: event.id,
@@ -3827,18 +3831,51 @@ The Art Battle Team`);
                             )}
                           </Table.Cell>
                           <Table.Cell>
-                            <Badge
-                              color={
-                                artist.payment_account_status === 'ready' ? 'green' :
-                                artist.payment_account_status === 'pending' ? 'orange' :
-                                'gray'
-                              }
-                              size="1"
-                            >
-                              {artist.payment_account_status === 'ready' ? 'Ready' :
-                               artist.payment_account_status === 'pending' ? 'Pending' :
-                               'Not Set Up'}
-                            </Badge>
+                            <Flex gap="1" wrap="wrap">
+                              {/* If artist has earnings and has been fully paid, show PAID badge only */}
+                              {artist.totals.total_earned > 0 && artist.totals.amount_owed <= 0.01 ? (
+                                <Badge color="green" size="1">
+                                  PAID
+                                </Badge>
+                              ) : (
+                                <>
+                                  {/* Show Stripe account status if available */}
+                                  {artist.stripe_recipient_id && (
+                                    <Badge
+                                      color={
+                                        artist.payment_account_status === 'ready' ? 'green' :
+                                        artist.payment_account_status === 'pending' ? 'orange' :
+                                        'gray'
+                                      }
+                                      size="1"
+                                      style={{ cursor: 'pointer' }}
+                                      onClick={() => openArtistPaymentDetail(artist)}
+                                    >
+                                      {artist.payment_account_status === 'ready' ? 'Ready' :
+                                       artist.payment_account_status === 'pending' ? 'Pending' :
+                                       'Not Set Up'}
+                                    </Badge>
+                                  )}
+                                  {/* Show manual payment badge - "Manual Ready" if they have info, "Manual Eligible" if not */}
+                                  {artist.manual_payment_override && (
+                                    <Badge
+                                      color={artist.manual_payment_request ? 'pink' : 'violet'}
+                                      size="1"
+                                      style={{ cursor: 'pointer' }}
+                                      onClick={() => openArtistPaymentDetail(artist)}
+                                    >
+                                      {artist.manual_payment_request ? 'Manual Ready' : 'Manual Eligible'}
+                                    </Badge>
+                                  )}
+                                  {/* Show "Not Set Up" if no Stripe and no manual override */}
+                                  {!artist.stripe_recipient_id && !artist.manual_payment_override && (
+                                    <Badge color="gray" size="1">
+                                      Not Set Up
+                                    </Badge>
+                                  )}
+                                </>
+                              )}
+                            </Flex>
                           </Table.Cell>
                           <Table.Cell>
                             <Text size="2" weight="bold" color="green">

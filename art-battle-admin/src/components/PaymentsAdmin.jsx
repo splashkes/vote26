@@ -769,8 +769,8 @@ const PaymentsAdmin = () => {
                               <EyeOpenIcon />
                             </IconButton>
 
-                            {/* Pay Now buttons for each currency if account is ready */}
-                            {artist.payment_status === 'ready' && artist.stripe_recipient_id && artist.currency_info?.currency_breakdown && (
+                            {/* Pay Now buttons for each currency if account is ready (hide for manual payment artists) */}
+                            {artist.payment_status === 'ready' && artist.stripe_recipient_id && artist.currency_info?.currency_breakdown && !artist.artist_profiles?.manual_payment_override && (
                               <Flex gap="1" wrap="wrap">
                                 {Object.entries(artist.currency_info.currency_breakdown).map(([currency, info]) => (
                                   info.balance > 0.01 && (

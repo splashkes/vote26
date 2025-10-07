@@ -25,6 +25,7 @@ import PaymentsAdminTabbed from './components/PaymentsAdminTabbed';
 import DuplicateProfileResolver from './components/DuplicateProfileResolver';
 import EventLinter from './components/EventLinter';
 import VenuesManagement from './components/VenuesManagement';
+import SponsorshipPackages from './components/sponsorship/SponsorshipPackages';
 import Welcome from './components/Welcome';
 import './App.css';
 
@@ -66,6 +67,7 @@ function App() {
                 <Route path="duplicate-profiles" element={<DuplicateProfileResolver />} />
                 <Route path="event-linter" element={<EventLinter />} />
                 <Route path="venues" element={<VenuesManagement />} />
+                <Route path="sponsorship-packages" element={<SponsorshipPackages />} />
                 <Route path="sms-marketing" element={<PromotionSystem />} />
                 <Route path="artist/:entryId" element={<ArtistsManagement />} />
                 <Route path="*" element={<Navigate to="/events" replace />} />
