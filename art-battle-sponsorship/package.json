@@ -1,0 +1,24 @@
+{
+  "name": "art-battle-sponsorship",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@radix-ui/react-icons": "^1.3.2",
+    "@radix-ui/themes": "^3.1.6",
+    "@supabase/supabase-js": "^2.47.10",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "vite": "^6.0.1"
+  }
+}

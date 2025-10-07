@@ -396,13 +396,48 @@ export async function getEventSponsorshipSummary(eventId) {
 }
 
 /**
- * Get all cities for pricing matrix
+ * Get cities for events in last 90 days + all future events
+ */
+export async function getRecentAndUpcomingCities() {
+  try {
+    const ninetyDaysAgo = new Date();
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+
+    const { data, error } = await supabase
+      .from('events')
+      .select('city_id, cities(id, name, countries(name, code, currency_code))')
+      .or(`event_start_datetime.gte.${ninetyDaysAgo.toISOString()},event_start_datetime.is.null`)
+      .not('city_id', 'is', null);
+
+    if (error) throw error;
+
+    // Deduplicate cities
+    const uniqueCities = new Map();
+    data?.forEach(event => {
+      if (event.cities) {
+        uniqueCities.set(event.cities.id, event.cities);
+      }
+    });
+
+    const cities = Array.from(uniqueCities.values()).sort((a, b) =>
+      a.name.localeCompare(b.name)
+    );
+
+    return { data: cities, error: null };
+  } catch (err) {
+    console.error('Error fetching recent and upcoming cities:', err);
+    return { data: null, error: err.message };
+  }
+}
+
+/**
+ * Get all cities for pricing matrix (fallback)
  */
 export async function getAllCities() {
   try {
     const { data, error } = await supabase
       .from('cities')
-      .select('id, name, countries(name, code)')
+      .select('id, name, countries(name, code, currency_code)')
       .order('name', { ascending: true });
 
     if (error) throw error;

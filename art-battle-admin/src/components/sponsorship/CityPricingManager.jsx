@@ -18,7 +18,7 @@ import {
 import { MagnifyingGlassIcon, CheckIcon, Cross2Icon } from '@radix-ui/react-icons';
 import {
   getAllPackageTemplates,
-  getAllCities,
+  getRecentAndUpcomingCities,
   getAllCityPricing,
   setCityPricing,
   deleteCityPricing
@@ -32,11 +32,8 @@ const CityPricingManager = () => {
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  // Search & selection
-  const [searchQuery, setSearchQuery] = useState('');
+  // Selection
   const [selectedCity, setSelectedCity] = useState(null);
-  const [filteredCities, setFilteredCities] = useState([]);
-  const [showDropdown, setShowDropdown] = useState(false);
 
   // City pricing form
   const [cityPrices, setCityPrices] = useState({});
@@ -49,25 +46,6 @@ const CityPricingManager = () => {
     loadData();
   }, []);
 
-  useEffect(() => {
-    // Filter cities based on search
-    if (searchQuery.length >= 2) {
-      const filtered = cities.filter(city => {
-        const searchLower = searchQuery.toLowerCase();
-        return (
-          city.name.toLowerCase().includes(searchLower) ||
-          city.countries?.name.toLowerCase().includes(searchLower) ||
-          city.countries?.code.toLowerCase().includes(searchLower)
-        );
-      }).slice(0, 20); // Limit to 20 results
-      setFilteredCities(filtered);
-      setShowDropdown(true);
-    } else {
-      setFilteredCities([]);
-      setShowDropdown(false);
-    }
-  }, [searchQuery, cities]);
-
   const loadData = async () => {
     setLoading(true);
     setError(null);
@@ -75,7 +53,7 @@ const CityPricingManager = () => {
     try {
       const [templatesResult, citiesResult, pricingResult] = await Promise.all([
         getAllPackageTemplates(),
-        getAllCities(),
+        getRecentAndUpcomingCities(),
         getAllCityPricing()
       ]);
 
@@ -113,8 +91,6 @@ const CityPricingManager = () => {
 
   const handleSelectCity = (city) => {
     setSelectedCity(city);
-    setSearchQuery('');
-    setShowDropdown(false);
 
     // Load existing pricing for this city
     const cityPricingData = {};
@@ -223,54 +199,44 @@ const CityPricingManager = () => {
       <Flex direction="column" gap="2" mb="4">
         <Heading size="5">City Pricing Management</Heading>
         <Text size="2" color="gray">
-          Select a city to configure sponsorship package pricing. Prices set here will be used as defaults for events in that city.
+          Select a city to configure sponsorship package pricing. Showing cities from events in the last 90 days and all future events.
         </Text>
+        <Badge color="blue" size="1">
+          {cities.length} cities available
+        </Badge>
       </Flex>
 
-      {/* City Search */}
+      {/* City List */}
       <Card mb="4">
-        <Box style={{ position: 'relative' }}>
-          <Text size="2" weight="bold" mb="2" style={{ display: 'block' }}>
-            Search for a City
-          </Text>
-          <TextField.Root
-            size="3"
-            placeholder="Type city name or country..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onFocus={() => searchQuery.length >= 2 && setShowDropdown(true)}
-          >
-            <TextField.Slot>
-              <MagnifyingGlassIcon />
-            </TextField.Slot>
-          </TextField.Root>
+        <Text size="2" weight="bold" mb="3" style={{ display: 'block' }}>
+          Select a City
+        </Text>
 
-          {/* Dropdown */}
-          {showDropdown && filteredCities.length > 0 && (
-            <Card
+        <Flex direction="column" gap="1" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+          {cities.map(city => (
+            <Box
+              key={city.id}
+              onClick={() => handleSelectCity(city)}
               style={{
-                position: 'absolute',
-                top: '100%',
-                left: 0,
-                right: 0,
-                marginTop: '0.5rem',
-                zIndex: 10,
-                maxHeight: '300px',
-                overflow: 'auto'
+                padding: '0.75rem',
+                cursor: 'pointer',
+                borderRadius: '6px',
+                backgroundColor: selectedCity?.id === city.id ? 'var(--accent-3)' : 'transparent',
+                border: selectedCity?.id === city.id ? '1px solid var(--accent-8)' : '1px solid transparent'
+              }}
+              onMouseEnter={(e) => {
+                if (selectedCity?.id !== city.id) {
+                  e.currentTarget.style.backgroundColor = 'var(--gray-3)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (selectedCity?.id !== city.id) {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }
               }}
             >
-              {filteredCities.map(city => (
-                <Box
-                  key={city.id}
-                  onClick={() => handleSelectCity(city)}
-                  style={{
-                    padding: '0.75rem',
-                    cursor: 'pointer',
-                    borderBottom: '1px solid var(--gray-4)'
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--gray-3)'}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                >
+              <Flex justify="between" align="center">
+                <Box>
                   <Text weight="bold">{city.name}</Text>
                   {city.countries && (
                     <Text size="1" color="gray" style={{ display: 'block' }}>
@@ -278,24 +244,13 @@ const CityPricingManager = () => {
                     </Text>
                   )}
                 </Box>
-              ))}
-            </Card>
-          )}
-        </Box>
-
-        {selectedCity && (
-          <Box mt="3">
-            <Flex align="center" gap="2">
-              <Badge color="blue" size="2">Selected</Badge>
-              <Text weight="bold">{selectedCity.name}</Text>
-              {selectedCity.countries && (
-                <Text size="2" color="gray">
-                  {selectedCity.countries.name} ({selectedCity.countries.code})
-                </Text>
-              )}
-            </Flex>
-          </Box>
-        )}
+                {selectedCity?.id === city.id && (
+                  <CheckIcon color="var(--accent-9)" />
+                )}
+              </Flex>
+            </Box>
+          ))}
+        </Flex>
       </Card>
 
       {/* Package Pricing Table */}
@@ -406,10 +361,9 @@ const CityPricingManager = () => {
       ) : (
         <Card>
           <Flex direction="column" align="center" gap="3" style={{ padding: '3rem' }}>
-            <MagnifyingGlassIcon size="48" color="var(--gray-8)" />
-            <Text size="4" color="gray">Search for a city to begin</Text>
+            <Text size="4" color="gray">Select a city from the list above</Text>
             <Text size="2" color="gray">
-              Type at least 2 characters in the search box above
+              {cities.length} cities available from recent and upcoming events
             </Text>
           </Flex>
         </Card>

@@ -65,6 +65,7 @@ import { parsePhoneNumber, isValidPhoneNumber } from 'libphonenumber-js';
 import EventDeleteModal from './EventDeleteModal';
 import EventPaymentWrapper from './EventPaymentWrapper';
 import EventLinterEmbed from './EventLinterEmbed';
+import EventSponsorshipSetup from './sponsorship/EventSponsorshipSetup';
 import { useAdmin } from '../contexts/AdminContext';
 import { checkEventAdminPermission } from '../lib/adminHelpers';
 import { formatDateForDisplay, sortByNewestFirst, getRecentActivityColor } from '../lib/dateUtils';
@@ -3711,6 +3712,9 @@ The Art Battle Team`);
             )}
           </Card>
         )}
+
+        {/* ===== SPONSORSHIP SECTION ===== */}
+        <EventSponsorshipSetup event={event} />
 
         {/* Artist Payments - Collapsible (only show if event is in the past) */}
         {status.label === 'Completed' && (
