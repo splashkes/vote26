@@ -78,6 +78,31 @@ const EventDetail = () => {
   const [error, setError] = useState(null);
   const [eventPeople, setEventPeople] = useState([]);
   const [peopleLoading, setPeopleLoading] = useState(false);
+  const [exchangeRates, setExchangeRates] = useState({});
+
+  // Helper function to get currency symbol
+  const getCurrencySymbol = (currencyCode) => {
+    const symbols = {
+      'USD': '$',
+      'CAD': '$',
+      'AUD': '$',
+      'NZD': '$',
+      'EUR': '€',
+      'GBP': '£',
+      'THB': '฿',
+      'JPY': '¥',
+      'CNY': '¥'
+    };
+    return symbols[currencyCode] || '$';
+  };
+
+  // Helper function to convert to USD
+  const convertToUSD = (amount, fromCurrency) => {
+    if (!amount || fromCurrency === 'USD') return null;
+    const rate = exchangeRates[fromCurrency];
+    if (!rate) return null;
+    return amount * rate;
+  };
   const [editingProducerTickets, setEditingProducerTickets] = useState(false);
   const [producerTicketsValue, setProducerTicketsValue] = useState('');
   const [producerTicketsCurrency, setProducerTicketsCurrency] = useState('USD');
@@ -125,7 +150,9 @@ const EventDetail = () => {
   const [artistsLoading, setArtistsLoading] = useState(false);
   const [selectedArtist, setSelectedArtist] = useState(null);
   const [preEventCollapsed, setPreEventCollapsed] = useState(false);
-  const [postEventCollapsed, setPostEventCollapsed] = useState(true); // Start minimized, will expand if event is completed
+  const [postEventCollapsed, setPostEventCollapsed] = useState(true); // Tickets & Revenue - Start minimized
+  const [auctionSummaryCollapsed, setAuctionSummaryCollapsed] = useState(false); // Auction Summary - Start expanded
+  const [advertisingCollapsed, setAdvertisingCollapsed] = useState(false); // Advertising - Start expanded
   const [linterCollapsed, setLinterCollapsed] = useState(false);
   const [artistPaymentsCollapsed, setArtistPaymentsCollapsed] = useState(false);
   const [artistPaymentsData, setArtistPaymentsData] = useState([]);
@@ -209,6 +236,30 @@ const EventDetail = () => {
   const [adminNote, setAdminNote] = useState('');
   const [sendingPaymentInvite, setSendingPaymentInvite] = useState(false);
 
+  // Fetch exchange rates once on component mount
+  useEffect(() => {
+    const fetchExchangeRates = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('exchange_rates')
+          .select('currency_code, rate_to_usd');
+
+        if (error) throw error;
+
+        // Convert to object for easy lookup
+        const rates = {};
+        data?.forEach(row => {
+          rates[row.currency_code] = row.rate_to_usd;
+        });
+        setExchangeRates(rates);
+      } catch (err) {
+        console.error('Error fetching exchange rates:', err);
+      }
+    };
+
+    fetchExchangeRates();
+  }, []);
+
   useEffect(() => {
     if (eventId) {
       // Preload all data for fast tab switching - fetch event details first, then others
@@ -258,16 +309,11 @@ const EventDetail = () => {
     const fetchPostEventDataIfNeeded = async () => {
       const promises = [];
 
-      // Check if completed and fetch post-event data
+      // Fetch post-event data for all events (includes Eventbrite ticket sales)
       if (event.event_end_datetime) {
-        const now = new Date();
-        const endTime = new Date(event.event_end_datetime);
-        const isCompleted = now > endTime;
-
-        if (isCompleted) {
-          promises.push(fetchPostEventData());
-          promises.push(fetchMetaAdsData());
-        }
+        promises.push(fetchPostEventData());
+        // Fetch Meta Ads data for all events
+        promises.push(fetchMetaAdsData());
       }
 
       // Fetch artist payments if confirmations are loaded
@@ -284,16 +330,27 @@ const EventDetail = () => {
     fetchPostEventDataIfNeeded();
   }, [event, artistConfirmations]);
 
-  // Auto-expand post-event section if event is completed
+  // Auto-expand sections when data is present
   useEffect(() => {
+    // Expand Tickets & Revenue if there's ticket sales data
+    if (postEventData && (postEventData.ticket_sales?.total_sold > 0 || postEventData.ticket_sales?.total_revenue > 0)) {
+      setPostEventCollapsed(false);
+    }
+
+    // Expand Auction Summary if event is completed and has auction data
     if (event?.event_end_datetime) {
       const now = new Date();
       const endTime = new Date(event.event_end_datetime);
-      if (now > endTime) {
-        setPostEventCollapsed(false);
+      if (now > endTime && postEventData?.auction_summary) {
+        setAuctionSummaryCollapsed(false);
       }
     }
-  }, [event?.event_end_datetime]);
+
+    // Expand Advertising if there's Meta Ads data with spend
+    if (metaAdsData && metaAdsData.total_spend > 0) {
+      setAdvertisingCollapsed(false);
+    }
+  }, [event?.event_end_datetime, postEventData, metaAdsData]);
 
   const fetchEventDetail = async () => {
     try {
@@ -2704,13 +2761,27 @@ The Art Battle Team`);
                     {event.meta_ads_budget && (
                       <Flex gap="2" align="center">
                         <Text size="1" color="gray">Meta Ads:</Text>
-                        <Text size="2" weight="medium">${event.meta_ads_budget.toFixed(2)}</Text>
+                        <Text size="2" weight="medium">
+                          {getCurrencySymbol(event.currency)}{event.meta_ads_budget.toFixed(2)} {event.currency}
+                          {convertToUSD(event.meta_ads_budget, event.currency) && (
+                            <Text size="1" color="gray" ml="1">
+                              (~${Math.round(convertToUSD(event.meta_ads_budget, event.currency))} USD)
+                            </Text>
+                          )}
+                        </Text>
                       </Flex>
                     )}
                     {event.other_ads_budget && (
                       <Flex gap="2" align="center">
                         <Text size="1" color="gray">Other Ads:</Text>
-                        <Text size="2" weight="medium">${event.other_ads_budget.toFixed(2)}</Text>
+                        <Text size="2" weight="medium">
+                          {getCurrencySymbol(event.currency)}{event.other_ads_budget.toFixed(2)} {event.currency}
+                          {convertToUSD(event.other_ads_budget, event.currency) && (
+                            <Text size="1" color="gray" ml="1">
+                              (~${Math.round(convertToUSD(event.other_ads_budget, event.currency))} USD)
+                            </Text>
+                          )}
+                        </Text>
                       </Flex>
                     )}
                   </Flex>
@@ -2783,11 +2854,11 @@ The Art Battle Team`);
           </Box>
         </Card>
 
-        {/* Post-Event Summary - Collapsible (always visible, minimized for non-completed events) */}
+        {/* Tickets & Revenue - Collapsible (always visible) */}
         <Card>
             <Box p="3">
               <Flex justify="between" align="center" style={{ cursor: 'pointer' }} onClick={() => setPostEventCollapsed(!postEventCollapsed)}>
-                <Heading size="4">Post-Event Summary</Heading>
+                <Heading size="4">Tickets & Revenue</Heading>
                 <IconButton size="1" variant="ghost">
                   {postEventCollapsed ? <ChevronDownIcon /> : <ChevronUpIcon />}
                 </IconButton>
@@ -3178,7 +3249,31 @@ The Art Battle Team`);
                         </Box>
                       </Box>
                     </Card>
+                  </>
+                )}
+              </Box>
+            )}
+          </Card>
 
+        {/* Auction Summary - Collapsible (only visible after event) */}
+        {status.label === 'Completed' && (
+          <Card>
+            <Box p="3">
+              <Flex justify="between" align="center" style={{ cursor: 'pointer' }} onClick={() => setAuctionSummaryCollapsed(!auctionSummaryCollapsed)}>
+                <Heading size="4">Auction Summary</Heading>
+                <IconButton size="1" variant="ghost">
+                  {auctionSummaryCollapsed ? <ChevronDownIcon /> : <ChevronUpIcon />}
+                </IconButton>
+              </Flex>
+            </Box>
+            {!auctionSummaryCollapsed && (
+              <Box p="3" pt="0">
+                {postEventLoading ? (
+                  <Flex align="center" justify="center" p="4">
+                    <Spinner size="3" />
+                  </Flex>
+                ) : (
+                  <>
                     <div className="card-grid card-grid-3" style={{ marginTop: '1rem' }}>
                       {/* Sales Summary Card */}
                       <Card>
@@ -3359,14 +3454,35 @@ The Art Battle Team`);
                     </div>
                   </>
                 )}
+              </Box>
+            )}
+          </Card>
+        )}
 
-                {/* Meta Advertising Row */}
-                <Card mt="3">
-                  <Box p="3">
-                    <Flex justify="between" align="center" mb="3">
-                      <Text size="2" weight="medium">
-                        Meta Advertising
-                      </Text>
+        {/* Advertising - Collapsible (always visible) */}
+        <Card>
+          <Box p="3">
+            <Flex justify="between" align="center" style={{ cursor: 'pointer' }} onClick={() => setAdvertisingCollapsed(!advertisingCollapsed)}>
+              <Heading size="4">Advertising</Heading>
+              <IconButton size="1" variant="ghost">
+                {advertisingCollapsed ? <ChevronDownIcon /> : <ChevronUpIcon />}
+              </IconButton>
+            </Flex>
+          </Box>
+          {!advertisingCollapsed && (
+            <Box p="3" pt="0">
+              {metaAdsLoading ? (
+                <Flex align="center" justify="center" p="4">
+                  <Spinner size="3" />
+                </Flex>
+              ) : (
+                <>
+                  <Card>
+                    <Box p="3">
+                      <Flex justify="between" align="center" mb="3">
+                        <Text size="2" weight="medium">
+                          Meta Ads
+                        </Text>
                       {metaAdsLoading && <Spinner size="1" />}
                       {metaAdsData && (
                         <Badge size="1" color="blue">
@@ -3515,6 +3631,8 @@ The Art Battle Team`);
                     )}
                   </Box>
                 </Card>
+                  </>
+                )}
               </Box>
             )}
           </Card>

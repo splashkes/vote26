@@ -252,14 +252,12 @@ serve(async (req) => {
           last: artistProfile.name.split(' ').slice(1).join(' ') || 'Profile'
         });
 
-        // Determine if US/Canada (full service agreement) or International (recipient service agreement)
-        const isUSorCA = (finalCountry === 'US' || finalCountry === 'CA' || finalCountry === 'Canada' || finalCountry === 'United States');
-        const serviceAgreement = isUSorCA ? 'full' : 'recipient';
+        // ALL accounts use recipient service agreement for global consistency
+        const serviceAgreement = 'recipient';
 
         console.log('=== SERVICE AGREEMENT SELECTION ===');
         console.log('Country:', finalCountry);
-        console.log('Is US/CA:', isUSorCA);
-        console.log('Service Agreement:', serviceAgreement);
+        console.log('Service Agreement:', serviceAgreement, '(recipient for all countries)');
 
         const accountData: any = {
           type: 'custom',
@@ -282,19 +280,12 @@ serve(async (req) => {
             support_phone: '+14163025959',
             support_url: 'https://artbattle.com/contact'
           },
+          tos_acceptance: {
+            service_agreement: 'recipient'
+          }
         };
 
-        // Add service agreement for recipient accounts (international)
-        if (!isUSorCA) {
-          accountData.tos_acceptance = {
-            service_agreement: 'recipient'
-          };
-          console.log('Added recipient service agreement for international artist');
-        } else {
-          // For US/CA, add card_payments capability (full service agreement - default)
-          accountData.capabilities.card_payments = { requested: true };
-          console.log('Using full service agreement (default) for US/CA artist');
-        }
+        console.log('Using recipient service agreement for all artists (global consistency)');
         
         console.log('Account data being sent to Stripe:', JSON.stringify(accountData, null, 2));
         

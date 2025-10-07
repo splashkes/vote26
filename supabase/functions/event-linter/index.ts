@@ -1338,80 +1338,165 @@ serve(async (req) => {
       }
     }
 
-    // Run meta ads budget check (check for events with budget set but no active campaigns)
-    const metaAdsBudgetRule = rules.find((r: any) => r.id === 'meta_ads_budget_no_campaigns');
-    if (metaAdsBudgetRule && eventsToLint.length > 0) {
-      try {
-        const now = new Date();
-        // Check upcoming events (within 45 days) or recently past events (within 7 days after)
-        const relevantEvents = eventsToLint.filter(e => {
-          if (!e.event_start_datetime || !e.meta_ads_budget || e.meta_ads_budget <= 0) return false;
-          const eventStart = new Date(e.event_start_datetime);
-          const daysUntilEvent = (eventStart.getTime() - now.getTime()) / 1000 / 60 / 60 / 24;
-          const daysSinceEvent = (now.getTime() - eventStart.getTime()) / 1000 / 60 / 60 / 24;
+    // Run Meta Ads budget checks
+    try {
+      const now = new Date();
 
-          // Include events within 45 days before or 7 days after start
-          return (daysUntilEvent > 0 && daysUntilEvent <= 45) || (daysSinceEvent >= 0 && daysSinceEvent <= 7);
+      // Find events with meta_ads_budget set
+      const eventsWithMetaBudget = eventsToLint.filter(e => {
+        if (!e.event_start_datetime || !e.meta_ads_budget || e.meta_ads_budget <= 0) return false;
+        const eventStart = new Date(e.event_start_datetime);
+        const daysUntilEvent = (eventStart.getTime() - now.getTime()) / 1000 / 60 / 60 / 24;
+        const daysSinceEvent = (now.getTime() - eventStart.getTime()) / 1000 / 60 / 60 / 24;
+
+        // Include events within 45 days before or 7 days after start
+        return (daysUntilEvent > 0 && daysUntilEvent <= 45) || (daysSinceEvent >= 0 && daysSinceEvent <= 7);
+      });
+
+      if (eventsWithMetaBudget.length > 0) {
+        // Fetch Meta ads cache data (6-hour cache)
+        const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+        const eventEids = eventsWithMetaBudget.map(e => e.eid);
+
+        const { data: cachedData } = await supabaseClient
+          .from('ai_analysis_cache')
+          .select('event_id, result, created_at')
+          .eq('analysis_type', 'meta_ads')
+          .in('event_id', eventEids)
+          .gte('created_at', sixHoursAgo);
+
+        const metaDataMap = new Map();
+        cachedData?.forEach((cache: any) => {
+          metaDataMap.set(cache.event_id, cache.result);
         });
 
-        if (relevantEvents.length > 0) {
-          // Check cache for meta ads data (24-hour cache for linter)
-          const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        debugInfo.meta_ads_events_checked = eventsWithMetaBudget.length;
+        debugInfo.meta_ads_cache_hits = cachedData?.length || 0;
 
-          const eventEids = relevantEvents.map(e => e.eid);
-          const { data: cachedData } = await supabaseClient
-            .from('ai_analysis_cache')
-            .select('event_id, result, created_at')
-            .eq('analysis_type', 'meta_ads')
-            .in('event_id', eventEids)
-            .gte('created_at', twentyFourHoursAgo);
+        // Check each event against Meta Ads rules
+        for (const event of eventsWithMetaBudget) {
+          const metaData = metaDataMap.get(event.eid);
+          const systemBudget = Number(event.meta_ads_budget);
+          const currency = event.currency || 'USD';
+          const eventStart = new Date(event.event_start_datetime);
+          const daysUntilEvent = (eventStart.getTime() - now.getTime()) / 1000 / 60 / 60 / 24;
 
-          const cacheMap = new Map();
-          cachedData?.forEach((cache: any) => {
-            cacheMap.set(cache.event_id, cache.result);
-          });
+          // RULE 1: meta_ads_budget_no_campaigns
+          // Warn if budget is set but Meta API shows no active campaigns
+          const noCampaignsRule = rules.find((r: any) => r.id === 'meta_ads_budget_no_campaigns');
+          if (noCampaignsRule && metaData) {
+            const hasCampaigns = metaData.campaigns && metaData.campaigns.length > 0;
 
-          // Check each event
-          for (const event of relevantEvents) {
-            const metaAdsData = cacheMap.get(event.eid);
-
-            // Generate warning if no cached data OR if campaigns array is empty
-            const shouldWarn = !metaAdsData || !metaAdsData.campaigns || metaAdsData.campaigns.length === 0;
-
-            if (shouldWarn) {
+            if (!hasCampaigns) {
               incrementRuleHit(supabaseClient, 'meta_ads_budget_no_campaigns');
-
-              const budgetAmount = event.meta_ads_budget;
-              const currencyCode = event.currency || 'USD';
-              const cacheStatus = !metaAdsData ? 'No data found' : 'No active campaigns';
-
-              const message = `Meta ads budget of $${budgetAmount} ${currencyCode} set but no active campaigns found. ${cacheStatus} (cache checked within 24h)`;
 
               findings.push({
                 ruleId: 'meta_ads_budget_no_campaigns',
-                ruleName: metaAdsBudgetRule.name,
+                ruleName: noCampaignsRule.name,
                 severity: 'warning',
-                category: metaAdsBudgetRule.category,
-                context: metaAdsBudgetRule.context,
+                category: noCampaignsRule.category,
+                context: noCampaignsRule.context,
                 emoji: '⚠️',
-                message: message,
+                message: `Meta ads budget of $${systemBudget} ${currency} set but no active campaigns found in Meta API`,
                 eventId: event.id,
                 eventEid: event.eid,
                 eventName: event.name,
-                metaAdsBudget: budgetAmount,
-                metaAdsCurrency: currencyCode,
-                cacheStatus: cacheStatus,
+                metaAdsBudget: systemBudget,
+                currency: currency,
                 timestamp: new Date().toISOString()
               });
             }
           }
 
-          debugInfo.meta_ads_checked = relevantEvents.length;
-          debugInfo.meta_ads_cache_hits = cachedData?.length || 0;
+          // RULE 2: meta_ads_budget_mismatch
+          // Compare Meta's allocated budget vs our system budget
+          const budgetMismatchRule = rules.find((r: any) => r.id === 'meta_ads_budget_mismatch');
+          if (budgetMismatchRule && metaData && metaData.total_budget) {
+            const metaBudget = Number(metaData.total_budget);
+            const difference = Math.abs(metaBudget - systemBudget);
+            const percentDiff = (difference / systemBudget) * 100;
+
+            // Warn if budgets differ by more than 10%
+            if (percentDiff > 10) {
+              incrementRuleHit(supabaseClient, 'meta_ads_budget_mismatch');
+
+              const severity = percentDiff > 25 ? 'error' : 'warning';
+              const emoji = percentDiff > 25 ? '🚨' : '⚠️';
+
+              findings.push({
+                ruleId: 'meta_ads_budget_mismatch',
+                ruleName: budgetMismatchRule.name,
+                severity: severity,
+                category: budgetMismatchRule.category,
+                context: budgetMismatchRule.context,
+                emoji: emoji,
+                message: `Meta ads budget mismatch: System shows $${systemBudget} ${currency} but Meta API shows $${metaBudget.toFixed(2)} ${currency} (${percentDiff.toFixed(1)}% difference)`,
+                eventId: event.id,
+                eventEid: event.eid,
+                eventName: event.name,
+                systemBudget: systemBudget,
+                metaBudget: metaBudget,
+                difference: difference,
+                percentDifference: percentDiff,
+                currency: currency,
+                timestamp: new Date().toISOString()
+              });
+            }
+          }
+
+          // RULE 3: meta_ads_budget_pacing
+          // Check if spend is on track for 21-day even distribution
+          const budgetPacingRule = rules.find((r: any) => r.id === 'meta_ads_budget_pacing');
+          if (budgetPacingRule && metaData && metaData.total_spend !== undefined && daysUntilEvent > 0 && daysUntilEvent <= 21) {
+            const totalSpend = Number(metaData.total_spend);
+            const targetBudget = metaData.total_budget || systemBudget;
+
+            // Calculate expected spend based on 21-day schedule
+            const totalCampaignDays = 21;
+            const daysElapsed = totalCampaignDays - daysUntilEvent;
+            const expectedSpend = (targetBudget / totalCampaignDays) * daysElapsed;
+            const spendDifference = totalSpend - expectedSpend;
+            const pacingPercentage = expectedSpend > 0 ? (totalSpend / expectedSpend) * 100 : 0;
+
+            // Warn if pacing is off by more than 20%
+            if (daysElapsed > 0 && (pacingPercentage < 80 || pacingPercentage > 120)) {
+              incrementRuleHit(supabaseClient, 'meta_ads_budget_pacing');
+
+              const isUnderspending = pacingPercentage < 100;
+              const severity = (pacingPercentage < 60 || pacingPercentage > 140) ? 'error' : 'warning';
+              const emoji = severity === 'error' ? '🚨' : '⚠️';
+
+              const statusText = isUnderspending
+                ? `underspending (${pacingPercentage.toFixed(0)}% of target)`
+                : `overspending (${pacingPercentage.toFixed(0)}% of target)`;
+
+              findings.push({
+                ruleId: 'meta_ads_budget_pacing',
+                ruleName: budgetPacingRule.name,
+                severity: severity,
+                category: budgetPacingRule.category,
+                context: budgetPacingRule.context,
+                emoji: emoji,
+                message: `Meta ads budget pacing issue: ${statusText}. Spent $${totalSpend.toFixed(2)} of expected $${expectedSpend.toFixed(2)} with ${daysUntilEvent.toFixed(0)} days until event (${daysElapsed.toFixed(0)}/${totalCampaignDays} days elapsed)`,
+                eventId: event.id,
+                eventEid: event.eid,
+                eventName: event.name,
+                totalSpend: totalSpend,
+                expectedSpend: expectedSpend,
+                targetBudget: targetBudget,
+                daysUntilEvent: Math.round(daysUntilEvent),
+                daysElapsed: Math.round(daysElapsed),
+                pacingPercentage: pacingPercentage,
+                isUnderspending: isUnderspending,
+                currency: currency,
+                timestamp: new Date().toISOString()
+              });
+            }
+          }
         }
-      } catch (metaAdsError: any) {
-        debugInfo.meta_ads_error = metaAdsError.message;
       }
+    } catch (metaAdsError: any) {
+      debugInfo.meta_ads_error = metaAdsError.message;
     }
 
     // Filter out suppressed findings
