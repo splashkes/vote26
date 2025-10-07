@@ -385,6 +385,39 @@ const EventDetail = () => {
       }
 
       debugObject(data, 'Event Detail Data');
+
+      // Auto-populate expected_number_of_rounds and target_artists_booked for future events
+      if (data?.event_start_datetime) {
+        const now = new Date();
+        const eventStart = new Date(data.event_start_datetime);
+        const isFutureEvent = eventStart > now;
+
+        if (isFutureEvent && (!data.expected_number_of_rounds || !data.target_artists_booked)) {
+          const updates: any = {};
+
+          if (!data.expected_number_of_rounds) {
+            updates.expected_number_of_rounds = 3;
+          }
+
+          if (!data.target_artists_booked) {
+            updates.target_artists_booked = 12;
+          }
+
+          // Update the database
+          const { error: updateError } = await supabase
+            .from('events')
+            .update(updates)
+            .eq('id', eventId);
+
+          if (!updateError) {
+            // Update local state with new values
+            data.expected_number_of_rounds = data.expected_number_of_rounds || 3;
+            data.target_artists_booked = data.target_artists_booked || 12;
+            console.log('Auto-populated event defaults:', updates);
+          }
+        }
+      }
+
       setEvent(data);
       return data; // Return the event data
     } catch (err) {
