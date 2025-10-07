@@ -2561,6 +2561,228 @@ The Art Battle Team`);
           </Flex>
         </Flex>
 
+        {/* Pre-Event Information */}
+        <Card>
+          <Box p="4">
+            {/* Event Listing Style */}
+            <Flex direction="column" gap="3">
+              {/* Title Line with Location */}
+              <Flex gap="3" align="center">
+                <Badge variant="outline" size="3">{event.eid}</Badge>
+                <Text size="6" weight="bold" style={{ lineHeight: '1.3' }}>
+                  {event.name}
+                  {event.cities?.name && (
+                    <Text color="gray"> in {event.cities.name}</Text>
+                  )}
+                </Text>
+              </Flex>
+
+              {/* Date Line */}
+              <Flex gap="2" wrap="wrap" align="center">
+                {event.event_start_datetime && (
+                  <>
+                    <Text size="3" weight="medium">
+                      {new Date(event.event_start_datetime).toLocaleDateString('en-US', {
+                        weekday: 'short',
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        timeZone: event.timezone_icann || 'UTC'
+                      })}
+                    </Text>
+                    {event.timezone_icann && (
+                      <Badge variant="soft" color="blue" size="1">
+                        {event.timezone_icann}
+                      </Badge>
+                    )}
+                  </>
+                )}
+              </Flex>
+
+              {/* Venue Line */}
+              {(event.venues?.name || event.venue) && (
+                <Flex direction="column" gap="1">
+                  <Flex gap="2" align="center">
+                    <Text size="3" weight="medium">
+                      {event.venues?.name || event.venue}
+                    </Text>
+                    {event.capacity && (
+                      <>
+                        <Text color="gray">•</Text>
+                        <Text size="3" color="gray">Capacity: {event.capacity}</Text>
+                      </>
+                    )}
+                  </Flex>
+                  {event.venues?.address && (
+                    <Text size="2" color="gray">
+                      {event.venues.address}
+                    </Text>
+                  )}
+                </Flex>
+              )}
+              {/* Structure Line */}
+              {(event.expected_number_of_rounds || event.target_artists_booked || event.wildcard_expected) && (
+                <Flex gap="2" wrap="wrap" align="center">
+                  {event.expected_number_of_rounds && (
+                    <Text size="2">{event.expected_number_of_rounds} Rounds</Text>
+                  )}
+                  {event.target_artists_booked && (
+                    <>
+                      {event.expected_number_of_rounds && <Text color="gray">•</Text>}
+                      <Text size="2">{event.target_artists_booked} Artists</Text>
+                    </>
+                  )}
+                  {event.wildcard_expected && (
+                    <>
+                      {(event.expected_number_of_rounds || event.target_artists_booked) && <Text color="gray">•</Text>}
+                      <Badge color="purple" size="1">Wildcard</Badge>
+                    </>
+                  )}
+                </Flex>
+              )}
+
+              {/* Description */}
+              {event.description && (
+                <Box>
+                  <Text size="2" style={{ lineHeight: '1.6' }}>{event.description}</Text>
+                </Box>
+              )}
+
+              <Separator size="4" />
+
+              {/* Details Grid */}
+              <Flex direction="column" gap="2">
+                {/* Tickets Line */}
+                {event.ticket_link && (
+                  <Flex gap="2" wrap="wrap" align="center">
+                    <Text size="2">Tickets:</Text>
+                    {event.ticket_price_notes && (
+                      <Text size="2" weight="bold">{event.ticket_price_notes}</Text>
+                    )}
+                    {event.ticket_price_notes && <Text size="2">@</Text>}
+                    <a href={event.ticket_link} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.875rem', color: 'var(--accent-9)' }}>
+                      {(() => {
+                        try {
+                          const url = new URL(event.ticket_link);
+                          return url.hostname.replace(/^www\./, '');
+                        } catch {
+                          return event.ticket_link;
+                        }
+                      })()}
+                    </a>
+                    {event.eventbrite_id && (
+                      <Text size="2" color="gray">({event.eventbrite_id})</Text>
+                    )}
+                  </Flex>
+                )}
+
+                {/* Auction Line */}
+                {event.enable_auction && (
+                  <Flex gap="2" wrap="wrap" align="center">
+                    <Text size="2">Auction:</Text>
+                    <Text size="2">starts at</Text>
+                    <Text size="2" weight="bold">
+                      {event.cities?.countries?.currency_code || 'USD'} {event.cities?.countries?.currency_symbol || '$'}{event.auction_start_bid?.toFixed(2) || '0.00'}
+                    </Text>
+                    {(event.tax !== null && event.tax !== undefined) && (
+                      <>
+                        <Text size="2">+</Text>
+                        <Text size="2">{(event.tax * 100).toFixed(1)}% tax</Text>
+                      </>
+                    )}
+                    {event.artist_auction_portion && (
+                      <Text size="2" color="gray">({Math.round(event.artist_auction_portion * 100)}% to artists)</Text>
+                    )}
+                  </Flex>
+                )}
+
+                {/* Budget Info */}
+                {(event.meta_ads_budget || event.other_ads_budget) && (
+                  <Flex gap="4" wrap="wrap">
+                    {event.meta_ads_budget && (
+                      <Flex gap="2" align="center">
+                        <Text size="1" color="gray">Meta Ads:</Text>
+                        <Text size="2" weight="medium">${event.meta_ads_budget.toFixed(2)}</Text>
+                      </Flex>
+                    )}
+                    {event.other_ads_budget && (
+                      <Flex gap="2" align="center">
+                        <Text size="1" color="gray">Other Ads:</Text>
+                        <Text size="2" weight="medium">${event.other_ads_budget.toFixed(2)}</Text>
+                      </Flex>
+                    )}
+                  </Flex>
+                )}
+
+                {/* Event Folder */}
+                {event.event_folder_link && (
+                  <Flex gap="2" align="center">
+                    <Text size="1" color="gray">Event Folder:</Text>
+                    <a href={event.event_folder_link} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.875rem', color: 'var(--accent-9)' }}>
+                      Open Drive Folder
+                    </a>
+                  </Flex>
+                )}
+              </Flex>
+
+              <Separator size="4" />
+
+              {/* Event Info Approval */}
+              <Flex direction="column" gap="2">
+                {(() => {
+                  const missingFields = [];
+
+                  if (!event.event_start_datetime) missingFields.push('Start Date/Time');
+                  if (!event.event_end_datetime) missingFields.push('End Date/Time');
+                  if (!event.timezone_icann) missingFields.push('Timezone');
+                  if (!event.venue && !event.venue_id) missingFields.push('Venue');
+                  if (!event.city_id) missingFields.push('City');
+                  if (!event.capacity) missingFields.push('Capacity');
+                  if (!event.expected_number_of_rounds) missingFields.push('Expected Rounds');
+                  if (!event.target_artists_booked) missingFields.push('Target Artists');
+                  if (event.enable_auction && !event.auction_start_bid) missingFields.push('Auction Start Bid');
+                  if (!event.artist_auction_portion) missingFields.push('Artist Auction Portion');
+                  if (event.tax === null || event.tax === undefined) missingFields.push('Tax Rate');
+
+                  return (
+                    <>
+                      {missingFields.length > 0 && (
+                        <Text size="1" style={{ color: 'var(--red-9)', fontStyle: 'italic' }}>
+                          Missing: {missingFields.join(', ')}
+                        </Text>
+                      )}
+                      <Flex gap="2" align="center">
+                        {event.event_info_approved_by ? (
+                          <>
+                            <Badge color="green" size="2">APPROVED</Badge>
+                            <Text size="1" color="gray">
+                              by {event.event_info_approved_by}
+                              {event.event_info_approved_at && (
+                                <> on {new Date(event.event_info_approved_at).toLocaleString()}</>
+                              )}
+                            </Text>
+                          </>
+                        ) : (
+                          <Button
+                            size="2"
+                            onClick={approveEventInfo}
+                            disabled={approvingEventInfo || missingFields.length > 0}
+                            color={missingFields.length > 0 ? 'gray' : undefined}
+                          >
+                            {approvingEventInfo ? 'Approving...' : 'APPROVE'}
+                          </Button>
+                        )}
+                      </Flex>
+                    </>
+                  );
+                })()}
+              </Flex>
+            </Flex>
+          </Box>
+        </Card>
+
         {/* Post-Event Summary - Collapsible (always visible, minimized for non-completed events) */}
         <Card>
             <Box p="3">
