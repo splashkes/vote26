@@ -142,9 +142,7 @@ const EventLinterEmbed = ({ eventEid }) => {
             <Table.Header>
               <Table.Row>
                 <Table.ColumnHeaderCell style={{ width: '30px', padding: '4px 8px' }}></Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell style={{ width: '90px', padding: '4px 8px' }}>Severity</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell style={{ minWidth: '300px', padding: '4px 8px' }}>Message</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell style={{ width: '120px', padding: '4px 8px' }}>Category</Table.ColumnHeaderCell>
               </Table.Row>
             </Table.Header>
 
@@ -154,25 +152,12 @@ const EventLinterEmbed = ({ eventEid }) => {
                   <Table.Cell style={{ padding: '4px 8px' }}>
                     <Text size="2">{finding.emoji}</Text>
                   </Table.Cell>
-                  <Table.Cell style={{ padding: '4px 8px' }}>
-                    <Badge color={getSeverityColor(finding.severity)} variant="soft" size="1">
-                      {finding.severity}
-                    </Badge>
-                  </Table.Cell>
                   <Table.Cell
                     style={{ padding: '4px 8px', cursor: 'pointer' }}
                     onClick={() => handleMessageClick(finding)}
                   >
                     <Text size="1" style={{ fontFamily: 'inherit' }}>
                       {finding.message}
-                    </Text>
-                  </Table.Cell>
-                  <Table.Cell style={{ padding: '4px 8px' }}>
-                    <Text size="1" color="gray" style={{
-                      textTransform: 'capitalize',
-                      fontFamily: 'inherit'
-                    }}>
-                      {finding.category.replace(/_/g, ' ')}
                     </Text>
                   </Table.Cell>
                 </Table.Row>

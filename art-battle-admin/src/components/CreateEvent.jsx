@@ -375,14 +375,20 @@ const CreateEvent = () => {
     'America/New_York',
     'America/Chicago',
     'America/Denver',
+    'America/Edmonton',
+    'America/Halifax',
     'America/Los_Angeles',
+    'America/Mexico_City',
     'America/Vancouver',
-    'Europe/London',
-    'Europe/Amsterdam',
-    'Europe/Paris',
-    'Australia/Sydney',
+    'America/Winnipeg',
+    'Asia/Bangkok',
     'Asia/Tokyo',
-    'Asia/Bangkok'
+    'Australia/Sydney',
+    'Europe/Amsterdam',
+    'Europe/London',
+    'Europe/Paris',
+    'Europe/Podgorica',
+    'Pacific/Auckland'
   ];
 
   return (
