@@ -1517,11 +1517,19 @@ serve(async (req) => {
             // Must match rule_id
             if (s.rule_id !== finding.ruleId) return false;
 
-            // If suppression has event_id, finding must match
-            if (s.event_id && s.event_id !== finding.eventId) return false;
+            // If suppression has event_id, finding must match (case-insensitive UUID comparison)
+            if (s.event_id) {
+              const suppressionEventId = String(s.event_id).toLowerCase();
+              const findingEventId = String(finding.eventId).toLowerCase();
+              if (suppressionEventId !== findingEventId) return false;
+            }
 
-            // If suppression has artist_id, finding must match
-            if (s.artist_id && s.artist_id !== finding.artistId) return false;
+            // If suppression has artist_id, finding must match (case-insensitive UUID comparison)
+            if (s.artist_id) {
+              const suppressionArtistId = String(s.artist_id).toLowerCase();
+              const findingArtistId = String(finding.artistId || '').toLowerCase();
+              if (suppressionArtistId !== findingArtistId) return false;
+            }
 
             // If suppression has neither event_id nor artist_id, it shouldn't exist (DB constraint)
             // But if it somehow does, don't match
