@@ -662,7 +662,7 @@ serve(async (req) => {
     }
 
     // Run linter on events
-    const findings: any[] = [];
+    let findings: any[] = [];
     for (const event of eventsToLint) {
       // Check EID format (special validation)
       if (event.eid && !/^AB\d{3,4}$/.test(event.eid)) {
@@ -1511,9 +1511,18 @@ serve(async (req) => {
           !s.suppressed_until || new Date(s.suppressed_until) > now
         );
 
+        debugInfo.total_suppressions = suppressions.length;
+        debugInfo.active_suppressions = activeSuppressions.length;
+        debugInfo.suppression_sample = activeSuppressions.slice(0, 2).map((s: any) => ({
+          rule_id: s.rule_id,
+          event_id: s.event_id,
+          artist_id: s.artist_id
+        }));
+
+        const suppressedFindings: any[] = [];
         findings = findings.filter((finding: any) => {
           // Check if this finding is suppressed
-          return !activeSuppressions.some((s: any) => {
+          const isSuppressed = activeSuppressions.some((s: any) => {
             // Must match rule_id
             if (s.rule_id !== finding.ruleId) return false;
 
@@ -1537,9 +1546,23 @@ serve(async (req) => {
 
             return true;
           });
+
+          if (isSuppressed) {
+            suppressedFindings.push({
+              ruleId: finding.ruleId,
+              eventId: finding.eventId,
+              artistId: finding.artistId
+            });
+          }
+
+          return !isSuppressed;
         });
 
         debugInfo.suppressions_checked = activeSuppressions.length;
+        debugInfo.findings_suppressed = suppressedFindings.length;
+        if (suppressedFindings.length > 0) {
+          debugInfo.suppressed_findings_sample = suppressedFindings.slice(0, 3);
+        }
       }
     } catch (suppressError: any) {
       debugInfo.suppression_error = suppressError.message;
