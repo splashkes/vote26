@@ -101,16 +101,19 @@ const EventLinter = () => {
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
 
-      // Insert suppression
+      // Upsert suppression (update if exists, insert if not)
       const { error } = await supabase
         .from('linter_suppressions')
-        .insert({
+        .upsert({
           rule_id: selectedFinding.ruleId,
           event_id: selectedFinding.eventId || null,
           artist_id: selectedFinding.artistId || null,
           suppressed_by: user?.id,
           suppressed_until: suppressedUntil,
           reason: suppressReason || null
+        }, {
+          onConflict: 'rule_id,event_id,artist_id',
+          ignoreDuplicates: false
         });
 
       if (error) {
