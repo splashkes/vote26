@@ -577,19 +577,26 @@ serve(async (req) => {
         // Get confirmed artists from artist_confirmations table
         const { data: confirmationData, error: confirmationError } = await supabaseClient
           .from('artist_confirmations')
-          .select('event_eid, confirmation_status, withdrawn_at')
+          .select('event_eid, confirmation_status, withdrawn_at, confirmation_date')
           .in('event_eid', futureEventEids);
 
         if (!confirmationError && confirmationData) {
-          // Group confirmation counts by event_eid
+          // Group confirmation counts and track last confirmation by event_eid
           const confirmationCountMap = new Map();
           confirmationData.forEach((ac: any) => {
             if (!confirmationCountMap.has(ac.event_eid)) {
-              confirmationCountMap.set(ac.event_eid, { confirmed: 0, withdrawn: 0 });
+              confirmationCountMap.set(ac.event_eid, { confirmed: 0, withdrawn: 0, last_confirmed_at: null });
             }
             const counts = confirmationCountMap.get(ac.event_eid);
             if (ac.confirmation_status === 'confirmed' && !ac.withdrawn_at) {
               counts.confirmed++;
+              // Track most recent confirmation date
+              if (ac.confirmation_date) {
+                const confirmedDate = new Date(ac.confirmation_date);
+                if (!counts.last_confirmed_at || confirmedDate > counts.last_confirmed_at) {
+                  counts.last_confirmed_at = confirmedDate;
+                }
+              }
             }
             if (ac.withdrawn_at) {
               counts.withdrawn++;
@@ -599,15 +606,24 @@ serve(async (req) => {
           // Enrich future events with confirmation counts and days until event
           const now = new Date();
           for (const event of futureEvents) {
-            const counts = confirmationCountMap.get(event.eid) || { confirmed: 0, withdrawn: 0 };
+            const counts = confirmationCountMap.get(event.eid) || { confirmed: 0, withdrawn: 0, last_confirmed_at: null };
             event.confirmed_artists_count = counts.confirmed;
             event.withdrawn_artists_count = counts.withdrawn;
 
-            // Calculate days until event
+            // Calculate days until event (from now for general use)
             if (event.event_start_datetime) {
               const startDate = new Date(event.event_start_datetime);
               const daysUntil = Math.ceil((startDate.getTime() - now.getTime()) / 1000 / 60 / 60 / 24);
               event.days_until_event = daysUntil;
+
+              // For success message: calculate days between last confirmation and event
+              // Fallback to days_until_event if no confirmation timestamp available
+              if (counts.last_confirmed_at) {
+                const daysFromConfirmation = Math.ceil((startDate.getTime() - counts.last_confirmed_at.getTime()) / 1000 / 60 / 60 / 24);
+                event.days_from_last_confirmation_to_event = daysFromConfirmation;
+              } else {
+                event.days_from_last_confirmation_to_event = daysUntil;
+              }
             }
           }
 
@@ -692,6 +708,17 @@ serve(async (req) => {
         }
         const finding = evaluateRule(rule, event, {}, supabaseClient);
         if (finding) {
+          // Special handling: advertising_budget_not_set_info - escalate severity based on days until event
+          if (finding.ruleId === 'advertising_budget_not_set_info' && event.days_until_event !== undefined) {
+            if (event.days_until_event <= 7) {
+              finding.severity = 'error';
+              finding.emoji = '❌';
+            } else if (event.days_until_event <= 20) {
+              finding.severity = 'warning';
+              finding.emoji = '⚠️';
+            }
+            // Otherwise stays as 'info'
+          }
           findings.push(finding);
         }
       }
