@@ -36,6 +36,7 @@ const EventLinter = () => {
   const [contextFilter, setContextFilter] = useState('all');
   const [futureOnly, setFutureOnly] = useState(false);
   const [activeOnly, setActiveOnly] = useState(false);
+  const [hideArtistFindings, setHideArtistFindings] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedFinding, setSelectedFinding] = useState(null);
@@ -160,6 +161,11 @@ const EventLinter = () => {
       filtered = filtered.filter(f => f.context === contextFilter);
     }
 
+    // Hide artist findings (findings with artistId but no eventId)
+    if (hideArtistFindings) {
+      filtered = filtered.filter(f => !f.artistId || f.eventId);
+    }
+
     // Filter by search
     if (searchQuery) {
       const searchLower = searchQuery.toLowerCase();
@@ -172,7 +178,7 @@ const EventLinter = () => {
     }
 
     setFindings(filtered);
-  }, [searchQuery, severityFilters, categoryFilter, contextFilter, allFindings]);
+  }, [searchQuery, severityFilters, categoryFilter, contextFilter, hideArtistFindings, allFindings]);
 
   // Get severity counts
   const severityCounts = useMemo(() => getSeverityCounts(allFindings), [allFindings]);
@@ -370,6 +376,16 @@ const EventLinter = () => {
               ⚡ Active (±24h)
             </Badge>
 
+            <Badge
+              color="gray"
+              size="1"
+              style={{ cursor: 'pointer' }}
+              variant={hideArtistFindings ? 'solid' : 'soft'}
+              onClick={() => setHideArtistFindings(!hideArtistFindings)}
+            >
+              👤 Hide Artist Issues
+            </Badge>
+
             <Text size="1" color="gray">
               ({allFindings.length} total)
             </Text>
@@ -420,7 +436,7 @@ const EventLinter = () => {
               </Select.Root>
             </Box>
 
-            {(searchQuery || severityFilters.size > 0 || categoryFilter !== 'all' || contextFilter !== 'all' || futureOnly || activeOnly) && (
+            {(searchQuery || severityFilters.size > 0 || categoryFilter !== 'all' || contextFilter !== 'all' || futureOnly || activeOnly || hideArtistFindings) && (
               <Button
                 size="1"
                 variant="ghost"
@@ -432,6 +448,7 @@ const EventLinter = () => {
                   setContextFilter('all');
                   setFutureOnly(false);
                   setActiveOnly(false);
+                  setHideArtistFindings(false);
                 }}
               >
                 <CrossCircledIcon />
