@@ -85,3 +85,42 @@ export async function getUpcomingEventsInCity(cityId, currentEventId) {
     return { data: null, error: err.message };
   }
 }
+
+/**
+ * Create Stripe checkout session for sponsorship purchase
+ */
+export async function createSponsorshipCheckout({
+  inviteHash,
+  mainPackageId,
+  addonPackageIds = [],
+  eventIds = [],
+  buyerName,
+  buyerEmail,
+  buyerCompany,
+  buyerPhone,
+  successUrl,
+  cancelUrl
+}) {
+  try {
+    const { data, error } = await supabase.functions.invoke('sponsorship-stripe-checkout', {
+      body: {
+        invite_hash: inviteHash,
+        main_package_id: mainPackageId,
+        addon_package_ids: addonPackageIds,
+        event_ids: eventIds,
+        buyer_name: buyerName,
+        buyer_email: buyerEmail,
+        buyer_company: buyerCompany,
+        buyer_phone: buyerPhone,
+        success_url: successUrl,
+        cancel_url: cancelUrl
+      }
+    });
+
+    if (error) throw error;
+    return { data, error: null };
+  } catch (err) {
+    console.error('Error creating checkout session:', err);
+    return { data: null, error: err.message };
+  }
+}

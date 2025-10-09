@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Theme, Container, Box, Flex, Spinner, Callout } from '@radix-ui/themes';
-import { getSponsorshipInvite, trackInteraction } from './lib/api';
+import { getSponsorshipInvite, trackInteraction, createSponsorshipCheckout } from './lib/api';
 import HeroSection from './components/HeroSection';
 import LocalRelevanceSection from './components/LocalRelevanceSection';
 import SelfSelectionCTA from './components/SelfSelectionCTA';
@@ -106,13 +106,59 @@ function App() {
     window.history.pushState({ step: 'selection', tier: selectedTier }, '', window.location.href);
   };
 
-  const handleCheckout = async () => {
-    // Phase 4: Stripe integration
-    console.log('Checkout:', {
-      package: selectedPackage,
-      addons: selectedAddons,
-      multiEvents: multiEventSelection
-    });
+  const handleCheckout = async (selectedEvents) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Prepare buyer information from invite
+      const buyerName = inviteData.prospect_company || inviteData.prospect_name || 'Sponsor';
+      const buyerEmail = inviteData.prospect_email || '';
+      const buyerCompany = inviteData.prospect_company || '';
+
+      // Build event IDs array - includes original event + selected additional events
+      const eventIds = [
+        inviteData.event_id,
+        ...selectedEvents.filter(e => !e.isPlaceholder && !e.isChampionship).map(e => e.id)
+      ];
+
+      // Create checkout session
+      const { data: checkoutData, error: checkoutError } = await createSponsorshipCheckout({
+        inviteHash: hash,
+        mainPackageId: selectedPackage.id,
+        addonPackageIds: selectedAddons.map(a => a.id),
+        eventIds: eventIds,
+        buyerName: buyerName,
+        buyerEmail: buyerEmail,
+        buyerCompany: buyerCompany,
+        buyerPhone: null,
+        successUrl: `${window.location.origin}/sponsor/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancelUrl: `${window.location.origin}/sponsor/${hash}?payment=cancelled`
+      });
+
+      if (checkoutError) {
+        throw new Error(checkoutError);
+      }
+
+      if (checkoutData?.url) {
+        // Track checkout initiation
+        if (hash) {
+          await trackInteraction(hash, 'checkout_initiated', selectedPackage.id, {
+            total_events: eventIds.length,
+            addon_count: selectedAddons.length
+          });
+        }
+
+        // Redirect to Stripe Checkout
+        window.location.href = checkoutData.url;
+      } else {
+        throw new Error('No checkout URL returned');
+      }
+    } catch (err) {
+      console.error('Checkout error:', err);
+      setError(err.message || 'Failed to initiate checkout');
+      setLoading(false);
+    }
   };
 
   if (loading) {
