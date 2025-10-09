@@ -27,6 +27,7 @@ serve(async (req) => {
     )
 
     // Get IP and user agent from request
+    // Store full x-forwarded-for chain (comma-separated list)
     const ipAddress = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || null
     const userAgent = req.headers.get('user-agent') || null
 
