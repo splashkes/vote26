@@ -289,8 +289,7 @@ const ArtistWorkflow = ({ eventIds = [], eventEids = [], title = "Artist Managem
   };
 
   const handleArtistCardClick = (artist, type) => {
-    // Open modal with artist details
-    // Need to format artist data for the modal
+    // Open modal with artist details - DO NOT navigate, keep modal on same page
     const artistForModal = {
       artist_number: artist.artist_number,
       artist_profile_id: artist.artist_profiles?.id,

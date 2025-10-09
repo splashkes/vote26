@@ -122,6 +122,12 @@ function App() {
     window.history.pushState({ step: 'selection', tier: selectedTier }, '', window.location.href);
   };
 
+  // Check if invite is expired
+  const isInviteExpired = () => {
+    if (!inviteData?.valid_until) return false;
+    return new Date(inviteData.valid_until) < new Date();
+  };
+
   const handleCheckout = async (selectedEvents) => {
     try {
       setLoading(true);
@@ -227,7 +233,7 @@ function App() {
           <Box style={{ maxWidth: '1400px', margin: '0 auto' }}>
             <HeroSection inviteData={inviteData} />
             <LocalRelevanceSection inviteData={inviteData} />
-            <SelfSelectionCTA onSelect={handleTierSelect} />
+            <SelfSelectionCTA onSelect={handleTierSelect} isExpired={isInviteExpired()} />
           </Box>
         )}
 

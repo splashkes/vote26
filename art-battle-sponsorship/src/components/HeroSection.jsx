@@ -1,5 +1,5 @@
-import { Box, Container, Flex, Heading, Text, Badge, ScrollArea } from '@radix-ui/themes';
-import { PlayIcon } from '@radix-ui/react-icons';
+import { Box, Container, Flex, Heading, Text, Badge, ScrollArea, Callout } from '@radix-ui/themes';
+import { PlayIcon, ClockIcon, ExclamationTriangleIcon } from '@radix-ui/react-icons';
 
 const HeroSection = ({ inviteData }) => {
   // Placeholder sponsor logos
@@ -10,6 +10,38 @@ const HeroSection = ({ inviteData }) => {
 
   // Get prospect name or company
   const prospectDisplay = inviteData?.prospect_company || inviteData?.prospect_name || '';
+
+  // Calculate expiration status
+  const getExpirationStatus = () => {
+    if (!inviteData?.valid_until) return null;
+
+    const validUntil = new Date(inviteData.valid_until);
+    const now = new Date();
+    const diffTime = validUntil - now;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) {
+      // Expired
+      return {
+        type: 'expired',
+        color: 'red',
+        message: `Personal offer expired ${Math.abs(diffDays)} day${Math.abs(diffDays) !== 1 ? 's' : ''} ago`,
+        icon: ExclamationTriangleIcon
+      };
+    } else if (diffDays <= 8) {
+      // Expires soon
+      return {
+        type: 'expires_soon',
+        color: 'amber',
+        message: `Offer expires in ${diffDays} day${diffDays !== 1 ? 's' : ''}`,
+        icon: ClockIcon
+      };
+    }
+
+    return null;
+  };
+
+  const expirationStatus = getExpirationStatus();
 
   return (
     <Box style={{ position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -59,6 +91,18 @@ const HeroSection = ({ inviteData }) => {
                 objectFit: 'contain'
               }}
             />
+
+            {/* Expiration Warning */}
+            {expirationStatus && (
+              <Callout.Root color={expirationStatus.color} size="3" style={{ maxWidth: '600px', width: '100%' }}>
+                <Callout.Icon>
+                  <expirationStatus.icon width="20" height="20" />
+                </Callout.Icon>
+                <Callout.Text size="3" weight="bold">
+                  {expirationStatus.message}
+                </Callout.Text>
+              </Callout.Root>
+            )}
 
             {/* Video Placeholder */}
             <Box style={{

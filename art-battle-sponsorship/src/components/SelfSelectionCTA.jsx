@@ -1,7 +1,7 @@
-import { Box, Container, Flex, Heading, Text, Card, Button } from '@radix-ui/themes';
+import { Box, Container, Flex, Heading, Text, Card, Button, Grid } from '@radix-ui/themes';
 import { StarFilledIcon, TargetIcon } from '@radix-ui/react-icons';
 
-const SelfSelectionCTA = ({ onSelect }) => {
+const SelfSelectionCTA = ({ onSelect, isExpired = false }) => {
   return (
     <Box py="9" style={{ position: 'relative', padding: '3rem 1rem', overflow: 'hidden' }}>
       {/* Background Image */}
@@ -48,10 +48,11 @@ const SelfSelectionCTA = ({ onSelect }) => {
               style={{
                 background: 'linear-gradient(135deg, var(--accent-3) 0%, var(--accent-4) 100%)',
                 border: '2px solid var(--accent-8)',
-                cursor: 'pointer',
+                cursor: isExpired ? 'not-allowed' : 'pointer',
+                opacity: isExpired ? 0.5 : 1,
                 transition: 'all 0.3s ease'
               }}
-              onClick={() => onSelect('premium')}
+              onClick={() => !isExpired && onSelect('premium')}
             >
               <Flex direction="column" gap="4" align="center" style={{ textAlign: 'center' }}>
                 <Box
@@ -82,7 +83,7 @@ const SelfSelectionCTA = ({ onSelect }) => {
                   <Text size="2" style={{ color: 'var(--gray-12)' }}>✓ Social media spotlight</Text>
                 </Flex>
 
-                <Button size="3" style={{ width: '100%' }}>
+                <Button size="3" style={{ width: '100%' }} disabled={isExpired}>
                   View Premium Packages
                 </Button>
               </Flex>
@@ -94,10 +95,11 @@ const SelfSelectionCTA = ({ onSelect }) => {
               style={{
                 background: 'var(--gray-3)',
                 border: '2px solid var(--gray-6)',
-                cursor: 'pointer',
+                cursor: isExpired ? 'not-allowed' : 'pointer',
+                opacity: isExpired ? 0.5 : 1,
                 transition: 'all 0.3s ease'
               }}
-              onClick={() => onSelect('targeted')}
+              onClick={() => !isExpired && onSelect('targeted')}
             >
               <Flex direction="column" gap="4" align="center" style={{ textAlign: 'center' }}>
                 <Box
@@ -128,7 +130,7 @@ const SelfSelectionCTA = ({ onSelect }) => {
                   <Text size="2" style={{ color: 'var(--gray-11)' }}>✓ Tickets included</Text>
                 </Flex>
 
-                <Button size="3" variant="outline" style={{ width: '100%' }}>
+                <Button size="3" variant="outline" style={{ width: '100%' }} disabled={isExpired}>
                   View Targeted Packages
                 </Button>
               </Flex>
@@ -139,8 +141,5 @@ const SelfSelectionCTA = ({ onSelect }) => {
     </Box>
   );
 };
-
-// Fix: Import Grid from Radix
-import { Grid } from '@radix-ui/themes';
 
 export default SelfSelectionCTA;
