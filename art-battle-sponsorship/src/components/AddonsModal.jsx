@@ -69,10 +69,7 @@ const AddonsModal = ({ open, packages, selectedPackage, discountPercent, onConfi
           <Card size="2" style={{ background: 'var(--accent-3)' }}>
             <Flex direction="column" gap="2">
               <Flex justify="between" align="center">
-                <Box>
-                  <Text size="2" style={{ color: 'var(--gray-11)' }}>Selected Package</Text>
-                  <Heading size="4">{selectedPackage.name}</Heading>
-                </Box>
+                <Heading size="4">{selectedPackage.name}</Heading>
                 <Heading size="5">
                   ${calculateDiscountedPrice(selectedPackage.base_price).toFixed(0)}
                 </Heading>
@@ -94,7 +91,7 @@ const AddonsModal = ({ open, packages, selectedPackage, discountPercent, onConfi
                   ) : (
                     <>
                       <ChevronDownIcon width="14" height="14" />
-                      <Text size="1">Show all benefits ({selectedPackage.benefits?.length || 0})</Text>
+                      <Text size="1">{selectedPackage.benefits?.length || 0} benefits</Text>
                     </>
                   )}
                 </Flex>
@@ -150,6 +147,7 @@ const AddonsModal = ({ open, packages, selectedPackage, discountPercent, onConfi
                       <Checkbox
                         checked={!!isSelected}
                         onCheckedChange={() => toggleAddon(addon)}
+                        onClick={(e) => e.stopPropagation()}
                         style={{ marginTop: '2px' }}
                       />
                       <Flex direction="column" gap="2" style={{ flex: 1 }}>
@@ -184,7 +182,7 @@ const AddonsModal = ({ open, packages, selectedPackage, discountPercent, onConfi
                             ) : (
                               <>
                                 <ChevronDownIcon width="14" height="14" />
-                                <Text size="1">Show all benefits ({addon.benefits?.length || 0})</Text>
+                                <Text size="1">{addon.benefits?.length || 0} benefits</Text>
                               </>
                             )}
                           </Flex>
@@ -235,13 +233,7 @@ const AddonsModal = ({ open, packages, selectedPackage, discountPercent, onConfi
           <Separator />
 
           {/* Total */}
-          <Flex justify="between" align="center">
-            <Box>
-              <Text size="2" style={{ color: 'var(--gray-11)' }}>Current Total</Text>
-              <Text size="1" style={{ color: 'var(--gray-11)' }}>
-                {selectedAddons.length} add-on{selectedAddons.length !== 1 ? 's' : ''} selected
-              </Text>
-            </Box>
+          <Flex justify="end" align="center">
             <Heading size="6">
               ${calculateTotal().toFixed(0)} {selectedPackage.currency || 'USD'}
             </Heading>

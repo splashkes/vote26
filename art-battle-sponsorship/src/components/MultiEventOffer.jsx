@@ -100,15 +100,45 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
     return pricePerEvent * totalEvents;
   };
 
-  const calculateSavings = () => {
+  const calculateTotalValue = () => {
     const basePrice = calculateBasePrice();
     const totalEvents = selectedEvents.length + 1;
-    const fullPrice = basePrice * totalEvents;
-    return fullPrice - calculateDiscountedTotal();
+    return basePrice * totalEvents;
+  };
+
+  const calculateSavings = () => {
+    return calculateTotalValue() - calculateDiscountedTotal();
+  };
+
+  const calculateRecipientDiscountAmount = () => {
+    if (!discountPercent || discountPercent === 0) return 0;
+    const basePrice = calculateBasePrice();
+    const totalEvents = selectedEvents.length + 1;
+    return (basePrice * totalEvents) * (discountPercent / 100);
+  };
+
+  const calculateMultiEventDiscountAmount = () => {
+    const basePrice = calculateBasePrice();
+    const totalEvents = selectedEvents.length + 1;
+    const multiEventDiscount = getDiscount(totalEvents);
+
+    if (multiEventDiscount === 0) return 0;
+
+    // Multi-event discount applies after recipient discount
+    const priceAfterRecipientDiscount = applyRecipientDiscount(basePrice);
+    return (priceAfterRecipientDiscount * totalEvents) * (multiEventDiscount / 100);
+  };
+
+  const calculateTotalDiscountPercent = () => {
+    const totalValue = calculateTotalValue();
+    const savings = calculateSavings();
+    if (totalValue === 0) return 0;
+    return Math.round((savings / totalValue) * 100);
   };
 
   const totalEvents = selectedEvents.length + 1;
   const discount = getDiscount(totalEvents);
+  const prospectDisplay = inviteData?.prospect_company || inviteData?.prospect_name || 'Recipient';
 
   return (
     <Box style={{ minHeight: '100vh', background: 'var(--gray-1)', padding: '3rem 1rem' }}>
@@ -220,12 +250,12 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                   {showBenefits ? (
                     <>
                       <ChevronUpIcon width="14" height="14" />
-                      <Text size="1">Hide full benefits</Text>
+                      <Text size="1">Hide benefits</Text>
                     </>
                   ) : (
                     <>
                       <ChevronDownIcon width="14" height="14" />
-                      <Text size="1">Show full benefits</Text>
+                      <Text size="1">{(selectedPackage.benefits?.length || 0) + selectedAddons.reduce((sum, addon) => sum + (addon.benefits?.length || 0), 0)} benefits</Text>
                     </>
                   )}
                 </Flex>
@@ -314,6 +344,7 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                       <Checkbox
                         checked={!!isSelected}
                         onCheckedChange={() => toggleEvent(event)}
+                        onClick={(e) => e.stopPropagation()}
                       />
                       <Flex direction="column" gap="1" style={{ flex: 1 }}>
                         <Text size="3" weight="bold">{event.name}</Text>
@@ -342,38 +373,58 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
           <Card size="3" style={{ background: 'var(--green-2)', border: '1px solid var(--green-6)' }}>
             <Flex direction="column" gap="3">
               <Flex justify="between" align="center">
-                <Text size="3" weight="bold">Total Events</Text>
+                <Text size="3" weight="bold">Events</Text>
                 <Text size="3" weight="bold">{totalEvents} event{totalEvents !== 1 ? 's' : ''}</Text>
+              </Flex>
+
+              <Flex justify="between" align="center">
+                <Heading size="5">Total Value</Heading>
+                <Heading size="6">
+                  ${calculateTotalValue().toFixed(0)} {selectedPackage.currency || 'USD'}
+                </Heading>
               </Flex>
 
               {discountPercent > 0 && (
                 <Flex justify="between" align="center">
-                  <Text size="3">Recipient Discount</Text>
-                  <Badge color="blue" size="2">{discountPercent}% OFF</Badge>
+                  <Text size="3">{prospectDisplay} Discount</Text>
+                  <Flex gap="2" align="center">
+                    <Badge color="blue" size="2">{discountPercent}% OFF</Badge>
+                    <Text size="3" weight="bold" style={{ color: 'var(--blue-11)' }}>
+                      ${calculateRecipientDiscountAmount().toFixed(0)}
+                    </Text>
+                  </Flex>
                 </Flex>
               )}
 
               {discount > 0 && (
                 <Flex justify="between" align="center">
-                  <Text size="3">Multi-Event Discount</Text>
-                  <Badge color="green" size="2">{discount}% OFF</Badge>
+                  <Text size="3">{totalEvents} Event Discount</Text>
+                  <Flex gap="2" align="center">
+                    <Badge color="green" size="2">{discount}% OFF</Badge>
+                    <Text size="3" weight="bold" style={{ color: 'var(--green-11)' }}>
+                      ${calculateMultiEventDiscountAmount().toFixed(0)}
+                    </Text>
+                  </Flex>
                 </Flex>
               )}
 
               {(discount > 0 || discountPercent > 0) && (
                 <Flex justify="between" align="center">
-                  <Text size="2" style={{ color: 'var(--gray-11)' }}>Total Savings</Text>
-                  <Text size="3" weight="bold" style={{ color: 'var(--green-11)' }}>
-                    ${calculateSavings().toFixed(0)}
-                  </Text>
+                  <Text size="3">Total Discount</Text>
+                  <Flex gap="2" align="center">
+                    <Badge color="green" size="2">{calculateTotalDiscountPercent()}% OFF</Badge>
+                    <Text size="3" weight="bold" style={{ color: 'var(--green-11)' }}>
+                      ${calculateSavings().toFixed(0)}
+                    </Text>
+                  </Flex>
                 </Flex>
               )}
 
               <Separator />
 
               <Flex justify="between" align="center">
-                <Heading size="5">Total Investment</Heading>
-                <Heading size="6">
+                <Heading size="5" style={{ color: 'var(--green-11)' }}>Final Price</Heading>
+                <Heading size="6" style={{ color: 'var(--green-11)' }}>
                   ${calculateDiscountedTotal().toFixed(0)} {selectedPackage.currency || 'USD'}
                 </Heading>
               </Flex>
@@ -382,9 +433,6 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
 
           {/* Actions */}
           <Flex gap="3" justify="center">
-            <Button variant="soft" size="3" onClick={onSkip}>
-              Continue with Single Event
-            </Button>
             <Button size="3" onClick={() => onConfirm(selectedEvents)}>
               Proceed to Checkout
             </Button>
