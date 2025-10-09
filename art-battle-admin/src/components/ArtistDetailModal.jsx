@@ -16,14 +16,7 @@ import {
 } from '@radix-ui/themes';
 import {
   PersonIcon,
-  Cross2Icon,
-  ImageIcon,
-  StarFilledIcon,
-  ReloadIcon,
-  LightningBoltIcon,
-  ExclamationTriangleIcon,
-  CheckCircledIcon,
-  StarIcon
+  Cross2Icon
 } from '@radix-ui/react-icons';
 import { supabase } from '../lib/supabase';
 
@@ -44,12 +37,6 @@ const ArtistDetailModal = ({
   const [bioSaving, setBioSaving] = useState(false);
   const [fullArtistProfile, setFullArtistProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(false);
-  const [aiIntel, setAiIntel] = useState(null);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiError, setAiError] = useState(null);
-  const [artworkAnalyses, setArtworkAnalyses] = useState([]);
-  const [artworkAnalysisLoading, setArtworkAnalysisLoading] = useState(false);
-  const [artworkAnalysisError, setArtworkAnalysisError] = useState(null);
 
   // Invitation states
   const [allEvents, setAllEvents] = useState([]);
@@ -58,14 +45,12 @@ const ArtistDetailModal = ({
   const [inviteMessage, setInviteMessage] = useState('');
   const [inviteLoading, setInviteLoading] = useState(false);
 
-  // Load sample works, event history, full profile, AI intel, and artwork analysis when modal opens
+  // Load sample works, event history, and full profile when modal opens
   useEffect(() => {
     if (isOpen && artist?.artist_profile_id) {
       loadFullArtistProfile();
       loadSampleWorks();
       loadArtistEventHistory();
-      loadAiIntel();
-      loadArtworkAnalysis();
       loadAllEvents();
     }
   }, [isOpen, artist?.artist_profile_id]);
@@ -92,10 +77,14 @@ const ArtistDetailModal = ({
   const loadSampleWorks = async () => {
     try {
       setSampleWorksLoading(true);
+      console.log('🎨 Loading sample works for artist_profile_id:', artist.artist_profile_id);
+
       const { data, error } = await supabase
-        .rpc('get_unified_sample_works', { 
-          profile_id: artist.artist_profile_id 
+        .rpc('get_unified_sample_works', {
+          profile_id: artist.artist_profile_id
         });
+
+      console.log('🎨 Sample works result:', { data, error, count: data?.length });
 
       if (error) throw error;
       setSampleWorks(data || []);
@@ -239,151 +228,6 @@ const ArtistDetailModal = ({
     setEditingBio(true);
   };
 
-  const loadAiIntel = async () => {
-    console.log('🤖 Starting AI Intel load for artist:', artist?.artist_profile_id);
-    
-    try {
-      setAiLoading(true);
-      setAiError(null);
-
-      const { data: { session } } = await supabase.auth.getSession();
-      console.log('🔑 Session check:', { hasSession: !!session, hasToken: !!session?.access_token });
-      
-      if (!session) {
-        throw new Error('Not authenticated');
-      }
-
-      console.log('📡 Making request to AI Intel function...');
-      const response = await fetch(`https://xsqdkubgyqwpyvfltnrf.supabase.co/functions/v1/admin-artist-ai-intel`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcWRrdWJneXF3cHl2Zmx0bnJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM0MjE2OTYsImV4cCI6MjA2ODk5NzY5Nn0.hY8v8IDZQTcdAFa_OvQNFd1CyvabGcOZZMn_J6c4c2U'
-        },
-        body: JSON.stringify({ 
-          artist_profile_id: artist.artist_profile_id,
-          force_regenerate: false 
-        })
-      });
-
-      console.log('📥 Response received:', { status: response.status, ok: response.ok });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('❌ Error response:', errorData);
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-      console.log('✅ AI Intel result:', result);
-      
-      // Ensure we only use the expected string fields
-      const cleanData = {
-        art_battle_history: typeof result.data?.art_battle_history === 'string' ? result.data.art_battle_history : 'No history analysis available',
-        bio_summary: typeof result.data?.bio_summary === 'string' ? result.data.bio_summary : 'No bio analysis available', 
-        event_potential: typeof result.data?.event_potential === 'string' ? result.data.event_potential : 'No event potential analysis available',
-        auction_stats: result.data?.auction_stats || null,
-        round_win_percentage: result.data?.round_win_percentage || 0,
-        generated_at: result.data?.generated_at,
-        is_cached: result.data?.is_cached
-      };
-      
-      setAiIntel(cleanData);
-    } catch (err) {
-      console.error('Failed to load AI intelligence:', err);
-      setAiError(err.message);
-    } finally {
-      setAiLoading(false);
-    }
-  };
-
-  const loadArtworkAnalysis = async () => {
-    console.log('🎨 Starting artwork analysis load for artist:', artist?.artist_profile_id);
-    
-    try {
-      setArtworkAnalysisLoading(true);
-      setArtworkAnalysisError(null);
-
-      const { data: { session } } = await supabase.auth.getSession();
-      console.log('🔑 Session check for artwork analysis:', { hasSession: !!session, hasToken: !!session?.access_token });
-      
-      if (!session) {
-        throw new Error('Not authenticated');
-      }
-
-      console.log('📡 Making request to artwork AI analysis function...');
-      const response = await fetch(`https://xsqdkubgyqwpyvfltnrf.supabase.co/functions/v1/admin-artwork-ai-analysis`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcWRrdWJneXF3cHl2Zmx0bnJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM0MjE2OTYsImV4cCI6MjA2ODk5NzY5Nn0.hY8v8IDZQTcdAFa_OvQNFd1CyvabGcOZZMn_J6c4c2U'
-        },
-        body: JSON.stringify({ 
-          artist_profile_id: artist.artist_profile_id,
-          artwork_type: 'sample_work',
-          force_regenerate: false,
-          limit: 3
-        })
-      });
-
-      console.log('📥 Artwork analysis response received:', { status: response.status, ok: response.ok });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('❌ Artwork analysis error response:', errorData);
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-      console.log('✅ Artwork analysis result:', result);
-      setArtworkAnalyses(result.data || []);
-    } catch (err) {
-      console.error('Failed to load artwork analysis:', err);
-      setArtworkAnalysisError(err.message);
-    } finally {
-      setArtworkAnalysisLoading(false);
-    }
-  };
-
-  const regenerateAiIntel = async () => {
-    try {
-      setAiLoading(true);
-      setAiError(null);
-
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        throw new Error('Not authenticated');
-      }
-
-      const response = await fetch(`https://xsqdkubgyqwpyvfltnrf.supabase.co/functions/v1/admin-artist-ai-intel`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcWRrdWJneXF3cHl2Zmx0bnJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM0MjE2OTYsImV4cCI6MjA2ODk5NzY5Nn0.hY8v8IDZQTcdAFa_OvQNFd1CyvabGcOZZMn_J6c4c2U'
-        },
-        body: JSON.stringify({
-          artist_profile_id: artist.artist_profile_id,
-          force_regenerate: true
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-      setAiIntel(result.data);
-    } catch (err) {
-      console.error('Failed to regenerate AI intelligence:', err);
-      setAiError(err.message);
-    } finally {
-      setAiLoading(false);
-    }
-  };
 
   const loadAllEvents = async () => {
     try {
@@ -643,179 +487,27 @@ Art Battle Team`);
                           </>
                         )}
                       </Box>
-                    </Box>
-                  )}
-                </Box>
-                    {/* Action Buttons */}
-                    <Box mt="4" pt="3" style={{ borderTop: '1px solid var(--gray-6)' }}>
-                      <Flex gap="2">
-                        {artistProfile?.email && (
-                          <Button
-                            variant="solid"
-                            color="blue"
-                            size="2"
-                            onClick={handleInviteArtist}
-                          >
-                            Invite to Event
-                          </Button>
-                        )}
-                        {!artistProfile?.email && (
-                          <Text size="2" color="gray">
-                            No email address available for invitations
-                          </Text>
-                        )}
-                      </Flex>
-                    </Box>
-                  </Box>
-                </Card>
 
-              {/* AI Intelligence */}
-              <Card style={{ background: 'linear-gradient(135deg, var(--blue-2) 0%, var(--purple-2) 100%)', border: '1px solid var(--blue-6)' }}>
-                <Box p="4">
-                  <Flex justify="between" align="center" mb="3">
-                    <Flex align="center" gap="2">
-                      <StarFilledIcon size={20} color="var(--blue-11)" />
-                      <Heading size="4" style={{ color: 'var(--blue-12)' }}>AI Insights</Heading>
-                      {aiIntel?.is_cached && (
-                        <Badge color="blue" size="1">Cached</Badge>
-                      )}
-                    </Flex>
-                    <Button 
-                      size="1" 
-                      variant="soft" 
-                      onClick={regenerateAiIntel}
-                      disabled={aiLoading}
-                      style={{ opacity: aiLoading ? 0.6 : 1 }}
-                    >
-                      <ReloadIcon style={{ marginRight: '4px' }} />
-                      {aiLoading ? 'Generating...' : 'Refresh'}
-                    </Button>
-                  </Flex>
-
-                  {aiLoading ? (
-                    <Box style={{ textAlign: 'center', padding: '2rem' }}>
-                      <Spinner size="3" />
-                      <Text size="2" color="gray" style={{ display: 'block', marginTop: '1rem' }}>
-                        {aiIntel ? 'Regenerating AI insights...' : 'Generating AI insights...'}
-                      </Text>
-                      <Text size="1" color="gray" style={{ display: 'block', marginTop: '0.5rem' }}>
-                        This may take 10-30 seconds
-                      </Text>
-                    </Box>
-                  ) : aiError ? (
-                    <Box style={{ textAlign: 'center', padding: '2rem' }}>
-                      <ExclamationTriangleIcon size={24} color="var(--red-9)" />
-                      <Text size="2" color="red" style={{ display: 'block', marginTop: '1rem' }}>
-                        Failed to generate AI insights
-                      </Text>
-                      <Text size="1" color="gray" style={{ display: 'block', marginTop: '0.5rem' }}>
-                        {aiError}
-                      </Text>
-                      <Button size="1" variant="soft" onClick={loadAiIntel} style={{ marginTop: '1rem' }}>
-                        Try Again
-                      </Button>
-                    </Box>
-                  ) : aiIntel ? (
-                    <Flex direction="column" gap="3">
-                      {/* Art Battle History */}
-                      <Box>
-                        <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>
-                          <LightningBoltIcon size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
-                          <strong>Art Battle History</strong>
-                        </Text>
-                        <Box p="3" style={{ backgroundColor: 'var(--blue-3)', borderRadius: '6px', border: '1px solid var(--blue-6)' }}>
-                          <Text size="2" style={{ lineHeight: '1.5' }}>
-                            {aiIntel.art_battle_history || 'No history available'}
-                          </Text>
-                        </Box>
+                      {/* Action Buttons */}
+                      <Box mt="4" pt="3" style={{ borderTop: '1px solid var(--gray-6)' }}>
+                        <Flex gap="2">
+                          {artistProfile?.email && (
+                            <Button
+                              variant="solid"
+                              color="blue"
+                              size="2"
+                              onClick={handleInviteArtist}
+                            >
+                              Invite to Event
+                            </Button>
+                          )}
+                          {!artistProfile?.email && (
+                            <Text size="2" color="gray">
+                              No email address available for invitations
+                            </Text>
+                          )}
+                        </Flex>
                       </Box>
-
-                      {/* Bio Summary */}
-                      <Box>
-                        <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>
-                          <PersonIcon size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
-                          <strong>Bio Summary</strong>
-                        </Text>
-                        <Box p="3" style={{ backgroundColor: 'var(--green-3)', borderRadius: '6px', border: '1px solid var(--green-6)' }}>
-                          <Text size="2" style={{ lineHeight: '1.5' }}>
-                            {aiIntel.bio_summary || 'No bio summary available'}
-                          </Text>
-                        </Box>
-                      </Box>
-
-                      {/* Event Potential */}
-                      <Box>
-                        <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>
-                          <StarIcon size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
-                          <strong>Event Potential</strong>
-                        </Text>
-                        <Box p="3" style={{ backgroundColor: 'var(--purple-3)', borderRadius: '6px', border: '1px solid var(--purple-6)' }}>
-                          <Text size="2" style={{ lineHeight: '1.5' }}>
-                            {aiIntel.event_potential || 'No potential analysis available'}
-                          </Text>
-                        </Box>
-                      </Box>
-
-                      {/* Auction Performance & Statistics */}
-                      {aiIntel.auction_stats && (
-                        <Box>
-                          <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>
-                            <strong>Auction Performance</strong>
-                          </Text>
-                          <Grid columns="2" gap="2">
-                            <Box style={{ textAlign: 'center', padding: '8px', backgroundColor: 'var(--green-2)', borderRadius: '4px' }}>
-                              <Text size="3" weight="bold" color="green">
-                                {aiIntel.auction_stats.totalAuctions || 0}
-                              </Text>
-                              <Text size="1" color="gray" style={{ display: 'block' }}>
-                                Total Auctions
-                              </Text>
-                            </Box>
-                            <Box style={{ textAlign: 'center', padding: '8px', backgroundColor: 'var(--blue-2)', borderRadius: '4px' }}>
-                              <Text size="3" weight="bold" color="blue">
-                                ${aiIntel.auction_stats.totalValue || 0}
-                              </Text>
-                              <Text size="1" color="gray" style={{ display: 'block' }}>
-                                Total Value
-                              </Text>
-                            </Box>
-                            <Box style={{ textAlign: 'center', padding: '8px', backgroundColor: 'var(--purple-2)', borderRadius: '4px' }}>
-                              <Text size="3" weight="bold" color="purple">
-                                ${aiIntel.auction_stats.averagePerPainting || 0}
-                              </Text>
-                              <Text size="1" color="gray" style={{ display: 'block' }}>
-                                Avg Per Painting
-                              </Text>
-                            </Box>
-                            <Box style={{ textAlign: 'center', padding: '8px', backgroundColor: 'var(--orange-2)', borderRadius: '4px' }}>
-                              <Text size="3" weight="bold" color="orange">
-                                {aiIntel.round_win_percentage || 0}%
-                              </Text>
-                              <Text size="1" color="gray" style={{ display: 'block' }}>
-                                Round Win Rate
-                              </Text>
-                            </Box>
-                          </Grid>
-                        </Box>
-                      )}
-
-
-                      {/* Generated timestamp */}
-                      {aiIntel.generated_at && (
-                        <Text size="1" color="gray" style={{ textAlign: 'center', marginTop: '1rem' }}>
-                          Generated: {new Date(aiIntel.generated_at).toLocaleString()}
-                        </Text>
-                      )}
-                    </Flex>
-                  ) : (
-                    <Box style={{ textAlign: 'center', padding: '2rem' }}>
-                      <StarFilledIcon size={24} color="var(--gray-8)" />
-                      <Text size="2" color="gray" style={{ display: 'block', marginTop: '1rem' }}>
-                        No AI insights available
-                      </Text>
-                      <Button size="1" variant="soft" onClick={loadAiIntel} style={{ marginTop: '1rem' }}>
-                        Generate Insights
-                      </Button>
                     </Box>
                   )}
                 </Box>
@@ -968,12 +660,12 @@ Art Battle Team`);
                   ) : sampleWorks.length > 0 ? (
                     <Grid columns={{ initial: '2', sm: '3', lg: '4' }} gap="3">
                       {sampleWorks.map((work) => (
-                        <Box 
+                        <Box
                           key={work.id || work.sample_work_id}
-                          style={{ 
-                            width: '100%', 
-                            height: 120, 
-                            backgroundColor: 'var(--gray-4)', 
+                          style={{
+                            width: '100%',
+                            height: 120,
+                            backgroundColor: 'var(--gray-4)',
                             borderRadius: '6px',
                             backgroundImage: work.image_url ? `url(${work.image_url})` : 'none',
                             backgroundSize: 'cover',
@@ -999,142 +691,6 @@ Art Battle Team`);
                       <Text size="2" color="gray">
                         No sample works available for this artist.
                       </Text>
-                    </Box>
-                  )}
-                </Box>
-              </Card>
-
-              {/* AI Artwork Analysis */}
-              <Card style={{ background: 'linear-gradient(135deg, var(--orange-2) 0%, var(--red-2) 100%)', border: '1px solid var(--orange-6)' }}>
-                <Box p="4">
-                  <Flex justify="between" align="center" mb="3">
-                    <Flex align="center" gap="2">
-                      <ImageIcon size={20} color="var(--orange-11)" />
-                      <Heading size="4" style={{ color: 'var(--orange-12)' }}>AI Artwork Analysis</Heading>
-                    </Flex>
-                    <Button 
-                      size="1" 
-                      variant="soft" 
-                      onClick={loadArtworkAnalysis}
-                      disabled={artworkAnalysisLoading}
-                    >
-                      <ReloadIcon size={12} />
-                      Refresh
-                    </Button>
-                  </Flex>
-                  
-                  {artworkAnalysisLoading ? (
-                    <Box style={{ textAlign: 'center', padding: '2rem' }}>
-                      <Spinner size="3" />
-                      <Text size="2" color="gray" style={{ display: 'block', marginTop: '1rem' }}>
-                        Analyzing artworks with AI...
-                      </Text>
-                      <Text size="1" color="gray" style={{ display: 'block', marginTop: '0.5rem' }}>
-                        This may take 30-60 seconds for multiple works
-                      </Text>
-                    </Box>
-                  ) : artworkAnalysisError ? (
-                    <Box style={{ textAlign: 'center', padding: '2rem' }}>
-                      <ExclamationTriangleIcon size={24} color="var(--red-9)" />
-                      <Text size="2" color="red" style={{ display: 'block', marginTop: '1rem' }}>
-                        Failed to analyze artworks
-                      </Text>
-                      <Text size="1" color="gray" style={{ display: 'block', marginTop: '0.5rem' }}>
-                        {artworkAnalysisError}
-                      </Text>
-                      <Button size="1" variant="soft" onClick={loadArtworkAnalysis} style={{ marginTop: '1rem' }}>
-                        Try Again
-                      </Button>
-                    </Box>
-                  ) : artworkAnalyses.length > 0 ? (
-                    <Flex direction="column" gap="4">
-                      {artworkAnalyses.map((artwork, index) => (
-                        <Card key={artwork.artwork_id || index} style={{ border: '1px solid var(--orange-6)' }}>
-                          <Box p="4">
-                            <Flex gap="4" align="start">
-                              {/* Artwork thumbnail */}
-                              <Box 
-                                style={{
-                                  width: '120px',
-                                  height: '120px',
-                                  backgroundColor: 'var(--gray-4)',
-                                  borderRadius: '6px',
-                                  backgroundImage: artwork.image_url ? `url(${artwork.image_url})` : 'none',
-                                  backgroundSize: 'cover',
-                                  backgroundPosition: 'center',
-                                  border: '1px solid var(--gray-6)',
-                                  flexShrink: 0
-                                }}
-                              />
-                              
-                              {/* Analysis content */}
-                              <Flex direction="column" gap="3" style={{ flex: 1 }}>
-                                <Flex align="center" gap="2" mb="2">
-                                  <Text size="3" weight="bold">Artwork Analysis</Text>
-                                  {artwork.cached && (
-                                    <Badge color="blue" size="1">Cached</Badge>
-                                  )}
-                                  {artwork.error && (
-                                    <Badge color="red" size="1">Error</Badge>
-                                  )}
-                                </Flex>
-
-                                {artwork.error ? (
-                                  <Text size="2" color="red">{artwork.error}</Text>
-                                ) : artwork.analysis ? (
-                                  <Grid columns="1" gap="3">
-                                    {/* Commentary */}
-                                    <Box>
-                                      <Text size="2" weight="medium" mb="1" style={{ display: 'block', color: 'var(--blue-11)' }}>
-                                        <strong>🎨 Commentary</strong>
-                                      </Text>
-                                      <Box p="3" style={{ backgroundColor: 'var(--blue-3)', borderRadius: '6px', border: '1px solid var(--blue-6)' }}>
-                                        <Text size="2" style={{ lineHeight: '1.5' }}>
-                                          {artwork.analysis.commentary}
-                                        </Text>
-                                      </Box>
-                                    </Box>
-
-                                    {/* Event Potential */}
-                                    <Box>
-                                      <Text size="2" weight="medium" mb="1" style={{ display: 'block', color: 'var(--green-11)' }}>
-                                        <strong>🎪 Event Potential</strong>
-                                      </Text>
-                                      <Box p="3" style={{ backgroundColor: 'var(--green-3)', borderRadius: '6px', border: '1px solid var(--green-6)' }}>
-                                        <Text size="2" style={{ lineHeight: '1.5' }}>
-                                          {artwork.analysis.event_potential}
-                                        </Text>
-                                      </Box>
-                                    </Box>
-
-                                    {/* Generated timestamp */}
-                                    {artwork.analysis.generated_at && (
-                                      <Text size="1" color="gray" style={{ textAlign: 'right', fontStyle: 'italic' }}>
-                                        Analyzed: {new Date(artwork.analysis.generated_at).toLocaleString()}
-                                      </Text>
-                                    )}
-                                  </Grid>
-                                ) : (
-                                  <Text size="2" color="gray">No analysis available</Text>
-                                )}
-                              </Flex>
-                            </Flex>
-                          </Box>
-                        </Card>
-                      ))}
-                    </Flex>
-                  ) : (
-                    <Box style={{ textAlign: 'center', padding: '2rem' }}>
-                      <ImageIcon size={32} color="var(--gray-8)" />
-                      <Text size="2" color="gray" style={{ display: 'block', marginTop: '1rem' }}>
-                        No artwork analysis available
-                      </Text>
-                      <Text size="1" color="gray" style={{ display: 'block', marginTop: '0.5rem' }}>
-                        Analysis will be generated for the first 3 sample works
-                      </Text>
-                      <Button size="1" variant="soft" onClick={loadArtworkAnalysis} style={{ marginTop: '1rem' }}>
-                        Generate Analysis
-                      </Button>
                     </Box>
                   )}
                 </Box>

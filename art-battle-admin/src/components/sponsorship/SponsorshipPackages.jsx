@@ -3,6 +3,7 @@ import { Box, Heading, Tabs, Card, Spinner, Flex, Text } from '@radix-ui/themes'
 import PackageTemplateList from './PackageTemplateList';
 import CityPricingManager from './CityPricingManager';
 import SponsorshipMediaLibrary from './SponsorshipMediaLibrary';
+import InvitesAndDiscounts from './InvitesAndDiscounts';
 
 const SponsorshipPackages = () => {
   const [loading, setLoading] = useState(true);
@@ -34,6 +35,7 @@ const SponsorshipPackages = () => {
         <Tabs.List>
           <Tabs.Trigger value="templates">Package Templates</Tabs.Trigger>
           <Tabs.Trigger value="pricing">City Pricing</Tabs.Trigger>
+          <Tabs.Trigger value="invites">Invites & Discounts</Tabs.Trigger>
           <Tabs.Trigger value="media">Media Library</Tabs.Trigger>
         </Tabs.List>
 
@@ -44,6 +46,10 @@ const SponsorshipPackages = () => {
 
           <Tabs.Content value="pricing">
             <CityPricingManager />
+          </Tabs.Content>
+
+          <Tabs.Content value="invites">
+            <InvitesAndDiscounts />
           </Tabs.Content>
 
           <Tabs.Content value="media">

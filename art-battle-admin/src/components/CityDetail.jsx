@@ -14,6 +14,7 @@ import {
 import { ArrowLeftIcon, CalendarIcon } from '@radix-ui/react-icons';
 import { supabase } from '../lib/supabase';
 import ArtistWorkflow from './ArtistWorkflow';
+import { getCountryFlag } from '../lib/countryFlags';
 
 const CityDetail = () => {
   const { cityId } = useParams();
@@ -144,7 +145,7 @@ const CityDetail = () => {
             </Button>
             <Box>
               <Heading size="6" mb="1">
-                {cityInfo.name}
+                {getCountryFlag(cityInfo.countries?.code)} {cityInfo.name}
               </Heading>
               <Text color="gray" size="2">
                 {cityInfo.countries?.name} ({cityInfo.countries?.code})

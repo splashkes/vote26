@@ -19,6 +19,7 @@ import { supabase } from '../lib/supabase';
 import { DebugField } from './DebugComponents';
 import { debugObject } from '../lib/debugHelpers';
 import EventSearch from './EventSearch';
+import { getCountryFlag } from '../lib/countryFlags';
 
 const EventDashboard = () => {
   const { user } = useAuth();
@@ -693,7 +694,7 @@ const EventDashboard = () => {
                         {/* City Header */}
                         <Box>
                           <Text size="4" weight="bold" mb="1" style={{ display: 'block' }}>
-                            {cityGroup.cityName}
+                            {getCountryFlag(cityGroup.countryCode)} {cityGroup.cityName}
                           </Text>
                           <Text size="2" color="gray">
                             {cityGroup.countryName} ({cityGroup.countryCode})
