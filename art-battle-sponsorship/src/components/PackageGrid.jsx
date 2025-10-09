@@ -115,8 +115,10 @@ const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack, invite
                     )}
 
                     {/* Package Header */}
-                    <Box>
-                      <Heading size="5" mb="2">{pkg.name}</Heading>
+                    <Box style={{ paddingRight: limitedBadge ? '90px' : '0' }}>
+                      <Heading size="5" mb="2" style={{ wordWrap: 'break-word', lineHeight: '1.3' }}>
+                        {pkg.name}
+                      </Heading>
                       <Text size="2" style={{ color: 'var(--gray-11)' }}>
                         {pkg.description}
                       </Text>
@@ -181,7 +183,7 @@ const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack, invite
                       color={limitedBadge ? 'amber' : undefined}
                       onClick={() => onSelect(pkg)}
                     >
-                      Select {pkg.name}
+                      Select Package
                     </Button>
                   </Flex>
                 </Card>
