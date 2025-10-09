@@ -131,8 +131,16 @@ const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack, invite
                     )}
 
                     {/* Package Header */}
-                    <Box style={{ paddingRight: limitedBadge ? '90px' : '0' }}>
-                      <Heading size="5" mb="2" style={{ wordWrap: 'break-word', lineHeight: '1.3' }}>
+                    <Box>
+                      <Heading
+                        size="5"
+                        mb="2"
+                        style={{
+                          wordWrap: 'break-word',
+                          lineHeight: '1.3',
+                          paddingRight: limitedBadge ? '90px' : '0'
+                        }}
+                      >
                         {pkg.name}
                       </Heading>
                       <Text size="2" style={{ color: 'var(--gray-11)' }}>
