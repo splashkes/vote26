@@ -210,32 +210,30 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
       <Container size="3" py="8" px="4">
         <Flex direction="column" gap="6">
           {/* Header */}
-          <Box style={{ textAlign: 'center' }}>
+          <Flex direction="column" align="center" gap="3" style={{ textAlign: 'center' }}>
             <img
               src="https://artb.tor1.cdn.digitaloceanspaces.com/img/AB-HWOT1.png"
               alt="Art Battle"
               style={{
                 height: '80px',
-                marginBottom: '2.5rem',
-                objectFit: 'contain',
-                display: 'block',
-                margin: '0 auto 2.5rem auto'
+                maxWidth: '100%',
+                objectFit: 'contain'
               }}
             />
-            <Badge color="green" size="3" mb="3">
+            <Badge color="green" size="3">
               <RocketIcon width="16" height="16" /> Exclusive Opportunity
             </Badge>
             <Heading size="8" mb="2">Sponsor Multiple Events & Save Big</Heading>
             <Text size="4" style={{ color: 'var(--gray-11)' }}>
               Lock in discounts by sponsoring more events in {inviteData.event_city}
             </Text>
-          </Box>
+          </Flex>
 
           {/* Discount Tiers */}
           <Card size="3" style={{ background: 'var(--accent-2)', border: '1px solid var(--accent-6)' }}>
             <Flex direction="column" gap="3">
               <Heading size="5">Multi-Event Discounts</Heading>
-              <Grid columns="3" gap="3">
+              <Grid columns={{ initial: '1', sm: '3' }} gap="3">
                 <Box
                   style={{
                     padding: '1rem',

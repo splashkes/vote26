@@ -87,6 +87,7 @@ const HeroSection = ({ inviteData }) => {
               alt="Art Battle"
               style={{
                 height: '80px',
+                maxWidth: '100%',
                 marginBottom: '1rem',
                 objectFit: 'contain'
               }}

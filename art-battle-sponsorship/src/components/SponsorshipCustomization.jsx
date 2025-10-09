@@ -114,26 +114,24 @@ const SponsorshipCustomization = ({ fulfillmentHash }) => {
       <Container size="2" py="8" px="4">
         <Flex direction="column" gap="6">
           {/* Header */}
-          <Box style={{ textAlign: 'center' }}>
+          <Flex direction="column" align="center" gap="3" style={{ textAlign: 'center' }}>
             <img
               src="https://artb.tor1.cdn.digitaloceanspaces.com/img/AB-HWOT1.png"
               alt="Art Battle"
               style={{
                 height: '80px',
-                marginBottom: '2.5rem',
-                objectFit: 'contain',
-                display: 'block',
-                margin: '0 auto 2.5rem auto'
+                maxWidth: '100%',
+                objectFit: 'contain'
               }}
             />
-            <Badge color="green" size="3" mb="3">
+            <Badge color="green" size="3">
               <CheckCircledIcon width="16" height="16" /> Payment Confirmed
             </Badge>
             <Heading size="8" mb="2">Customize Your Brand Integration</Heading>
             <Text size="4" style={{ color: 'var(--gray-11)' }}>
               Complete your sponsorship setup
             </Text>
-          </Box>
+          </Flex>
 
           {/* Purchase Summary */}
           <Card size="3">
