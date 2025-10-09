@@ -291,18 +291,16 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
           {/* Current Selection Summary */}
           <Card size="3">
             <Flex direction="column" gap="3">
-              <Flex justify="between" align="center">
-                <Box>
-                  <Text size="2" style={{ color: 'var(--gray-11)' }}>Your Current Selection</Text>
-                  <Heading size="5">
-                    <Text weight="bold">Art Battle {inviteData.event_city}</Text> / {selectedPackage.name}
-                  </Heading>
+              <Flex justify="between" align="start">
+                <Flex direction="column" gap="1">
+                  <Text size="3" weight="bold">Art Battle {inviteData.event_city}</Text>
+                  <Heading size="6">{selectedPackage.name}</Heading>
                   {selectedAddons.length > 0 && (
                     <Text size="2" style={{ color: 'var(--gray-11)', marginTop: '0.25rem' }}>
                       + {selectedAddons.map(a => a.name).join(', ')}
                     </Text>
                   )}
-                </Box>
+                </Flex>
                 <Badge color="blue">Included</Badge>
               </Flex>
 
