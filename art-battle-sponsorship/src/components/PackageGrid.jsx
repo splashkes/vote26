@@ -56,8 +56,9 @@ const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack, invite
   };
 
   return (
-    <Box py="6">
-      <Flex direction="column" gap="6" align="center">
+    <Box py="6" style={{ width: '100%' }}>
+      <Container size="4">
+        <Flex direction="column" gap="6">
           {/* Header */}
           <Flex direction="column" align="center" gap="3">
             <img
@@ -87,10 +88,7 @@ const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack, invite
             gap="4"
             style={{
               paddingTop: '1.5rem',
-              overflow: 'visible',
-              width: '100%',
-              maxWidth: '1200px',
-              justifyItems: 'center'
+              overflow: 'visible'
             }}
           >
             {filteredPackages.map((pkg, index) => {
@@ -108,8 +106,7 @@ const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack, invite
                     border: limitedBadge ? '2px solid var(--amber-8)' : '1px solid var(--gray-6)',
                     position: 'relative',
                     overflow: 'visible',
-                    width: '100%',
-                    maxWidth: '400px'
+                    width: '100%'
                   }}
                 >
                   <Flex direction="column" gap="4" style={{ height: '100%' }}>
@@ -229,6 +226,7 @@ const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack, invite
             </Card>
           )}
         </Flex>
+      </Container>
     </Box>
   );
 };
