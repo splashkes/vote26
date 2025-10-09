@@ -30,6 +30,9 @@ const EventDashboard = () => {
     future: [],
     past30to120: []
   });
+  const [cityGroups, setCityGroups] = useState([]);
+  const [userCityAccess, setUserCityAccess] = useState(null);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [healthScores, setHealthScores] = useState(new Map());
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -122,19 +125,26 @@ const EventDashboard = () => {
       setLoading(true);
       setError(null);
       
-      // Check admin user's city access restrictions
+      // Check admin user's city access restrictions and level
       let cityFilter = null;
       if (user?.email) {
         const { data: adminUser } = await supabase
           .from('abhq_admin_users')
-          .select('cities_access')
+          .select('cities_access, level')
           .eq('email', user.email)
           .eq('active', true)
           .single();
-        
+
+        // Check if user is super admin (producer level)
+        const isSuperAdmin = adminUser?.level === 'producer';
+        setIsSuperAdmin(isSuperAdmin);
+
         // If admin has specific cities_access (not empty array), apply filter
         if (adminUser?.cities_access && adminUser.cities_access.length > 0) {
           cityFilter = adminUser.cities_access;
+          setUserCityAccess(adminUser.cities_access);
+        } else {
+          setUserCityAccess(null);
         }
       }
       
@@ -225,6 +235,57 @@ const EventDashboard = () => {
 
     // Load health scores for upcoming events
     loadHealthScores(groups.upcoming30);
+
+    // Group events by city
+    groupEventsByCity(allEvents);
+  };
+
+  const groupEventsByCity = (allEvents) => {
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+    // Filter events to recent (past 30 days) or upcoming (next 30 days)
+    const relevantEvents = allEvents.filter(event => {
+      const eventDate = new Date(event.event_start_datetime);
+      return eventDate >= thirtyDaysAgo && eventDate <= thirtyDaysFromNow;
+    });
+
+    // Group by city
+    const cityMap = new Map();
+
+    relevantEvents.forEach(event => {
+      if (!event.city_id || !event.cities) return;
+
+      const cityId = event.city_id;
+      const cityName = event.cities.name;
+      const countryName = event.cities.countries?.name || '';
+      const countryCode = event.cities.countries?.code || '';
+
+      if (!cityMap.has(cityId)) {
+        cityMap.set(cityId, {
+          cityId,
+          cityName,
+          countryName,
+          countryCode,
+          events: []
+        });
+      }
+
+      cityMap.get(cityId).events.push(event);
+    });
+
+    // Convert to array and sort by city name
+    const cityArray = Array.from(cityMap.values())
+      .sort((a, b) => a.cityName.localeCompare(b.cityName));
+
+    // Filter by user's city access if applicable
+    let filteredCities = cityArray;
+    if (userCityAccess && userCityAccess.length > 0) {
+      filteredCities = cityArray.filter(city => userCityAccess.includes(city.cityId));
+    }
+
+    setCityGroups(filteredCities);
   };
 
   const loadHealthScores = async (upcomingEvents) => {
@@ -593,6 +654,103 @@ const EventDashboard = () => {
                 </Box>
               </Card>
             ) : null}
+          </Box>
+        )}
+
+        {/* City Activity Cards */}
+        {!searchTerm && cityGroups.length > 0 && (
+          <Box>
+            <Flex align="center" gap="3" mb="4">
+              <Heading size="4">Active Cities</Heading>
+              <Badge color="purple">{cityGroups.length}</Badge>
+              <Text size="2" color="gray">With recent or upcoming events</Text>
+            </Flex>
+            <Grid columns={{ initial: '1', sm: '2', md: '3', lg: '4' }} gap="4">
+              {cityGroups.map((cityGroup) => {
+                // Count upcoming vs past events
+                const now = new Date();
+                const upcomingCount = cityGroup.events.filter(e =>
+                  new Date(e.event_start_datetime) >= now
+                ).length;
+                const pastCount = cityGroup.events.length - upcomingCount;
+
+                // Get most recent/upcoming event
+                const sortedEvents = [...cityGroup.events].sort((a, b) =>
+                  new Date(b.event_start_datetime) - new Date(a.event_start_datetime)
+                );
+                const nextEvent = sortedEvents.find(e => new Date(e.event_start_datetime) >= now);
+                const latestEvent = sortedEvents[0];
+                const featuredEvent = nextEvent || latestEvent;
+
+                return (
+                  <Card
+                    key={cityGroup.cityId}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => navigate(`/cities/${cityGroup.cityId}`)}
+                  >
+                    <Box p="4">
+                      <Flex direction="column" gap="3">
+                        {/* City Header */}
+                        <Box>
+                          <Text size="4" weight="bold" mb="1" style={{ display: 'block' }}>
+                            {cityGroup.cityName}
+                          </Text>
+                          <Text size="2" color="gray">
+                            {cityGroup.countryName} ({cityGroup.countryCode})
+                          </Text>
+                        </Box>
+
+                        {/* Event Counts */}
+                        <Flex gap="2" wrap="wrap">
+                          {upcomingCount > 0 && (
+                            <Badge color="blue" size="2">
+                              {upcomingCount} Upcoming
+                            </Badge>
+                          )}
+                          {pastCount > 0 && (
+                            <Badge color="green" size="2">
+                              {pastCount} Recent
+                            </Badge>
+                          )}
+                        </Flex>
+
+                        {/* Featured Event */}
+                        {featuredEvent && (
+                          <Box
+                            p="3"
+                            style={{
+                              backgroundColor: 'var(--gray-2)',
+                              borderRadius: '6px',
+                              borderLeft: nextEvent ? '3px solid var(--blue-9)' : '3px solid var(--green-9)'
+                            }}
+                          >
+                            <Flex direction="column" gap="2">
+                              <Text size="2" weight="medium">
+                                {nextEvent ? 'Next Event:' : 'Latest Event:'}
+                              </Text>
+                              <Text size="2" weight="bold">
+                                {featuredEvent.eid}
+                              </Text>
+                              <Flex align="center" gap="2">
+                                <CalendarIcon size={12} />
+                                <Text size="1" color="gray">
+                                  {new Date(featuredEvent.event_start_datetime).toLocaleDateString()}
+                                </Text>
+                              </Flex>
+                            </Flex>
+                          </Box>
+                        )}
+
+                        {/* Total Events Badge */}
+                        <Text size="1" color="gray">
+                          {cityGroup.events.length} event{cityGroup.events.length !== 1 ? 's' : ''} in last 30 days
+                        </Text>
+                      </Flex>
+                    </Box>
+                  </Card>
+                );
+              })}
+            </Grid>
           </Box>
         )}
 

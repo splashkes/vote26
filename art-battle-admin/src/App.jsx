@@ -6,6 +6,7 @@ import AdminLayout from './components/AdminLayout';
 import LoginPage from './components/LoginPage';
 import EventDashboard from './components/EventDashboard';
 import EventDetail from './components/EventDetail';
+import CityDetail from './components/CityDetail';
 import CreateEvent from './components/CreateEvent';
 import ArtistManagement from './components/ArtistManagement';
 import HealthMonitor from './components/HealthMonitor';
@@ -54,6 +55,7 @@ function App() {
                 <Route path="events/:eventId/art" element={<ArtworkManagement />} />
                 <Route path="events/:eventId/health" element={<HealthMonitor />} />
                 <Route path="events/:eventId/live" element={<LiveMonitor />} />
+                <Route path="cities/:cityId" element={<CityDetail />} />
                 <Route path="artists" element={<ArtistsManagement />} />
                 <Route path="artists/bulk-management" element={<BulkArtistView />} />
                 <Route path="content" element={<ContentLibrary />} />
