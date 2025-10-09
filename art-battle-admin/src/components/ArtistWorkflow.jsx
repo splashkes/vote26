@@ -99,24 +99,41 @@ const ArtistWorkflow = ({ eventIds = [], eventEids = [], title = "Artist Managem
               // Convert artist numbers to integers (art.artist_number is integer type)
               const artistNumbersArray = Array.from(allArtistNumbers).map(n => parseInt(n, 10)).filter(n => !isNaN(n));
 
-              const statsResponse = await fetch(`https://xsqdkubgyqwpyvfltnrf.supabase.co/functions/v1/admin-artist-stats`, {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${session.access_token}`,
-                  'Content-Type': 'application/json',
-                  'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcWRrdWJneXF3cHl2Zmx0bnJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM0MjE2OTYsImV4cCI6MjA2ODk5NzY5Nn0.hY8v8IDZQTcdAFa_OvQNFd1CyvabGcOZZMn_J6c4c2U'
-                },
-                body: JSON.stringify({
-                  artistNumbers: artistNumbersArray
-                  // No eventIds filter - we want to show total stats across all their events
-                })
-              });
-
-              if (statsResponse.ok) {
-                const { data } = await statsResponse.json();
-                artistStatsData = data.stats || {};
-                console.log('Artist stats loaded:', artistStatsData);
+              // Batch requests for large artist lists (to avoid timeouts)
+              const BATCH_SIZE = 100;
+              const batches = [];
+              for (let i = 0; i < artistNumbersArray.length; i += BATCH_SIZE) {
+                batches.push(artistNumbersArray.slice(i, i + BATCH_SIZE));
               }
+
+              // Fetch stats in batches
+              const allStats = {};
+              for (const batch of batches) {
+                try {
+                  const statsResponse = await fetch(`https://xsqdkubgyqwpyvfltnrf.supabase.co/functions/v1/admin-artist-stats`, {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Bearer ${session.access_token}`,
+                      'Content-Type': 'application/json',
+                      'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcWRrdWJneXF3cHl2Zmx0bnJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM0MjE2OTYsImV4cCI6MjA2ODk5NzY5Nn0.hY8v8IDZQTcdAFa_OvQNFd1CyvabGcOZZMn_J6c4c2U'
+                    },
+                    body: JSON.stringify({
+                      artistNumbers: batch
+                      // No eventIds filter - we want to show total stats across all their events
+                    })
+                  });
+
+                  if (statsResponse.ok) {
+                    const { data } = await statsResponse.json();
+                    Object.assign(allStats, data.stats || {});
+                  }
+                } catch (err) {
+                  console.error('Error fetching batch stats:', err);
+                }
+              }
+
+              artistStatsData = allStats;
+              console.log('Artist stats loaded:', Object.keys(artistStatsData).length, 'artists');
             }
           } catch (err) {
             console.error('Error fetching artist data:', err);

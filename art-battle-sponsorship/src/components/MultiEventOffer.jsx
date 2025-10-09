@@ -32,32 +32,69 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
       return;
     }
 
-    // In real implementation, we'd get city_id from inviteData
-    // For now, using placeholder data
-    setUpcomingEvents([
-      {
-        id: 'evt-1',
-        name: `Art Battle ${inviteData.event_city} - Spring Edition`,
-        event_start_datetime: '2025-11-15T19:00:00',
-        venues: { name: 'Downtown Gallery' }
-      },
-      {
-        id: 'evt-2',
-        name: `Art Battle ${inviteData.event_city} - Winter Special`,
-        event_start_datetime: '2025-12-20T19:00:00',
-        venues: { name: 'Cultural Center' }
-      },
-      {
-        id: 'evt-3',
-        name: `Art Battle ${inviteData.event_city} - New Year Gala`,
-        event_start_datetime: '2026-01-10T20:00:00',
-        venues: { name: 'Grand Ballroom' }
+    let events = [];
+    const currentYear = new Date().getFullYear();
+    const nextYear = currentYear + 1;
+    const cityName = inviteData.event_city;
+
+    // Try to fetch real events from database if we have city_id
+    if (inviteData.city_id && inviteData.event_id) {
+      try {
+        const { data, error } = await getUpcomingEventsInCity(inviteData.city_id, inviteData.event_id);
+        if (!error && data && data.length > 0) {
+          events = data;
+        }
+      } catch (err) {
+        console.error('Error loading upcoming events:', err);
       }
-    ]);
+    }
+
+    // If no real events found, create placeholder events
+    if (events.length === 0) {
+      events = [
+        {
+          id: `placeholder-${currentYear}`,
+          name: `${currentYear} Art Battle ${cityName} Regular Season Event`,
+          event_start_datetime: `${currentYear}-12-31T19:00:00`,
+          venues: null,
+          isPlaceholder: true
+        },
+        {
+          id: `placeholder-${nextYear}`,
+          name: `${nextYear} Art Battle ${cityName} Regular Season Event`,
+          event_start_datetime: `${nextYear}-12-31T19:00:00`,
+          venues: null,
+          isPlaceholder: true
+        }
+      ];
+    }
+
+    // Always add the Championship event at the end
+    events.push({
+      id: `championship-${nextYear}`,
+      name: `${nextYear} ${cityName} Championship`,
+      event_start_datetime: `${nextYear}-12-31T20:00:00`,
+      venues: null,
+      isChampionship: true
+    });
+
+    setUpcomingEvents(events);
     setLoading(false);
   };
 
   const toggleEvent = (event) => {
+    // If this is a championship event, check if all other events are selected first
+    if (event.isChampionship) {
+      const nonChampionshipEvents = upcomingEvents.filter(e => !e.isChampionship);
+      const allOthersSelected = nonChampionshipEvents.every(e =>
+        selectedEvents.find(se => se.id === e.id)
+      );
+
+      if (!allOthersSelected) {
+        return; // Don't allow championship selection until all other events are selected
+      }
+    }
+
     setSelectedEvents(prev => {
       const exists = prev.find(e => e.id === event.id);
       if (exists) {
@@ -257,7 +294,9 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
               <Flex justify="between" align="center">
                 <Box>
                   <Text size="2" style={{ color: 'var(--gray-11)' }}>Your Current Selection</Text>
-                  <Heading size="5">{selectedPackage.name}</Heading>
+                  <Heading size="5">
+                    <Text weight="bold">Art Battle {inviteData.event_city}</Text> / {selectedPackage.name}
+                  </Heading>
                   {selectedAddons.length > 0 && (
                     <Text size="2" style={{ color: 'var(--gray-11)', marginTop: '0.25rem' }}>
                       + {selectedAddons.map(a => a.name).join(', ')}
@@ -351,42 +390,111 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
             <Flex direction="column" gap="3">
               {upcomingEvents.map(event => {
                 const isSelected = selectedEvents.find(e => e.id === event.id);
-                const eventDate = new Date(event.event_start_datetime).toLocaleDateString('en-US', {
+                const isChampionship = event.isChampionship;
+
+                // Check if championship is selectable
+                const nonChampionshipEvents = upcomingEvents.filter(e => !e.isChampionship);
+                const allOthersSelected = nonChampionshipEvents.every(e =>
+                  selectedEvents.find(se => se.id === e.id)
+                );
+                const isChampionshipSelectable = !isChampionship || allOthersSelected;
+
+                const formattedDate = new Date(event.event_start_datetime).toLocaleDateString('en-US', {
                   month: 'short',
                   day: 'numeric',
                   year: 'numeric'
                 });
+                const eventDate = (event.isPlaceholder || event.isChampionship) ? `Before ${formattedDate}` : formattedDate;
+
+                // Gold styling for championship
+                const getBackground = () => {
+                  if (isChampionship) {
+                    return isSelected
+                      ? 'linear-gradient(135deg, #f6d365 0%, #fda085 100%)'
+                      : 'linear-gradient(135deg, rgba(246, 211, 101, 0.15) 0%, rgba(253, 160, 133, 0.15) 100%)';
+                  }
+                  return isSelected ? 'var(--accent-2)' : 'var(--gray-2)';
+                };
+
+                const getBorder = () => {
+                  if (isChampionship) {
+                    return isSelected ? '2px solid #f6d365' : '1px solid rgba(246, 211, 101, 0.6)';
+                  }
+                  return isSelected ? '2px solid var(--accent-8)' : '1px solid var(--gray-6)';
+                };
+
+                const isDisabled = !isChampionshipSelectable;
 
                 return (
                   <Card
                     key={event.id}
                     size="2"
                     style={{
-                      cursor: 'pointer',
-                      background: isSelected ? 'var(--accent-2)' : 'var(--gray-2)',
-                      border: isSelected ? '2px solid var(--accent-8)' : '1px solid var(--gray-6)'
+                      cursor: isDisabled ? 'not-allowed' : 'pointer',
+                      background: getBackground(),
+                      border: getBorder(),
+                      opacity: isDisabled ? 0.6 : 1,
+                      transition: 'all 0.3s'
                     }}
-                    onClick={() => toggleEvent(event)}
+                    onClick={() => !isDisabled && toggleEvent(event)}
                   >
                     <Flex gap="3" align="center">
                       <Checkbox
                         checked={!!isSelected}
-                        onCheckedChange={() => toggleEvent(event)}
+                        disabled={isDisabled}
+                        onCheckedChange={() => !isDisabled && toggleEvent(event)}
                         onClick={(e) => e.stopPropagation()}
                       />
                       <Flex direction="column" gap="1" style={{ flex: 1 }}>
-                        <Text size="3" weight="bold">{event.name}</Text>
+                        <Flex align="center" gap="2">
+                          <Text
+                            size="3"
+                            weight="bold"
+                            style={{ color: isChampionship && isSelected ? '#1a1a1a' : 'inherit' }}
+                          >
+                            {event.name}
+                          </Text>
+                          {isChampionship && (
+                            <Badge
+                              color="amber"
+                              size="1"
+                              style={isSelected ? {
+                                backgroundColor: '#1a1a1a',
+                                color: '#f6d365'
+                              } : undefined}
+                            >
+                              Championship
+                            </Badge>
+                          )}
+                        </Flex>
                         <Flex gap="3" align="center">
                           <Flex align="center" gap="1">
-                            <CalendarIcon width="14" height="14" />
-                            <Text size="2" style={{ color: 'var(--gray-11)' }}>{eventDate}</Text>
+                            <CalendarIcon
+                              width="14"
+                              height="14"
+                              style={{ color: isChampionship && isSelected ? '#4a4a4a' : undefined }}
+                            />
+                            <Text
+                              size="2"
+                              style={{ color: isChampionship && isSelected ? '#4a4a4a' : 'var(--gray-11)' }}
+                            >
+                              {eventDate}
+                            </Text>
                           </Flex>
                           {event.venues && (
-                            <Text size="2" style={{ color: 'var(--gray-11)' }}>
+                            <Text
+                              size="2"
+                              style={{ color: isChampionship && isSelected ? '#4a4a4a' : 'var(--gray-11)' }}
+                            >
                               {event.venues.name}
                             </Text>
                           )}
                         </Flex>
+                        {isChampionship && !isChampionshipSelectable && (
+                          <Text size="1" style={{ color: 'var(--amber-11)', marginTop: '0.25rem', fontStyle: 'italic' }}>
+                            Select all other events to unlock
+                          </Text>
+                        )}
                       </Flex>
                     </Flex>
                   </Card>

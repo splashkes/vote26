@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
     // Fetch artworks for these artists (optionally filtered by events)
     let artworksQuery = supabaseClient
       .from('art')
-      .select('id, artist_number, event_id, vote_count, round')
+      .select('id, artist_number, event_id, round')
       .in('artist_number', artistNumbersInt)
 
     if (eventIds && Array.isArray(eventIds) && eventIds.length > 0) {
@@ -64,7 +64,7 @@ Deno.serve(async (req) => {
 
     if (artError) throw artError
 
-    // Get art IDs for bid queries
+    // Get art IDs for bid and vote queries
     const artIds = artworks?.map(a => a.id) || []
 
     // Fetch highest bids for each artwork
@@ -75,6 +75,14 @@ Deno.serve(async (req) => {
       .order('amount', { ascending: false })
 
     if (bidsError) throw bidsError
+
+    // Fetch votes for these artworks
+    const { data: votes, error: votesError } = await supabaseClient
+      .from('votes')
+      .select('art_uuid, vote_factor')
+      .in('art_uuid', artIds)
+
+    if (votesError) throw votesError
 
     // Group bids by art_id and get highest bid
     const artworkSales = new Map()
@@ -87,45 +95,65 @@ Deno.serve(async (req) => {
       }
     })
 
+    // Count votes per artwork
+    const artworkVotes = new Map()
+    votes?.forEach(vote => {
+      const currentCount = artworkVotes.get(vote.art_uuid) || 0
+      artworkVotes.set(vote.art_uuid, currentCount + (vote.vote_factor || 1))
+    })
+
     // Calculate stats per artist
     const artistStats: Record<number, any> = {}
 
     artistNumbers.forEach(artistNumber => {
-      const artistArtworks = artworks?.filter(a => a.artist_number === artistNumber) || []
+      try {
+        const artistArtworks = artworks?.filter(a => a.artist_number === artistNumber) || []
 
-      // Get sold artworks (those with bids)
-      const soldArtworks = artistArtworks.filter(a => artworkSales.has(a.id))
-      const soldCount = soldArtworks.length
+        // Get sold artworks (those with bids)
+        const soldArtworks = artistArtworks.filter(a => artworkSales.has(a.id))
+        const soldCount = soldArtworks.length
 
-      // Calculate total revenue and average price
-      let totalRevenue = 0
-      const currencies = new Set<string>()
+        // Calculate total revenue and average price
+        let totalRevenue = 0
+        const currencies = new Set<string>()
 
-      soldArtworks.forEach(artwork => {
-        const sale = artworkSales.get(artwork.id)
-        if (sale) {
-          totalRevenue += sale.highestBid || 0
-          if (sale.currencyCode) {
-            currencies.add(sale.currencyCode)
+        soldArtworks.forEach(artwork => {
+          const sale = artworkSales.get(artwork.id)
+          if (sale) {
+            totalRevenue += sale.highestBid || 0
+            if (sale.currencyCode) {
+              currencies.add(sale.currencyCode)
+            }
           }
+        })
+
+        const avgPrice = soldCount > 0 ? totalRevenue / soldCount : 0
+        const currencyCode = currencies.size === 1 ? Array.from(currencies)[0] : null
+
+        // Calculate average votes per round from votes table
+        const artworksWithVotes = artistArtworks.filter(a => artworkVotes.has(a.id) && artworkVotes.get(a.id) > 0)
+        const totalVotes = artworksWithVotes.reduce((sum, a) => sum + (artworkVotes.get(a.id) || 0), 0)
+        const avgVotesPerRound = artworksWithVotes.length > 0 ? totalVotes / artworksWithVotes.length : 0
+
+        artistStats[artistNumber] = {
+          totalArtworks: artistArtworks.length,
+          soldCount,
+          avgPrice: Math.round(avgPrice),
+          currencyCode,
+          avgVotesPerRound: Math.round(avgVotesPerRound),
+          totalVotes
         }
-      })
-
-      const avgPrice = soldCount > 0 ? totalRevenue / soldCount : 0
-      const currencyCode = currencies.size === 1 ? Array.from(currencies)[0] : null
-
-      // Calculate average votes per round
-      const artworksWithVotes = artistArtworks.filter(a => a.vote_count > 0)
-      const totalVotes = artworksWithVotes.reduce((sum, a) => sum + (a.vote_count || 0), 0)
-      const avgVotesPerRound = artworksWithVotes.length > 0 ? totalVotes / artworksWithVotes.length : 0
-
-      artistStats[artistNumber] = {
-        totalArtworks: artistArtworks.length,
-        soldCount,
-        avgPrice: Math.round(avgPrice),
-        currencyCode,
-        avgVotesPerRound: Math.round(avgVotesPerRound),
-        totalVotes
+      } catch (err) {
+        console.error(`Error processing artist ${artistNumber}:`, err)
+        // Return empty stats for this artist
+        artistStats[artistNumber] = {
+          totalArtworks: 0,
+          soldCount: 0,
+          avgPrice: 0,
+          currencyCode: null,
+          avgVotesPerRound: 0,
+          totalVotes: 0
+        }
       }
     })
 
