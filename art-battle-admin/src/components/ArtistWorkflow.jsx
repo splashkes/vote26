@@ -163,33 +163,52 @@ const ArtistWorkflow = ({ eventIds = [], eventEids = [], title = "Artist Managem
   };
 
 
+  const sortByVotesPerRound = (artists) => {
+    return [...artists].sort((a, b) => {
+      const aStats = artistStats[a.artist_number];
+      const bStats = artistStats[b.artist_number];
+
+      // Get votes per round, defaulting to -1 for artists without stats (so they appear at the bottom)
+      const aVotes = aStats?.avgVotesPerRound ?? -1;
+      const bVotes = bStats?.avgVotesPerRound ?? -1;
+
+      return bVotes - aVotes; // Descending order (highest votes first)
+    });
+  };
+
   const getFilteredApplications = () => {
+    let filtered;
     if (showAllArtists) {
-      return artistApplications;
+      filtered = artistApplications;
+    } else {
+      // Hide applications where artist is already invited or confirmed
+      const invitedNumbers = new Set(artistInvites.map(inv => inv.artist_number));
+      const confirmedNumbers = new Set(artistConfirmations.map(conf => conf.artist_number));
+
+      filtered = artistApplications.filter(app =>
+        !invitedNumbers.has(app.artist_number) && !confirmedNumbers.has(app.artist_number)
+      );
     }
 
-    // Hide applications where artist is already invited or confirmed
-    const invitedNumbers = new Set(artistInvites.map(inv => inv.artist_number));
-    const confirmedNumbers = new Set(artistConfirmations.map(conf => conf.artist_number));
-
-    return artistApplications.filter(app =>
-      !invitedNumbers.has(app.artist_number) && !confirmedNumbers.has(app.artist_number)
-    );
+    return sortByVotesPerRound(filtered);
   };
 
   const getFilteredInvitations = () => {
+    let filtered;
     if (showAllArtists) {
-      return artistInvites;
+      filtered = artistInvites;
+    } else {
+      // Hide invitations where artist is already confirmed
+      const confirmedNumbers = new Set(artistConfirmations.map(conf => conf.artist_number));
+
+      filtered = artistInvites.filter(inv => !confirmedNumbers.has(inv.artist_number));
     }
 
-    // Hide invitations where artist is already confirmed
-    const confirmedNumbers = new Set(artistConfirmations.map(conf => conf.artist_number));
-
-    return artistInvites.filter(inv => !confirmedNumbers.has(inv.artist_number));
+    return sortByVotesPerRound(filtered);
   };
 
   const getFilteredConfirmations = () => {
-    return artistConfirmations;
+    return sortByVotesPerRound(artistConfirmations);
   };
 
   const getInvitationStatus = (invite) => {

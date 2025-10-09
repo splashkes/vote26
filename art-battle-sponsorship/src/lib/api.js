@@ -124,3 +124,20 @@ export async function createSponsorshipCheckout({
     return { data: null, error: err.message };
   }
 }
+
+/**
+ * Get purchase details by fulfillment hash for post-payment customization
+ */
+export async function getPurchaseByFulfillmentHash(hash) {
+  try {
+    const { data, error } = await supabase.functions.invoke('sponsorship-fulfillment-details', {
+      body: { hash }
+    });
+
+    if (error) throw error;
+    return { data: data || null, error: null };
+  } catch (err) {
+    console.error('Error fetching purchase details:', err);
+    return { data: null, error: err.message };
+  }
+}

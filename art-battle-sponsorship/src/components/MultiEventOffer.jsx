@@ -597,10 +597,13 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
           </Card>
 
           {/* Actions */}
-          <Flex gap="3" justify="center">
+          <Flex direction="column" gap="2" align="center">
             <Button size="3" onClick={() => onConfirm(selectedEvents)}>
               Proceed to Checkout
             </Button>
+            <Text size="2" style={{ fontStyle: 'italic', color: 'var(--gray-11)' }}>
+              Customize your brand name and media files after payment!
+            </Text>
           </Flex>
         </Flex>
       </Container>

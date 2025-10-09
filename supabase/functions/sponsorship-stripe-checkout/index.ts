@@ -194,38 +194,13 @@ serve(async (req) => {
       })
     }
 
-    // Create checkout session
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items: lineItems,
-      mode: 'payment',
-      success_url: success_url || `https://artb.art/sponsor/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: cancel_url || `https://artb.art/sponsor/${invite_hash}?payment=cancelled`,
-      customer_email: buyer_email || undefined,
-      metadata: {
-        invite_id: invite.id,
-        event_id: event.id,
-        main_package_id: mainPackage.id,
-        total_events: totalEvents,
-        payment_type: 'sponsorship',
-      },
-      payment_intent_data: {
-        metadata: {
-          invite_id: invite.id,
-          event_id: event.id,
-          main_package_id: mainPackage.id,
-          payment_type: 'sponsorship',
-        },
-      },
-    })
-
-    // Store purchase record
+    // Store purchase record first to get fulfillment_hash
     const { data: purchase, error: purchaseError } = await supabase
       .from('sponsorship_purchases')
       .insert({
         event_id: event.id,
         invite_id: invite.id,
-        stripe_checkout_session_id: session.id,
+        stripe_checkout_session_id: 'pending', // Will update after session creation
         buyer_name: buyer_name,
         buyer_email: buyer_email,
         buyer_company: buyer_company || null,
@@ -238,7 +213,6 @@ serve(async (req) => {
           event_ids: event_ids,
           total_events: totalEvents,
           city_name: cityName,
-          stripe_session_url: session.url,
         },
         subtotal: subtotal,
         discount_percent: discountPercent,
@@ -249,20 +223,73 @@ serve(async (req) => {
         payment_status: 'pending',
         fulfillment_status: 'pending',
       })
-      .select()
+      .select('id, fulfillment_hash')
       .single()
 
-    if (purchaseError) {
+    if (purchaseError || !purchase) {
       console.error('Error storing purchase record:', purchaseError)
-      // Don't fail the request, payment can still proceed
+      throw new Error('Failed to create purchase record')
     }
 
-    // Return the checkout URL
+    // Replace {FULFILLMENT_HASH} placeholder in success_url
+    const finalSuccessUrl = (success_url || `https://artb.art/sponsor/customize/{FULFILLMENT_HASH}`)
+      .replace('{FULFILLMENT_HASH}', purchase.fulfillment_hash)
+
+    // Create checkout session
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: lineItems,
+      mode: 'payment',
+      success_url: finalSuccessUrl,
+      cancel_url: cancel_url || `https://artb.art/sponsor/${invite_hash}?payment=cancelled`,
+      customer_email: buyer_email || undefined,
+      metadata: {
+        invite_id: invite.id,
+        event_id: event.id,
+        main_package_id: mainPackage.id,
+        total_events: totalEvents,
+        payment_type: 'sponsorship',
+        fulfillment_hash: purchase.fulfillment_hash,
+      },
+      payment_intent_data: {
+        metadata: {
+          invite_id: invite.id,
+          event_id: event.id,
+          main_package_id: mainPackage.id,
+          payment_type: 'sponsorship',
+          fulfillment_hash: purchase.fulfillment_hash,
+        },
+      },
+    })
+
+    // Update purchase record with session ID
+    const { error: updateError } = await supabase
+      .from('sponsorship_purchases')
+      .update({
+        stripe_checkout_session_id: session.id,
+        package_details: {
+          main_package: mainPackage,
+          addons: addons,
+          event_ids: event_ids,
+          total_events: totalEvents,
+          city_name: cityName,
+          stripe_session_url: session.url,
+        }
+      })
+      .eq('id', purchase.id)
+
+    if (updateError) {
+      console.error('Error updating purchase with session ID:', updateError)
+      // Don't fail - the purchase record exists and can be linked via fulfillment_hash
+    }
+
+    // Return the checkout URL and fulfillment hash
     return new Response(
       JSON.stringify({
         url: session.url,
         session_id: session.id,
         purchase_id: purchase?.id,
+        fulfillment_hash: purchase?.fulfillment_hash,
         amount: totalAmount,
         currency: currency,
       }),

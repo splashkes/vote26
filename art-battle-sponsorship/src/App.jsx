@@ -7,12 +7,14 @@ import SelfSelectionCTA from './components/SelfSelectionCTA';
 import PackageGrid from './components/PackageGrid';
 import AddonsModal from './components/AddonsModal';
 import MultiEventOffer from './components/MultiEventOffer';
+import SponsorshipCustomization from './components/SponsorshipCustomization';
 
 function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [inviteData, setInviteData] = useState(null);
   const [hash, setHash] = useState(null);
+  const [pageType, setPageType] = useState(null); // 'invite' or 'customize'
 
   // Flow state
   const [currentStep, setCurrentStep] = useState('landing'); // landing, selection, addons, multi-event
@@ -23,7 +25,20 @@ function App() {
 
   useEffect(() => {
     // Extract hash from URL path
-    const pathParts = window.location.pathname.split('/');
+    const pathParts = window.location.pathname.split('/').filter(p => p);
+
+    // Check if this is a customization page
+    if (pathParts.includes('customize')) {
+      const hashFromUrl = pathParts[pathParts.length - 1];
+      if (hashFromUrl && hashFromUrl.length === 40) { // Fulfillment hash is 40 chars
+        setPageType('customize');
+        setHash(hashFromUrl);
+        setLoading(false);
+        return;
+      }
+    }
+
+    // Otherwise treat as invite flow
     const hashFromUrl = pathParts[pathParts.length - 1] || pathParts[pathParts.length - 2];
 
     if (!hashFromUrl || hashFromUrl === 'sponsor') {
@@ -32,6 +47,7 @@ function App() {
       return;
     }
 
+    setPageType('invite');
     setHash(hashFromUrl);
     loadInvite(hashFromUrl);
 
@@ -132,7 +148,7 @@ function App() {
         buyerEmail: buyerEmail,
         buyerCompany: buyerCompany,
         buyerPhone: null,
-        successUrl: `${window.location.origin}/sponsor/success?session_id={CHECKOUT_SESSION_ID}`,
+        successUrl: `${window.location.origin}/sponsor/customize/{FULFILLMENT_HASH}`,
         cancelUrl: `${window.location.origin}/sponsor/${hash}?payment=cancelled`
       });
 
@@ -147,6 +163,11 @@ function App() {
             total_events: eventIds.length,
             addon_count: selectedAddons.length
           });
+        }
+
+        // Store fulfillment hash in session storage for success redirect
+        if (checkoutData.fulfillment_hash) {
+          sessionStorage.setItem('fulfillment_hash', checkoutData.fulfillment_hash);
         }
 
         // Redirect to Stripe Checkout
@@ -185,6 +206,15 @@ function App() {
             </Callout.Root>
           </Flex>
         </Container>
+      </Theme>
+    );
+  }
+
+  // Show customization page if pageType is 'customize'
+  if (pageType === 'customize') {
+    return (
+      <Theme appearance="dark">
+        <SponsorshipCustomization fulfillmentHash={hash} />
       </Theme>
     );
   }
