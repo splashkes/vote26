@@ -64,6 +64,7 @@ serve(async (req) => {
             currency_symbol
           ),
           cities (
+            id,
             name
           )
         )
@@ -98,28 +99,72 @@ serve(async (req) => {
       stripeAccountRegion = 'canada'
     }
 
-    // Get main package details
-    const { data: mainPackage, error: mainPackageError } = await supabase
-      .from('event_sponsorship_packages')
-      .select('id, name, description, base_price, benefits, is_addon')
-      .eq('id', main_package_id)
+    // Get main package details from template + city pricing
+    const { data: mainPackageData, error: mainPackageError } = await supabase
+      .from('sponsorship_city_pricing')
+      .select(`
+        price,
+        currency,
+        sponsorship_package_templates (
+          id,
+          name,
+          description,
+          benefits,
+          category
+        )
+      `)
+      .eq('city_id', event.cities.id)
+      .eq('package_template_id', main_package_id)
       .single()
 
-    if (mainPackageError || !mainPackage || mainPackage.is_addon) {
+    if (mainPackageError || !mainPackageData) {
       throw new Error('Main package not found or invalid')
+    }
+
+    const template = mainPackageData.sponsorship_package_templates
+    if (!template || template.category === 'addon') {
+      throw new Error('Main package not found or is an addon')
+    }
+
+    const mainPackage = {
+      id: template.id,
+      name: template.name,
+      description: template.description,
+      base_price: mainPackageData.price,
+      benefits: template.benefits,
+      is_addon: false
     }
 
     // Get addon packages if any
     let addons = []
     if (addon_package_ids.length > 0) {
       const { data: addonData, error: addonError } = await supabase
-        .from('event_sponsorship_packages')
-        .select('id, name, description, base_price, benefits, is_addon')
-        .in('id', addon_package_ids)
-        .eq('is_addon', true)
+        .from('sponsorship_city_pricing')
+        .select(`
+          price,
+          currency,
+          sponsorship_package_templates (
+            id,
+            name,
+            description,
+            benefits,
+            category
+          )
+        `)
+        .eq('city_id', event.cities.id)
+        .in('package_template_id', addon_package_ids)
 
       if (!addonError && addonData) {
         addons = addonData
+          .filter(item => item.sponsorship_package_templates?.category === 'addon')
+          .map(item => ({
+            id: item.sponsorship_package_templates.id,
+            name: item.sponsorship_package_templates.name,
+            description: item.sponsorship_package_templates.description,
+            base_price: item.price,
+            benefits: item.sponsorship_package_templates.benefits,
+            is_addon: true
+          }))
       }
     }
 

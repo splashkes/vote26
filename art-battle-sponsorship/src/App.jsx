@@ -10,6 +10,7 @@ import MultiEventOffer from './components/MultiEventOffer';
 import SponsorshipCustomization from './components/SponsorshipCustomization';
 
 function App() {
+  console.log('🚀 APP STARTED - React is running');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [inviteData, setInviteData] = useState(null);
@@ -65,6 +66,7 @@ function App() {
   }, []);
 
   const loadInvite = async (inviteHash) => {
+    console.log('📥 loadInvite called with hash:', inviteHash);
     setLoading(true);
     setError(null);
 
@@ -77,7 +79,9 @@ function App() {
       setInviteData(data);
 
       // Track the view
+      console.log('📊 Tracking view interaction...');
       await trackInteraction(inviteHash, 'view');
+      console.log('✅ View interaction tracked successfully');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -86,12 +90,16 @@ function App() {
   };
 
   const handleTierSelect = async (tier) => {
+    console.log('🎯 Tier selected:', tier);
     setSelectedTier(tier);
     setCurrentStep('selection');
     window.history.pushState({ step: 'selection', tier }, '', window.location.href);
+    console.log('📦 Current step set to: selection');
 
     if (hash) {
+      console.log('📊 Tracking tier select...');
       await trackInteraction(hash, 'tier_select', null, { tier });
+      console.log('✅ Tier select tracked');
     }
   };
 
@@ -225,6 +233,8 @@ function App() {
     );
   }
 
+  console.log('🔄 Rendering App - currentStep:', currentStep, 'selectedTier:', selectedTier, 'hasPackages:', !!inviteData?.packages);
+
   return (
     <Theme appearance="dark">
       <Box style={{ background: 'var(--gray-1)', minHeight: '100vh' }}>
@@ -240,6 +250,7 @@ function App() {
         {/* Package Selection */}
         {currentStep === 'selection' && (
           <Box style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 1rem' }}>
+            {console.log('📦 Rendering PackageGrid with', inviteData?.packages?.length, 'packages')}
             <PackageGrid
               packages={inviteData.packages}
               tier={selectedTier}
