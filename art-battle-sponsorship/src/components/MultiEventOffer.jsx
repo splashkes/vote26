@@ -12,7 +12,7 @@ import {
   Checkbox,
   Separator
 } from '@radix-ui/themes';
-import { CalendarIcon, RocketIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon } from '@radix-ui/react-icons';
+import { CalendarIcon, RocketIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon, QuestionMarkCircledIcon } from '@radix-ui/react-icons';
 import { getUpcomingEventsInCity } from '../lib/api';
 
 const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfirm, onSkip, discountPercent }) => {
@@ -20,6 +20,7 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
   const [selectedEvents, setSelectedEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showBenefits, setShowBenefits] = useState(false);
+  const [showDiscountBreakdown, setShowDiscountBreakdown] = useState(false);
 
   useEffect(() => {
     loadUpcomingEvents();
@@ -136,8 +137,31 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
     return Math.round((savings / totalValue) * 100);
   };
 
+  // Get locale from country code
+  const getLocale = () => {
+    const countryCode = inviteData?.country_code || 'US';
+    // Map country codes to locales
+    const localeMap = {
+      'US': 'en-US',
+      'CA': 'en-CA',
+      'GB': 'en-GB',
+      'AU': 'en-AU',
+      'NZ': 'en-NZ',
+      'FR': 'fr-FR',
+      'DE': 'de-DE',
+      'ES': 'es-ES',
+      'IT': 'it-IT',
+      'JP': 'ja-JP',
+      'CN': 'zh-CN',
+      'BR': 'pt-BR',
+      'MX': 'es-MX',
+      'IN': 'en-IN'
+    };
+    return localeMap[countryCode] || 'en-US';
+  };
+
   const formatCurrency = (amount) => {
-    return Math.round(amount).toLocaleString('en-US');
+    return Math.round(amount).toLocaleString(getLocale());
   };
 
   const totalEvents = selectedEvents.length + 1;
@@ -388,40 +412,69 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                 </Heading>
               </Flex>
 
-              {discountPercent > 0 && (
-                <Flex justify="between" align="center">
-                  <Text size="3">{prospectDisplay} Discount</Text>
-                  <Flex gap="2" align="center">
-                    <Badge color="blue" size="2">{discountPercent}% OFF</Badge>
-                    <Text size="3" weight="bold">
-                      ${formatCurrency(calculateRecipientDiscountAmount())}
-                    </Text>
-                  </Flex>
-                </Flex>
-              )}
-
-              {discount > 0 && (
-                <Flex justify="between" align="center">
-                  <Text size="3">{totalEvents} Event Discount</Text>
-                  <Flex gap="2" align="center">
-                    <Badge color="green" size="2">{discount}% OFF</Badge>
-                    <Text size="3" weight="bold">
-                      ${formatCurrency(calculateMultiEventDiscountAmount())}
-                    </Text>
-                  </Flex>
-                </Flex>
-              )}
-
               {(discount > 0 || discountPercent > 0) && (
-                <Flex justify="between" align="center">
-                  <Text size="3">Total Discount</Text>
-                  <Flex gap="2" align="center">
-                    <Badge color="green" size="2">{calculateTotalDiscountPercent()}% OFF</Badge>
-                    <Text size="3" weight="bold" style={{ color: 'var(--green-11)' }}>
-                      ${formatCurrency(calculateSavings())}
-                    </Text>
+                <Box>
+                  <Flex justify="between" align="center">
+                    <Flex align="center" gap="1">
+                      <Text size="3">Total Discount</Text>
+                      <QuestionMarkCircledIcon
+                        width="16"
+                        height="16"
+                        style={{
+                          color: 'var(--gray-11)',
+                          cursor: 'pointer',
+                          opacity: 0.7
+                        }}
+                        onClick={() => setShowDiscountBreakdown(!showDiscountBreakdown)}
+                      />
+                    </Flex>
+                    <Flex gap="2" align="center">
+                      <Badge color="green" size="2">{calculateTotalDiscountPercent()}% OFF</Badge>
+                      <Text size="3" weight="bold" style={{ color: 'var(--green-11)' }}>
+                        ${formatCurrency(calculateSavings())}
+                      </Text>
+                    </Flex>
                   </Flex>
-                </Flex>
+
+                  {/* Expandable Breakdown */}
+                  {showDiscountBreakdown && (
+                    <Box
+                      mt="2"
+                      p="3"
+                      style={{
+                        background: 'var(--gray-3)',
+                        borderRadius: '6px',
+                        border: '1px solid var(--gray-6)'
+                      }}
+                    >
+                      <Flex direction="column" gap="2">
+                        {discountPercent > 0 && (
+                          <Flex justify="between" align="center">
+                            <Text size="2" style={{ color: 'var(--gray-11)' }}>{prospectDisplay} Discount</Text>
+                            <Flex gap="2" align="center">
+                              <Badge color="blue" size="1">{discountPercent}% OFF</Badge>
+                              <Text size="2" weight="bold">
+                                ${formatCurrency(calculateRecipientDiscountAmount())}
+                              </Text>
+                            </Flex>
+                          </Flex>
+                        )}
+
+                        {discount > 0 && (
+                          <Flex justify="between" align="center">
+                            <Text size="2" style={{ color: 'var(--gray-11)' }}>{totalEvents} Event Discount</Text>
+                            <Flex gap="2" align="center">
+                              <Badge color="green" size="1">{discount}% OFF</Badge>
+                              <Text size="2" weight="bold">
+                                ${formatCurrency(calculateMultiEventDiscountAmount())}
+                              </Text>
+                            </Flex>
+                          </Flex>
+                        )}
+                      </Flex>
+                    </Box>
+                  )}
+                </Box>
               )}
 
               <Separator />

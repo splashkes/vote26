@@ -12,7 +12,7 @@ import {
 } from '@radix-ui/themes';
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from '@radix-ui/react-icons';
 
-const AddonsModal = ({ open, packages, selectedPackage, discountPercent, onConfirm, onClose }) => {
+const AddonsModal = ({ open, packages, selectedPackage, discountPercent, inviteData, onConfirm, onClose }) => {
   const [selectedAddons, setSelectedAddons] = useState([]);
   const [expandedAddons, setExpandedAddons] = useState({});
   const [showPackageBenefits, setShowPackageBenefits] = useState(false);
@@ -22,8 +22,31 @@ const AddonsModal = ({ open, packages, selectedPackage, discountPercent, onConfi
   // Filter addon packages
   const addonPackages = packages.filter(pkg => pkg.is_addon);
 
+  // Get locale from country code
+  const getLocale = () => {
+    const countryCode = inviteData?.country_code || 'US';
+    // Map country codes to locales
+    const localeMap = {
+      'US': 'en-US',
+      'CA': 'en-CA',
+      'GB': 'en-GB',
+      'AU': 'en-AU',
+      'NZ': 'en-NZ',
+      'FR': 'fr-FR',
+      'DE': 'de-DE',
+      'ES': 'es-ES',
+      'IT': 'it-IT',
+      'JP': 'ja-JP',
+      'CN': 'zh-CN',
+      'BR': 'pt-BR',
+      'MX': 'es-MX',
+      'IN': 'en-IN'
+    };
+    return localeMap[countryCode] || 'en-US';
+  };
+
   const formatCurrency = (amount) => {
-    return Math.round(amount).toLocaleString('en-US');
+    return Math.round(amount).toLocaleString(getLocale());
   };
 
   const calculateDiscountedPrice = (price) => {

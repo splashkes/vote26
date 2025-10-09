@@ -176,6 +176,7 @@ function App() {
             packages={inviteData.packages}
             selectedPackage={selectedPackage}
             discountPercent={inviteData.discount_percent}
+            inviteData={inviteData}
             onConfirm={handleAddonsConfirm}
             onClose={handleBackToSelection}
           />
