@@ -40,9 +40,26 @@ serve(async (req) => {
     })
 
     if (error) {
-      console.error('Database error:', error)
       return new Response(
-        JSON.stringify({ error: error.message }),
+        JSON.stringify({
+          error: error.message,
+          success: false,
+          debug: {
+            timestamp: new Date().toISOString(),
+            function_name: 'sponsorship-track-interaction',
+            error_type: error.constructor?.name || 'Error',
+            error_message: error.message,
+            error_details: error.details || null,
+            error_hint: error.hint || null,
+            error_code: error.code || null,
+            input: {
+              hash,
+              interactionType,
+              packageId,
+              hasMetadata: !!metadata
+            }
+          }
+        }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
@@ -52,9 +69,18 @@ serve(async (req) => {
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error) {
-    console.error('Function error:', error)
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({
+        error: error.message,
+        success: false,
+        debug: {
+          timestamp: new Date().toISOString(),
+          function_name: 'sponsorship-track-interaction',
+          error_type: error.constructor?.name || 'Error',
+          error_message: error.message,
+          stack: error.stack
+        }
+      }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }

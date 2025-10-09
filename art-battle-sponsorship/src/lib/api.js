@@ -35,7 +35,23 @@ export async function trackInteraction(hash, interactionType, packageId = null, 
       }
     });
 
-    if (error) throw error;
+    if (error) {
+      // Parse edge function debug info if available
+      if (error.context) {
+        try {
+          const responseText = await error.context.text();
+          console.log('Track interaction raw response:', responseText);
+          const parsed = JSON.parse(responseText);
+
+          if (parsed.debug) {
+            console.error('Track interaction debug info:', parsed.debug);
+          }
+        } catch (parseError) {
+          console.error('Could not parse track interaction error:', parseError);
+        }
+      }
+      throw error;
+    }
     return { data, error: null };
   } catch (err) {
     console.error('Error tracking interaction:', err);
