@@ -11,7 +11,8 @@ import {
   ScrollArea,
   Spinner,
   Badge,
-  TextArea
+  TextArea,
+  Select
 } from '@radix-ui/themes';
 import {
   PersonIcon,
@@ -26,11 +27,13 @@ import {
 } from '@radix-ui/react-icons';
 import { supabase } from '../lib/supabase';
 
-const ArtistDetailModal = ({ 
-  isOpen, 
-  onClose, 
+const ArtistDetailModal = ({
+  isOpen,
+  onClose,
   artist,
-  showApplicationSpecifics = false 
+  showApplicationSpecifics = false,
+  upcomingEvents = [],
+  onInviteSent
 }) => {
   const [sampleWorks, setSampleWorks] = useState([]);
   const [sampleWorksLoading, setSampleWorksLoading] = useState(false);
@@ -47,6 +50,21 @@ const ArtistDetailModal = ({
   const [artworkAnalyses, setArtworkAnalyses] = useState([]);
   const [artworkAnalysisLoading, setArtworkAnalysisLoading] = useState(false);
   const [artworkAnalysisError, setArtworkAnalysisError] = useState(null);
+
+  // Invitation states
+  const [selectedEventForInvite, setSelectedEventForInvite] = useState('');
+  const [inviteMessage, setInviteMessage] = useState(`Hi!
+
+You're invited to participate in our upcoming Art Battle event!
+
+We'd love to have you showcase your artistic talents in this exciting live painting competition.
+
+Please let us know if you're interested in participating.
+
+Best regards,
+Art Battle Team`);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [showInviteSection, setShowInviteSection] = useState(false);
 
   // Load sample works, event history, full profile, AI intel, and artwork analysis when modal opens
   useEffect(() => {

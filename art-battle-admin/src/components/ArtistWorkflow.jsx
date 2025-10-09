@@ -12,8 +12,9 @@ import {
 import { ReloadIcon } from '@radix-ui/react-icons';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
+import ArtistDetailModal from './ArtistDetailModal';
 
-const ArtistWorkflow = ({ eventIds = [], eventEids = [], title = "Artist Management Workflow", showEventInfo = false }) => {
+const ArtistWorkflow = ({ eventIds = [], eventEids = [], title = "Artist Management Workflow", showEventInfo = false, upcomingEvents = [] }) => {
   const navigate = useNavigate();
   const [artistApplications, setArtistApplications] = useState([]);
   const [artistInvites, setArtistInvites] = useState([]);
@@ -21,6 +22,8 @@ const ArtistWorkflow = ({ eventIds = [], eventEids = [], title = "Artist Managem
   const [artistsLoading, setArtistsLoading] = useState(false);
   const [showAllArtists, setShowAllArtists] = useState(false);
   const [artistStats, setArtistStats] = useState({});
+  const [selectedArtist, setSelectedArtist] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     if ((eventIds && eventIds.length > 0) || (eventEids && eventEids.length > 0)) {
@@ -163,6 +166,18 @@ const ArtistWorkflow = ({ eventIds = [], eventEids = [], title = "Artist Managem
   };
 
 
+  const deduplicateByArtistNumber = (artists) => {
+    // Keep only the most recent entry for each artist_number
+    const artistMap = new Map();
+    artists.forEach(artist => {
+      const existing = artistMap.get(artist.artist_number);
+      if (!existing || new Date(artist.created_at) > new Date(existing.created_at)) {
+        artistMap.set(artist.artist_number, artist);
+      }
+    });
+    return Array.from(artistMap.values());
+  };
+
   const sortByVotesPerRound = (artists) => {
     return [...artists].sort((a, b) => {
       const aStats = artistStats[a.artist_number];
@@ -190,6 +205,9 @@ const ArtistWorkflow = ({ eventIds = [], eventEids = [], title = "Artist Managem
       );
     }
 
+    // Deduplicate by artist_number (keep most recent)
+    filtered = deduplicateByArtistNumber(filtered);
+
     return sortByVotesPerRound(filtered);
   };
 
@@ -204,11 +222,16 @@ const ArtistWorkflow = ({ eventIds = [], eventEids = [], title = "Artist Managem
       filtered = artistInvites.filter(inv => !confirmedNumbers.has(inv.artist_number));
     }
 
+    // Deduplicate by artist_number (keep most recent)
+    filtered = deduplicateByArtistNumber(filtered);
+
     return sortByVotesPerRound(filtered);
   };
 
   const getFilteredConfirmations = () => {
-    return sortByVotesPerRound(artistConfirmations);
+    // Deduplicate by artist_number (keep most recent)
+    const deduplicated = deduplicateByArtistNumber(artistConfirmations);
+    return sortByVotesPerRound(deduplicated);
   };
 
   const getInvitationStatus = (invite) => {
@@ -266,10 +289,17 @@ const ArtistWorkflow = ({ eventIds = [], eventEids = [], title = "Artist Managem
   };
 
   const handleArtistCardClick = (artist, type) => {
-    // Navigate to artist profile or show artist details
-    if (artist.artist_profiles?.entry_id) {
-      navigate(`/artist/${artist.artist_profiles.entry_id}`);
-    }
+    // Open modal with artist details
+    // Need to format artist data for the modal
+    const artistForModal = {
+      artist_number: artist.artist_number,
+      artist_profile_id: artist.artist_profiles?.id,
+      artist_profiles: artist.artist_profiles,
+      artist_name: artist.artist_profiles?.name,
+      event_eid: type === 'application' ? artist.event_id : artist.event_eid
+    };
+    setSelectedArtist(artistForModal);
+    setIsModalOpen(true);
   };
 
   return (
@@ -379,9 +409,11 @@ const ArtistWorkflow = ({ eventIds = [], eventEids = [], title = "Artist Managem
                                 pt="2"
                                 style={{ borderTop: '1px solid var(--gray-6)' }}
                               >
-                                <Text size="1" color="gray" style={{ display: 'block', marginBottom: '4px' }}>
-                                  <strong>{artistStats[application.artist_number].soldCount}</strong> works sold across all events • Avg: {artistStats[application.artist_number].currencyCode ? getCurrencySymbol(artistStats[application.artist_number].currencyCode) : '$'}{artistStats[application.artist_number].avgPrice}
-                                </Text>
+                                {artistStats[application.artist_number].soldCount > 0 && (
+                                  <Text size="1" color="gray" style={{ display: 'block', marginBottom: '4px' }}>
+                                    <strong>{artistStats[application.artist_number].soldCount}</strong> works sold across all events • Avg: {artistStats[application.artist_number].currencyCode ? getCurrencySymbol(artistStats[application.artist_number].currencyCode) : '$'}{artistStats[application.artist_number].avgPrice}
+                                  </Text>
+                                )}
                                 <Text size="1" color="gray">
                                   Avg: <strong>{artistStats[application.artist_number].avgVotesPerRound}</strong> votes per round
                                 </Text>
@@ -458,9 +490,11 @@ const ArtistWorkflow = ({ eventIds = [], eventEids = [], title = "Artist Managem
                                   pt="2"
                                   style={{ borderTop: '1px solid var(--gray-6)' }}
                                 >
-                                  <Text size="1" color="gray" style={{ display: 'block', marginBottom: '4px' }}>
-                                    <strong>{artistStats[invite.artist_number].soldCount}</strong> works sold across all events • Avg: {artistStats[invite.artist_number].currencyCode ? getCurrencySymbol(artistStats[invite.artist_number].currencyCode) : '$'}{artistStats[invite.artist_number].avgPrice}
-                                  </Text>
+                                  {artistStats[invite.artist_number].soldCount > 0 && (
+                                    <Text size="1" color="gray" style={{ display: 'block', marginBottom: '4px' }}>
+                                      <strong>{artistStats[invite.artist_number].soldCount}</strong> works sold across all events • Avg: {artistStats[invite.artist_number].currencyCode ? getCurrencySymbol(artistStats[invite.artist_number].currencyCode) : '$'}{artistStats[invite.artist_number].avgPrice}
+                                    </Text>
+                                  )}
                                   <Text size="1" color="gray">
                                     Avg: <strong>{artistStats[invite.artist_number].avgVotesPerRound}</strong> votes per round
                                   </Text>
@@ -536,9 +570,11 @@ const ArtistWorkflow = ({ eventIds = [], eventEids = [], title = "Artist Managem
                                 pt="2"
                                 style={{ borderTop: '1px solid var(--gray-6)' }}
                               >
-                                <Text size="1" color="gray" style={{ display: 'block', marginBottom: '4px' }}>
-                                  <strong>{artistStats[confirmation.artist_number].soldCount}</strong> works sold across all events • Avg: {artistStats[confirmation.artist_number].currencyCode ? getCurrencySymbol(artistStats[confirmation.artist_number].currencyCode) : '$'}{artistStats[confirmation.artist_number].avgPrice}
-                                </Text>
+                                {artistStats[confirmation.artist_number].soldCount > 0 && (
+                                  <Text size="1" color="gray" style={{ display: 'block', marginBottom: '4px' }}>
+                                    <strong>{artistStats[confirmation.artist_number].soldCount}</strong> works sold across all events • Avg: {artistStats[confirmation.artist_number].currencyCode ? getCurrencySymbol(artistStats[confirmation.artist_number].currencyCode) : '$'}{artistStats[confirmation.artist_number].avgPrice}
+                                  </Text>
+                                )}
                                 <Text size="1" color="gray">
                                   Avg: <strong>{artistStats[confirmation.artist_number].avgVotesPerRound}</strong> votes per round
                                 </Text>
@@ -561,6 +597,22 @@ const ArtistWorkflow = ({ eventIds = [], eventEids = [], title = "Artist Managem
           )}
         </Flex>
       </Box>
+
+      {/* Artist Detail Modal */}
+      <ArtistDetailModal
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setSelectedArtist(null);
+        }}
+        artist={selectedArtist}
+        showApplicationSpecifics={false}
+        upcomingEvents={upcomingEvents}
+        onInviteSent={() => {
+          // Refresh artist data after invitation
+          fetchArtistData();
+        }}
+      />
     </Card>
   );
 };

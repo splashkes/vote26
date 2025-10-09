@@ -117,7 +117,27 @@ export async function createSponsorshipCheckout({
       }
     });
 
-    if (error) throw error;
+    if (error) {
+      // Parse edge function debug info if available
+      if (error.context) {
+        try {
+          const responseText = await error.context.text();
+          console.log('Edge function raw response:', responseText);
+          const parsed = JSON.parse(responseText);
+
+          if (parsed.debug) {
+            console.error('Edge function debug info:', parsed.debug);
+          }
+
+          // Return the detailed error message
+          throw new Error(parsed.error || error.message);
+        } catch (parseError) {
+          console.error('Could not parse error response:', parseError);
+          throw error;
+        }
+      }
+      throw error;
+    }
     return { data, error: null };
   } catch (err) {
     console.error('Error creating checkout session:', err);

@@ -48,6 +48,9 @@ serve(async (req) => {
         id,
         event_id,
         discount_percent,
+        valid_until,
+        max_uses,
+        use_count,
         events (
           id,
           name,
@@ -66,11 +69,20 @@ serve(async (req) => {
         )
       `)
       .eq('hash', invite_hash)
-      .eq('active', true)
       .single()
 
     if (inviteError || !invite) {
       throw new Error('Invite not found or expired')
+    }
+
+    // Check if invite is still valid
+    if (invite.valid_until && new Date(invite.valid_until) < new Date()) {
+      throw new Error('Invite has expired')
+    }
+
+    // Check if invite has reached max uses
+    if (invite.use_count >= invite.max_uses) {
+      throw new Error('Invite has already been used')
     }
 
     const event = invite.events
@@ -302,7 +314,20 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error creating sponsorship checkout session:', error)
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({
+        error: error.message,
+        success: false,
+        debug: {
+          timestamp: new Date().toISOString(),
+          function_name: 'sponsorship-stripe-checkout',
+          error_type: error.constructor.name,
+          error_message: error.message,
+          stack: error.stack,
+          error_details: error.details || null,
+          error_hint: error.hint || null,
+          error_code: error.code || null,
+        }
+      }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400,
