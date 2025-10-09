@@ -57,14 +57,19 @@ const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack, invite
 
   return (
     <Box py="6">
-      <Flex direction="column" gap="6">
+      <Flex direction="column" gap="6" align="center">
           {/* Header */}
-          <Flex justify="between" align="center">
-            <Button variant="ghost" onClick={onBack}>
-              <ChevronLeftIcon width="20" height="20" />
-              Back
-            </Button>
-            <Box style={{ textAlign: 'center', flex: 1 }}>
+          <Flex direction="column" align="center" gap="3">
+            <img
+              src="https://artb.tor1.cdn.digitaloceanspaces.com/img/AB-HWOT1.png"
+              alt="Art Battle"
+              style={{
+                height: '50px',
+                maxWidth: '100%',
+                objectFit: 'contain'
+              }}
+            />
+            <Box style={{ textAlign: 'center' }}>
               <Heading size="7">
                 {tier === 'premium' ? 'Premium Sponsorship Packages' : 'Targeted Sponsorship Packages'}
               </Heading>
@@ -74,11 +79,20 @@ const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack, invite
                 </Badge>
               )}
             </Box>
-            <Box style={{ width: '80px' }} /> {/* Spacer for centering */}
           </Flex>
 
           {/* Package Cards */}
-          <Grid columns={{ initial: '1', sm: '2', md: '3' }} gap="4" style={{ paddingTop: '1.5rem', overflow: 'visible' }}>
+          <Grid
+            columns={{ initial: '1', sm: '2', md: '3' }}
+            gap="4"
+            style={{
+              paddingTop: '1.5rem',
+              overflow: 'visible',
+              width: '100%',
+              maxWidth: '1200px',
+              justifyItems: 'center'
+            }}
+          >
             {filteredPackages.map((pkg, index) => {
               const originalPrice = pkg.base_price;
               const discountedPrice = calculateDiscountedPrice(originalPrice);
@@ -93,7 +107,9 @@ const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack, invite
                     background: 'var(--gray-2)',
                     border: limitedBadge ? '2px solid var(--amber-8)' : '1px solid var(--gray-6)',
                     position: 'relative',
-                    overflow: 'visible'
+                    overflow: 'visible',
+                    width: '100%',
+                    maxWidth: '400px'
                   }}
                 >
                   <Flex direction="column" gap="4" style={{ height: '100%' }}>
