@@ -447,3 +447,191 @@ export async function getAllCities() {
     return { data: null, error: err.message };
   }
 }
+
+// =====================================================
+// PACKAGE IMAGES
+// =====================================================
+
+/**
+ * Get images for a package template
+ */
+export async function getPackageImages(packageTemplateId) {
+  try {
+    const { data, error } = await supabase
+      .from('sponsorship_package_images')
+      .select('*')
+      .eq('package_template_id', packageTemplateId)
+      .order('display_order', { ascending: true })
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (err) {
+    console.error('Error fetching package images:', err);
+    return { data: null, error: err.message };
+  }
+}
+
+/**
+ * Upload package image to Cloudflare and save to database
+ */
+export async function uploadPackageImage(file, packageTemplateId) {
+  if (!file || !file.type.startsWith('image/')) {
+    return { success: false, error: 'Please select a valid image file' };
+  }
+
+  if (!packageTemplateId) {
+    return { success: false, error: 'Package template ID is required' };
+  }
+
+  try {
+    // Get current session for authentication
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      return { success: false, error: 'No active session' };
+    }
+
+    // Resize image before upload
+    const resizedFile = await resizePackageImage(file, 1200, 1200, 0.85);
+
+    // Upload to Cloudflare Worker
+    const formData = new FormData();
+    formData.append('file', resizedFile);
+
+    const workerUrl = 'https://art-battle-image-upload-production.simon-867.workers.dev';
+    const uploadResponse = await fetch(workerUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'X-Package-Template-ID': packageTemplateId,
+        'X-Upload-Source': 'admin_package_image'
+      },
+      body: formData
+    });
+
+    if (!uploadResponse.ok) {
+      const errorText = await uploadResponse.text();
+      throw new Error(`Upload failed: ${errorText}`);
+    }
+
+    const uploadResult = await uploadResponse.json();
+    const imageUrl = uploadResult.url || uploadResult.result?.variants?.[0];
+
+    if (!imageUrl) {
+      throw new Error('No image URL returned from upload');
+    }
+
+    // Get current max display_order
+    const { data: existingImages } = await supabase
+      .from('sponsorship_package_images')
+      .select('display_order')
+      .eq('package_template_id', packageTemplateId)
+      .order('display_order', { ascending: false })
+      .limit(1);
+
+    const nextOrder = existingImages && existingImages.length > 0
+      ? existingImages[0].display_order + 1
+      : 0;
+
+    // Save to database
+    const { data, error } = await supabase
+      .from('sponsorship_package_images')
+      .insert([{
+        package_template_id: packageTemplateId,
+        url: imageUrl,
+        cloudflare_id: uploadResult.id,
+        display_order: nextOrder
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return { success: true, data, imageUrl, cloudflareId: uploadResult.id, error: null };
+  } catch (err) {
+    console.error('Exception in uploadPackageImage:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Delete package image
+ */
+export async function deletePackageImage(id) {
+  try {
+    const { error } = await supabase
+      .from('sponsorship_package_images')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    return { success: true, error: null };
+  } catch (err) {
+    console.error('Error deleting package image:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Update package image display order
+ */
+export async function updatePackageImageOrder(id, displayOrder) {
+  try {
+    const { data, error } = await supabase
+      .from('sponsorship_package_images')
+      .update({ display_order: displayOrder, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return { data, error: null };
+  } catch (err) {
+    console.error('Error updating package image order:', err);
+    return { data: null, error: err.message };
+  }
+}
+
+/**
+ * Resize image client-side before upload
+ */
+function resizePackageImage(file, maxWidth = 1200, maxHeight = 1200, quality = 0.85) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        // Calculate new dimensions
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob((blob) => {
+          resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+        }, 'image/jpeg', quality);
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}

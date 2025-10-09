@@ -17,6 +17,10 @@ const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack, invite
   // Get prospect name for personalization
   const prospectDisplay = inviteData?.prospect_company || inviteData?.prospect_name || '';
 
+  const formatCurrency = (amount) => {
+    return Math.round(amount).toLocaleString('en-US');
+  };
+
   const calculateDiscountedPrice = (price) => {
     if (!discountPercent || discountPercent === 0) return price;
     return price * (1 - discountPercent / 100);
@@ -125,7 +129,7 @@ const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack, invite
                     <Box>
                       {hasDiscount ? (
                         <Flex align="baseline" gap="2">
-                          <Heading size="7">${discountedPrice.toFixed(0)}</Heading>
+                          <Heading size="7">${formatCurrency(discountedPrice)}</Heading>
                           <Text
                             size="4"
                             style={{
@@ -133,11 +137,11 @@ const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack, invite
                               textDecoration: 'line-through'
                             }}
                           >
-                            ${originalPrice}
+                            ${formatCurrency(originalPrice)}
                           </Text>
                         </Flex>
                       ) : (
-                        <Heading size="7">${originalPrice}</Heading>
+                        <Heading size="7">${formatCurrency(originalPrice)}</Heading>
                       )}
                       <Text size="2" style={{ color: 'var(--gray-11)' }}>
                         {pkg.currency || 'USD'}

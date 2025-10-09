@@ -293,6 +293,7 @@ const CityDetail = () => {
             eventIds={events.map(e => e.id)}
             eventEids={events.map(e => e.eid)}
             title={`Artist Management - ${cityInfo.name}`}
+            showEventInfo={true}
           />
         )}
 

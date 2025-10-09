@@ -13,19 +13,20 @@ import { ReloadIcon } from '@radix-ui/react-icons';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 
-const ArtistWorkflow = ({ eventIds = [], eventEids = [], title = "Artist Management Workflow" }) => {
+const ArtistWorkflow = ({ eventIds = [], eventEids = [], title = "Artist Management Workflow", showEventInfo = false }) => {
   const navigate = useNavigate();
   const [artistApplications, setArtistApplications] = useState([]);
   const [artistInvites, setArtistInvites] = useState([]);
   const [artistConfirmations, setArtistConfirmations] = useState([]);
   const [artistsLoading, setArtistsLoading] = useState(false);
   const [showAllArtists, setShowAllArtists] = useState(false);
+  const [artistStats, setArtistStats] = useState({});
 
   useEffect(() => {
     if ((eventIds && eventIds.length > 0) || (eventEids && eventEids.length > 0)) {
       fetchArtistData();
     }
-  }, [eventIds, eventEids]);
+  }, [eventIds, eventEids, showEventInfo]);
 
   const fetchArtistData = async () => {
     if ((!eventIds || eventIds.length === 0) && (!eventEids || eventEids.length === 0)) return;
@@ -68,12 +69,15 @@ const ArtistWorkflow = ({ eventIds = [], eventEids = [], title = "Artist Managem
         }
       });
 
-      // Fetch artist profiles using the Edge Function
+      // Fetch artist profiles and stats using Edge Functions
       let artistProfiles = {};
+      let artistStatsData = {};
+
       if (allArtistNumbers.size > 0) {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
           try {
+            // Fetch profiles
             const profilesResponse = await fetch(`https://xsqdkubgyqwpyvfltnrf.supabase.co/functions/v1/admin-artist-profiles`, {
               method: 'POST',
               headers: {
@@ -88,11 +92,39 @@ const ArtistWorkflow = ({ eventIds = [], eventEids = [], title = "Artist Managem
               const { data } = await profilesResponse.json();
               artistProfiles = data.profiles || {};
             }
+
+            // Fetch artist stats (only if showEventInfo is true)
+            // Note: We fetch stats across ALL events, not filtered by eventIds, to show the artist's full history
+            if (showEventInfo) {
+              // Convert artist numbers to integers (art.artist_number is integer type)
+              const artistNumbersArray = Array.from(allArtistNumbers).map(n => parseInt(n, 10)).filter(n => !isNaN(n));
+
+              const statsResponse = await fetch(`https://xsqdkubgyqwpyvfltnrf.supabase.co/functions/v1/admin-artist-stats`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${session.access_token}`,
+                  'Content-Type': 'application/json',
+                  'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcWRrdWJneXF3cHl2Zmx0bnJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM0MjE2OTYsImV4cCI6MjA2ODk5NzY5Nn0.hY8v8IDZQTcdAFa_OvQNFd1CyvabGcOZZMn_J6c4c2U'
+                },
+                body: JSON.stringify({
+                  artistNumbers: artistNumbersArray
+                  // No eventIds filter - we want to show total stats across all their events
+                })
+              });
+
+              if (statsResponse.ok) {
+                const { data } = await statsResponse.json();
+                artistStatsData = data.stats || {};
+                console.log('Artist stats loaded:', artistStatsData);
+              }
+            }
           } catch (err) {
-            console.error('Error fetching artist profiles:', err);
+            console.error('Error fetching artist data:', err);
           }
         }
       }
+
+      setArtistStats(artistStatsData);
 
       // Merge profile data and normalize timestamp field
       const mergeProfiles = (items, timestampField = 'created_at') => {
@@ -112,6 +144,7 @@ const ArtistWorkflow = ({ eventIds = [], eventEids = [], title = "Artist Managem
       setArtistsLoading(false);
     }
   };
+
 
   const getFilteredApplications = () => {
     if (showAllArtists) {
@@ -180,6 +213,20 @@ const ArtistWorkflow = ({ eventIds = [], eventEids = [], title = "Artist Managem
 
   const getRecentActivityColor = (isRecent) => {
     return isRecent ? 'var(--orange-9)' : 'var(--gray-6)';
+  };
+
+  const getCurrencySymbol = (currencyCode) => {
+    const symbols = {
+      'USD': '$',
+      'CAD': 'CA$',
+      'EUR': '€',
+      'GBP': '£',
+      'AUD': 'A$',
+      'NZD': 'NZ$',
+      'THB': '฿',
+      'MXN': 'MX$'
+    };
+    return symbols[currencyCode] || currencyCode;
   };
 
   const handleArtistCardClick = (artist, type) => {
@@ -290,6 +337,20 @@ const ArtistWorkflow = ({ eventIds = [], eventEids = [], title = "Artist Managem
                                 {formatDateForDisplay(application.created_at).timeAgo}
                               </Text>
                             </Flex>
+                            {showEventInfo && application.artist_number && artistStats[application.artist_number] && artistStats[application.artist_number].totalArtworks > 0 && (
+                              <Box
+                                mt="2"
+                                pt="2"
+                                style={{ borderTop: '1px solid var(--gray-6)' }}
+                              >
+                                <Text size="1" color="gray" style={{ display: 'block', marginBottom: '4px' }}>
+                                  <strong>{artistStats[application.artist_number].soldCount}</strong> works sold across all events • Avg: {artistStats[application.artist_number].currencyCode ? getCurrencySymbol(artistStats[application.artist_number].currencyCode) : '$'}{artistStats[application.artist_number].avgPrice}
+                                </Text>
+                                <Text size="1" color="gray">
+                                  Avg: <strong>{artistStats[application.artist_number].avgVotesPerRound}</strong> votes per round
+                                </Text>
+                              </Box>
+                            )}
                           </Flex>
                         </Box>
                       </Card>
@@ -355,6 +416,20 @@ const ArtistWorkflow = ({ eventIds = [], eventEids = [], title = "Artist Managem
                                   {formatDateForDisplay(invite.created_at).timeAgo}
                                 </Text>
                               </Flex>
+                              {showEventInfo && invite.artist_number && artistStats[invite.artist_number] && artistStats[invite.artist_number].totalArtworks > 0 && (
+                                <Box
+                                  mt="2"
+                                  pt="2"
+                                  style={{ borderTop: '1px solid var(--gray-6)' }}
+                                >
+                                  <Text size="1" color="gray" style={{ display: 'block', marginBottom: '4px' }}>
+                                    <strong>{artistStats[invite.artist_number].soldCount}</strong> works sold across all events • Avg: {artistStats[invite.artist_number].currencyCode ? getCurrencySymbol(artistStats[invite.artist_number].currencyCode) : '$'}{artistStats[invite.artist_number].avgPrice}
+                                  </Text>
+                                  <Text size="1" color="gray">
+                                    Avg: <strong>{artistStats[invite.artist_number].avgVotesPerRound}</strong> votes per round
+                                  </Text>
+                                </Box>
+                              )}
                             </Flex>
                           </Box>
                         </Card>
@@ -419,6 +494,20 @@ const ArtistWorkflow = ({ eventIds = [], eventEids = [], title = "Artist Managem
                                 {formatDateForDisplay(confirmation.created_at).timeAgo}
                               </Text>
                             </Flex>
+                            {showEventInfo && confirmation.artist_number && artistStats[confirmation.artist_number] && artistStats[confirmation.artist_number].totalArtworks > 0 && (
+                              <Box
+                                mt="2"
+                                pt="2"
+                                style={{ borderTop: '1px solid var(--gray-6)' }}
+                              >
+                                <Text size="1" color="gray" style={{ display: 'block', marginBottom: '4px' }}>
+                                  <strong>{artistStats[confirmation.artist_number].soldCount}</strong> works sold across all events • Avg: {artistStats[confirmation.artist_number].currencyCode ? getCurrencySymbol(artistStats[confirmation.artist_number].currencyCode) : '$'}{artistStats[confirmation.artist_number].avgPrice}
+                                </Text>
+                                <Text size="1" color="gray">
+                                  Avg: <strong>{artistStats[confirmation.artist_number].avgVotesPerRound}</strong> votes per round
+                                </Text>
+                              </Box>
+                            )}
                           </Flex>
                         </Box>
                       </Card>

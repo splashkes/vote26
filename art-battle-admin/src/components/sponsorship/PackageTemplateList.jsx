@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Card,
@@ -23,13 +23,18 @@ import {
   TrashIcon,
   Cross2Icon,
   CheckIcon,
-  DragHandleDots2Icon
+  DragHandleDots2Icon,
+  ImageIcon
 } from '@radix-ui/react-icons';
 import {
   getAllPackageTemplates,
   createPackageTemplate,
   updatePackageTemplate,
-  deletePackageTemplate
+  deletePackageTemplate,
+  getPackageImages,
+  uploadPackageImage,
+  deletePackageImage,
+  getAllCityPricing
 } from '../../lib/sponsorshipAPI';
 
 const PackageTemplateList = () => {
@@ -39,6 +44,19 @@ const PackageTemplateList = () => {
   const [editingTemplate, setEditingTemplate] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Image modal state
+  const [imageModalOpen, setImageModalOpen] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(null);
+
+  // Package images state
+  const [packageImages, setPackageImages] = useState([]);
+  const [loadingImages, setLoadingImages] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const fileInputRef = useRef(null);
+
+  // City pricing state
+  const [cityPricing, setCityPricing] = useState([]);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -58,12 +76,23 @@ const PackageTemplateList = () => {
 
   const loadTemplates = async () => {
     setLoading(true);
-    const { data, error } = await getAllPackageTemplates();
-    if (error) {
-      setError(error);
+
+    // Load both templates and city pricing in parallel
+    const [templatesResult, pricingResult] = await Promise.all([
+      getAllPackageTemplates(),
+      getAllCityPricing()
+    ]);
+
+    if (templatesResult.error) {
+      setError(templatesResult.error);
     } else {
-      setTemplates(data);
+      setTemplates(templatesResult.data);
     }
+
+    if (!pricingResult.error) {
+      setCityPricing(pricingResult.data || []);
+    }
+
     setLoading(false);
   };
 
@@ -94,7 +123,74 @@ const PackageTemplateList = () => {
       active: template.active
     });
     setBenefitInput('');
+    loadPackageImages(template.id);
     setDialogOpen(true);
+  };
+
+  const loadPackageImages = async (templateId) => {
+    if (!templateId) {
+      setPackageImages([]);
+      return;
+    }
+
+    setLoadingImages(true);
+    const { data, error } = await getPackageImages(templateId);
+    if (error) {
+      console.error('Error loading package images:', error);
+      setPackageImages([]);
+    } else {
+      setPackageImages(data || []);
+    }
+    setLoadingImages(false);
+  };
+
+  const handleImageUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file || !editingTemplate) return;
+
+    setUploadingImage(true);
+    setError(null);
+
+    try {
+      const result = await uploadPackageImage(file, editingTemplate.id);
+
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+
+      // Reload images
+      await loadPackageImages(editingTemplate.id);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setUploadingImage(false);
+      // Reset file input
+      if (event.target) {
+        event.target.value = '';
+      }
+    }
+  };
+
+  const handleDeleteImage = async (imageId) => {
+    if (!confirm('Delete this image?')) return;
+
+    setError(null);
+    try {
+      const result = await deletePackageImage(imageId);
+
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+
+      // Reload images
+      if (editingTemplate) {
+        await loadPackageImages(editingTemplate.id);
+      }
+    } catch (err) {
+      setError(err.message);
+    }
   };
 
   const handleSave = async () => {
@@ -196,6 +292,7 @@ const PackageTemplateList = () => {
               <Table.ColumnHeaderCell width="30px"></Table.ColumnHeaderCell>
               <Table.ColumnHeaderCell>Package Name</Table.ColumnHeaderCell>
               <Table.ColumnHeaderCell>Category</Table.ColumnHeaderCell>
+              <Table.ColumnHeaderCell>Cities</Table.ColumnHeaderCell>
               <Table.ColumnHeaderCell>Benefits</Table.ColumnHeaderCell>
               <Table.ColumnHeaderCell>Status</Table.ColumnHeaderCell>
               <Table.ColumnHeaderCell width="120px">Actions</Table.ColumnHeaderCell>
@@ -221,6 +318,31 @@ const PackageTemplateList = () => {
                   <Badge color={template.category === 'main' ? 'blue' : 'orange'}>
                     {template.category === 'main' ? 'Main Package' : 'Add-on'}
                   </Badge>
+                </Table.Cell>
+                <Table.Cell>
+                  {(() => {
+                    const citiesWithPricing = cityPricing.filter(
+                      cp => cp.package_template_id === template.id && cp.cities
+                    );
+                    const uniqueCities = [...new Set(citiesWithPricing.map(cp => cp.cities.name))];
+
+                    return uniqueCities.length > 0 ? (
+                      <Flex gap="1" wrap="wrap">
+                        {uniqueCities.slice(0, 3).map((city, idx) => (
+                          <Badge key={idx} color="blue" variant="soft" size="1">
+                            {city}
+                          </Badge>
+                        ))}
+                        {uniqueCities.length > 3 && (
+                          <Text size="1" color="gray">
+                            +{uniqueCities.length - 3} more
+                          </Text>
+                        )}
+                      </Flex>
+                    ) : (
+                      <Text size="2" color="gray">No cities</Text>
+                    );
+                  })()}
                 </Table.Cell>
                 <Table.Cell>
                   <Text size="2" color="gray">
@@ -348,6 +470,152 @@ const PackageTemplateList = () => {
               </Flex>
             </Box>
 
+            {/* Visual Samples Section - Only show for existing templates */}
+            {editingTemplate && (
+              <Box>
+                <Text size="2" mb="2" weight="bold">Visual Samples</Text>
+                <Text size="1" color="gray" mb="3" style={{ display: 'block' }}>
+                  Upload images showing what's included in this sponsorship package
+                </Text>
+
+                {/* Hidden file input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  style={{ display: 'none' }}
+                  disabled={uploadingImage}
+                />
+
+                <Flex gap="2" wrap="wrap">
+                  {/* Existing images */}
+                  {loadingImages ? (
+                    <Box style={{ padding: '2rem', textAlign: 'center', width: '100%' }}>
+                      <Spinner size="2" />
+                      <Text size="1" color="gray" style={{ display: 'block', marginTop: '0.5rem' }}>
+                        Loading images...
+                      </Text>
+                    </Box>
+                  ) : (
+                    <>
+                      {packageImages.map((image) => (
+                        <Box
+                          key={image.id}
+                          style={{
+                            width: '100px',
+                            height: '100px',
+                            position: 'relative'
+                          }}
+                        >
+                          <Box
+                            onClick={() => {
+                              setSelectedImage(image.url);
+                              setImageModalOpen(true);
+                            }}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              backgroundColor: 'var(--gray-4)',
+                              borderRadius: '6px',
+                              border: '1px solid var(--gray-6)',
+                              cursor: 'pointer',
+                              transition: 'transform 0.2s ease, border-color 0.2s ease',
+                              backgroundImage: `url(${image.url})`,
+                              backgroundSize: 'cover',
+                              backgroundPosition: 'center'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.transform = 'scale(1.05)';
+                              e.currentTarget.style.borderColor = 'var(--blue-8)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.transform = 'scale(1)';
+                              e.currentTarget.style.borderColor = 'var(--gray-6)';
+                            }}
+                          />
+                          {/* Delete button */}
+                          <IconButton
+                            size="1"
+                            variant="solid"
+                            color="red"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteImage(image.id);
+                            }}
+                            style={{
+                              position: 'absolute',
+                              top: '4px',
+                              right: '4px',
+                              width: '20px',
+                              height: '20px',
+                              padding: '0',
+                              minWidth: '20px',
+                              minHeight: '20px'
+                            }}
+                          >
+                            <Cross2Icon />
+                          </IconButton>
+                        </Box>
+                      ))}
+
+                      {/* Add image button - always show */}
+                      <Box
+                        onClick={() => fileInputRef.current?.click()}
+                        style={{
+                          width: '100px',
+                          height: '100px',
+                          backgroundColor: uploadingImage ? 'var(--gray-3)' : 'var(--gray-4)',
+                          borderRadius: '6px',
+                          border: '2px dashed var(--gray-7)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: uploadingImage ? 'not-allowed' : 'pointer',
+                          transition: 'all 0.2s ease',
+                          opacity: uploadingImage ? 0.5 : 1
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!uploadingImage) {
+                            e.currentTarget.style.backgroundColor = 'var(--gray-5)';
+                            e.currentTarget.style.borderColor = 'var(--blue-8)';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'var(--gray-4)';
+                          e.currentTarget.style.borderColor = 'var(--gray-7)';
+                        }}
+                      >
+                        {uploadingImage ? (
+                          <Spinner size="2" />
+                        ) : (
+                          <>
+                            <PlusIcon size={24} color="var(--gray-9)" />
+                            <Text size="1" color="gray" style={{ marginTop: '4px' }}>
+                              Add Image
+                            </Text>
+                          </>
+                        )}
+                      </Box>
+                    </>
+                  )}
+                </Flex>
+
+                <Text size="1" color="gray" mt="2" style={{ display: 'block', fontStyle: 'italic' }}>
+                  Click thumbnails to view full size • Click + to add new image • Click X to remove
+                </Text>
+              </Box>
+            )}
+
+            {!editingTemplate && (
+              <Callout.Root color="blue">
+                <Callout.Text>
+                  Save the template first, then you can add visual samples by editing it.
+                </Callout.Text>
+              </Callout.Root>
+            )}
+
             <Flex gap="3">
               <Box style={{ flex: 1 }}>
                 <Text size="2" mb="1" weight="bold">Display Order</Text>
@@ -377,6 +645,37 @@ const PackageTemplateList = () => {
                 {saving ? 'Saving...' : 'Save Template'}
               </Button>
             </Flex>
+          </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
+
+      {/* Image Modal for Full-Screen View */}
+      <Dialog.Root open={imageModalOpen} onOpenChange={setImageModalOpen}>
+        <Dialog.Content style={{ maxWidth: '90vw', maxHeight: '90vh', padding: '0' }}>
+          <Flex direction="column" style={{ height: '100%' }}>
+            <Flex justify="between" align="center" p="3" style={{ borderBottom: '1px solid var(--gray-6)' }}>
+              <Dialog.Title>Package Visual Sample</Dialog.Title>
+              <Dialog.Close>
+                <Button variant="ghost" size="1">
+                  <Cross2Icon />
+                </Button>
+              </Dialog.Close>
+            </Flex>
+
+            <Box style={{ flex: 1, overflow: 'auto', padding: '1rem', textAlign: 'center' }}>
+              {selectedImage && (
+                <img
+                  src={selectedImage}
+                  alt="Package sample"
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: '70vh',
+                    objectFit: 'contain',
+                    borderRadius: '6px'
+                  }}
+                />
+              )}
+            </Box>
           </Flex>
         </Dialog.Content>
       </Dialog.Root>

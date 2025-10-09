@@ -37,6 +37,8 @@ const EventLinter = () => {
   const [futureOnly, setFutureOnly] = useState(false);
   const [activeOnly, setActiveOnly] = useState(false);
   const [hideArtistFindings, setHideArtistFindings] = useState(false);
+  const [hideEventFindings, setHideEventFindings] = useState(false);
+  const [hideCityFindings, setHideCityFindings] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedFinding, setSelectedFinding] = useState(null);
@@ -46,12 +48,103 @@ const EventLinter = () => {
   const [suppressReason, setSuppressReason] = useState('');
   const [suppressDuration, setSuppressDuration] = useState('forever');
 
-  // Load events and run linter via edge function
+  // Load events and run linter via edge function with streaming
   const runLinter = async () => {
     try {
       setLoading(true);
+      setAllFindings([]); // Clear previous findings
+      setFindings([]);
 
-      // Call edge function
+      // Call edge function with streaming
+      const { data: { session } } = await supabase.auth.getSession();
+      const url = new URL(`${import.meta.env.VITE_SUPABASE_URL || 'https://xsqdkubgyqwpyvfltnrf.supabase.co'}/functions/v1/event-linter`);
+      if (futureOnly) url.searchParams.append('future', 'true');
+      if (activeOnly) url.searchParams.append('active', 'true');
+      url.searchParams.append('stream', 'true'); // Enable streaming
+
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${session?.access_token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      // Read the stream
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulatedFindings = [];
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+
+        if (done) {
+          console.log('Stream complete');
+          setLoading(false);
+          break;
+        }
+
+        // Decode chunk and add to buffer
+        buffer += decoder.decode(value, { stream: true });
+
+        // Process complete SSE messages (end with \n\n)
+        const messages = buffer.split('\n\n');
+        buffer = messages.pop() || ''; // Keep incomplete message in buffer
+
+        for (const message of messages) {
+          if (!message.trim() || !message.startsWith('data: ')) continue;
+
+          try {
+            const jsonStr = message.replace(/^data: /, '');
+            const data = JSON.parse(jsonStr);
+
+            if (data.complete) {
+              // Stream complete
+              console.log('Linter complete:', data.summary);
+              console.log('Debug info:', data.debug);
+              setRules({ length: data.debug?.rules_loaded || 0 });
+              setLoading(false);
+            } else if (data.progress) {
+              // Progress update
+              console.log(`[${data.phase}] ${data.progress}`);
+            } else if (data.phase && data.findings) {
+              // New findings batch
+              console.log(`Received ${data.findings.length} findings from phase: ${data.phase}`);
+              accumulatedFindings = [...accumulatedFindings, ...data.findings];
+              setAllFindings(accumulatedFindings);
+              setFindings(accumulatedFindings); // Will be filtered by useEffect
+            } else if (data.error) {
+              // Error occurred
+              console.error('Linter error:', data.error, data.debug);
+              setLoading(false);
+              break;
+            }
+          } catch (parseError) {
+            console.error('Error parsing SSE message:', parseError, message);
+          }
+        }
+      }
+
+    } catch (err) {
+      console.error('Error running linter:', err);
+      setLoading(false);
+
+      // Fallback to non-streaming if streaming fails
+      console.log('Falling back to non-streaming mode...');
+      runLinterNonStreaming();
+    }
+  };
+
+  // Fallback non-streaming version
+  const runLinterNonStreaming = async () => {
+    try {
+      setLoading(true);
+
       const { data: { session } } = await supabase.auth.getSession();
       const url = new URL(`${import.meta.env.VITE_SUPABASE_URL || 'https://xsqdkubgyqwpyvfltnrf.supabase.co'}/functions/v1/event-linter`);
       if (futureOnly) url.searchParams.append('future', 'true');
@@ -72,8 +165,7 @@ const EventLinter = () => {
         throw new Error(result.error || 'Failed to run linter');
       }
 
-      // Store results
-      setRules({ length: result.rules_count || 0 }); // Just store count for display
+      setRules({ length: result.rules_count || 0 });
       setAllFindings(result.findings || []);
       setFindings(result.findings || []);
 
@@ -166,6 +258,16 @@ const EventLinter = () => {
       filtered = filtered.filter(f => !f.artistId || f.eventId);
     }
 
+    // Hide event findings (findings with eventId but no artistId or cityId)
+    if (hideEventFindings) {
+      filtered = filtered.filter(f => !f.eventId || f.artistId || f.cityId);
+    }
+
+    // Hide city findings (findings with cityId)
+    if (hideCityFindings) {
+      filtered = filtered.filter(f => !f.cityId);
+    }
+
     // Filter by search
     if (searchQuery) {
       const searchLower = searchQuery.toLowerCase();
@@ -178,7 +280,7 @@ const EventLinter = () => {
     }
 
     setFindings(filtered);
-  }, [searchQuery, severityFilters, categoryFilter, contextFilter, hideArtistFindings, allFindings]);
+  }, [searchQuery, severityFilters, categoryFilter, contextFilter, hideArtistFindings, hideEventFindings, hideCityFindings, allFindings]);
 
   // Get severity counts
   const severityCounts = useMemo(() => getSeverityCounts(allFindings), [allFindings]);
@@ -242,6 +344,16 @@ const EventLinter = () => {
       case 'success': return 'green';
       default: return 'gray';
     }
+  };
+
+  // Convert country code to flag emoji
+  const getFlagEmoji = (countryCode) => {
+    if (!countryCode || countryCode.length !== 2) return '';
+    const codePoints = countryCode
+      .toUpperCase()
+      .split('')
+      .map(char => 127397 + char.charCodeAt(0));
+    return String.fromCodePoint(...codePoints);
   };
 
   return (
@@ -380,10 +492,30 @@ const EventLinter = () => {
               color="gray"
               size="1"
               style={{ cursor: 'pointer' }}
+              variant={hideEventFindings ? 'solid' : 'soft'}
+              onClick={() => setHideEventFindings(!hideEventFindings)}
+            >
+              📅 Hide Events
+            </Badge>
+
+            <Badge
+              color="gray"
+              size="1"
+              style={{ cursor: 'pointer' }}
               variant={hideArtistFindings ? 'solid' : 'soft'}
               onClick={() => setHideArtistFindings(!hideArtistFindings)}
             >
-              👤 Hide Artist Issues
+              👤 Hide Artists
+            </Badge>
+
+            <Badge
+              color="gray"
+              size="1"
+              style={{ cursor: 'pointer' }}
+              variant={hideCityFindings ? 'solid' : 'soft'}
+              onClick={() => setHideCityFindings(!hideCityFindings)}
+            >
+              🏙️ Hide Cities
             </Badge>
 
             <Text size="1" color="gray">
@@ -436,7 +568,7 @@ const EventLinter = () => {
               </Select.Root>
             </Box>
 
-            {(searchQuery || severityFilters.size > 0 || categoryFilter !== 'all' || contextFilter !== 'all' || futureOnly || activeOnly || hideArtistFindings) && (
+            {(searchQuery || severityFilters.size > 0 || categoryFilter !== 'all' || contextFilter !== 'all' || futureOnly || activeOnly || hideEventFindings || hideArtistFindings || hideCityFindings) && (
               <Button
                 size="1"
                 variant="ghost"
@@ -448,7 +580,9 @@ const EventLinter = () => {
                   setContextFilter('all');
                   setFutureOnly(false);
                   setActiveOnly(false);
+                  setHideEventFindings(false);
                   setHideArtistFindings(false);
+                  setHideCityFindings(false);
                 }}
               >
                 <CrossCircledIcon />
@@ -497,8 +631,8 @@ const EventLinter = () => {
                       style={{ padding: '4px 8px', cursor: 'pointer' }}
                       onClick={(e) => handleEidClick(e, finding)}
                     >
-                      <Badge color={finding.artistNumber ? 'purple' : 'gray'} variant="soft" size="1">
-                        {finding.eventEid || (finding.artistNumber ? `#${finding.artistNumber}` : 'N/A')}
+                      <Badge color={finding.artistNumber ? 'purple' : finding.cityId ? 'blue' : 'gray'} variant="soft" size="1">
+                        {finding.cityId ? getFlagEmoji(finding.countryCode) : (finding.eventEid || (finding.artistNumber ? `#${finding.artistNumber}` : 'N/A'))}
                       </Badge>
                     </Table.Cell>
                     <Table.Cell style={{ padding: '4px 8px' }}>
@@ -509,7 +643,7 @@ const EventLinter = () => {
                         whiteSpace: 'nowrap',
                         display: 'block'
                       }}>
-                        {finding.eventName}
+                        {finding.cityId ? finding.cityName : finding.eventName}
                       </Text>
                     </Table.Cell>
                     <Table.Cell style={{ padding: '4px 8px' }}>

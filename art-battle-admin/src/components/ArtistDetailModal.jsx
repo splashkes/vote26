@@ -17,7 +17,7 @@ import {
   PersonIcon,
   Cross2Icon,
   ImageIcon,
-  RocketIcon,
+  StarFilledIcon,
   ReloadIcon,
   LightningBoltIcon,
   ExclamationTriangleIcon,
@@ -565,7 +565,7 @@ const ArtistDetailModal = ({
                 <Box p="4">
                   <Flex justify="between" align="center" mb="3">
                     <Flex align="center" gap="2">
-                      <RocketIcon size={20} color="var(--blue-11)" />
+                      <StarFilledIcon size={20} color="var(--blue-11)" />
                       <Heading size="4" style={{ color: 'var(--blue-12)' }}>AI Insights</Heading>
                       {aiIntel?.is_cached && (
                         <Badge color="blue" size="1">Cached</Badge>
@@ -700,7 +700,7 @@ const ArtistDetailModal = ({
                     </Flex>
                   ) : (
                     <Box style={{ textAlign: 'center', padding: '2rem' }}>
-                      <RocketIcon size={24} color="var(--gray-8)" />
+                      <StarFilledIcon size={24} color="var(--gray-8)" />
                       <Text size="2" color="gray" style={{ display: 'block', marginTop: '1rem' }}>
                         No AI insights available
                       </Text>

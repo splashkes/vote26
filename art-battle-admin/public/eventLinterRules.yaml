@@ -1,6 +1,13 @@
-# Event Linter Rules Configuration
+# Event Linter Rules Configuration - IMPROVED VERSION
 # This file defines the rules for checking event health and operational readiness
 # Rules are evaluated against events and generate severity-based findings
+
+# IMPROVEMENTS:
+# 1. Consolidated duplicate rules (e.g., ticket link + Eventbrite into one rule)
+# 2. Added action_url field for one-click fixes
+# 3. Added priority_score for sorting by business impact
+# 4. Reduced booking opportunity noise (only one rule per city, higher thresholds)
+# 5. Added suppress_if conditions to prevent rule overlap
 
 # Severity levels with emoji mappings:
 # - error: ❌ (critical issues that block operations)
@@ -8,19 +15,14 @@
 # - info: 📊 (metrics and informational items)
 # - success: ✅ (things that are going well)
 
-# Rule structure:
-# - id: unique identifier
-# - name: human-readable name
-# - description: what this rule checks
-# - severity: error | warning | info | success
-# - category: timing | data_completeness | operational | comparative | live_event
-# - context: pre_event | during_event | post_event | always
-# - conditions: array of conditions to evaluate
-# - message: template for the output message (can use {{placeholders}})
+# New fields:
+# - priority_score: 1-100 (higher = more urgent/impactful)
+# - action_url: Deep link to fix the issue
+# - action_text: Button text for the action
+# - suppress_if: Array of rule IDs that suppress this rule if they fire
 
 rules:
   # ==================== ARTIST PAYMENT RULES ====================
-  # Note: These rules check artist payment status globally, not per-event
 
   - id: artist_payment_overdue
     name: Artist Payment Overdue
@@ -28,8 +30,11 @@ rules:
     severity: error
     category: data_completeness
     context: post_event
+    priority_score: 95
     conditions: []  # Handled by database function
     message: "Artist payment overdue - handled by get_overdue_artist_payments()"
+    action_text: "Process Payment"
+    action_url: "/admin/payments/artists"
 
   # ==================== LIVE EVENT RULES ====================
 
@@ -39,6 +44,7 @@ rules:
     severity: error
     category: live_event
     context: during_event
+    priority_score: 90
     conditions:
       - field: event_start_datetime
         operator: past_minutes
@@ -47,6 +53,8 @@ rules:
         operator: equals
         value: 0
     message: "Event started {{minutes_ago}} minutes ago but no photos uploaded"
+    action_text: "Upload Photos"
+    action_url: "/admin/events/{{event_id}}/photos"
 
   - id: live_round_3_auction_not_closed
     name: Round 3 Ended - Auction Still Open
@@ -54,6 +62,7 @@ rules:
     severity: warning
     category: live_event
     context: during_event
+    priority_score: 85
     conditions:
       - field: rounds.3.end_time
         operator: past_minutes
@@ -61,6 +70,8 @@ rules:
       - field: auction_close_time
         operator: is_null
     message: "Round 3 ended {{minutes_ago}} minutes ago but auction not closed"
+    action_text: "Close Auction"
+    action_url: "/admin/events/{{event_id}}/auction"
 
   - id: live_door_time_no_qr
     name: Door Time Soon - No QR Codes
@@ -68,6 +79,7 @@ rules:
     severity: warning
     category: live_event
     context: pre_event
+    priority_score: 80
     conditions:
       - field: door_time
         operator: upcoming_minutes
@@ -75,7 +87,9 @@ rules:
       - field: qr_codes_generated
         operator: equals
         value: 0
-    message: "Door time in {{minutes_until}} minutes but no QR codes generated (testing not done?)"
+    message: "Door time in {{minutes_until}} minutes but no QR codes generated"
+    action_text: "Generate QR Codes"
+    action_url: "/admin/events/{{event_id}}/qr-codes"
 
   - id: live_event_no_timer_set
     name: Event Active - No Round Timer
@@ -83,6 +97,7 @@ rules:
     severity: error
     category: live_event
     context: during_event
+    priority_score: 90
     conditions:
       - field: event_start_datetime
         operator: past_minutes
@@ -91,6 +106,8 @@ rules:
         operator: equals
         value: false
     message: "Event started {{minutes_ago}} minutes ago but round timer not activated"
+    action_text: "Start Timer"
+    action_url: "/admin/events/{{event_id}}/timer"
 
   # ==================== PRE-EVENT COMPLETENESS ====================
 
@@ -100,6 +117,7 @@ rules:
     severity: error
     category: data_completeness
     context: pre_event
+    priority_score: 95
     conditions:
       - field: event_start_datetime
         operator: upcoming_hours
@@ -107,6 +125,8 @@ rules:
       - field: venue
         operator: is_empty
     message: "Event in {{hours_until}} hours but venue not set"
+    action_text: "Set Venue"
+    action_url: "/admin/events/{{event_id}}/edit"
 
   - id: event_soon_low_artists
     name: Event Soon - Low Artist Count
@@ -114,6 +134,7 @@ rules:
     severity: warning
     category: data_completeness
     context: pre_event
+    priority_score: 75
     conditions:
       - field: event_start_datetime
         operator: upcoming_days
@@ -122,6 +143,8 @@ rules:
         operator: less_than
         value: 6
     message: "Event in {{days_until}} days with only {{confirmed_artists_count}} confirmed artists"
+    action_text: "Confirm Artists"
+    action_url: "/admin/events/{{event_id}}/artists"
 
   - id: applications_open_no_city
     name: Applications Open - No City Set
@@ -129,6 +152,7 @@ rules:
     severity: error
     category: data_completeness
     context: always
+    priority_score: 100
     conditions:
       - field: applications_open
         operator: equals
@@ -136,6 +160,8 @@ rules:
       - field: cities.id
         operator: is_null
     message: "Applications open but city not configured"
+    action_text: "Set City"
+    action_url: "/admin/events/{{event_id}}/edit"
 
   - id: event_week_away_no_promo
     name: Event Week Away - No Promo Materials
@@ -143,6 +169,7 @@ rules:
     severity: warning
     category: data_completeness
     context: pre_event
+    priority_score: 60
     conditions:
       - field: event_start_datetime
         operator: upcoming_days
@@ -151,6 +178,8 @@ rules:
         operator: equals
         value: 0
     message: "Event in {{days_until}} days but no promo materials uploaded"
+    action_text: "Upload Promo"
+    action_url: "/admin/events/{{event_id}}/media"
 
   # ==================== FUTURE EVENT CRITICAL (7 DAYS) ====================
 
@@ -160,6 +189,7 @@ rules:
     severity: error
     category: data_completeness
     context: pre_event
+    priority_score: 90
     conditions:
       - field: event_start_datetime
         operator: upcoming_days
@@ -168,6 +198,8 @@ rules:
         operator: equals
         value: 0
     message: "Event in {{days_until}} days with NO confirmed artists!"
+    action_text: "Confirm Artists"
+    action_url: "/admin/events/{{event_id}}/artists"
 
   - id: event_week_few_artists
     name: Event Week Away - Low Artist Count
@@ -175,6 +207,8 @@ rules:
     severity: warning
     category: data_completeness
     context: pre_event
+    priority_score: 75
+    suppress_if: [event_week_no_artists]
     conditions:
       - field: event_start_datetime
         operator: upcoming_days
@@ -186,20 +220,28 @@ rules:
         operator: less_than
         value: 8
     message: "Event in {{days_until}} days with only {{confirmed_artists_count}} confirmed artists"
+    action_text: "Confirm More Artists"
+    action_url: "/admin/events/{{event_id}}/artists"
 
-  - id: event_week_no_ticket_link
-    name: Event Week Away - No Ticket Link
-    description: Event in 7 days or less without ticket link
+  # CONSOLIDATED: Ticket link OR Eventbrite (not both)
+  - id: event_week_no_tickets
+    name: Event Week Away - No Ticketing Configured
+    description: Event in 7 days or less without ticket link or Eventbrite
     severity: error
     category: data_completeness
     context: pre_event
+    priority_score: 85
     conditions:
       - field: event_start_datetime
         operator: upcoming_days
         value: 7
       - field: ticket_link
         operator: is_empty
-    message: "Event in {{days_until}} days but no ticket link configured"
+      - field: eventbrite_id
+        operator: is_empty
+    message: "Event in {{days_until}} days but no ticket link configured (Eventbrite or custom link)"
+    action_text: "Configure Tickets"
+    action_url: "/admin/events/{{event_id}}/edit"
 
   - id: event_week_no_description
     name: Event Week Away - No Description
@@ -207,6 +249,7 @@ rules:
     severity: warning
     category: data_completeness
     context: pre_event
+    priority_score: 50
     conditions:
       - field: event_start_datetime
         operator: upcoming_days
@@ -214,6 +257,8 @@ rules:
       - field: description
         operator: is_empty
     message: "Event in {{days_until}} days but no description configured"
+    action_text: "Add Description"
+    action_url: "/admin/events/{{event_id}}/edit"
 
   # ==================== FUTURE EVENT WARNING (14 DAYS) ====================
 
@@ -223,6 +268,8 @@ rules:
     severity: warning
     category: data_completeness
     context: pre_event
+    priority_score: 70
+    suppress_if: [event_week_no_artists]
     conditions:
       - field: event_start_datetime
         operator: upcoming_days
@@ -234,6 +281,8 @@ rules:
         operator: equals
         value: 0
     message: "Event in {{days_until}} days with no confirmed artists yet"
+    action_text: "Confirm Artists"
+    action_url: "/admin/events/{{event_id}}/artists"
 
   - id: event_2weeks_few_artists
     name: Event 2 Weeks Away - Low Artist Count
@@ -241,6 +290,8 @@ rules:
     severity: info
     category: data_completeness
     context: pre_event
+    priority_score: 50
+    suppress_if: [event_week_few_artists, event_2weeks_no_artists]
     conditions:
       - field: event_start_datetime
         operator: upcoming_days
@@ -255,13 +306,18 @@ rules:
         operator: less_than
         value: 4
     message: "Event in {{days_until}} days with only {{confirmed_artists_count}} confirmed artists"
+    action_text: "Confirm More Artists"
+    action_url: "/admin/events/{{event_id}}/artists"
 
-  - id: event_2weeks_no_ticket_link
-    name: Event 2 Weeks Away - No Ticket Link
-    description: Event in 14 days or less without ticket link
+  # CONSOLIDATED: Only warn about tickets at 14 days if not already warned at 7 days
+  - id: event_2weeks_no_tickets
+    name: Event 2 Weeks Away - No Ticketing
+    description: Event in 14 days or less without ticket link or Eventbrite
     severity: warning
     category: data_completeness
     context: pre_event
+    priority_score: 65
+    suppress_if: [event_week_no_tickets]
     conditions:
       - field: event_start_datetime
         operator: upcoming_days
@@ -271,7 +327,47 @@ rules:
         value: 7
       - field: ticket_link
         operator: is_empty
+      - field: eventbrite_id
+        operator: is_empty
     message: "Event in {{days_until}} days but no ticket link configured yet"
+    action_text: "Configure Tickets"
+    action_url: "/admin/events/{{event_id}}/edit"
+
+  # ==================== PRE-EVENT APPROVAL ====================
+
+  - id: event_basics_not_approved_14days
+    name: Event Basics Not Approved
+    description: Event in 14 days but basics not yet approved by producer
+    severity: warning
+    category: pre_event
+    context: pre_event
+    priority_score: 60
+    conditions:
+      - field: event_start_datetime
+        operator: upcoming_days
+        value: 14
+      - field: basics_approved
+        operator: equals
+        value: false
+    message: "Event basics not yet approved by producer - {{days_until}} days to event"
+    action_text: "Review & Approve"
+    action_url: "/admin/events/{{event_id}}/approval"
+
+  # ==================== OPERATIONAL REQUIREMENTS ====================
+
+  - id: no_tax_rate_auction
+    name: No Tax Rate for Auction
+    description: Event auction sales will have no tax rate applied
+    severity: warning
+    category: operational
+    context: always
+    priority_score: 55
+    conditions:
+      - field: tax_rate_auction
+        operator: is_null
+    message: "No tax rate set for auction sales"
+    action_text: "Set Tax Rate"
+    action_url: "/admin/events/{{event_id}}/financial"
 
   # ==================== FUTURE EVENT SUCCESS ====================
 
@@ -281,6 +377,7 @@ rules:
     severity: success
     category: data_completeness
     context: pre_event
+    priority_score: 0
     conditions:
       - field: event_start_datetime
         operator: upcoming_days
@@ -304,6 +401,7 @@ rules:
     severity: error
     category: operational
     context: pre_event
+    priority_score: 88
     conditions:
       - field: event_start_datetime
         operator: upcoming_days
@@ -312,6 +410,8 @@ rules:
         operator: equals
         value: 0
     message: "Event in {{days_until}} days - no artists assigned in event_artists table!"
+    action_text: "Assign Artists"
+    action_url: "/admin/events/{{event_id}}/artists"
 
   - id: event_artists_low_7days
     name: Event Week - Low Artist Assignments
@@ -319,6 +419,8 @@ rules:
     severity: warning
     category: operational
     context: pre_event
+    priority_score: 73
+    suppress_if: [event_artists_not_assigned_7days]
     conditions:
       - field: event_start_datetime
         operator: upcoming_days
@@ -330,6 +432,8 @@ rules:
         operator: less_than
         value: 8
     message: "Event in {{days_until}} days - only {{event_artists_confirmed_count}} artists assigned in event_artists table"
+    action_text: "Assign More Artists"
+    action_url: "/admin/events/{{event_id}}/artists"
 
   # ==================== POST-EVENT COMPLETENESS ====================
 
@@ -339,6 +443,7 @@ rules:
     severity: info
     category: data_completeness
     context: post_event
+    priority_score: 40
     conditions:
       - field: event_end_datetime
         operator: past_days
@@ -346,6 +451,8 @@ rules:
       - field: food_beverage_revenue
         operator: is_null
     message: "Event ended {{days_ago}} days ago - food/beverage revenue not recorded"
+    action_text: "Record Revenue"
+    action_url: "/admin/events/{{event_id}}/financial"
 
   - id: event_ended_no_other_revenue
     name: Event Ended - Other Revenue Not Recorded
@@ -353,6 +460,7 @@ rules:
     severity: info
     category: data_completeness
     context: post_event
+    priority_score: 35
     conditions:
       - field: event_end_datetime
         operator: past_days
@@ -360,6 +468,8 @@ rules:
       - field: other_revenue
         operator: is_null
     message: "Event ended {{days_ago}} days ago - other revenue not recorded"
+    action_text: "Record Revenue"
+    action_url: "/admin/events/{{event_id}}/financial"
 
   - id: event_ended_no_producer_tickets
     name: Event Ended - Producer Tickets Not Recorded
@@ -367,6 +477,7 @@ rules:
     severity: info
     category: data_completeness
     context: post_event
+    priority_score: 38
     conditions:
       - field: event_end_datetime
         operator: past_days
@@ -374,6 +485,8 @@ rules:
       - field: producer_tickets_sold
         operator: is_null
     message: "Event ended {{days_ago}} days ago - producer ticket sales not recorded"
+    action_text: "Record Tickets"
+    action_url: "/admin/events/{{event_id}}/financial"
 
   # ==================== COMPARATIVE ANALYSIS ====================
 
@@ -383,12 +496,15 @@ rules:
     severity: info
     category: comparative
     context: pre_event
+    priority_score: 45
     conditions:
       - field: ticket_sales
         operator: less_than_percent
         value: 70
         compare_to: city_average
     message: "Ticket sales {{percent_of_average}}% of city average ({{ticket_sales}} vs {{city_average}})"
+    action_text: "View Promo Plan"
+    action_url: "/admin/events/{{event_id}}/marketing"
 
   - id: applications_closed_low_count
     name: Applications Closed - Below Typical Count
@@ -396,6 +512,7 @@ rules:
     severity: warning
     category: comparative
     context: pre_event
+    priority_score: 55
     conditions:
       - field: applications_open
         operator: equals
@@ -405,6 +522,8 @@ rules:
         value: 50
         compare_to: city_typical
     message: "Applications closed with {{applied_artists_count}} artists ({{percent_of_typical}}% of typical {{city_typical}})"
+    action_text: "View Artists"
+    action_url: "/admin/events/{{event_id}}/artists"
 
   - id: food_beverage_above_average
     name: Food/Beverage Revenue Above Average
@@ -412,6 +531,7 @@ rules:
     severity: success
     category: comparative
     context: post_event
+    priority_score: 0
     conditions:
       - field: food_beverage_revenue
         operator: greater_than_percent
@@ -427,11 +547,17 @@ rules:
     severity: warning
     category: operational
     context: always
+    priority_score: 65
     conditions:
       - field: enabled
         operator: equals
         value: false
+      - field: eid
+        operator: not_equals
+        value: "AB8888"  # Exclude the deleted events holder
     message: "Event is disabled - not visible to public"
+    action_text: "Enable Event"
+    action_url: "/admin/events/{{event_id}}/edit"
 
   - id: timezone_not_set
     name: Timezone Not Configured
@@ -439,10 +565,13 @@ rules:
     severity: error
     category: operational
     context: always
+    priority_score: 80
     conditions:
       - field: timezone_icann
         operator: is_empty
     message: "Event timezone not configured"
+    action_text: "Set Timezone"
+    action_url: "/admin/events/{{event_id}}/edit"
 
   - id: slack_channel_not_set
     name: No Slack Channel
@@ -450,24 +579,13 @@ rules:
     severity: info
     category: operational
     context: always
+    priority_score: 20
     conditions:
       - field: slack_channel
         operator: is_empty
     message: "No Slack channel configured for event communication"
-
-  - id: eventbrite_not_linked
-    name: No Eventbrite Link
-    description: Event approaching but no Eventbrite integration
-    severity: warning
-    category: operational
-    context: pre_event
-    conditions:
-      - field: event_start_datetime
-        operator: upcoming_days
-        value: 14
-      - field: eventbrite_id
-        operator: is_empty
-    message: "Event in {{days_until}} days but no Eventbrite link configured"
+    action_text: "Set Channel"
+    action_url: "/admin/events/{{event_id}}/edit"
 
   # ==================== SUCCESS METRICS ====================
 
@@ -477,6 +595,7 @@ rules:
     severity: success
     category: operational
     context: pre_event
+    priority_score: 0
     conditions:
       - field: event_start_datetime
         operator: upcoming_days
@@ -497,6 +616,7 @@ rules:
     severity: success
     category: comparative
     context: pre_event
+    priority_score: 0
     conditions:
       - field: sold_out
         operator: equals
@@ -507,10 +627,11 @@ rules:
 
   - id: ticket_revenue_success
     name: Ticket Revenue Exceeded Last Event
-    description: Ticket revenue exceeded the last event in this city
+    description: Ticket revenue exceeded the last event in this venue
     severity: success
     category: comparative
     context: post_event
+    priority_score: 0
     conditions:
       - field: event_end_datetime
         operator: past_days
@@ -528,10 +649,11 @@ rules:
 
   - id: ticket_revenue_decline_warning
     name: Ticket Revenue Below Last Event
-    description: Ticket revenue is 20%+ lower than last event
+    description: Ticket revenue is 20%+ lower than last event in venue
     severity: warning
     category: comparative
     context: post_event
+    priority_score: 60
     conditions:
       - field: event_end_datetime
         operator: past_days
@@ -544,13 +666,17 @@ rules:
         value: 80
         compare_to: prev_ticket_revenue
     message: "Ticket revenue ${{ticket_revenue}} is {{percent_of_previous}}% of last event ${{prev_ticket_revenue}} ({{prev_event_eid}})"
+    action_text: "Analyze Event"
+    action_url: "/admin/events/{{event_id}}/analysis"
 
   - id: ticket_revenue_decline_error
     name: Significant Ticket Revenue Drop
-    description: Ticket revenue is 50%+ lower than last event
+    description: Ticket revenue is 50%+ lower than last event in venue
     severity: error
     category: comparative
     context: post_event
+    priority_score: 85
+    suppress_if: [ticket_revenue_decline_warning]
     conditions:
       - field: event_end_datetime
         operator: past_days
@@ -563,13 +689,16 @@ rules:
         value: 50
         compare_to: prev_ticket_revenue
     message: "CRITICAL: Ticket revenue ${{ticket_revenue}} is only {{percent_of_previous}}% of last event ${{prev_ticket_revenue}} ({{prev_event_eid}})"
+    action_text: "Analyze Event"
+    action_url: "/admin/events/{{event_id}}/analysis"
 
   - id: auction_revenue_success
     name: Auction Revenue Exceeded Last Event
-    description: Auction revenue exceeded the last event in this city
+    description: Auction revenue exceeded the last event in this venue
     severity: success
     category: comparative
     context: post_event
+    priority_score: 0
     conditions:
       - field: event_end_datetime
         operator: past_days
@@ -589,10 +718,11 @@ rules:
 
   - id: total_votes_success
     name: Total Votes Exceeded Last Event
-    description: Total votes exceeded the last event in this city (recently ended events only)
+    description: Total votes exceeded the last event in this venue (recently ended events only)
     severity: success
     category: comparative
     context: post_event
+    priority_score: 0
     conditions:
       - field: event_end_datetime
         operator: past_days
@@ -614,10 +744,11 @@ rules:
 
   - id: total_votes_decline_warning
     name: Total Votes Below Last Event
-    description: Total votes are 20%+ lower than last event (recently ended events only)
+    description: Total votes are 20%+ lower than last event in venue (recently ended events only)
     severity: warning
     category: comparative
     context: post_event
+    priority_score: 55
     conditions:
       - field: event_end_datetime
         operator: past_days
@@ -636,13 +767,17 @@ rules:
         value: 80
         compare_to: prev_total_votes
     message: "Total votes {{total_votes}} is {{percent_of_previous}}% of last event {{prev_total_votes}} ({{prev_event_eid}})"
+    action_text: "Analyze Event"
+    action_url: "/admin/events/{{event_id}}/analysis"
 
   - id: total_votes_decline_error
     name: Significant Vote Decline
-    description: Total votes are 50%+ lower than last event (recently ended events only)
+    description: Total votes are 50%+ lower than last event in venue (recently ended events only)
     severity: error
     category: comparative
     context: post_event
+    priority_score: 80
+    suppress_if: [total_votes_decline_warning]
     conditions:
       - field: event_end_datetime
         operator: past_days
@@ -661,6 +796,29 @@ rules:
         value: 50
         compare_to: prev_total_votes
     message: "CRITICAL: Total votes {{total_votes}} is only {{percent_of_previous}}% of last event {{prev_total_votes}} ({{prev_event_eid}})"
+    action_text: "Analyze Event"
+    action_url: "/admin/events/{{event_id}}/analysis"
+
+  # ==================== BOOKING OPPORTUNITIES ====================
+  # IMPROVED: Consolidated to one rule per city, higher thresholds, with priority scoring
+
+  - id: booking_opportunity_strong_city
+    name: Strong City Booking Opportunity
+    description: City had exceptional events (300+ votes) but no future event booked
+    severity: warning
+    category: booking_opportunity
+    context: always
+    priority_score: 70
+    conditions:
+      - field: has_future_event
+        operator: equals
+        value: false
+      - field: best_recent_votes
+        operator: greater_than
+        value: 300
+    message: "{{city_name}} had strong events recently ({{best_recent_event_eid}} ({{best_recent_votes}} votes)) but no future event is booked"
+    action_text: "Book Event"
+    action_url: "/admin/cities/{{city_id}}/book"
 
 # Configuration for comparative analysis
 comparison_settings:
@@ -672,3 +830,14 @@ comparison_settings:
 
   # How to handle missing comparative data
   missing_data_behavior: skip  # options: skip | info | warning
+
+# Configuration for booking opportunities
+booking_settings:
+  # Only show cities with events this strong (minimum votes)
+  min_votes_threshold: 300
+
+  # Only look back this many days for "recent" events
+  recent_lookback_days: 730  # 2 years
+
+  # Don't show "very strong historically" separately - just use one rule
+  combine_historical_and_recent: true

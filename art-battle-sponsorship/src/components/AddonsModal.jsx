@@ -22,6 +22,10 @@ const AddonsModal = ({ open, packages, selectedPackage, discountPercent, onConfi
   // Filter addon packages
   const addonPackages = packages.filter(pkg => pkg.is_addon);
 
+  const formatCurrency = (amount) => {
+    return Math.round(amount).toLocaleString('en-US');
+  };
+
   const calculateDiscountedPrice = (price) => {
     if (!discountPercent || discountPercent === 0) return price;
     return price * (1 - discountPercent / 100);
@@ -71,7 +75,7 @@ const AddonsModal = ({ open, packages, selectedPackage, discountPercent, onConfi
               <Flex justify="between" align="center">
                 <Heading size="4">{selectedPackage.name}</Heading>
                 <Heading size="5">
-                  ${calculateDiscountedPrice(selectedPackage.base_price).toFixed(0)}
+                  ${formatCurrency(calculateDiscountedPrice(selectedPackage.base_price))}
                 </Heading>
               </Flex>
 
@@ -159,7 +163,7 @@ const AddonsModal = ({ open, packages, selectedPackage, discountPercent, onConfi
                             </Text>
                           </Box>
                           <Text size="4" weight="bold" style={{ marginLeft: '1rem' }}>
-                            +${price.toFixed(0)}
+                            +${formatCurrency(price)}
                           </Text>
                         </Flex>
 
@@ -235,7 +239,7 @@ const AddonsModal = ({ open, packages, selectedPackage, discountPercent, onConfi
           {/* Total */}
           <Flex justify="end" align="center">
             <Heading size="6">
-              ${calculateTotal().toFixed(0)} {selectedPackage.currency || 'USD'}
+              ${formatCurrency(calculateTotal())} {selectedPackage.currency || 'USD'}
             </Heading>
           </Flex>
 

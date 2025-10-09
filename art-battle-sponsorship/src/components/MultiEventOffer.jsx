@@ -136,6 +136,10 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
     return Math.round((savings / totalValue) * 100);
   };
 
+  const formatCurrency = (amount) => {
+    return Math.round(amount).toLocaleString('en-US');
+  };
+
   const totalEvents = selectedEvents.length + 1;
   const discount = getDiscount(totalEvents);
   const prospectDisplay = inviteData?.prospect_company || inviteData?.prospect_name || 'Recipient';
@@ -380,7 +384,7 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
               <Flex justify="between" align="center">
                 <Heading size="5">Total Value</Heading>
                 <Heading size="6">
-                  ${calculateTotalValue().toFixed(0)} {selectedPackage.currency || 'USD'}
+                  ${formatCurrency(calculateTotalValue())} {selectedPackage.currency || 'USD'}
                 </Heading>
               </Flex>
 
@@ -389,8 +393,8 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                   <Text size="3">{prospectDisplay} Discount</Text>
                   <Flex gap="2" align="center">
                     <Badge color="blue" size="2">{discountPercent}% OFF</Badge>
-                    <Text size="3" weight="bold" style={{ color: 'var(--blue-11)' }}>
-                      ${calculateRecipientDiscountAmount().toFixed(0)}
+                    <Text size="3" weight="bold">
+                      ${formatCurrency(calculateRecipientDiscountAmount())}
                     </Text>
                   </Flex>
                 </Flex>
@@ -401,8 +405,8 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                   <Text size="3">{totalEvents} Event Discount</Text>
                   <Flex gap="2" align="center">
                     <Badge color="green" size="2">{discount}% OFF</Badge>
-                    <Text size="3" weight="bold" style={{ color: 'var(--green-11)' }}>
-                      ${calculateMultiEventDiscountAmount().toFixed(0)}
+                    <Text size="3" weight="bold">
+                      ${formatCurrency(calculateMultiEventDiscountAmount())}
                     </Text>
                   </Flex>
                 </Flex>
@@ -414,7 +418,7 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                   <Flex gap="2" align="center">
                     <Badge color="green" size="2">{calculateTotalDiscountPercent()}% OFF</Badge>
                     <Text size="3" weight="bold" style={{ color: 'var(--green-11)' }}>
-                      ${calculateSavings().toFixed(0)}
+                      ${formatCurrency(calculateSavings())}
                     </Text>
                   </Flex>
                 </Flex>
@@ -425,7 +429,7 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
               <Flex justify="between" align="center">
                 <Heading size="5" style={{ color: 'var(--green-11)' }}>Final Price</Heading>
                 <Heading size="6" style={{ color: 'var(--green-11)' }}>
-                  ${calculateDiscountedTotal().toFixed(0)} {selectedPackage.currency || 'USD'}
+                  ${formatCurrency(calculateDiscountedTotal())} {selectedPackage.currency || 'USD'}
                 </Heading>
               </Flex>
             </Flex>
