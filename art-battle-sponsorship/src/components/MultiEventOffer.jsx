@@ -12,13 +12,14 @@ import {
   Checkbox,
   Separator
 } from '@radix-ui/themes';
-import { CalendarIcon, RocketIcon } from '@radix-ui/react-icons';
+import { CalendarIcon, RocketIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon } from '@radix-ui/react-icons';
 import { getUpcomingEventsInCity } from '../lib/api';
 
-const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfirm, onSkip }) => {
+const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfirm, onSkip, discountPercent }) => {
   const [upcomingEvents, setUpcomingEvents] = useState([]);
   const [selectedEvents, setSelectedEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showBenefits, setShowBenefits] = useState(false);
 
   useEffect(() => {
     loadUpcomingEvents();
@@ -81,11 +82,21 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
     return total;
   };
 
+  const applyRecipientDiscount = (price) => {
+    if (!discountPercent || discountPercent === 0) return price;
+    return price * (1 - discountPercent / 100);
+  };
+
   const calculateDiscountedTotal = () => {
     const basePrice = calculateBasePrice();
+    // First apply recipient discount
+    const priceAfterRecipientDiscount = applyRecipientDiscount(basePrice);
+
+    // Then apply multi-event discount
     const totalEvents = selectedEvents.length + 1; // +1 for original event
-    const discount = getDiscount(totalEvents);
-    const pricePerEvent = basePrice * (1 - discount / 100);
+    const multiEventDiscount = getDiscount(totalEvents);
+    const pricePerEvent = priceAfterRecipientDiscount * (1 - multiEventDiscount / 100);
+
     return pricePerEvent * totalEvents;
   };
 
@@ -105,6 +116,17 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
         <Flex direction="column" gap="6">
           {/* Header */}
           <Box style={{ textAlign: 'center' }}>
+            <img
+              src="https://artb.tor1.cdn.digitaloceanspaces.com/img/AB-HWOT1.png"
+              alt="Art Battle"
+              style={{
+                height: '80px',
+                marginBottom: '2.5rem',
+                objectFit: 'contain',
+                display: 'block',
+                margin: '0 auto 2.5rem auto'
+              }}
+            />
             <Badge color="green" size="3" mb="3">
               <RocketIcon width="16" height="16" /> Exclusive Opportunity
             </Badge>
@@ -178,13 +200,89 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                 <Box>
                   <Text size="2" style={{ color: 'var(--gray-11)' }}>Your Current Selection</Text>
                   <Heading size="5">{selectedPackage.name}</Heading>
+                  {selectedAddons.length > 0 && (
+                    <Text size="2" style={{ color: 'var(--gray-11)', marginTop: '0.25rem' }}>
+                      + {selectedAddons.map(a => a.name).join(', ')}
+                    </Text>
+                  )}
                 </Box>
                 <Badge color="blue">Included</Badge>
               </Flex>
-              {selectedAddons.length > 0 && (
-                <Text size="2" style={{ color: 'var(--gray-11)' }}>
-                  + {selectedAddons.length} add-on{selectedAddons.length !== 1 ? 's' : ''}
-                </Text>
+
+              {/* Toggle Benefits Button */}
+              <Button
+                variant="ghost"
+                size="1"
+                onClick={() => setShowBenefits(!showBenefits)}
+                style={{ padding: '0.25rem 0.5rem', justifyContent: 'flex-start' }}
+              >
+                <Flex align="center" gap="1">
+                  {showBenefits ? (
+                    <>
+                      <ChevronUpIcon width="14" height="14" />
+                      <Text size="1">Hide full benefits</Text>
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDownIcon width="14" height="14" />
+                      <Text size="1">Show full benefits</Text>
+                    </>
+                  )}
+                </Flex>
+              </Button>
+
+              {/* Expandable Benefits */}
+              {showBenefits && (
+                <Box
+                  p="3"
+                  style={{
+                    background: 'var(--gray-3)',
+                    borderRadius: '6px',
+                    border: '1px solid var(--gray-6)'
+                  }}
+                >
+                  <Flex direction="column" gap="3">
+                    {/* Package Benefits */}
+                    <Box>
+                      <Text size="2" weight="bold" mb="2" style={{ display: 'block' }}>
+                        {selectedPackage.name}
+                      </Text>
+                      <Flex direction="column" gap="1">
+                        {selectedPackage.benefits && selectedPackage.benefits.map((benefit, idx) => (
+                          <Flex key={idx} gap="2" align="start">
+                            <CheckIcon
+                              width="14"
+                              height="14"
+                              style={{ color: 'var(--green-9)', marginTop: '2px', flexShrink: 0 }}
+                            />
+                            <Text size="2">{benefit}</Text>
+                          </Flex>
+                        ))}
+                      </Flex>
+                    </Box>
+
+                    {/* Addon Benefits */}
+                    {selectedAddons.map((addon, addonIdx) => (
+                      <Box key={addonIdx}>
+                        <Text size="2" weight="bold" mb="2" style={{ display: 'block' }}>
+                          {addon.name}
+                        </Text>
+                        <Flex direction="column" gap="1">
+                          {addon.benefits && addon.benefits.map((benefit, idx) => (
+                            <Flex key={idx} gap="2" align="start">
+                              <CheckIcon
+                                width="14"
+                                height="14"
+                                style={{ color: 'var(--green-9)', marginTop: '2px', flexShrink: 0 }}
+                              />
+                              <Text size="2">{benefit}</Text>
+                            </Flex>
+                          ))}
+                        </Flex>
+                      </Box>
+                    ))}
+                  </Flex>
+                </Box>
               )}
             </Flex>
           </Card>
@@ -248,19 +346,27 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                 <Text size="3" weight="bold">{totalEvents} event{totalEvents !== 1 ? 's' : ''}</Text>
               </Flex>
 
+              {discountPercent > 0 && (
+                <Flex justify="between" align="center">
+                  <Text size="3">Recipient Discount</Text>
+                  <Badge color="blue" size="2">{discountPercent}% OFF</Badge>
+                </Flex>
+              )}
+
               {discount > 0 && (
-                <>
-                  <Flex justify="between" align="center">
-                    <Text size="3">Multi-Event Discount</Text>
-                    <Badge color="green" size="2">{discount}% OFF</Badge>
-                  </Flex>
-                  <Flex justify="between" align="center">
-                    <Text size="2" style={{ color: 'var(--gray-11)' }}>You save</Text>
-                    <Text size="3" weight="bold" style={{ color: 'var(--green-11)' }}>
-                      ${calculateSavings().toFixed(0)}
-                    </Text>
-                  </Flex>
-                </>
+                <Flex justify="between" align="center">
+                  <Text size="3">Multi-Event Discount</Text>
+                  <Badge color="green" size="2">{discount}% OFF</Badge>
+                </Flex>
+              )}
+
+              {(discount > 0 || discountPercent > 0) && (
+                <Flex justify="between" align="center">
+                  <Text size="2" style={{ color: 'var(--gray-11)' }}>Total Savings</Text>
+                  <Text size="3" weight="bold" style={{ color: 'var(--green-11)' }}>
+                    ${calculateSavings().toFixed(0)}
+                  </Text>
+                </Flex>
               )}
 
               <Separator />

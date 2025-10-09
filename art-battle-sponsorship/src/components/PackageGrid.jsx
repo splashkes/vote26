@@ -1,7 +1,10 @@
+import { useState } from 'react';
 import { Box, Container, Flex, Heading, Text, Card, Button, Badge, Grid } from '@radix-ui/themes';
-import { ChevronLeftIcon, CheckIcon } from '@radix-ui/react-icons';
+import { ChevronLeftIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon } from '@radix-ui/react-icons';
 
-const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack }) => {
+const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack, inviteData }) => {
+  const [expandedPackages, setExpandedPackages] = useState({});
+
   if (!packages) return null;
 
   // Filter packages based on tier
@@ -13,6 +16,16 @@ const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack }) => {
       return price < 300 && !pkg.is_addon;
     }
   });
+
+  const toggleBenefits = (pkgId) => {
+    setExpandedPackages(prev => ({
+      ...prev,
+      [pkgId]: !prev[pkgId]
+    }));
+  };
+
+  // Get prospect name for personalization
+  const prospectDisplay = inviteData?.prospect_company || inviteData?.prospect_name || '';
 
   const calculateDiscountedPrice = (price) => {
     if (!discountPercent || discountPercent === 0) return price;
@@ -40,7 +53,7 @@ const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack }) => {
               </Heading>
               {discountPercent > 0 && (
                 <Badge size="2" color="green" style={{ marginTop: '0.5rem' }}>
-                  {discountPercent}% Exclusive Discount Applied
+                  {discountPercent}% Exclusive Discount Applied{prospectDisplay && ` for ${prospectDisplay}`}
                 </Badge>
               )}
             </Box>
@@ -88,6 +101,54 @@ const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack }) => {
                       <Text size="2" style={{ color: 'var(--gray-11)' }}>
                         {pkg.description}
                       </Text>
+
+                      {/* Expandable Benefits Toggle */}
+                      <Button
+                        variant="ghost"
+                        size="1"
+                        onClick={() => toggleBenefits(pkg.id)}
+                        style={{ marginTop: '0.5rem', padding: '0.25rem 0.5rem' }}
+                      >
+                        <Flex align="center" gap="1">
+                          {expandedPackages[pkg.id] ? (
+                            <>
+                              <ChevronUpIcon width="14" height="14" />
+                              <Text size="1">Hide benefits</Text>
+                            </>
+                          ) : (
+                            <>
+                              <ChevronDownIcon width="14" height="14" />
+                              <Text size="1">Show all benefits ({pkg.benefits?.length || 0})</Text>
+                            </>
+                          )}
+                        </Flex>
+                      </Button>
+
+                      {/* Expandable Benefits List */}
+                      {expandedPackages[pkg.id] && (
+                        <Box
+                          mt="3"
+                          p="3"
+                          style={{
+                            background: 'var(--gray-3)',
+                            borderRadius: '6px',
+                            border: '1px solid var(--gray-6)'
+                          }}
+                        >
+                          <Flex direction="column" gap="2">
+                            {pkg.benefits && pkg.benefits.map((benefit, idx) => (
+                              <Flex key={idx} gap="2" align="start">
+                                <CheckIcon
+                                  width="16"
+                                  height="16"
+                                  style={{ color: 'var(--green-9)', marginTop: '2px', flexShrink: 0 }}
+                                />
+                                <Text size="2">{benefit}</Text>
+                              </Flex>
+                            ))}
+                          </Flex>
+                        </Box>
+                      )}
                     </Box>
 
                     {/* Pricing */}
@@ -113,19 +174,8 @@ const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack }) => {
                       </Text>
                     </Box>
 
-                    {/* Benefits */}
-                    <Flex direction="column" gap="2" style={{ flex: 1 }}>
-                      {pkg.benefits && pkg.benefits.map((benefit, idx) => (
-                        <Flex key={idx} gap="2" align="start">
-                          <CheckIcon
-                            width="16"
-                            height="16"
-                            style={{ color: 'var(--green-9)', marginTop: '2px', flexShrink: 0 }}
-                          />
-                          <Text size="2">{benefit}</Text>
-                        </Flex>
-                      ))}
-                    </Flex>
+                    {/* Spacer */}
+                    <Box style={{ flex: 1 }} />
 
                     {/* CTA */}
                     <Button

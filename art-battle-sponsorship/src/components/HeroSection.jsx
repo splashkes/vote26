@@ -1,24 +1,65 @@
 import { Box, Container, Flex, Heading, Text, Badge, ScrollArea } from '@radix-ui/themes';
 import { PlayIcon } from '@radix-ui/react-icons';
 
-const HeroSection = () => {
+const HeroSection = ({ inviteData }) => {
   // Placeholder sponsor logos
   const sponsorLogos = [
     'Molson Canadian', 'Bacardi', 'Red Bull', 'Bombay Sapphire',
     'Corona', 'Grey Goose', 'Jameson', 'Stella Artois'
   ];
 
+  // Get prospect name or company
+  const prospectDisplay = inviteData?.prospect_company || inviteData?.prospect_name || '';
+
   return (
-    <Box style={{ position: 'relative', overflow: 'hidden' }}>
+    <Box style={{ position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      {/* Background Image with Combined Overlays */}
+      <Box style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundImage: 'url(https://picsum.photos/1920/1080?random=1)',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        filter: 'brightness(0.4)',
+        transform: 'translate3d(0,0,0)',
+        willChange: 'transform',
+        zIndex: 0
+      }} />
+
+      {/* Combined Gradient Overlays (single layer for performance) */}
+      <Box style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'linear-gradient(135deg, rgba(100,50,200,0.5) 0%, rgba(50,20,100,0.4) 70%, rgba(0,0,0,0.9) 100%)',
+        transform: 'translate3d(0,0,0)',
+        zIndex: 1
+      }} />
+
       {/* Hero Video Section */}
       <Box style={{
-        background: 'linear-gradient(135deg, var(--accent-9) 0%, var(--accent-11) 100%)',
         position: 'relative',
-        minHeight: '70vh',
-        padding: '0 1rem'
+        padding: '0 1rem',
+        zIndex: 2
       }}>
-        <Container size="4" py="9" px="4">
-          <Flex direction="column" align="center" gap="6" style={{ textAlign: 'center' }}>
+        <Container size="4" py="6" px="4">
+          <Flex direction="column" align="center" gap="4" style={{ textAlign: 'center' }}>
+            {/* Art Battle Logo */}
+            <img
+              src="https://artb.tor1.cdn.digitaloceanspaces.com/img/AB-HWOT1.png"
+              alt="Art Battle"
+              style={{
+                height: '80px',
+                marginBottom: '1rem',
+                objectFit: 'contain'
+              }}
+            />
+
             {/* Video Placeholder */}
             <Box style={{
               width: '100%',
@@ -67,25 +108,32 @@ const HeroSection = () => {
             </Box>
 
             {/* Global Stats */}
-            <Flex gap="6" wrap="wrap" justify="center" mt="4">
+            <Flex gap="6" wrap="wrap" justify="center">
               <Box style={{ textAlign: 'center' }}>
-                <Heading size="8" style={{ color: 'white' }}>12,000+</Heading>
-                <Text size="2" style={{ color: 'rgba(255,255,255,0.8)' }}>Events Worldwide</Text>
+                <Heading size="8" style={{ color: 'white' }}>3,500+</Heading>
+                <Text size="2" style={{ color: 'rgba(255,255,255,0.8)' }}>Events Since 2001</Text>
               </Box>
               <Box style={{ textAlign: 'center' }}>
                 <Heading size="8" style={{ color: 'white' }}>85</Heading>
-                <Text size="2" style={{ color: 'rgba(255,255,255,0.8)' }}>Cities</Text>
+                <Text size="2" style={{ color: 'rgba(255,255,255,0.8)' }}>Cities Worldwide</Text>
               </Box>
               <Box style={{ textAlign: 'center' }}>
-                <Heading size="8" style={{ color: 'white' }}>2M+</Heading>
-                <Text size="2" style={{ color: 'rgba(255,255,255,0.8)' }}>Total Attendees</Text>
+                <Heading size="8" style={{ color: 'white' }}>88,000+</Heading>
+                <Text size="2" style={{ color: 'rgba(255,255,255,0.8)' }}>Attendees Each Year</Text>
               </Box>
             </Flex>
 
             {/* Scroll Indicator */}
-            <Text size="2" style={{ color: 'rgba(255,255,255,0.6)', marginTop: '2rem' }}>
+            <Text size="2" style={{ color: 'rgba(255,255,255,0.6)', marginTop: '0.5rem' }}>
               ↓ Scroll to learn more
             </Text>
+
+            {/* Personalized Prospect/Company Name */}
+            {prospectDisplay && (
+              <Heading size="6" style={{ color: 'white', marginTop: '0.25rem', textAlign: 'center' }}>
+                {prospectDisplay}
+              </Heading>
+            )}
           </Flex>
         </Container>
       </Box>

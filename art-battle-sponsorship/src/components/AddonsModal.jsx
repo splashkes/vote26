@@ -10,10 +10,12 @@ import {
   Checkbox,
   Separator
 } from '@radix-ui/themes';
-import { CheckIcon } from '@radix-ui/react-icons';
+import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from '@radix-ui/react-icons';
 
 const AddonsModal = ({ open, packages, selectedPackage, discountPercent, onConfirm, onClose }) => {
   const [selectedAddons, setSelectedAddons] = useState([]);
+  const [expandedAddons, setExpandedAddons] = useState({});
+  const [showPackageBenefits, setShowPackageBenefits] = useState(false);
 
   if (!packages || !selectedPackage) return null;
 
@@ -34,6 +36,13 @@ const AddonsModal = ({ open, packages, selectedPackage, discountPercent, onConfi
         return [...prev, addon];
       }
     });
+  };
+
+  const toggleBenefits = (addonId) => {
+    setExpandedAddons(prev => ({
+      ...prev,
+      [addonId]: !prev[addonId]
+    }));
   };
 
   const calculateTotal = () => {
@@ -58,14 +67,63 @@ const AddonsModal = ({ open, packages, selectedPackage, discountPercent, onConfi
         <Flex direction="column" gap="4" style={{ marginTop: '1rem' }}>
           {/* Selected Package Summary */}
           <Card size="2" style={{ background: 'var(--accent-3)' }}>
-            <Flex justify="between" align="center">
-              <Box>
-                <Text size="2" style={{ color: 'var(--gray-11)' }}>Selected Package</Text>
-                <Heading size="4">{selectedPackage.name}</Heading>
-              </Box>
-              <Heading size="5">
-                ${calculateDiscountedPrice(selectedPackage.base_price).toFixed(0)}
-              </Heading>
+            <Flex direction="column" gap="2">
+              <Flex justify="between" align="center">
+                <Box>
+                  <Text size="2" style={{ color: 'var(--gray-11)' }}>Selected Package</Text>
+                  <Heading size="4">{selectedPackage.name}</Heading>
+                </Box>
+                <Heading size="5">
+                  ${calculateDiscountedPrice(selectedPackage.base_price).toFixed(0)}
+                </Heading>
+              </Flex>
+
+              {/* Toggle Benefits Button */}
+              <Button
+                variant="ghost"
+                size="1"
+                onClick={() => setShowPackageBenefits(!showPackageBenefits)}
+                style={{ padding: '0.25rem 0.5rem', justifyContent: 'flex-start' }}
+              >
+                <Flex align="center" gap="1">
+                  {showPackageBenefits ? (
+                    <>
+                      <ChevronUpIcon width="14" height="14" />
+                      <Text size="1">Hide benefits</Text>
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDownIcon width="14" height="14" />
+                      <Text size="1">Show all benefits ({selectedPackage.benefits?.length || 0})</Text>
+                    </>
+                  )}
+                </Flex>
+              </Button>
+
+              {/* Expandable Benefits */}
+              {showPackageBenefits && (
+                <Box
+                  p="3"
+                  style={{
+                    background: 'var(--gray-3)',
+                    borderRadius: '6px',
+                    border: '1px solid var(--gray-6)'
+                  }}
+                >
+                  <Flex direction="column" gap="2">
+                    {selectedPackage.benefits && selectedPackage.benefits.map((benefit, idx) => (
+                      <Flex key={idx} gap="2" align="start">
+                        <CheckIcon
+                          width="14"
+                          height="14"
+                          style={{ color: 'var(--green-9)', marginTop: '2px', flexShrink: 0 }}
+                        />
+                        <Text size="2">{benefit}</Text>
+                      </Flex>
+                    ))}
+                  </Flex>
+                </Box>
+              )}
             </Flex>
           </Card>
 
@@ -107,20 +165,55 @@ const AddonsModal = ({ open, packages, selectedPackage, discountPercent, onConfi
                           </Text>
                         </Flex>
 
-                        {/* Benefits */}
-                        {addon.benefits && addon.benefits.length > 0 && (
-                          <Flex direction="column" gap="1" mt="1">
-                            {addon.benefits.slice(0, 3).map((benefit, idx) => (
-                              <Flex key={idx} gap="2" align="start">
-                                <CheckIcon
-                                  width="14"
-                                  height="14"
-                                  style={{ color: 'var(--green-9)', marginTop: '2px', flexShrink: 0 }}
-                                />
-                                <Text size="1" style={{ color: 'var(--gray-11)' }}>{benefit}</Text>
-                              </Flex>
-                            ))}
+                        {/* Expandable Benefits Toggle */}
+                        <Button
+                          variant="ghost"
+                          size="1"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleBenefits(addon.id);
+                          }}
+                          style={{ padding: '0.25rem 0.5rem', justifyContent: 'flex-start' }}
+                        >
+                          <Flex align="center" gap="1">
+                            {expandedAddons[addon.id] ? (
+                              <>
+                                <ChevronUpIcon width="14" height="14" />
+                                <Text size="1">Hide benefits</Text>
+                              </>
+                            ) : (
+                              <>
+                                <ChevronDownIcon width="14" height="14" />
+                                <Text size="1">Show all benefits ({addon.benefits?.length || 0})</Text>
+                              </>
+                            )}
                           </Flex>
+                        </Button>
+
+                        {/* Expandable Benefits List */}
+                        {expandedAddons[addon.id] && addon.benefits && addon.benefits.length > 0 && (
+                          <Box
+                            mt="1"
+                            p="2"
+                            style={{
+                              background: 'var(--gray-3)',
+                              borderRadius: '6px',
+                              border: '1px solid var(--gray-6)'
+                            }}
+                          >
+                            <Flex direction="column" gap="1">
+                              {addon.benefits.map((benefit, idx) => (
+                                <Flex key={idx} gap="2" align="start">
+                                  <CheckIcon
+                                    width="14"
+                                    height="14"
+                                    style={{ color: 'var(--green-9)', marginTop: '2px', flexShrink: 0 }}
+                                  />
+                                  <Text size="1" style={{ color: 'var(--gray-11)' }}>{benefit}</Text>
+                                </Flex>
+                              ))}
+                            </Flex>
+                          </Box>
                         )}
                       </Flex>
                     </Flex>
@@ -162,7 +255,10 @@ const AddonsModal = ({ open, packages, selectedPackage, discountPercent, onConfi
             <Button variant="outline" onClick={() => onConfirm([])}>
               Skip Add-ons
             </Button>
-            <Button onClick={() => onConfirm(selectedAddons)}>
+            <Button
+              onClick={() => onConfirm(selectedAddons)}
+              disabled={selectedAddons.length === 0}
+            >
               Continue
             </Button>
           </Flex>

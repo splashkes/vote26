@@ -1,10 +1,38 @@
 import { Box, Container, Flex, Heading, Text, Card, Button } from '@radix-ui/themes';
-import { RocketIcon, TargetIcon } from '@radix-ui/react-icons';
+import { StarFilledIcon, TargetIcon } from '@radix-ui/react-icons';
 
 const SelfSelectionCTA = ({ onSelect }) => {
   return (
-    <Box py="9" style={{ background: 'var(--gray-2)', padding: '3rem 1rem' }}>
-      <Container size="3" px="4">
+    <Box py="9" style={{ position: 'relative', padding: '3rem 1rem', overflow: 'hidden' }}>
+      {/* Background Image */}
+      <Box style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundImage: 'url(https://picsum.photos/1920/1080?random=3)',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        filter: 'brightness(0.25)',
+        transform: 'translate3d(0,0,0)',
+        willChange: 'transform',
+        zIndex: 0
+      }} />
+
+      {/* Combined Overlay Gradients (single layer) */}
+      <Box style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'linear-gradient(to bottom, black 0%, rgba(30,60,120,0.6) 15%, rgba(10,20,40,0.8) 85%, black 100%)',
+        transform: 'translate3d(0,0,0)',
+        zIndex: 1
+      }} />
+
+      <Container size="3" px="4" style={{ position: 'relative', zIndex: 2 }}>
         <Flex direction="column" gap="6" align="center">
           <Box style={{ textAlign: 'center' }}>
             <Heading size="7" mb="2">Choose Your Sponsorship Level</Heading>
@@ -37,11 +65,11 @@ const SelfSelectionCTA = ({ onSelect }) => {
                     justifyContent: 'center'
                   }}
                 >
-                  <RocketIcon width="40" height="40" style={{ color: 'white' }} />
+                  <StarFilledIcon width="40" height="40" style={{ color: 'white' }} />
                 </Box>
 
                 <Box>
-                  <Heading size="6" mb="2">Maximize My Visibility</Heading>
+                  <Heading size="6" mb="2">Maximize Awareness</Heading>
                   <Text size="3" style={{ color: 'var(--gray-11)' }}>
                     Premium sponsorship packages over $300
                   </Text>
@@ -87,7 +115,7 @@ const SelfSelectionCTA = ({ onSelect }) => {
                 </Box>
 
                 <Box>
-                  <Heading size="6" mb="2">Targeted Brand Presence</Heading>
+                  <Heading size="6" mb="2">Targeted Activations</Heading>
                   <Text size="3" style={{ color: 'var(--gray-11)' }}>
                     Focused sponsorship packages under $300
                   </Text>

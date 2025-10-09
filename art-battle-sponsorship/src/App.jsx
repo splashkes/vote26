@@ -34,6 +34,18 @@ function App() {
 
     setHash(hashFromUrl);
     loadInvite(hashFromUrl);
+
+    // Handle browser back/forward buttons
+    const handlePopState = (event) => {
+      if (event.state) {
+        setCurrentStep(event.state.step || 'landing');
+        setSelectedTier(event.state.tier || null);
+        setSelectedPackage(event.state.package || null);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
   const loadInvite = async (inviteHash) => {
@@ -60,6 +72,7 @@ function App() {
   const handleTierSelect = async (tier) => {
     setSelectedTier(tier);
     setCurrentStep('selection');
+    window.history.pushState({ step: 'selection', tier }, '', window.location.href);
 
     if (hash) {
       await trackInteraction(hash, 'tier_select', null, { tier });
@@ -69,6 +82,7 @@ function App() {
   const handlePackageSelect = async (pkg) => {
     setSelectedPackage(pkg);
     setCurrentStep('addons');
+    window.history.pushState({ step: 'addons', tier: selectedTier, package: pkg }, '', window.location.href);
 
     if (hash) {
       await trackInteraction(hash, 'package_click', pkg.id);
@@ -78,6 +92,18 @@ function App() {
   const handleAddonsConfirm = (addons) => {
     setSelectedAddons(addons);
     setCurrentStep('multi-event');
+    window.history.pushState({ step: 'multi-event', tier: selectedTier, package: selectedPackage }, '', window.location.href);
+  };
+
+  const handleBackToLanding = () => {
+    setCurrentStep('landing');
+    setSelectedTier(null);
+    window.history.pushState({ step: 'landing' }, '', window.location.href);
+  };
+
+  const handleBackToSelection = () => {
+    setCurrentStep('selection');
+    window.history.pushState({ step: 'selection', tier: selectedTier }, '', window.location.href);
   };
 
   const handleCheckout = async () => {
@@ -123,7 +149,7 @@ function App() {
         {/* Landing: Hero + Local Relevance + Self-Selection */}
         {currentStep === 'landing' && (
           <Box style={{ maxWidth: '1400px', margin: '0 auto' }}>
-            <HeroSection />
+            <HeroSection inviteData={inviteData} />
             <LocalRelevanceSection inviteData={inviteData} />
             <SelfSelectionCTA onSelect={handleTierSelect} />
           </Box>
@@ -136,8 +162,9 @@ function App() {
               packages={inviteData.packages}
               tier={selectedTier}
               discountPercent={inviteData.discount_percent}
+              inviteData={inviteData}
               onSelect={handlePackageSelect}
-              onBack={() => setCurrentStep('landing')}
+              onBack={handleBackToLanding}
             />
           </Box>
         )}
@@ -150,7 +177,7 @@ function App() {
             selectedPackage={selectedPackage}
             discountPercent={inviteData.discount_percent}
             onConfirm={handleAddonsConfirm}
-            onClose={() => setCurrentStep('selection')}
+            onClose={handleBackToSelection}
           />
         )}
 
@@ -161,6 +188,7 @@ function App() {
               inviteData={inviteData}
               selectedPackage={selectedPackage}
               selectedAddons={selectedAddons}
+              discountPercent={inviteData.discount_percent}
               onConfirm={handleCheckout}
               onSkip={handleCheckout}
             />
