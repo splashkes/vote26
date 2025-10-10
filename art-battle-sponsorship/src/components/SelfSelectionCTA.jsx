@@ -1,7 +1,23 @@
 import { Box, Container, Flex, Heading, Text, Card, Button, Grid } from '@radix-ui/themes';
 import { StarFilledIcon, TargetIcon, PersonIcon } from '@radix-ui/react-icons';
 
-const SelfSelectionCTA = ({ onSelect, isExpired = false }) => {
+const SelfSelectionCTA = ({ packages, onSelect, isExpired = false }) => {
+  // Check which tiers have available packages
+  const hasPersonalPackages = packages?.some(pkg => pkg.category === 'personal' && !pkg.is_addon) || false;
+  const hasBrandPackages = packages?.some(pkg => pkg.category === 'brand' && !pkg.is_addon) || false;
+  const hasBusinessPackages = packages?.some(pkg => pkg.category === 'business' && !pkg.is_addon) || false;
+
+  // Count available tiers
+  const availableTiers = [hasPersonalPackages, hasBrandPackages, hasBusinessPackages].filter(Boolean).length;
+
+  // Don't render if no tiers available
+  if (availableTiers === 0) {
+    return null;
+  }
+
+  // Determine grid columns based on available tiers
+  const gridColumns = availableTiers === 1 ? '1' : availableTiers === 2 ? { initial: '1', sm: '2' } : { initial: '1', sm: '3' };
+
   return (
     <Box py="9" style={{ position: 'relative', padding: '3rem 1rem', overflow: 'hidden' }}>
       {/* Background Image */}
@@ -41,9 +57,10 @@ const SelfSelectionCTA = ({ onSelect, isExpired = false }) => {
             </Text>
           </Box>
 
-          <Grid columns={{ initial: '1', sm: '3' }} gap="4" width="100%">
+          <Grid columns={gridColumns} gap="4" width="100%">
             {/* Personal Tier */}
-            <Card
+            {hasPersonalPackages && (
+              <Card
               size="4"
               style={{
                 background: 'var(--gray-3)',
@@ -88,9 +105,11 @@ const SelfSelectionCTA = ({ onSelect, isExpired = false }) => {
                 </Button>
               </Flex>
             </Card>
+            )}
 
             {/* Brand Tier */}
-            <Card
+            {hasBrandPackages && (
+              <Card
               size="4"
               style={{
                 background: 'var(--gray-3)',
@@ -135,9 +154,11 @@ const SelfSelectionCTA = ({ onSelect, isExpired = false }) => {
                 </Button>
               </Flex>
             </Card>
+            )}
 
             {/* Business Tier */}
-            <Card
+            {hasBusinessPackages && (
+              <Card
               size="4"
               style={{
                 background: 'linear-gradient(135deg, var(--accent-3) 0%, var(--accent-4) 100%)',
@@ -182,6 +203,7 @@ const SelfSelectionCTA = ({ onSelect, isExpired = false }) => {
                 </Button>
               </Flex>
             </Card>
+            )}
           </Grid>
         </Flex>
       </Container>

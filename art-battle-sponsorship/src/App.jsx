@@ -359,7 +359,11 @@ function App() {
             <Box style={{ maxWidth: '1400px', margin: '0 auto' }}>
               <HeroSection inviteData={inviteData} />
               <LocalRelevanceSection inviteData={inviteData} />
-              <SelfSelectionCTA onSelect={handleTierSelect} isExpired={isInviteExpired()} />
+              <SelfSelectionCTA
+                packages={inviteData.packages}
+                onSelect={handleTierSelect}
+                isExpired={isInviteExpired()}
+              />
             </Box>
           )}
 
