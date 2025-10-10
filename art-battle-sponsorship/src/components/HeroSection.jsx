@@ -8,6 +8,15 @@ const HeroSection = ({ inviteData }) => {
     'Corona', 'Grey Goose', 'Jameson', 'Stella Artois'
   ];
 
+  // Convert media array to map
+  const mediaMap = {};
+  inviteData?.media?.forEach(item => {
+    mediaMap[item.media_type] = item.url;
+  });
+
+  const heroBg = mediaMap.hero_bg_desktop || 'https://picsum.photos/1920/1080?random=1';
+  const videoPoster = mediaMap.video_poster || 'https://placehold.co/800x450/1a1a1a/white?text=Art+Battle+Highlight+Reel';
+
   // Get prospect name or company
   const prospectDisplay = inviteData?.prospect_company || inviteData?.prospect_name || '';
 
@@ -52,7 +61,7 @@ const HeroSection = ({ inviteData }) => {
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundImage: 'url(https://picsum.photos/1920/1080?random=1)',
+        backgroundImage: `url(${heroBg})`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         filter: 'brightness(0.4)',
@@ -144,7 +153,7 @@ const HeroSection = ({ inviteData }) => {
               </Flex>
               <video
                 style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.3 }}
-                poster="https://placehold.co/800x450/1a1a1a/white?text=Art+Battle+Highlight+Reel"
+                poster={videoPoster}
                 muted
                 loop
               >

@@ -59,6 +59,33 @@ export async function trackInteraction(hash, interactionType, packageId = null, 
   }
 }
 
+/**
+ * Get sponsorship media assets (backgrounds, photos, logos)
+ */
+export async function getSponsorshipMedia() {
+  try {
+    const { data, error } = await supabase
+      .from('sponsorship_media')
+      .select('*')
+      .eq('active', true)
+      .is('event_id', null) // Only global media, not event-specific
+      .order('display_order', { ascending: true });
+
+    if (error) throw error;
+
+    // Create a map of media_type to URL for easy lookup
+    const mediaMap = {};
+    data?.forEach(item => {
+      mediaMap[item.media_type] = item.url;
+    });
+
+    return { data: mediaMap, error: null };
+  } catch (err) {
+    console.error('Error fetching sponsorship media:', err);
+    return { data: {}, error: err.message };
+  }
+}
+
 // Note: Removed direct database queries - all data fetching now done through edge functions
 // - getCityPackagePricing: Data now comes from sponsorship-invite-details edge function
 // - getUpcomingEventsInCity: Multi-event offers use placeholder events instead of real database queries

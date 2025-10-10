@@ -44,7 +44,7 @@ const SponsorshipMediaLibrary = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [formData, setFormData] = useState({
-    media_type: 'promo_sample',
+    media_type: 'hero_bg_desktop',
     title: '',
     caption: '',
     display_order: 0
@@ -55,6 +55,28 @@ const SponsorshipMediaLibrary = () => {
   useEffect(() => {
     loadMedia();
   }, []);
+
+  // Define required assets for sponsorship SPA
+  const requiredAssets = [
+    { type: 'hero_bg_desktop', label: 'Hero Background (Desktop)', resolution: '1920×1080', required: true },
+    { type: 'hero_bg_mobile', label: 'Hero Background (Mobile)', resolution: '1200×900', required: true },
+    { type: 'video_poster', label: 'Video Poster Image', resolution: '1600×900', required: true },
+    { type: 'event_photo_packed_venue', label: 'Event Photo: Packed Venue', resolution: '800×600', required: true },
+    { type: 'event_photo_live_painting', label: 'Event Photo: Live Painting', resolution: '800×600', required: true },
+    { type: 'event_photo_audience_engagement', label: 'Event Photo: Audience Engagement', resolution: '800×600', required: true },
+    { type: 'event_photo_sponsor_visibility', label: 'Event Photo: Sponsor Visibility', resolution: '800×600', required: true },
+    { type: 'section_bg', label: 'Section Background', resolution: '1920×1080', required: true },
+    { type: 'sponsor_logo_1', label: 'Sponsor Logo 1', resolution: 'SVG or PNG', required: false },
+    { type: 'sponsor_logo_2', label: 'Sponsor Logo 2', resolution: 'SVG or PNG', required: false },
+    { type: 'sponsor_logo_3', label: 'Sponsor Logo 3', resolution: 'SVG or PNG', required: false },
+    { type: 'sponsor_logo_4', label: 'Sponsor Logo 4', resolution: 'SVG or PNG', required: false },
+    { type: 'sponsor_logo_5', label: 'Sponsor Logo 5', resolution: 'SVG or PNG', required: false },
+    { type: 'sponsor_logo_6', label: 'Sponsor Logo 6', resolution: 'SVG or PNG', required: false }
+  ];
+
+  const getAssetStatus = (assetType) => {
+    return media.find(m => m.media_type === assetType);
+  };
 
   const loadMedia = async () => {
     setLoading(true);
@@ -154,7 +176,7 @@ const SponsorshipMediaLibrary = () => {
     setSelectedFile(null);
     setPreview(null);
     setFormData({
-      media_type: 'promo_sample',
+      media_type: 'hero_bg_desktop',
       title: '',
       caption: '',
       display_order: 0
@@ -168,9 +190,23 @@ const SponsorshipMediaLibrary = () => {
   };
 
   const mediaTypes = [
+    { value: 'hero_bg_desktop', label: 'Hero Background (Desktop)' },
+    { value: 'hero_bg_mobile', label: 'Hero Background (Mobile)' },
+    { value: 'video_poster', label: 'Video Poster Image' },
+    { value: 'event_photo_packed_venue', label: 'Event Photo: Packed Venue' },
+    { value: 'event_photo_live_painting', label: 'Event Photo: Live Painting' },
+    { value: 'event_photo_audience_engagement', label: 'Event Photo: Audience Engagement' },
+    { value: 'event_photo_sponsor_visibility', label: 'Event Photo: Sponsor Visibility' },
+    { value: 'section_bg', label: 'Section Background' },
+    { value: 'sponsor_logo_1', label: 'Sponsor Logo 1' },
+    { value: 'sponsor_logo_2', label: 'Sponsor Logo 2' },
+    { value: 'sponsor_logo_3', label: 'Sponsor Logo 3' },
+    { value: 'sponsor_logo_4', label: 'Sponsor Logo 4' },
+    { value: 'sponsor_logo_5', label: 'Sponsor Logo 5' },
+    { value: 'sponsor_logo_6', label: 'Sponsor Logo 6' },
     { value: 'promo_sample', label: 'Promo Material Sample' },
     { value: 'voting_screenshot', label: 'Voting Screenshot' },
-    { value: 'event_photo', label: 'Event Photo' },
+    { value: 'event_photo', label: 'Event Photo (General)' },
     { value: 'testimonial', label: 'Testimonial' }
   ];
 
@@ -180,10 +216,24 @@ const SponsorshipMediaLibrary = () => {
 
   const getMediaTypeColor = (type) => {
     const colors = {
+      hero_bg_desktop: 'purple',
+      hero_bg_mobile: 'purple',
+      video_poster: 'indigo',
+      event_photo_packed_venue: 'green',
+      event_photo_live_painting: 'green',
+      event_photo_audience_engagement: 'green',
+      event_photo_sponsor_visibility: 'green',
+      section_bg: 'purple',
+      sponsor_logo_1: 'orange',
+      sponsor_logo_2: 'orange',
+      sponsor_logo_3: 'orange',
+      sponsor_logo_4: 'orange',
+      sponsor_logo_5: 'orange',
+      sponsor_logo_6: 'orange',
       promo_sample: 'blue',
-      voting_screenshot: 'purple',
+      voting_screenshot: 'cyan',
       event_photo: 'green',
-      testimonial: 'orange'
+      testimonial: 'amber'
     };
     return colors[type] || 'gray';
   };
@@ -196,6 +246,10 @@ const SponsorshipMediaLibrary = () => {
     );
   }
 
+  const requiredCount = requiredAssets.filter(a => a.required).length;
+  const uploadedCount = requiredAssets.filter(a => a.required && getAssetStatus(a.type)).length;
+  const completionPercentage = Math.round((uploadedCount / requiredCount) * 100);
+
   return (
     <Box>
       {error && (
@@ -206,14 +260,110 @@ const SponsorshipMediaLibrary = () => {
 
       <Flex justify="between" align="center" mb="4">
         <Box>
-          <Heading size="5">Media Library</Heading>
+          <Heading size="5">Sponsorship SPA Assets</Heading>
           <Text size="2" color="gray">
-            Upload visual samples to showcase in sponsorship proposals
+            Required media for the sponsorship platform
           </Text>
         </Box>
         <Button onClick={handleOpenDialog}>
           <PlusIcon /> Upload Media
         </Button>
+      </Flex>
+
+      {/* Required Assets Checklist */}
+      <Card mb="6">
+        <Flex direction="column" gap="3">
+          <Flex justify="between" align="center">
+            <Heading size="4">Required Assets ({uploadedCount}/{requiredCount})</Heading>
+            <Badge size="2" color={completionPercentage === 100 ? 'green' : 'orange'}>
+              {completionPercentage}% Complete
+            </Badge>
+          </Flex>
+
+          {completionPercentage < 100 && (
+            <Progress value={completionPercentage} />
+          )}
+
+          <Grid columns={{ initial: '1', md: '2' }} gap="3">
+            {requiredAssets.map((asset) => {
+              const uploaded = getAssetStatus(asset.type);
+              return (
+                <Card
+                  key={asset.type}
+                  style={{
+                    background: uploaded ? 'var(--green-3)' : 'var(--gray-3)',
+                    border: uploaded ? '1px solid var(--green-6)' : '1px solid var(--gray-6)'
+                  }}
+                >
+                  <Flex gap="3" align="center">
+                    {uploaded ? (
+                      <Box style={{
+                        width: '60px',
+                        height: '60px',
+                        borderRadius: '4px',
+                        overflow: 'hidden'
+                      }}>
+                        <img
+                          src={uploaded.url}
+                          alt={asset.label}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                      </Box>
+                    ) : (
+                      <Flex
+                        align="center"
+                        justify="center"
+                        style={{
+                          width: '60px',
+                          height: '60px',
+                          background: 'var(--gray-5)',
+                          borderRadius: '4px'
+                        }}
+                      >
+                        <ImageIcon color="var(--gray-9)" />
+                      </Flex>
+                    )}
+                    <Flex direction="column" gap="1" style={{ flex: 1 }}>
+                      <Flex justify="between" align="center">
+                        <Text size="2" weight="bold">{asset.label}</Text>
+                        {uploaded ? (
+                          <Badge size="1" color="green">✓ Uploaded</Badge>
+                        ) : (
+                          <Badge size="1" color={asset.required ? 'red' : 'gray'}>
+                            {asset.required ? 'Required' : 'Optional'}
+                          </Badge>
+                        )}
+                      </Flex>
+                      <Text size="1" color="gray">{asset.resolution}</Text>
+                      {uploaded && (
+                        <Button
+                          size="1"
+                          variant="soft"
+                          color="blue"
+                          onClick={() => {
+                            navigator.clipboard.writeText(uploaded.url);
+                          }}
+                        >
+                          Copy URL
+                        </Button>
+                      )}
+                    </Flex>
+                  </Flex>
+                </Card>
+              );
+            })}
+          </Grid>
+        </Flex>
+      </Card>
+
+      {/* All Media Library */}
+      <Flex justify="between" align="center" mb="4">
+        <Box>
+          <Heading size="5">All Media</Heading>
+          <Text size="2" color="gray">
+            All uploaded media including additional assets
+          </Text>
+        </Box>
       </Flex>
 
       {media.length === 0 ? (

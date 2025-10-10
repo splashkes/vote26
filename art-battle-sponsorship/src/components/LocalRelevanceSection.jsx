@@ -11,12 +11,20 @@ const LocalRelevanceSection = ({ inviteData }) => {
     year: 'numeric'
   });
 
-  // Placeholder photos with labels
+  // Convert media array to map
+  const mediaMap = {};
+  inviteData?.media?.forEach(item => {
+    mediaMap[item.media_type] = item.url;
+  });
+
+  const sectionBg = mediaMap.section_bg || 'https://picsum.photos/1920/1080?random=2';
+
+  // Event photos with labels
   const eventPhotos = [
-    { url: 'https://picsum.photos/400/300?random=10', label: 'Packed Venue' },
-    { url: 'https://picsum.photos/400/300?random=11', label: 'Live Painting' },
-    { url: 'https://picsum.photos/400/300?random=12', label: 'Audience Engagement' },
-    { url: 'https://picsum.photos/400/300?random=13', label: 'Sponsor Visibility' }
+    { url: mediaMap.event_photo_packed_venue || 'https://picsum.photos/400/300?random=10', label: 'Packed Venue' },
+    { url: mediaMap.event_photo_live_painting || 'https://picsum.photos/400/300?random=11', label: 'Live Painting' },
+    { url: mediaMap.event_photo_audience_engagement || 'https://picsum.photos/400/300?random=12', label: 'Audience Engagement' },
+    { url: mediaMap.event_photo_sponsor_visibility || 'https://picsum.photos/400/300?random=13', label: 'Sponsor Visibility' }
   ];
 
   return (
@@ -28,7 +36,7 @@ const LocalRelevanceSection = ({ inviteData }) => {
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundImage: 'url(https://picsum.photos/1920/1080?random=2)',
+        backgroundImage: `url(${sectionBg})`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         filter: 'brightness(0.3)',

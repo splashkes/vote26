@@ -243,36 +243,51 @@ export async function deleteSponsorshipMedia(id) {
 }
 
 /**
- * Upload media to CloudFlare (via edge function)
+ * Upload media to CloudFlare (via CF Worker - same as used for artist images)
  */
 export async function uploadSponsorshipMediaFile(file, eventId, mediaType, metadata = {}) {
+  if (!file || !file.type.startsWith('image/')) {
+    return { success: false, error: 'Please select a valid image file' };
+  }
+
   try {
-    // Read file as base64
-    const reader = new FileReader();
-    const fileData = await new Promise((resolve, reject) => {
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
+    // Get current session for authentication
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      return { success: false, error: 'No active session' };
+    }
+
+    // Resize image before upload
+    const resizedFile = await resizeImage(file, 1920, 1920, 0.85);
+
+    // Upload to Cloudflare Worker
+    const formData = new FormData();
+    formData.append('file', resizedFile);
+
+    const workerUrl = 'https://art-battle-image-upload-production.simon-867.workers.dev';
+    const uploadResponse = await fetch(workerUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'X-Upload-Source': 'sponsorship_media'
+      },
+      body: formData
     });
 
-    // Call edge function
-    const { data, error } = await supabase.functions.invoke('sponsorship-upload-media', {
-      body: {
-        fileData,
-        fileName: file.name,
-        fileType: file.type,
-        eventId,
-        mediaType,
-        metadata
-      }
-    });
+    if (!uploadResponse.ok) {
+      const errorText = await uploadResponse.text();
+      throw new Error(`Upload failed: ${errorText}`);
+    }
 
-    if (error) throw error;
+    const uploadResult = await uploadResponse.json();
+
+    // Construct Cloudflare image URL
+    const imageUrl = `https://imagedelivery.net/IGZfH_Pl-6S6csykNnXNJw/${uploadResult.id}/public`;
 
     return {
       success: true,
-      imageUrl: data.imageUrl,
-      cloudflareId: data.cloudflareId
+      imageUrl,
+      cloudflareId: uploadResult.id
     };
   } catch (err) {
     console.error('Error uploading sponsorship media:', err);
@@ -281,6 +296,56 @@ export async function uploadSponsorshipMediaFile(file, eventId, mediaType, metad
       error: err.message
     };
   }
+}
+
+/**
+ * Resize image client-side before upload
+ */
+function resizeImage(file, maxWidth = 1920, maxHeight = 1920, quality = 0.85) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        // Calculate new dimensions
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob((blob) => {
+          if (blob) {
+            resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+          } else {
+            reject(new Error('Failed to resize image'));
+          }
+        }, 'image/jpeg', quality);
+      };
+      img.onerror = () => reject(new Error('Failed to load image'));
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsDataURL(file);
+  });
 }
 
 // =====================================================
