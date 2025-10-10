@@ -20,6 +20,8 @@ const HeroSection = ({ inviteData }) => {
     }
   }
 
+  console.log('🎨 Sponsor logos found:', sponsorLogoUrls.length, sponsorLogoUrls);
+
   // Get prospect name or company
   const prospectDisplay = inviteData?.prospect_company || inviteData?.prospect_name || '';
 
@@ -109,13 +111,15 @@ const HeroSection = ({ inviteData }) => {
 
             {/* Expiration Warning */}
             {expirationStatus && (
-              <Callout.Root color={expirationStatus.color} size="3" style={{ maxWidth: '600px', width: '100%', textAlign: 'center' }}>
-                <Callout.Icon>
-                  <expirationStatus.icon width="20" height="20" />
-                </Callout.Icon>
-                <Callout.Text size="3" weight="bold">
-                  {expirationStatus.message}
-                </Callout.Text>
+              <Callout.Root color={expirationStatus.color} size="3" style={{ maxWidth: '600px', width: '100%' }}>
+                <Flex align="center" justify="center" gap="2" style={{ width: '100%' }}>
+                  <Callout.Icon>
+                    <expirationStatus.icon width="20" height="20" />
+                  </Callout.Icon>
+                  <Callout.Text size="3" weight="bold">
+                    {expirationStatus.message}
+                  </Callout.Text>
+                </Flex>
               </Callout.Root>
             )}
 
@@ -182,57 +186,70 @@ const HeroSection = ({ inviteData }) => {
               </Box>
             </Flex>
 
-            {/* Scroll Indicator */}
-            <Text size="2" style={{ color: 'rgba(255,255,255,0.6)', marginTop: '0.5rem' }}>
-              ↓ Scroll to learn more
-            </Text>
+            {/* Sponsor Logos - Clean Transparent Display */}
+            {sponsorLogoUrls.length > 0 && (
+              <>
+                <Box style={{
+                  width: '100%',
+                  height: '1px',
+                  background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)',
+                  margin: '2rem 0 1.5rem 0'
+                }} />
+
+                <Flex direction="column" gap="4" align="center" style={{ width: '100%' }}>
+                  <Text size="2" weight="medium" style={{
+                    color: 'rgba(255,255,255,0.5)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.15em',
+                    fontSize: '11px'
+                  }}>
+                    Trusted by Leading Brands
+                  </Text>
+
+                  <Flex gap="6" wrap="wrap" justify="center" align="center" style={{ maxWidth: '900px' }}>
+                    {sponsorLogoUrls.map((logoUrl, idx) => {
+                      // Use CloudFlare flexible variants for optimized sizing
+                      const optimizedUrl = logoUrl.replace('/public', '/w=280,h=120,fit=scale-down');
+
+                      return (
+                        <img
+                          key={idx}
+                          src={optimizedUrl}
+                          alt={`Sponsor ${idx + 1}`}
+                          style={{
+                            maxHeight: '120px',
+                            maxWidth: '280px',
+                            width: 'auto',
+                            height: 'auto',
+                            objectFit: 'contain',
+                            display: 'block',
+                            opacity: 0.9,
+                            transition: 'opacity 0.2s ease',
+                            cursor: 'default'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.opacity = '1';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.opacity = '0.9';
+                          }}
+                        />
+                      );
+                    })}
+                  </Flex>
+                </Flex>
+
+                <Box style={{
+                  width: '100%',
+                  height: '1px',
+                  background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)',
+                  margin: '1.5rem 0 1rem 0'
+                }} />
+              </>
+            )}
           </Flex>
         </Container>
       </Box>
-
-      {/* Sponsor Logo Banner */}
-      {sponsorLogoUrls.length > 0 && (
-        <Box style={{
-          background: 'var(--gray-2)',
-          borderTop: '1px solid var(--gray-6)',
-          borderBottom: '1px solid var(--gray-6)',
-          padding: '1.5rem 1rem'
-        }}>
-          <Container size="4" px="4">
-            <Flex direction="column" gap="3" align="center">
-              <Text size="2" weight="bold" style={{ color: 'var(--gray-11)' }}>
-                TRUSTED BY LEADING BRANDS
-              </Text>
-              <Flex gap="6" wrap="wrap" justify="center" align="center">
-                {sponsorLogoUrls.map((logoUrl, idx) => (
-                  <Box
-                    key={idx}
-                    style={{
-                      padding: '0.75rem 1.5rem',
-                      background: 'var(--gray-3)',
-                      borderRadius: '6px',
-                      border: '1px solid var(--gray-6)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}
-                  >
-                    <img
-                      src={logoUrl}
-                      alt={`Sponsor ${idx + 1}`}
-                      style={{
-                        maxHeight: '40px',
-                        maxWidth: '120px',
-                        objectFit: 'contain'
-                      }}
-                    />
-                  </Box>
-                ))}
-              </Flex>
-            </Flex>
-          </Container>
-        </Box>
-      )}
     </Box>
   );
 };

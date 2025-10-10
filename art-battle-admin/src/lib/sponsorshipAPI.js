@@ -300,6 +300,7 @@ export async function uploadSponsorshipMediaFile(file, eventId, mediaType, metad
 
 /**
  * Resize image client-side before upload
+ * Preserves PNG transparency for logos
  */
 function resizeImage(file, maxWidth = 1920, maxHeight = 1920, quality = 0.85) {
   return new Promise((resolve, reject) => {
@@ -328,17 +329,29 @@ function resizeImage(file, maxWidth = 1920, maxHeight = 1920, quality = 0.85) {
         canvas.height = height;
 
         const ctx = canvas.getContext('2d');
-        ctx.fillStyle = 'white';
-        ctx.fillRect(0, 0, width, height);
+
+        // Determine if PNG based on file type
+        const isPNG = file.type === 'image/png';
+
+        // Only fill white background for non-PNG images (JPEG, etc.)
+        if (!isPNG) {
+          ctx.fillStyle = 'white';
+          ctx.fillRect(0, 0, width, height);
+        }
+
         ctx.drawImage(img, 0, 0, width, height);
+
+        // Use PNG format for PNG files to preserve transparency
+        const outputFormat = isPNG ? 'image/png' : 'image/jpeg';
+        const outputQuality = isPNG ? 1.0 : quality; // PNG doesn't use quality param
 
         canvas.toBlob((blob) => {
           if (blob) {
-            resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+            resolve(new File([blob], file.name, { type: outputFormat }));
           } else {
             reject(new Error('Failed to resize image'));
           }
-        }, 'image/jpeg', quality);
+        }, outputFormat, outputQuality);
       };
       img.onerror = () => reject(new Error('Failed to load image'));
       img.src = e.target.result;

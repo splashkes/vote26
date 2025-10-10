@@ -303,7 +303,7 @@ const CityDetail = () => {
           <Card>
             <Box p="6" style={{ textAlign: 'center' }}>
               <Text size="3" color="gray" mb="2" style={{ display: 'block' }}>
-                No events found in the last 2 years
+                No events found since 2018
               </Text>
             </Box>
           </Card>

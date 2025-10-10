@@ -176,7 +176,10 @@ const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack, invite
                     </Box>
 
                     {/* Pricing */}
-                    <Box>
+                    <Flex justify="end" align="end" direction="column" gap="1">
+                      <Text size="1" weight="medium" style={{ color: 'var(--gray-11)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        {pkg.currency || 'USD'}
+                      </Text>
                       {hasDiscount ? (
                         <Flex align="baseline" gap="2">
                           <Heading size="7">${formatCurrency(discountedPrice)}</Heading>
@@ -193,10 +196,7 @@ const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack, invite
                       ) : (
                         <Heading size="7">${formatCurrency(originalPrice)}</Heading>
                       )}
-                      <Text size="2" style={{ color: 'var(--gray-11)' }}>
-                        {pkg.currency || 'USD'}
-                      </Text>
-                    </Box>
+                    </Flex>
 
                     {/* Spacer */}
                     <Box style={{ flex: 1 }} />

@@ -2765,6 +2765,32 @@ The Art Battle Team`);
                 </Flex>
               )}
 
+              {/* Advances To Information */}
+              {event.advances_to_event_eid && (
+                <Flex gap="2" wrap="wrap" align="center">
+                  <Text size="2">Advances To:</Text>
+                  <Text size="2" weight="bold" color="blue" style={{ cursor: 'pointer' }}
+                    onClick={() => {
+                      // Find the event by EID and navigate to it
+                      fetch(`${supabase.supabaseUrl}/rest/v1/events?eid=eq.${event.advances_to_event_eid}&select=id`, {
+                        headers: {
+                          'apikey': supabase.supabaseKey,
+                          'Authorization': `Bearer ${supabase.supabaseKey}`
+                        }
+                      })
+                      .then(res => res.json())
+                      .then(data => {
+                        if (data && data[0]) {
+                          navigate(`/events/${data[0].id}`);
+                        }
+                      });
+                    }}
+                  >
+                    {event.advances_to_event_eid}
+                  </Text>
+                </Flex>
+              )}
+
               <Separator size="4" />
 
               {/* Details Grid */}

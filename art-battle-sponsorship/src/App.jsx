@@ -112,6 +112,9 @@ function App() {
     setHash(hashFromUrl);
     loadInvite(hashFromUrl);
 
+    // Push initial landing state for browser history
+    window.history.replaceState({ step: 'landing' }, '', window.location.href);
+
     // Handle browser back/forward buttons
     const handlePopState = (event) => {
       if (event.state) {

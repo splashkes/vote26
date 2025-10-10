@@ -61,7 +61,8 @@ const CreateEvent = () => {
     artist_auction_portion: 0.5,
     winner_prize: '',
     winner_prize_currency: '',
-    other_prizes: ''
+    other_prizes: '',
+    advances_to_event_eid: ''
   });
 
   useEffect(() => {
@@ -232,7 +233,8 @@ const CreateEvent = () => {
           artist_auction_portion: eventData.artist_auction_portion || 0.5,
           winner_prize: eventData.winner_prize || '',
           winner_prize_currency: eventData.winner_prize_currency || '',
-          other_prizes: eventData.other_prizes || ''
+          other_prizes: eventData.other_prizes || '',
+          advances_to_event_eid: eventData.advances_to_event_eid || ''
         };
 
         console.log('Setting form data:', {
@@ -309,7 +311,8 @@ const CreateEvent = () => {
         expected_number_of_rounds: formData.expected_number_of_rounds ? parseInt(formData.expected_number_of_rounds) : null,
         winner_prize: formData.winner_prize ? parseFloat(formData.winner_prize) : null,
         winner_prize_currency: formData.winner_prize_currency || null,
-        other_prizes: formData.other_prizes || null
+        other_prizes: formData.other_prizes || null,
+        advances_to_event_eid: formData.advances_to_event_eid || null
       };
 
       // Only include venue_id if venues dropdown was opened/interacted with
@@ -933,6 +936,26 @@ const CreateEvent = () => {
                           />
                           <Text size="2" color="gray" mt="1" style={{ display: 'block' }}>
                             Describe other prizes (runner-up, people's choice, etc.)
+                          </Text>
+                        </Box>
+
+                        <Box>
+                          <Text as="label" size="2" weight="medium" mb="1" style={{ display: 'block' }}>
+                            Advances To Event
+                          </Text>
+                          <TextField.Root
+                            placeholder="e.g., AB2950 - Enter EID of the next event"
+                            value={formData.advances_to_event_eid}
+                            onChange={(e) => {
+                              const value = e.target.value.toUpperCase();
+                              handleInputChange('advances_to_event_eid', value);
+                            }}
+                            style={{
+                              fontFamily: 'monospace'
+                            }}
+                          />
+                          <Text size="2" color="gray" mt="1" style={{ display: 'block' }}>
+                            Optional. Enter the Event ID (EID) that winners from this event advance to (e.g., regional winners advance to nationals). Must be a valid existing event EID.
                           </Text>
                         </Box>
                       </Flex>
