@@ -62,18 +62,10 @@ const LocalRelevanceSection = ({ inviteData }) => {
 
       <Container size="4" px="4" style={{ position: 'relative', zIndex: 2 }}>
         <Flex direction="column" gap="6">
-          {/* Personalized Prospect/Company Name */}
-          {prospectDisplay && (
-            <Box style={{ textAlign: 'center' }}>
-              <Heading size="6" style={{ color: 'white', marginBottom: '1rem' }}>
-                {prospectDisplay}
-              </Heading>
-            </Box>
-          )}
-
-          {/* Main Headline */}
+          {/* Main Headline with Personalized Company Name */}
           <Box style={{ textAlign: 'center' }}>
             <Heading size="8" mb="2">
+              {prospectDisplay && <>{prospectDisplay}, </>}
               {inviteData.event_city} art lovers will know your brand!
             </Heading>
             <Text size="4" style={{ color: 'var(--gray-11)' }}>
