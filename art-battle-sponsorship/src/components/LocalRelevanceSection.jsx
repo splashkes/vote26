@@ -65,7 +65,7 @@ const LocalRelevanceSection = ({ inviteData }) => {
           {/* Main Headline with Personalized Company Name */}
           <Box style={{ textAlign: 'center' }}>
             <Heading size="8" mb="2">
-              {prospectDisplay && <>{prospectDisplay}, </>}
+              {prospectDisplay && <>{prospectDisplay},<br /></>}
               {inviteData.event_city} art lovers will know your brand!
             </Heading>
             <Text size="4" style={{ color: 'var(--gray-11)' }}>
