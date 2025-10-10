@@ -4,14 +4,16 @@ import { ChevronLeftIcon, CheckIcon } from '@radix-ui/react-icons';
 const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack, inviteData }) => {
   if (!packages) return null;
 
-  // Filter packages based on tier
+  // Filter packages based on tier category
   const filteredPackages = packages.filter(pkg => {
-    const price = pkg.base_price;
-    if (tier === 'premium') {
-      return price >= 300 && !pkg.is_addon;
-    } else {
-      return price < 300 && !pkg.is_addon;
+    if (tier === 'personal') {
+      return pkg.category === 'personal' && !pkg.is_addon;
+    } else if (tier === 'brand') {
+      return pkg.category === 'brand' && !pkg.is_addon;
+    } else if (tier === 'business') {
+      return pkg.category === 'business' && !pkg.is_addon;
     }
+    return false;
   });
 
   // Get prospect name for personalization
@@ -72,9 +74,11 @@ const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack, invite
             />
             <Box style={{ textAlign: 'center' }}>
               <Heading size="7">
-                {tier === 'premium'
-                  ? `Premium ${inviteData?.event_city || ''} Packages`
-                  : `Targeted ${inviteData?.event_city || ''} Packages`}
+                {tier === 'personal'
+                  ? `Personal ${inviteData?.event_city || ''} Packages`
+                  : tier === 'brand'
+                  ? `Brand ${inviteData?.event_city || ''} Packages`
+                  : `Business ${inviteData?.event_city || ''} Packages`}
               </Heading>
               {discountPercent > 0 && (
                 <Badge size="2" color="green" style={{ marginTop: '0.5rem' }}>
