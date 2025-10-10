@@ -200,9 +200,9 @@ const LocalRelevanceSection = ({ inviteData }) => {
                       <Text key={i} style={{ color: '#FFD700', fontSize: '14px' }}>★</Text>
                     ))}
                   </Flex>
-                  <Text size="3" weight="bold">"As a craft brewery, we're always looking for ways to connect with the creative community. Art Battle gave us exactly that - our logo was everywhere and people loved the partnership. Already planning our next one."</Text>
+                  <Text size="3" weight="bold">"Thanks for the great event and allowing us to join in on the fun!"</Text>
                   <Text size="2" style={{ color: 'var(--gray-11)' }}>
-                    — Mike Rodriguez, Raven's Nest Brewing, Portland
+                    — Alex King, Brand Manager, Sharpie, Newell Brands
                   </Text>
                 </Flex>
               </Card>
