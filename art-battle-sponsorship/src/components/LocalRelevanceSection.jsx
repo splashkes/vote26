@@ -19,6 +19,9 @@ const LocalRelevanceSection = ({ inviteData }) => {
 
   const sectionBg = mediaMap.section_bg || 'https://picsum.photos/1920/1080?random=2';
 
+  // Get prospect name or company for display above headline
+  const prospectDisplay = inviteData?.prospect_company || inviteData?.prospect_name || '';
+
   // Event photos with labels
   const eventPhotos = [
     { url: mediaMap.event_photo_packed_venue || 'https://picsum.photos/400/300?random=10', label: 'Packed Venue' },
@@ -28,7 +31,7 @@ const LocalRelevanceSection = ({ inviteData }) => {
   ];
 
   return (
-    <Box py="9" style={{ position: 'relative', padding: '3rem 1rem', overflow: 'hidden' }}>
+    <Box style={{ position: 'relative', padding: '3rem 1rem', overflow: 'hidden' }}>
       {/* Background Image */}
       <Box style={{
         position: 'absolute',
@@ -59,6 +62,15 @@ const LocalRelevanceSection = ({ inviteData }) => {
 
       <Container size="4" px="4" style={{ position: 'relative', zIndex: 2 }}>
         <Flex direction="column" gap="6">
+          {/* Personalized Prospect/Company Name */}
+          {prospectDisplay && (
+            <Box style={{ textAlign: 'center' }}>
+              <Heading size="6" style={{ color: 'white', marginBottom: '1rem' }}>
+                {prospectDisplay}
+              </Heading>
+            </Box>
+          )}
+
           {/* Main Headline */}
           <Box style={{ textAlign: 'center' }}>
             <Heading size="8" mb="2">

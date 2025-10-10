@@ -53,7 +53,7 @@ const HeroSection = ({ inviteData }) => {
   const expirationStatus = getExpirationStatus();
 
   return (
-    <Box style={{ position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+    <Box style={{ position: 'relative', overflow: 'hidden', minHeight: 0 }}>
       {/* Background Image with Combined Overlays */}
       <Box style={{
         position: 'absolute',
@@ -64,10 +64,12 @@ const HeroSection = ({ inviteData }) => {
         backgroundImage: `url(${heroBg})`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
         filter: 'brightness(0.4)',
         transform: 'translate3d(0,0,0)',
         willChange: 'transform',
-        zIndex: 0
+        zIndex: 0,
+        pointerEvents: 'none'
       }} />
 
       {/* Combined Gradient Overlays (single layer for performance) */}
@@ -88,7 +90,7 @@ const HeroSection = ({ inviteData }) => {
         padding: '0 1rem',
         zIndex: 2
       }}>
-        <Container size="4" py="6" px="4">
+        <Container size="4" py="6" px="4" style={{ paddingBottom: 0 }}>
           <Flex direction="column" align="center" gap="4" style={{ textAlign: 'center' }}>
             {/* Art Battle Logo */}
             <img
@@ -181,13 +183,6 @@ const HeroSection = ({ inviteData }) => {
             <Text size="2" style={{ color: 'rgba(255,255,255,0.6)', marginTop: '0.5rem' }}>
               ↓ Scroll to learn more
             </Text>
-
-            {/* Personalized Prospect/Company Name */}
-            {prospectDisplay && (
-              <Heading size="6" style={{ color: 'white', marginTop: '0.25rem', textAlign: 'center' }}>
-                {prospectDisplay}
-              </Heading>
-            )}
           </Flex>
         </Container>
       </Box>
