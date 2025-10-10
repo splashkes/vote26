@@ -130,7 +130,7 @@ const LocalRelevanceSection = ({ inviteData }) => {
           {/* Photo Grid */}
           <Box>
             <Heading size="5" mb="4">Art Battle in {inviteData.event_city}</Heading>
-            <Grid columns="4" gap="3">
+            <Grid columns={{ initial: '2', md: '4' }} gap="3">
               {eventPhotos.map((photo, idx) => (
                 <Box
                   key={idx}

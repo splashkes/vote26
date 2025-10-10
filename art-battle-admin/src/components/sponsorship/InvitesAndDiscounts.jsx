@@ -15,7 +15,8 @@ import {
   Select,
   Spinner,
   IconButton,
-  Grid
+  Grid,
+  Checkbox
 } from '@radix-ui/themes';
 import {
   ChevronRightIcon,
@@ -61,7 +62,8 @@ const InvitesAndDiscounts = () => {
     prospectCompany: '',
     discountPercent: 0,
     validUntil: '',
-    notes: ''
+    notes: '',
+    multiEventEnabled: true
   });
   const [generatingInvite, setGeneratingInvite] = useState(false);
   const [generatedLink, setGeneratedLink] = useState(null);
@@ -225,7 +227,8 @@ const InvitesAndDiscounts = () => {
         prospectCompany: inviteForm.prospectCompany,
         discountPercent: parseFloat(inviteForm.discountPercent) || 0,
         validUntil: inviteForm.validUntil ? new Date(inviteForm.validUntil).toISOString() : null,
-        notes: inviteForm.notes
+        notes: inviteForm.notes,
+        multiEventEnabled: inviteForm.multiEventEnabled
       });
 
       if (error) throw new Error(error);
@@ -268,7 +271,8 @@ const InvitesAndDiscounts = () => {
       prospectCompany: '',
       discountPercent: 0,
       validUntil: '',
-      notes: ''
+      notes: '',
+      multiEventEnabled: true
     });
   };
 
@@ -383,115 +387,135 @@ const InvitesAndDiscounts = () => {
                     Set prices for sponsorship packages in this city. These will be the default prices shown to prospects.
                   </Text>
 
-                  <Box>
-                    {templates.map(template => {
-                      const priceData = cityPrices[template.id] || {};
-                      const hasPricing = priceData.price && parseFloat(priceData.price) > 0;
-                      const isExpanded = expandedBenefits === template.id;
-                      const benefits = template.benefits || [];
-                      const benefitsCount = benefits.length;
+                  <Flex justify="center" style={{ width: '100%' }}>
+                    <Box style={{ width: '100%', maxWidth: '700px' }}>
+                      {templates.map(template => {
+                        const priceData = cityPrices[template.id] || {};
+                        const hasPricing = priceData.price && parseFloat(priceData.price) > 0;
+                        const isExpanded = expandedBenefits === template.id;
+                        const benefits = template.benefits || [];
+                        const benefitsCount = benefits.length;
+                        const description = template.description || '';
 
-                      return (
-                        <Card key={template.id} mb="3">
-                          <Flex direction="column" gap="3">
-                            {/* Main Row */}
-                            <Flex justify="between" align="start" gap="3">
-                              {/* Package Info */}
-                              <Box style={{ flex: 1 }}>
-                                <Flex align="center" gap="2" mb="1">
-                                  <Text weight="bold" size="3">{template.name}</Text>
-                                  <Badge size="1" color={template.category === 'main' ? 'blue' : 'orange'}>
-                                    {template.category === 'main' ? 'Package' : 'Add-on'}
-                                  </Badge>
-                                  {hasPricing && <CheckIcon color="green" />}
-                                </Flex>
+                        return (
+                          <Card key={template.id} mb="3">
+                            <Flex direction="column" gap="3">
+                              {/* Main Row */}
+                              <Flex justify="between" align="start" gap="3">
+                                {/* Package Info */}
+                                <Box style={{ flex: 1 }}>
+                                  <Flex align="center" gap="2" mb="1">
+                                    <Text weight="bold" size="3">{template.name}</Text>
+                                    <Badge size="1" color={template.category === 'main' ? 'blue' : 'orange'}>
+                                      {template.category === 'main' ? 'Package' : 'Add-on'}
+                                    </Badge>
+                                    {hasPricing && <CheckIcon color="green" />}
+                                  </Flex>
 
-                                {/* Benefits Summary */}
-                                {benefitsCount > 0 && (
-                                  <Button
-                                    variant="ghost"
-                                    size="1"
-                                    onClick={() => toggleBenefits(template.id)}
-                                    style={{ padding: '4px 8px', height: 'auto' }}
-                                  >
-                                    <Flex align="center" gap="1">
-                                      {isExpanded ? <ChevronUpIcon /> : <ChevronDownIcon />}
-                                      <Text size="2" color="gray">
-                                        {benefitsCount} benefit{benefitsCount !== 1 ? 's' : ''}
-                                      </Text>
-                                    </Flex>
-                                  </Button>
-                                )}
-                              </Box>
-
-                              {/* Price Input */}
-                              <Flex gap="2" align="center">
-                                <Box style={{ width: '150px' }}>
-                                  <TextField.Root
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    value={priceData.price || ''}
-                                    onChange={(e) => handlePriceChange(template.id, 'price', e.target.value)}
-                                    placeholder="0.00"
-                                    size="2"
-                                  />
-                                </Box>
-
-                                {/* Currency Select */}
-                                <Box style={{ width: '120px' }}>
-                                  <Select.Root
-                                    value={priceData.currency || 'USD'}
-                                    onValueChange={(value) => handlePriceChange(template.id, 'currency', value)}
-                                    size="2"
-                                  >
-                                    <Select.Trigger style={{ width: '100%' }} />
-                                    <Select.Content>
-                                      <Select.Item value="USD">USD</Select.Item>
-                                      <Select.Item value="CAD">CAD</Select.Item>
-                                      <Select.Item value="EUR">EUR</Select.Item>
-                                      <Select.Item value="GBP">GBP</Select.Item>
-                                      <Select.Item value="AUD">AUD</Select.Item>
-                                    </Select.Content>
-                                  </Select.Root>
-                                </Box>
-                              </Flex>
-                            </Flex>
-
-                            {/* Expanded Benefits List */}
-                            {isExpanded && benefitsCount > 0 && (
-                              <Box
-                                p="3"
-                                style={{
-                                  backgroundColor: 'var(--gray-2)',
-                                  borderRadius: '6px',
-                                  borderLeft: '3px solid var(--blue-9)'
-                                }}
-                              >
-                                <Text size="2" weight="bold" mb="2" style={{ display: 'block' }}>
-                                  Benefits:
-                                </Text>
-                                <Flex direction="column" gap="2">
-                                  {benefits.map((benefit, idx) => (
-                                    <Flex key={idx} align="start" gap="2">
-                                      <CheckIcon
+                                  {/* Description with justified text */}
+                                  {description && (
+                                    <Box mb="2">
+                                      <Text
+                                        size="2"
+                                        color="gray"
                                         style={{
-                                          marginTop: '2px',
-                                          flexShrink: 0,
-                                          color: 'var(--green-9)'
+                                          textAlign: 'justify',
+                                          textAlignLast: 'left',
+                                          lineHeight: '1.5'
                                         }}
-                                      />
-                                      <Text size="2">{benefit}</Text>
-                                    </Flex>
-                                  ))}
+                                      >
+                                        {description}
+                                      </Text>
+                                    </Box>
+                                  )}
+
+                                  {/* Benefits Summary */}
+                                  {benefitsCount > 0 && (
+                                    <Button
+                                      variant="ghost"
+                                      size="1"
+                                      onClick={() => toggleBenefits(template.id)}
+                                      style={{ padding: '4px 8px', height: 'auto' }}
+                                    >
+                                      <Flex align="center" gap="1">
+                                        {isExpanded ? <ChevronUpIcon /> : <ChevronDownIcon />}
+                                        <Text size="2" color="gray">
+                                          {benefitsCount} benefit{benefitsCount !== 1 ? 's' : ''}
+                                        </Text>
+                                      </Flex>
+                                    </Button>
+                                  )}
+                                </Box>
+
+                                {/* Price Input */}
+                                <Flex gap="2" align="center">
+                                  <Box style={{ width: '150px' }}>
+                                    <TextField.Root
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      value={priceData.price || ''}
+                                      onChange={(e) => handlePriceChange(template.id, 'price', e.target.value)}
+                                      placeholder="0.00"
+                                      size="2"
+                                    />
+                                  </Box>
+
+                                  {/* Currency Select */}
+                                  <Box style={{ width: '120px' }}>
+                                    <Select.Root
+                                      value={priceData.currency || 'USD'}
+                                      onValueChange={(value) => handlePriceChange(template.id, 'currency', value)}
+                                      size="2"
+                                    >
+                                      <Select.Trigger style={{ width: '100%' }} />
+                                      <Select.Content>
+                                        <Select.Item value="USD">USD</Select.Item>
+                                        <Select.Item value="CAD">CAD</Select.Item>
+                                        <Select.Item value="EUR">EUR</Select.Item>
+                                        <Select.Item value="GBP">GBP</Select.Item>
+                                        <Select.Item value="AUD">AUD</Select.Item>
+                                      </Select.Content>
+                                    </Select.Root>
+                                  </Box>
                                 </Flex>
-                              </Box>
-                            )}
-                          </Flex>
-                        </Card>
-                      );
-                    })}
-                  </Box>
+                              </Flex>
+
+                              {/* Expanded Benefits List */}
+                              {isExpanded && benefitsCount > 0 && (
+                                <Box
+                                  p="3"
+                                  style={{
+                                    backgroundColor: 'var(--gray-2)',
+                                    borderRadius: '6px',
+                                    borderLeft: '3px solid var(--blue-9)'
+                                  }}
+                                >
+                                  <Text size="2" weight="bold" mb="2" style={{ display: 'block' }}>
+                                    Benefits:
+                                  </Text>
+                                  <Flex direction="column" gap="2">
+                                    {benefits.map((benefit, idx) => (
+                                      <Flex key={idx} align="start" gap="2">
+                                        <CheckIcon
+                                          style={{
+                                            marginTop: '2px',
+                                            flexShrink: 0,
+                                            color: 'var(--green-9)'
+                                          }}
+                                        />
+                                        <Text size="2">{benefit}</Text>
+                                      </Flex>
+                                    ))}
+                                  </Flex>
+                                </Box>
+                              )}
+                            </Flex>
+                          </Card>
+                        );
+                      })}
+                    </Box>
+                  </Flex>
 
                   <Flex justify="between" align="center" mt="4">
                     <Text size="2" color="gray">
@@ -608,6 +632,24 @@ const InvitesAndDiscounts = () => {
                         placeholder="Internal notes about this prospect"
                       />
                     </Box>
+
+                    {/* Multi-Event Enable Checkbox */}
+                    <Card>
+                      <Flex align="center" gap="2">
+                        <Checkbox
+                          checked={inviteForm.multiEventEnabled}
+                          onCheckedChange={(checked) =>
+                            setInviteForm({ ...inviteForm, multiEventEnabled: checked })
+                          }
+                        />
+                        <Box>
+                          <Text size="2" weight="bold">Enable Multi-Event Stage</Text>
+                          <Text size="1" color="gray" style={{ display: 'block' }}>
+                            Allow sponsor to select from multiple events in this city
+                          </Text>
+                        </Box>
+                      </Flex>
+                    </Card>
 
                     <Button
                       onClick={handleGenerateInvite}

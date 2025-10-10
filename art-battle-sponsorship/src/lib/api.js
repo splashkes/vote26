@@ -59,48 +59,9 @@ export async function trackInteraction(hash, interactionType, packageId = null, 
   }
 }
 
-/**
- * Get city pricing for packages (for multi-event discount view)
- */
-export async function getCityPackagePricing(cityId) {
-  try {
-    const { data, error } = await supabase
-      .from('sponsorship_city_pricing')
-      .select(`
-        *,
-        sponsorship_package_templates(id, name, slug, description, benefits, category)
-      `)
-      .eq('city_id', cityId);
-
-    if (error) throw error;
-    return { data: data || [], error: null };
-  } catch (err) {
-    console.error('Error fetching city pricing:', err);
-    return { data: null, error: err.message };
-  }
-}
-
-/**
- * Get upcoming events in a city (for multi-event discount)
- */
-export async function getUpcomingEventsInCity(cityId, currentEventId) {
-  try {
-    const { data, error } = await supabase
-      .from('events')
-      .select('id, name, event_start_datetime, venue_id, venues(name)')
-      .eq('city_id', cityId)
-      .neq('id', currentEventId)
-      .gte('event_start_datetime', new Date().toISOString())
-      .order('event_start_datetime', { ascending: true })
-      .limit(10);
-
-    if (error) throw error;
-    return { data: data || [], error: null };
-  } catch (err) {
-    console.error('Error fetching upcoming events:', err);
-    return { data: null, error: err.message };
-  }
-}
+// Note: Removed direct database queries - all data fetching now done through edge functions
+// - getCityPackagePricing: Data now comes from sponsorship-invite-details edge function
+// - getUpcomingEventsInCity: Multi-event offers use placeholder events instead of real database queries
 
 /**
  * Create Stripe checkout session for sponsorship purchase

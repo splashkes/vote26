@@ -97,9 +97,16 @@ const AddonsModal = ({ open, packages, selectedPackage, discountPercent, inviteD
             <Flex direction="column" gap="2">
               <Flex justify="between" align="center">
                 <Heading size="4">{selectedPackage.name}</Heading>
-                <Heading size="5">
-                  ${formatCurrency(calculateDiscountedPrice(selectedPackage.base_price))}
-                </Heading>
+                <Flex direction="column" align="end" gap="1">
+                  {discountPercent > 0 && (
+                    <Text size="2" style={{ textDecoration: 'line-through', color: 'var(--gray-11)' }}>
+                      ${formatCurrency(selectedPackage.base_price)}
+                    </Text>
+                  )}
+                  <Heading size="5">
+                    ${formatCurrency(calculateDiscountedPrice(selectedPackage.base_price))}
+                  </Heading>
+                </Flex>
               </Flex>
 
               {/* Toggle Benefits Button */}
@@ -185,9 +192,16 @@ const AddonsModal = ({ open, packages, selectedPackage, discountPercent, inviteD
                               {addon.description}
                             </Text>
                           </Box>
-                          <Text size="4" weight="bold" style={{ marginLeft: '1rem' }}>
-                            +${formatCurrency(price)}
-                          </Text>
+                          <Flex direction="column" align="end" gap="1" style={{ marginLeft: '1rem' }}>
+                            {discountPercent > 0 && (
+                              <Text size="2" style={{ textDecoration: 'line-through', color: 'var(--gray-11)' }}>
+                                +${formatCurrency(addon.base_price)}
+                              </Text>
+                            )}
+                            <Text size="4" weight="bold">
+                              +${formatCurrency(price)}
+                            </Text>
+                          </Flex>
                         </Flex>
 
                         {/* Expandable Benefits Toggle */}

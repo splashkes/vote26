@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Theme, Container, Box, Flex, Spinner, Callout } from '@radix-ui/themes';
+import { Theme, Container, Box, Flex, Spinner, Callout, Text } from '@radix-ui/themes';
 import { getSponsorshipInvite, trackInteraction, createSponsorshipCheckout } from './lib/api';
 import HeroSection from './components/HeroSection';
 import LocalRelevanceSection from './components/LocalRelevanceSection';
@@ -23,6 +23,66 @@ function App() {
   const [selectedPackage, setSelectedPackage] = useState(null);
   const [selectedAddons, setSelectedAddons] = useState([]);
   const [multiEventSelection, setMultiEventSelection] = useState([]);
+  const [paymentCancelled, setPaymentCancelled] = useState(false);
+
+  // Check for cancelled payment on mount
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('payment') === 'cancelled') {
+      setPaymentCancelled(true);
+      // Clear the query param after showing message
+      window.history.replaceState({}, '', window.location.pathname);
+
+      // Track payment cancellation
+      if (hash) {
+        trackInteraction(hash, 'payment_cancelled');
+      }
+    }
+  }, [hash]);
+
+  // Save state to localStorage on any selection change
+  useEffect(() => {
+    if (!hash) return;
+
+    const stateToSave = {
+      currentStep,
+      selectedTier,
+      selectedPackage,
+      selectedAddons,
+      multiEventSelection,
+      timestamp: Date.now()
+    };
+
+    localStorage.setItem(`sponsorship_flow_${hash}`, JSON.stringify(stateToSave));
+    console.log('💾 Saved state to localStorage:', stateToSave);
+  }, [hash, currentStep, selectedTier, selectedPackage, selectedAddons, multiEventSelection]);
+
+  // Restore state from localStorage after inviteData is loaded
+  useEffect(() => {
+    if (!hash || !inviteData) return;
+
+    try {
+      const savedState = localStorage.getItem(`sponsorship_flow_${hash}`);
+      if (savedState) {
+        const parsed = JSON.parse(savedState);
+        console.log('📂 Restored state from localStorage:', parsed);
+
+        // Only restore if saved within last 24 hours
+        if (parsed.timestamp && (Date.now() - parsed.timestamp < 24 * 60 * 60 * 1000)) {
+          if (parsed.currentStep) setCurrentStep(parsed.currentStep);
+          if (parsed.selectedTier) setSelectedTier(parsed.selectedTier);
+          if (parsed.selectedPackage) setSelectedPackage(parsed.selectedPackage);
+          if (parsed.selectedAddons) setSelectedAddons(parsed.selectedAddons);
+          if (parsed.multiEventSelection) setMultiEventSelection(parsed.multiEventSelection);
+        } else {
+          // Clear expired state
+          localStorage.removeItem(`sponsorship_flow_${hash}`);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to restore state from localStorage:', err);
+    }
+  }, [hash, inviteData]);
 
   useEffect(() => {
     // Extract hash from URL path
@@ -113,16 +173,32 @@ function App() {
     }
   };
 
-  const handleAddonsConfirm = (addons) => {
+  const handleAddonsConfirm = async (addons) => {
     setSelectedAddons(addons);
     setCurrentStep('multi-event');
     window.history.pushState({ step: 'multi-event', tier: selectedTier, package: selectedPackage }, '', window.location.href);
+
+    if (hash && addons.length > 0) {
+      await trackInteraction(hash, 'addon_select', null, {
+        addon_count: addons.length,
+        addon_ids: addons.map(a => a.id)
+      });
+    }
   };
 
   const handleBackToLanding = () => {
     setCurrentStep('landing');
     setSelectedTier(null);
+    setSelectedPackage(null);
+    setSelectedAddons([]);
+    setMultiEventSelection([]);
     window.history.pushState({ step: 'landing' }, '', window.location.href);
+
+    // Clear saved state since user is starting over
+    if (hash) {
+      localStorage.removeItem(`sponsorship_flow_${hash}`);
+      console.log('🗑️ Cleared saved state - user returned to landing');
+    }
   };
 
   const handleBackToSelection = () => {
@@ -152,6 +228,14 @@ function App() {
         ...selectedEvents.filter(e => !e.isPlaceholder && !e.isChampionship).map(e => e.id)
       ];
 
+      // Track event selection if multiple events were selected
+      if (hash && eventIds.length > 1) {
+        await trackInteraction(hash, 'multi_event_select', null, {
+          event_count: eventIds.length,
+          event_ids: eventIds
+        });
+      }
+
       // Create checkout session
       const { data: checkoutData, error: checkoutError } = await createSponsorshipCheckout({
         inviteHash: hash,
@@ -179,6 +263,10 @@ function App() {
           });
         }
 
+        // Clear saved flow state since they're going to Stripe
+        localStorage.removeItem(`sponsorship_flow_${hash}`);
+        console.log('🗑️ Cleared saved state - proceeding to checkout');
+
         // Store fulfillment hash in session storage for success redirect
         if (checkoutData.fulfillment_hash) {
           sessionStorage.setItem('fulfillment_hash', checkoutData.fulfillment_hash);
@@ -199,11 +287,23 @@ function App() {
   if (loading) {
     return (
       <Theme appearance="dark">
-        <Container size="1">
-          <Flex justify="center" align="center" style={{ minHeight: '100vh' }}>
+        <Flex direction="column" justify="center" align="center" style={{ minHeight: '100vh', gap: '2rem' }}>
+          <img
+            src="https://artb.tor1.cdn.digitaloceanspaces.com/images/ABWoTCirc1.png"
+            alt="Art Battle"
+            style={{
+              height: '120px',
+              width: '120px',
+              objectFit: 'contain'
+            }}
+          />
+          <Flex direction="column" align="center" gap="3">
             <Spinner size="3" />
+            <Text size="3" style={{ color: 'var(--gray-11)' }}>
+              {currentStep === 'multi-event' && inviteData ? 'Redirecting to payment...' : 'Loading...'}
+            </Text>
           </Flex>
-        </Container>
+        </Flex>
       </Theme>
     );
   }
@@ -237,57 +337,86 @@ function App() {
 
   return (
     <Theme appearance="dark">
-      <Box style={{ background: 'var(--gray-1)', minHeight: '100vh' }}>
-        {/* Landing: Hero + Local Relevance + Self-Selection */}
-        {currentStep === 'landing' && (
-          <Box style={{ maxWidth: '1400px', margin: '0 auto' }}>
-            <HeroSection inviteData={inviteData} />
-            <LocalRelevanceSection inviteData={inviteData} />
-            <SelfSelectionCTA onSelect={handleTierSelect} isExpired={isInviteExpired()} />
-          </Box>
+      <Box style={{ background: 'var(--gray-1)', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+        {/* Payment Cancelled Message */}
+        {paymentCancelled && (
+          <Container size="2" style={{ paddingTop: '2rem' }}>
+            <Callout.Root color="amber">
+              <Callout.Text>
+                Your payment was cancelled. Your selections have been saved - you can continue where you left off.
+              </Callout.Text>
+            </Callout.Root>
+          </Container>
         )}
 
-        {/* Package Selection */}
-        {currentStep === 'selection' && (
-          <Box style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 1rem' }}>
-            {console.log('📦 Rendering PackageGrid with', inviteData?.packages?.length, 'packages')}
-            <PackageGrid
+        {/* Main Content */}
+        <Box style={{ flex: 1 }}>
+          {/* Landing: Hero + Local Relevance + Self-Selection */}
+          {currentStep === 'landing' && (
+            <Box style={{ maxWidth: '1400px', margin: '0 auto' }}>
+              <HeroSection inviteData={inviteData} />
+              <LocalRelevanceSection inviteData={inviteData} />
+              <SelfSelectionCTA onSelect={handleTierSelect} isExpired={isInviteExpired()} />
+            </Box>
+          )}
+
+          {/* Package Selection */}
+          {currentStep === 'selection' && (
+            <Box style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 1rem' }}>
+              {console.log('📦 Rendering PackageGrid with', inviteData?.packages?.length, 'packages')}
+              <PackageGrid
+                packages={inviteData.packages}
+                tier={selectedTier}
+                discountPercent={inviteData.discount_percent}
+                inviteData={inviteData}
+                onSelect={handlePackageSelect}
+                onBack={handleBackToLanding}
+              />
+            </Box>
+          )}
+
+          {/* Addons Modal */}
+          {currentStep === 'addons' && (
+            <AddonsModal
+              open={true}
               packages={inviteData.packages}
-              tier={selectedTier}
-              discountPercent={inviteData.discount_percent}
-              inviteData={inviteData}
-              onSelect={handlePackageSelect}
-              onBack={handleBackToLanding}
-            />
-          </Box>
-        )}
-
-        {/* Addons Modal */}
-        {currentStep === 'addons' && (
-          <AddonsModal
-            open={true}
-            packages={inviteData.packages}
-            selectedPackage={selectedPackage}
-            discountPercent={inviteData.discount_percent}
-            inviteData={inviteData}
-            onConfirm={handleAddonsConfirm}
-            onClose={handleBackToSelection}
-          />
-        )}
-
-        {/* Multi-Event Discount Offer */}
-        {currentStep === 'multi-event' && (
-          <Box style={{ maxWidth: '1400px', margin: '0 auto' }}>
-            <MultiEventOffer
-              inviteData={inviteData}
               selectedPackage={selectedPackage}
-              selectedAddons={selectedAddons}
               discountPercent={inviteData.discount_percent}
-              onConfirm={handleCheckout}
-              onSkip={handleCheckout}
+              inviteData={inviteData}
+              onConfirm={handleAddonsConfirm}
+              onClose={handleBackToSelection}
             />
-          </Box>
-        )}
+          )}
+
+          {/* Multi-Event Discount Offer */}
+          {currentStep === 'multi-event' && (
+            <Box style={{ maxWidth: '1400px', margin: '0 auto' }}>
+              <MultiEventOffer
+                inviteData={inviteData}
+                selectedPackage={selectedPackage}
+                selectedAddons={selectedAddons}
+                discountPercent={inviteData.discount_percent}
+                onConfirm={handleCheckout}
+                onSkip={handleCheckout}
+              />
+            </Box>
+          )}
+        </Box>
+
+        {/* Footer with circular logo */}
+        <Box style={{ padding: '3rem 1rem', background: 'var(--gray-2)', borderTop: '1px solid var(--gray-6)' }}>
+          <Flex justify="center" align="center">
+            <img
+              src="https://artb.tor1.cdn.digitaloceanspaces.com/images/ABWoTCirc1.png"
+              alt="Art Battle"
+              style={{
+                height: '80px',
+                width: '80px',
+                objectFit: 'contain'
+              }}
+            />
+          </Flex>
+        </Box>
       </Box>
     </Theme>
   );

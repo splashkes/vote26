@@ -13,12 +13,10 @@ import {
   Separator
 } from '@radix-ui/themes';
 import { CalendarIcon, RocketIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon, QuestionMarkCircledIcon } from '@radix-ui/react-icons';
-import { getUpcomingEventsInCity } from '../lib/api';
 
 const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfirm, onSkip, discountPercent }) => {
   const [upcomingEvents, setUpcomingEvents] = useState([]);
   const [selectedEvents, setSelectedEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [showBenefits, setShowBenefits] = useState(false);
   const [showDiscountBreakdown, setShowDiscountBreakdown] = useState(false);
 
@@ -26,60 +24,42 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
     loadUpcomingEvents();
   }, []);
 
-  const loadUpcomingEvents = async () => {
+  const loadUpcomingEvents = () => {
     if (!inviteData.event_city) {
-      setLoading(false);
       return;
     }
 
-    let events = [];
     const currentYear = new Date().getFullYear();
     const nextYear = currentYear + 1;
     const cityName = inviteData.event_city;
 
-    // Try to fetch real events from database if we have city_id
-    if (inviteData.city_id && inviteData.event_id) {
-      try {
-        const { data, error } = await getUpcomingEventsInCity(inviteData.city_id, inviteData.event_id);
-        if (!error && data && data.length > 0) {
-          events = data;
-        }
-      } catch (err) {
-        console.error('Error loading upcoming events:', err);
+    // Use placeholder events for multi-event sponsorship selection
+    const events = [
+      {
+        id: `placeholder-${currentYear}`,
+        name: `${currentYear} Art Battle ${cityName} Regular Season Event`,
+        event_start_datetime: `${currentYear}-12-31T19:00:00`,
+        venues: null,
+        isPlaceholder: true
+      },
+      {
+        id: `placeholder-${nextYear}`,
+        name: `${nextYear} Art Battle ${cityName} Regular Season Event`,
+        event_start_datetime: `${nextYear}-12-31T19:00:00`,
+        venues: null,
+        isPlaceholder: true
+      },
+      // Championship event
+      {
+        id: `championship-${nextYear}`,
+        name: `${nextYear} ${cityName} Championship`,
+        event_start_datetime: `${nextYear}-12-31T20:00:00`,
+        venues: null,
+        isChampionship: true
       }
-    }
-
-    // If no real events found, create placeholder events
-    if (events.length === 0) {
-      events = [
-        {
-          id: `placeholder-${currentYear}`,
-          name: `${currentYear} Art Battle ${cityName} Regular Season Event`,
-          event_start_datetime: `${currentYear}-12-31T19:00:00`,
-          venues: null,
-          isPlaceholder: true
-        },
-        {
-          id: `placeholder-${nextYear}`,
-          name: `${nextYear} Art Battle ${cityName} Regular Season Event`,
-          event_start_datetime: `${nextYear}-12-31T19:00:00`,
-          venues: null,
-          isPlaceholder: true
-        }
-      ];
-    }
-
-    // Always add the Championship event at the end
-    events.push({
-      id: `championship-${nextYear}`,
-      name: `${nextYear} ${cityName} Championship`,
-      event_start_datetime: `${nextYear}-12-31T20:00:00`,
-      venues: null,
-      isChampionship: true
-    });
+    ];
 
     setUpcomingEvents(events);
-    setLoading(false);
   };
 
   const toggleEvent = (event) => {

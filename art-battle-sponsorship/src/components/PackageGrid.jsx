@@ -72,7 +72,9 @@ const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack, invite
             />
             <Box style={{ textAlign: 'center' }}>
               <Heading size="7">
-                {tier === 'premium' ? 'Premium Sponsorship Packages' : 'Targeted Sponsorship Packages'}
+                {tier === 'premium'
+                  ? `Premium ${inviteData?.event_city || ''} Packages`
+                  : `Targeted ${inviteData?.event_city || ''} Packages`}
               </Heading>
               {discountPercent > 0 && (
                 <Badge size="2" color="green" style={{ marginTop: '0.5rem' }}>
@@ -83,12 +85,12 @@ const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack, invite
           </Flex>
 
           {/* Package Cards */}
-          <Grid
-            columns={{ initial: '1', sm: '2', md: '3' }}
+          <Flex
             gap="4"
+            wrap="wrap"
+            justify="center"
             style={{
-              paddingTop: '1.5rem',
-              overflow: 'visible'
+              paddingTop: '1.5rem'
             }}
           >
             {filteredPackages.map((pkg, index) => {
@@ -106,7 +108,9 @@ const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack, invite
                     border: limitedBadge ? '2px solid var(--amber-8)' : '1px solid var(--gray-6)',
                     position: 'relative',
                     overflow: 'visible',
-                    width: '100%'
+                    width: '100%',
+                    maxWidth: '380px',
+                    flex: '1 1 300px'
                   }}
                 >
                   <Flex direction="column" gap="4" style={{ height: '100%' }}>
@@ -210,7 +214,7 @@ const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack, invite
                 </Card>
               );
             })}
-          </Grid>
+          </Flex>
 
           {/* Empty State */}
           {filteredPackages.length === 0 && (

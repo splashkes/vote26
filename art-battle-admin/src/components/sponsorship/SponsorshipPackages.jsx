@@ -4,6 +4,7 @@ import PackageTemplateList from './PackageTemplateList';
 import CityPricingManager from './CityPricingManager';
 import SponsorshipMediaLibrary from './SponsorshipMediaLibrary';
 import InvitesAndDiscounts from './InvitesAndDiscounts';
+import InviteTracking from './InviteTracking';
 
 const SponsorshipPackages = () => {
   const [loading, setLoading] = useState(true);
@@ -31,25 +32,30 @@ const SponsorshipPackages = () => {
         </Text>
       </Flex>
 
-      <Tabs.Root defaultValue="templates">
+      <Tabs.Root defaultValue="tracking">
         <Tabs.List>
+          <Tabs.Trigger value="tracking">Invite Tracking</Tabs.Trigger>
+          <Tabs.Trigger value="invites">Create Invites</Tabs.Trigger>
           <Tabs.Trigger value="templates">Package Templates</Tabs.Trigger>
           <Tabs.Trigger value="pricing">City Pricing</Tabs.Trigger>
-          <Tabs.Trigger value="invites">Invites & Discounts</Tabs.Trigger>
           <Tabs.Trigger value="media">Media Library</Tabs.Trigger>
         </Tabs.List>
 
         <Box pt="4">
+          <Tabs.Content value="tracking">
+            <InviteTracking />
+          </Tabs.Content>
+
+          <Tabs.Content value="invites">
+            <InvitesAndDiscounts />
+          </Tabs.Content>
+
           <Tabs.Content value="templates">
             <PackageTemplateList />
           </Tabs.Content>
 
           <Tabs.Content value="pricing">
             <CityPricingManager />
-          </Tabs.Content>
-
-          <Tabs.Content value="invites">
-            <InvitesAndDiscounts />
           </Tabs.Content>
 
           <Tabs.Content value="media">

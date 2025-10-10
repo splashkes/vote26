@@ -25,7 +25,7 @@ const HeroSection = ({ inviteData }) => {
       return {
         type: 'expired',
         color: 'red',
-        message: `Personal offer expired ${Math.abs(diffDays)} day${Math.abs(diffDays) !== 1 ? 's' : ''} ago`,
+        message: `Personal offer${prospectDisplay ? ` for ${prospectDisplay}` : ''} expired ${Math.abs(diffDays)} day${Math.abs(diffDays) !== 1 ? 's' : ''} ago!`,
         icon: ExclamationTriangleIcon
       };
     } else if (diffDays <= 8) {
@@ -33,7 +33,7 @@ const HeroSection = ({ inviteData }) => {
       return {
         type: 'expires_soon',
         color: 'amber',
-        message: `Offer expires in ${diffDays} day${diffDays !== 1 ? 's' : ''}`,
+        message: `Offer${prospectDisplay ? ` for ${prospectDisplay}` : ''} expires in ${diffDays} day${diffDays !== 1 ? 's' : ''}!`,
         icon: ClockIcon
       };
     }
@@ -95,7 +95,7 @@ const HeroSection = ({ inviteData }) => {
 
             {/* Expiration Warning */}
             {expirationStatus && (
-              <Callout.Root color={expirationStatus.color} size="3" style={{ maxWidth: '600px', width: '100%' }}>
+              <Callout.Root color={expirationStatus.color} size="3" style={{ maxWidth: '600px', width: '100%', textAlign: 'center' }}>
                 <Callout.Icon>
                   <expirationStatus.icon width="20" height="20" />
                 </Callout.Icon>
