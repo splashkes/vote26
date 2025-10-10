@@ -45,9 +45,8 @@ const CityDetail = () => {
       if (cityError) throw cityError;
       setCityInfo(city);
 
-      // Fetch events for this city (last 2 years)
-      const twoYearsAgo = new Date();
-      twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+      // Fetch events for this city (from 2018 onwards)
+      const startDate = new Date('2018-01-01');
 
       const { data: eventsData, error: eventsError } = await supabase
         .from('events')
@@ -63,7 +62,7 @@ const CityDetail = () => {
           eventbrite_id
         `)
         .eq('city_id', cityId)
-        .gte('event_start_datetime', twoYearsAgo.toISOString())
+        .gte('event_start_datetime', startDate.toISOString())
         .order('event_start_datetime', { ascending: false });
 
       if (eventsError) throw eventsError;
@@ -229,7 +228,7 @@ const CityDetail = () => {
         {pastEvents.length > 0 && (
           <Box>
             <Heading size="4" mb="3">
-              Past Events (Last 2 Years)
+              Past Events (Since 2018)
             </Heading>
             <Grid columns={{ initial: '1', sm: '2', lg: '3' }} gap="4">
               {pastEvents.map((event) => {

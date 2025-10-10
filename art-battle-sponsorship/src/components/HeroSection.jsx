@@ -2,12 +2,6 @@ import { Box, Container, Flex, Heading, Text, Badge, ScrollArea, Callout } from 
 import { PlayIcon, ClockIcon, ExclamationTriangleIcon } from '@radix-ui/react-icons';
 
 const HeroSection = ({ inviteData }) => {
-  // Placeholder sponsor logos
-  const sponsorLogos = [
-    'Molson Canadian', 'Bacardi', 'Red Bull', 'Bombay Sapphire',
-    'Corona', 'Grey Goose', 'Jameson', 'Stella Artois'
-  ];
-
   // Convert media array to map
   const mediaMap = {};
   inviteData?.media?.forEach(item => {
@@ -16,6 +10,15 @@ const HeroSection = ({ inviteData }) => {
 
   const heroBg = mediaMap.hero_bg_desktop || 'https://picsum.photos/1920/1080?random=1';
   const videoPoster = mediaMap.video_poster || 'https://placehold.co/800x450/1a1a1a/white?text=Art+Battle+Highlight+Reel';
+
+  // Get sponsor logos from media - looking for sponsor_logo_1 through sponsor_logo_8
+  const sponsorLogoUrls = [];
+  for (let i = 1; i <= 8; i++) {
+    const logoUrl = mediaMap[`sponsor_logo_${i}`];
+    if (logoUrl) {
+      sponsorLogoUrls.push(logoUrl);
+    }
+  }
 
   // Get prospect name or company
   const prospectDisplay = inviteData?.prospect_company || inviteData?.prospect_name || '';
@@ -188,37 +191,48 @@ const HeroSection = ({ inviteData }) => {
       </Box>
 
       {/* Sponsor Logo Banner */}
-      <Box style={{
-        background: 'var(--gray-2)',
-        borderTop: '1px solid var(--gray-6)',
-        borderBottom: '1px solid var(--gray-6)',
-        padding: '1.5rem 1rem'
-      }}>
-        <Container size="4" px="4">
-          <Flex direction="column" gap="3" align="center">
-            <Text size="2" weight="bold" style={{ color: 'var(--gray-11)' }}>
-              TRUSTED BY LEADING BRANDS
-            </Text>
-            <Flex gap="6" wrap="wrap" justify="center" align="center">
-              {sponsorLogos.map((logo, idx) => (
-                <Box
-                  key={idx}
-                  style={{
-                    padding: '0.75rem 1.5rem',
-                    background: 'var(--gray-3)',
-                    borderRadius: '6px',
-                    border: '1px solid var(--gray-6)'
-                  }}
-                >
-                  <Text size="2" weight="bold" style={{ color: 'var(--gray-11)' }}>
-                    {logo}
-                  </Text>
-                </Box>
-              ))}
+      {sponsorLogoUrls.length > 0 && (
+        <Box style={{
+          background: 'var(--gray-2)',
+          borderTop: '1px solid var(--gray-6)',
+          borderBottom: '1px solid var(--gray-6)',
+          padding: '1.5rem 1rem'
+        }}>
+          <Container size="4" px="4">
+            <Flex direction="column" gap="3" align="center">
+              <Text size="2" weight="bold" style={{ color: 'var(--gray-11)' }}>
+                TRUSTED BY LEADING BRANDS
+              </Text>
+              <Flex gap="6" wrap="wrap" justify="center" align="center">
+                {sponsorLogoUrls.map((logoUrl, idx) => (
+                  <Box
+                    key={idx}
+                    style={{
+                      padding: '0.75rem 1.5rem',
+                      background: 'var(--gray-3)',
+                      borderRadius: '6px',
+                      border: '1px solid var(--gray-6)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <img
+                      src={logoUrl}
+                      alt={`Sponsor ${idx + 1}`}
+                      style={{
+                        maxHeight: '40px',
+                        maxWidth: '120px',
+                        objectFit: 'contain'
+                      }}
+                    />
+                  </Box>
+                ))}
+              </Flex>
             </Flex>
-          </Flex>
-        </Container>
-      </Box>
+          </Container>
+        </Box>
+      )}
     </Box>
   );
 };
