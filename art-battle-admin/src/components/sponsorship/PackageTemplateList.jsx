@@ -64,7 +64,7 @@ const PackageTemplateList = () => {
     slug: '',
     description: '',
     benefits: [],
-    category: 'main',
+    category: 'brand',
     display_order: 0,
     active: true
   });
@@ -103,7 +103,7 @@ const PackageTemplateList = () => {
       slug: '',
       description: '',
       benefits: [],
-      category: 'main',
+      category: 'brand',
       display_order: templates.length,
       active: true
     });
@@ -315,8 +315,17 @@ const PackageTemplateList = () => {
                   </Box>
                 </Table.Cell>
                 <Table.Cell>
-                  <Badge color={template.category === 'main' ? 'blue' : 'orange'}>
-                    {template.category === 'main' ? 'Main Package' : 'Add-on'}
+                  <Badge color={
+                    template.category === 'personal' ? 'indigo' :
+                    template.category === 'brand' ? 'blue' :
+                    template.category === 'business' ? 'green' :
+                    template.category === 'addon' ? 'orange' : 'gray'
+                  }>
+                    {template.category === 'personal' ? 'Personal' :
+                     template.category === 'brand' ? 'Brand' :
+                     template.category === 'business' ? 'Business' :
+                     template.category === 'addon' ? 'Add-on' :
+                     template.category || 'Unknown'}
                   </Badge>
                 </Table.Cell>
                 <Table.Cell>
@@ -426,10 +435,15 @@ const PackageTemplateList = () => {
               >
                 <Select.Trigger style={{ width: '100%' }} />
                 <Select.Content>
-                  <Select.Item value="main">Main Package</Select.Item>
+                  <Select.Item value="personal">Personal</Select.Item>
+                  <Select.Item value="brand">Brand</Select.Item>
+                  <Select.Item value="business">Business</Select.Item>
                   <Select.Item value="addon">Add-on</Select.Item>
                 </Select.Content>
               </Select.Root>
+              <Text size="1" color="gray" mt="1">
+                Personal/Brand/Business are main package tiers. Add-on is for optional extras.
+              </Text>
             </Box>
 
             <Box>
