@@ -302,8 +302,20 @@ const CityPricingManager = () => {
                     </Table.Cell>
 
                     <Table.Cell>
-                      <Badge color={template.category === 'main' ? 'blue' : 'orange'} size="1">
-                        {template.category === 'main' ? 'Main Package' : 'Add-on'}
+                      <Badge
+                        color={
+                          template.category === 'personal' ? 'indigo' :
+                          template.category === 'brand' ? 'blue' :
+                          template.category === 'business' ? 'green' :
+                          template.category === 'addon' ? 'orange' : 'gray'
+                        }
+                        size="1"
+                      >
+                        {template.category === 'personal' ? 'Personal' :
+                         template.category === 'brand' ? 'Brand' :
+                         template.category === 'business' ? 'Business' :
+                         template.category === 'addon' ? 'Add-on' :
+                         template.category || 'Unknown'}
                       </Badge>
                     </Table.Cell>
 

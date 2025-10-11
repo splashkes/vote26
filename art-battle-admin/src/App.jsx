@@ -27,6 +27,7 @@ import DuplicateProfileResolver from './components/DuplicateProfileResolver';
 import EventLinter from './components/EventLinter';
 import VenuesManagement from './components/VenuesManagement';
 import SponsorshipPackages from './components/sponsorship/SponsorshipPackages';
+import EventRelationshipBackfill from './components/EventRelationshipBackfill';
 import Welcome from './components/Welcome';
 import './App.css';
 
@@ -70,6 +71,7 @@ function App() {
                 <Route path="event-linter" element={<EventLinter />} />
                 <Route path="venues" element={<VenuesManagement />} />
                 <Route path="sponsorship-packages" element={<SponsorshipPackages />} />
+                <Route path="event-relationships" element={<EventRelationshipBackfill />} />
                 <Route path="sms-marketing" element={<PromotionSystem />} />
                 <Route path="artist/:entryId" element={<ArtistsManagement />} />
                 <Route path="*" element={<Navigate to="/events" replace />} />
