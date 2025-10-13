@@ -934,8 +934,8 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
           </Card>
         )}
 
-        {/* Pending Invitations */}
-        {invitations.filter(inv => inv.event?.applications_open).length > 0 && (
+        {/* Event Invitations */}
+        {invitations.length > 0 && (
           <Card size="3" style={{ border: '2px solid var(--crimson-9)' }}>
             <Flex direction="column" gap="4">
               <Flex justify="between" align="center">
@@ -943,12 +943,17 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
                   🎉 Event Invitations
                 </Heading>
                 <Badge color="crimson" variant="solid">
-                  {invitations.filter(inv => inv.event?.applications_open).length} pending
+                  {invitations.filter(inv => inv.status === 'pending' && inv.event?.applications_open).length} active
+                  {invitations.filter(inv => inv.status === 'expired' || !inv.event?.applications_open).length > 0 &&
+                    ` • ${invitations.filter(inv => inv.status === 'expired' || !inv.event?.applications_open).length} expired`}
                 </Badge>
               </Flex>
-              
+
               <Flex direction="column" gap="3">
-                {invitations.filter(inv => inv.event?.applications_open).map((invitation) => (
+                {invitations.map((invitation) => {
+                  const isExpired = invitation.status === 'expired' || !invitation.event?.applications_open;
+
+                  return (
                   <Card key={invitation.id} size="2" style={{ backgroundColor: 'var(--crimson-2)', border: '1px solid var(--crimson-6)' }}>
                     <Flex direction="column" gap="3">
                       <Flex justify="between" align="start">
@@ -966,12 +971,12 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
                             Artist #{invitation.artist_number}
                           </Text>
                         </Flex>
-                        
-                        <Badge color="crimson" variant="solid">
-                          INVITED
+
+                        <Badge color={isExpired ? 'gray' : 'crimson'} variant="solid">
+                          {isExpired ? 'EXPIRED' : 'INVITED'}
                         </Badge>
                       </Flex>
-                      
+
                       {invitation.message_from_producer && (
                         <Box p="3" style={{ backgroundColor: 'var(--blue-2)', borderRadius: '6px', borderLeft: '3px solid var(--blue-9)' }}>
                           <Text size="2" weight="medium" mb="1" style={{ display: 'block' }}>
@@ -982,24 +987,36 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
                           </Text>
                         </Box>
                       )}
-                      
-                      <Button
-                        size="3"
-                        variant="solid"
-                        color="crimson"
-                        onClick={() => handleAcceptInvitation(invitation.id)}
-                        style={{ 
-                          fontSize: '14px',
-                          fontWeight: 'bold',
-                          textTransform: 'uppercase'
-                        }}
-                      >
-                        <CheckCircledIcon width="16" height="16" />
-                        Accept Invitation & Confirm Attendance
-                      </Button>
+
+                      {isExpired ? (
+                        <Callout.Root color="gray" size="1">
+                          <Callout.Icon>
+                            <CrossCircledIcon />
+                          </Callout.Icon>
+                          <Callout.Text>
+                            Invitation Expired - Applications for this event have closed
+                          </Callout.Text>
+                        </Callout.Root>
+                      ) : (
+                        <Button
+                          size="3"
+                          variant="solid"
+                          color="crimson"
+                          onClick={() => handleAcceptInvitation(invitation.id)}
+                          style={{
+                            fontSize: '14px',
+                            fontWeight: 'bold',
+                            textTransform: 'uppercase'
+                          }}
+                        >
+                          <CheckCircledIcon width="16" height="16" />
+                          Accept Invitation & Confirm Attendance
+                        </Button>
+                      )}
                     </Flex>
                   </Card>
-                ))}
+                  );
+                })}
               </Flex>
             </Flex>
           </Card>

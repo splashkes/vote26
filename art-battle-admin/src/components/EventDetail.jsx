@@ -119,6 +119,10 @@ const EventDetail = () => {
   const [otherRevenueCurrency, setOtherRevenueCurrency] = useState('USD');
   const [updatingOtherRevenue, setUpdatingOtherRevenue] = useState(false);
 
+  const [editingTaxRate, setEditingTaxRate] = useState(false);
+  const [taxRateValue, setTaxRateValue] = useState('');
+  const [updatingTaxRate, setUpdatingTaxRate] = useState(false);
+
   const [approvingEventInfo, setApprovingEventInfo] = useState(false);
 
   const [selectedPerson, setSelectedPerson] = useState(null);
@@ -587,6 +591,48 @@ const EventDetail = () => {
       setError('Failed to update other revenue: ' + err.message);
     } finally {
       setUpdatingOtherRevenue(false);
+    }
+  };
+
+  const updateTaxRate = async () => {
+    if (taxRateValue === '' || isNaN(parseFloat(taxRateValue))) {
+      alert('Please enter a valid tax rate percentage');
+      return;
+    }
+
+    const taxRatePercentage = parseFloat(taxRateValue);
+    if (taxRatePercentage < 0 || taxRatePercentage > 100) {
+      alert('Tax rate must be between 0 and 100');
+      return;
+    }
+
+    try {
+      setUpdatingTaxRate(true);
+
+      const { error } = await supabase
+        .from('events')
+        .update({
+          tax: taxRatePercentage
+        })
+        .eq('id', eventId);
+
+      if (error) throw error;
+
+      setEvent(prev => ({
+        ...prev,
+        tax: taxRatePercentage
+      }));
+
+      setEditingTaxRate(false);
+      setTaxRateValue('');
+      showAdminMessage('success', 'Tax rate updated successfully');
+
+    } catch (err) {
+      console.error('Error updating tax rate:', err);
+      setError('Failed to update tax rate: ' + err.message);
+      showAdminMessage('error', 'Failed to update tax rate');
+    } finally {
+      setUpdatingTaxRate(false);
     }
   };
 
@@ -2221,9 +2267,9 @@ The Art Battle Team`);
     setInvitationMessage('');
   };
 
-  const handleWithdrawInvitation = async (artist) => {
+  const handleExpireInvitation = async (artist) => {
     if (!artist?.artist_invitations?.[0]?.id) {
-      showAdminMessage('error', 'No invitation found to withdraw');
+      showAdminMessage('error', 'No invitation found to expire');
       return;
     }
 
@@ -2233,25 +2279,24 @@ The Art Battle Team`);
       const { error } = await supabase
         .from('artist_invitations')
         .update({
-          status: 'withdrawn',
-          withdrawn_at: new Date().toISOString(),
-          withdrawn_by: user?.id
+          status: 'expired',
+          updated_at: new Date().toISOString()
         })
         .eq('id', invitationId);
 
       if (error) {
-        console.error('Error withdrawing invitation:', error);
-        showAdminMessage('error', 'Failed to withdraw invitation');
+        console.error('Error expiring invitation:', error);
+        showAdminMessage('error', 'Failed to expire invitation');
       } else {
-        showAdminMessage('success', 'Invitation withdrawn successfully - artist will no longer see this invitation');
+        showAdminMessage('success', 'Invitation expired successfully - artist will no longer see this invitation');
         // Refresh the applications to update the UI
         await fetchEventApplications();
         // Close the modal
         setSelectedArtist(null);
       }
     } catch (err) {
-      console.error('Error withdrawing invitation:', err);
-      showAdminMessage('error', 'Failed to withdraw invitation');
+      console.error('Error expiring invitation:', err);
+      showAdminMessage('error', 'Failed to expire invitation');
     }
   };
 
@@ -2827,10 +2872,70 @@ The Art Battle Team`);
                     <Text size="2" weight="bold">
                       {event.cities?.countries?.currency_code || 'USD'} {event.cities?.countries?.currency_symbol || '$'}{event.auction_start_bid?.toFixed(2) || '0.00'}
                     </Text>
-                    {(event.tax !== null && event.tax !== undefined) && (
+                    {editingTaxRate ? (
                       <>
                         <Text size="2">+</Text>
-                        <Text size="2">{(event.tax * 100).toFixed(1)}% tax</Text>
+                        <TextField.Root
+                          size="1"
+                          value={taxRateValue}
+                          onChange={(e) => setTaxRateValue(e.target.value)}
+                          placeholder="Tax %"
+                          style={{ width: '80px' }}
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          max="100"
+                        />
+                        <Text size="2">% tax</Text>
+                        <Button
+                          size="1"
+                          onClick={updateTaxRate}
+                          disabled={updatingTaxRate}
+                        >
+                          {updatingTaxRate ? 'Saving...' : 'Save'}
+                        </Button>
+                        <Button
+                          size="1"
+                          variant="soft"
+                          color="gray"
+                          onClick={() => {
+                            setEditingTaxRate(false);
+                            setTaxRateValue('');
+                          }}
+                          disabled={updatingTaxRate}
+                        >
+                          Cancel
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        {(event.tax !== null && event.tax !== undefined) ? (
+                          <>
+                            <Text size="2">+</Text>
+                            <Text size="2">{(event.tax).toFixed(1)}% tax</Text>
+                            <Button
+                              size="1"
+                              variant="ghost"
+                              onClick={() => {
+                                setTaxRateValue((event.tax).toString());
+                                setEditingTaxRate(true);
+                              }}
+                            >
+                              Edit
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            size="1"
+                            variant="soft"
+                            onClick={() => {
+                              setTaxRateValue('0');
+                              setEditingTaxRate(true);
+                            }}
+                          >
+                            + Add Tax Rate
+                          </Button>
+                        )}
                       </>
                     )}
                     {event.artist_auction_portion && (
@@ -5577,13 +5682,13 @@ The Art Battle Team`);
                               'Send Reminder'
                             )}
                           </Button>
-                          <Button 
-                            size="3" 
-                            variant="outline" 
+                          <Button
+                            size="3"
+                            variant="outline"
                             color="red"
-                            onClick={() => handleWithdrawInvitation(selectedArtist)}
+                            onClick={() => handleExpireInvitation(selectedArtist)}
                           >
-                            Withdraw Invitation
+                            Expire Invite
                           </Button>
                         </Flex>
                       </Flex>

@@ -267,19 +267,47 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
           </Card>
 
           {/* Current Selection Summary */}
-          <Card size="3">
+          <Card size="3" style={{ background: 'var(--blue-2)', border: '2px solid var(--blue-8)' }}>
             <Flex direction="column" gap="3">
               <Flex justify="between" align="start">
-                <Flex direction="column" gap="1">
-                  <Text size="3" weight="bold">Art Battle {inviteData.event_city}</Text>
-                  <Heading size="6">{selectedPackage.name}</Heading>
+                <Box>
+                  <Badge color="blue" size="2" mb="2">Primary Event - Included</Badge>
+                  <Heading size="6" mb="2">{inviteData.event_name || `Art Battle ${inviteData.event_city}`}</Heading>
+                  <Flex direction="column" gap="1" mb="3">
+                    {inviteData.event_start_datetime && (
+                      <Flex align="center" gap="2">
+                        <CalendarIcon width="16" height="16" style={{ color: 'var(--blue-11)' }} />
+                        <Text size="2" weight="medium" style={{ color: 'var(--blue-11)' }}>
+                          {new Date(inviteData.event_start_datetime).toLocaleDateString('en-US', {
+                            weekday: 'long',
+                            month: 'long',
+                            day: 'numeric',
+                            year: 'numeric'
+                          })}
+                          {' at '}
+                          {new Date(inviteData.event_start_datetime).toLocaleTimeString('en-US', {
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true
+                          })}
+                        </Text>
+                      </Flex>
+                    )}
+                    {inviteData.event_venue && (
+                      <Text size="2" weight="medium" style={{ color: 'var(--blue-11)', marginLeft: '24px' }}>
+                        {inviteData.event_venue}
+                      </Text>
+                    )}
+                  </Flex>
+                  <Separator mb="3" />
+                  <Text size="2" weight="bold" mb="1" style={{ color: 'var(--gray-12)' }}>Sponsorship Package:</Text>
+                  <Heading size="5" mb="1">{selectedPackage.name}</Heading>
                   {selectedAddons.length > 0 && (
-                    <Text size="2" style={{ color: 'var(--gray-11)', marginTop: '0.25rem' }}>
+                    <Text size="2" style={{ color: 'var(--gray-11)' }}>
                       + {selectedAddons.map(a => a.name).join(', ')}
                     </Text>
                   )}
-                </Flex>
-                <Badge color="blue">Included</Badge>
+                </Box>
               </Flex>
 
               {/* Toggle Benefits Button */}

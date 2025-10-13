@@ -122,13 +122,13 @@ serve(async (req) => {
     }
 
     // Get invitations for ALL related profiles
+    // Include pending and expired statuses (show all active invitations)
     if (relatedProfileIds.length > 0) {
       const { data: allInvitations, error: invitationsError } = await supabase
         .from('artist_invitations')
         .select('*')
         .in('artist_profile_id', relatedProfileIds)
-        .eq('status', 'pending')
-        .is('accepted_at', null)
+        .in('status', ['pending', 'expired'])
         .order('created_at', { ascending: false });
 
       if (invitationsError) throw invitationsError;

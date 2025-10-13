@@ -746,7 +746,7 @@ const EventApplications = () => {
                             <CrossCircledIcon />
                           </Callout.Icon>
                           <Callout.Text>
-                            Applications for this event are now closed. You cannot accept this invitation at this time.
+                            Invitation Expired - Applications for this event have closed
                           </Callout.Text>
                         </Callout.Root>
                       )}
