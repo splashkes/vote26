@@ -54,7 +54,9 @@ const VenuesManagement = () => {
   const fetchVenues = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+
+      // Fetch venues with city info
+      const { data: venuesData, error: venuesError } = await supabase
         .from('venues')
         .select(`
           *,
@@ -65,18 +67,33 @@ const VenuesManagement = () => {
               name,
               code
             )
-          ),
-          venue_logos (
-            id,
-            logo_url,
-            logo_type,
-            display_order
           )
-        `)
-        .order('name');
+        `);
 
-      if (error) throw error;
-      setVenues(data || []);
+      if (venuesError) throw venuesError;
+
+      // Fetch event counts for each venue
+      const { data: eventCounts, error: countsError } = await supabase
+        .from('events')
+        .select('venue_id');
+
+      if (countsError) throw countsError;
+
+      // Count events per venue
+      const countMap = {};
+      eventCounts.forEach(event => {
+        if (event.venue_id) {
+          countMap[event.venue_id] = (countMap[event.venue_id] || 0) + 1;
+        }
+      });
+
+      // Add event counts to venues and sort by count descending
+      const venuesWithCounts = (venuesData || []).map(venue => ({
+        ...venue,
+        event_count: countMap[venue.id] || 0
+      })).sort((a, b) => b.event_count - a.event_count);
+
+      setVenues(venuesWithCounts);
     } catch (err) {
       console.error('Error fetching venues:', err);
       setError('Failed to load venues');
@@ -148,11 +165,17 @@ const VenuesManagement = () => {
         return;
       }
 
+      // Prepare data with default capacity if empty
+      const dataToSave = {
+        ...formData,
+        default_capacity: formData.default_capacity === '' ? 200 : parseInt(formData.default_capacity)
+      };
+
       if (editingVenue) {
         // Update existing venue
         const { error } = await supabase
           .from('venues')
-          .update(formData)
+          .update(dataToSave)
           .eq('id', editingVenue.id);
 
         if (error) throw error;
@@ -160,7 +183,7 @@ const VenuesManagement = () => {
         // Create new venue
         const { error } = await supabase
           .from('venues')
-          .insert([formData]);
+          .insert([dataToSave]);
 
         if (error) throw error;
       }
@@ -190,16 +213,18 @@ const VenuesManagement = () => {
     }
   };
 
-  const filteredVenues = venues.filter(venue => {
-    const matchesSearch = !searchTerm ||
-      venue.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      venue.address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      venue.cities?.name?.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredVenues = venues
+    .filter(venue => {
+      const matchesSearch = !searchTerm ||
+        venue.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        venue.address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        venue.cities?.name?.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesCity = selectedCity === 'all' || venue.city_id === selectedCity;
+      const matchesCity = selectedCity === 'all' || venue.city_id === selectedCity;
 
-    return matchesSearch && matchesCity;
-  });
+      return matchesSearch && matchesCity;
+    })
+    .sort((a, b) => b.event_count - a.event_count);
 
   if (loading) {
     return (
@@ -260,9 +285,8 @@ const VenuesManagement = () => {
               <Table.Row>
                 <Table.ColumnHeaderCell>Name</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>City</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell>Address</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell>Events</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>Capacity</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell>Logos</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>Actions</Table.ColumnHeaderCell>
               </Table.Row>
             </Table.Header>
@@ -278,15 +302,12 @@ const VenuesManagement = () => {
                     </Text>
                   </Table.Cell>
                   <Table.Cell>
-                    <Text size="2" color="gray">{venue.address || '-'}</Text>
+                    <Badge color={venue.event_count > 0 ? 'green' : 'gray'}>
+                      {venue.event_count}
+                    </Badge>
                   </Table.Cell>
                   <Table.Cell>
                     <Badge color="blue">{venue.default_capacity}</Badge>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Badge color={venue.venue_logos?.length > 0 ? 'green' : 'gray'}>
-                      {venue.venue_logos?.length || 0}
-                    </Badge>
                   </Table.Cell>
                   <Table.Cell>
                     <Flex gap="2">
@@ -367,7 +388,9 @@ const VenuesManagement = () => {
               <TextField.Root
                 type="number"
                 value={formData.default_capacity}
-                onChange={(e) => setFormData({ ...formData, default_capacity: parseInt(e.target.value) || 200 })}
+                onChange={(e) => setFormData({ ...formData, default_capacity: e.target.value === '' ? '' : parseInt(e.target.value) })}
+                placeholder="Enter capacity (e.g., 200)"
+                min="0"
               />
             </Box>
 
