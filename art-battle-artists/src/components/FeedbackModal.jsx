@@ -84,7 +84,7 @@ const RatingSlider = ({ question, value, onChange, min = 1, max = 5, required = 
  */
 const MultipleChoice = ({ question, options, value, onChange, required = false }) => {
   return (
-    <Flex direction="column" gap="2" style={{ width: '100%' }}>
+    <Flex direction="column" gap="3" style={{ width: '100%' }}>
       <Text size="3" weight="medium">
         {question}
         {required && <Text color="red" style={{ display: 'inline' }}> *</Text>}
@@ -93,15 +93,42 @@ const MultipleChoice = ({ question, options, value, onChange, required = false }
       <RadioGroup.Root value={value || ''} onValueChange={onChange}>
         <Flex direction="column" gap="2">
           {options.map((option, idx) => (
-            <Text as="label" key={idx} size="2">
-              <Flex gap="2" align="center">
-                <RadioGroup.Item value={option} />
-                <Text>{option}</Text>
-              </Flex>
-            </Text>
+            <label
+              key={idx}
+              style={{
+                display: 'block',
+                cursor: 'pointer'
+              }}
+            >
+              <Card
+                size="2"
+                style={{
+                  padding: '12px 16px',
+                  background: value === option ? 'var(--crimson-3)' : 'var(--gray-2)',
+                  border: value === option ? '2px solid var(--crimson-8)' : '1px solid var(--gray-6)',
+                  transition: 'all 0.2s ease',
+                  cursor: 'pointer'
+                }}
+                className="multiple-choice-option"
+              >
+                <Flex gap="3" align="center">
+                  <RadioGroup.Item value={option} />
+                  <Text size="3" style={{ flex: 1, lineHeight: '1.5' }}>
+                    {option}
+                  </Text>
+                </Flex>
+              </Card>
+            </label>
           ))}
         </Flex>
       </RadioGroup.Root>
+
+      <style jsx>{`
+        .multiple-choice-option:hover {
+          background: var(--gray-3) !important;
+          border-color: var(--gray-8) !important;
+        }
+      `}</style>
     </Flex>
   );
 };
