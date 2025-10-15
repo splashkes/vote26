@@ -57,9 +57,9 @@
    93e39d6f-63c1-431a-80a5-0c278a55afb4 | send-email                           | send-email                           | ACTIVE | 24      | 2025-09-08 03:23:35 
    2fbe7ba9-3617-4208-894f-0ac34eb825a4 | test-smtp                            | test-smtp                            | ACTIVE | 20      | 2025-08-25 18:55:49 
    20c5f9e0-315b-490f-8fcb-7781eee96ec1 | process-slack-queue                  | process-slack-queue                  | ACTIVE | 21      | 2025-09-08 03:23:30 
-   42de2f81-4120-4344-9362-472cb67d5b82 | cancel-confirmation                  | cancel-confirmation                  | ACTIVE | 30      | 2025-09-08 03:26:58 
+   42de2f81-4120-4344-9362-472cb67d5b82 | cancel-confirmation                  | cancel-confirmation                  | ACTIVE | 31      | 2025-10-15 00:59:48 
    c651f478-86e2-4718-ba98-032e11c7727e | get-event-details-for-artist-profile | get-event-details-for-artist-profile | ACTIVE | 26      | 2025-09-23 17:01:42 
-   9c8a3f07-39e4-4183-83ea-532919a25a30 | accept-invitation                    | accept-invitation                    | ACTIVE | 30      | 2025-10-04 14:35:07 
+   9c8a3f07-39e4-4183-83ea-532919a25a30 | accept-invitation                    | accept-invitation                    | ACTIVE | 31      | 2025-10-15 16:13:28 
    f7da6757-7229-4808-b4a3-4ca490c0a6a1 | auction-csv-export                   | auction-csv-export                   | ACTIVE | 31      | 2025-09-17 17:24:01 
    eef9e9ea-2979-4fd4-80a1-d0c8061f336c | admin-bid-history                    | admin-bid-history                    | ACTIVE | 20      | 2025-08-26 03:22:39 
    ac270076-07be-4085-99cc-b8e994e023aa | artist-email-export                  | artist-email-export                  | ACTIVE | 32      | 2025-08-27 03:38:58 
@@ -74,14 +74,14 @@
    eaf7644c-8d53-4cd6-85da-8c71836c32a6 | admin-set-password                   | admin-set-password                   | ACTIVE | 28      | 2025-09-10 19:17:15 
    253f6c34-a73c-403e-9084-f977d245f16c | phone-data-analysis                  | phone-data-analysis                  | ACTIVE | 22      | 2025-08-26 15:35:18 
    b0bb1bed-74eb-45a7-916f-8a7a63aa0a9b | fix-artist-phones                    | fix-artist-phones                    | ACTIVE | 23      | 2025-08-26 15:51:46 
-   86716d7c-00ff-4b1c-9984-027d2b512a8b | email-queue-manager                  | email-queue-manager                  | ACTIVE | 24      | 2025-08-26 20:16:17 
+   86716d7c-00ff-4b1c-9984-027d2b512a8b | email-queue-manager                  | email-queue-manager                  | ACTIVE | 25      | 2025-10-15 01:03:17 
    81996300-bd86-4b89-8076-bc9aba7e5c98 | send-marketing-sms                   | send-marketing-sms                   | ACTIVE | 21      | 2025-09-08 03:23:13 
    5b852f49-20e4-44ef-9fa4-67827563a0aa | send-bulk-marketing-sms              | send-bulk-marketing-sms              | ACTIVE | 20      | 2025-08-26 17:49:58 
    bf8ea8d3-528a-441a-b1b4-3cfc595c756a | sms-marketing-webhook                | sms-marketing-webhook                | ACTIVE | 23      | 2025-10-03 16:02:19 
    1f99ed5b-af34-4b5b-8662-3ee6c5dcc887 | sms-marketing-templates              | sms-marketing-templates              | ACTIVE | 21      | 2025-09-08 03:23:31 
    c488ef23-71c5-4150-b695-b1338f53a12b | test-telnyx-marketing                | test-telnyx-marketing                | ACTIVE | 21      | 2025-08-26 17:54:09 
    4c3faa9f-9886-4668-a826-db3550f01ef2 | test-telnyx-api-connectivity         | test-telnyx-api-connectivity         | ACTIVE | 20      | 2025-08-26 18:04:22 
-   7b66fb44-fe31-40b0-8f88-4822669f963e | populate-email-queue                 | populate-email-queue                 | ACTIVE | 20      | 2025-08-26 18:48:32 
+   7b66fb44-fe31-40b0-8f88-4822669f963e | populate-email-queue                 | populate-email-queue                 | ACTIVE | 21      | 2025-10-15 00:59:48 
    faf5b928-09b2-448c-a22e-1e37a5e291a4 | email-template-showcase              | email-template-showcase              | ACTIVE | 28      | 2025-08-27 02:37:39 
    222557d1-01e6-4e50-a6f6-4d5d7139664c | v2-public-vote-analytics             | v2-public-vote-analytics             | ACTIVE | 27      | 2025-09-08 03:23:14 
    9794b8fb-c293-45d1-9449-c0ea1aca2693 | simple-email-viewer                  | simple-email-viewer                  | ACTIVE | 23      | 2025-09-04 16:06:31 
@@ -108,8 +108,8 @@
    f6364321-cf68-494c-9df1-be39baf239ab | admin-content-library                | admin-content-library                | ACTIVE | 18      | 2025-09-11 19:44:16 
    4ffb8b20-3bdf-428a-b800-44ca93cf36a0 | promo-materials-data                 | promo-materials-data                 | ACTIVE | 15      | 2025-09-11 15:28:27 
    962a0b2b-780c-4b1a-a70f-8bcffd079a7d | promo-generator                      | promo-generator                      | ACTIVE | 23      | 2025-09-11 18:47:08 
-   8e184cc5-a9bd-480c-a68d-1cf1699a9358 | stripe-global-payments-onboard       | stripe-global-payments-onboard       | ACTIVE | 34      | 2025-10-07 14:48:58 
-   39e7ca69-f998-4c86-a15c-c60440c101f0 | stripe-global-payments-payout        | stripe-global-payments-payout        | ACTIVE | 13      | 2025-10-03 14:18:03 
+   8e184cc5-a9bd-480c-a68d-1cf1699a9358 | stripe-global-payments-onboard       | stripe-global-payments-onboard       | ACTIVE | 36      | 2025-10-15 18:46:58 
+   39e7ca69-f998-4c86-a15c-c60440c101f0 | stripe-global-payments-payout        | stripe-global-payments-payout        | ACTIVE | 14      | 2025-10-15 17:10:17 
    0175fbad-a7ad-47b0-abfa-eea8833d964e | update-bidder-info                   | update-bidder-info                   | ACTIVE | 16      | 2025-09-16 22:39:33 
    42bc7ead-dcc4-46fc-8ed3-ea3fb8d8eebe | stripe-onboarding-return             | stripe-onboarding-return             | ACTIVE | 13      | 2025-09-12 18:52:52 
    ade1b8a6-df81-43bd-bbf8-66c8381cdff1 | stripe-account-details               | stripe-account-details               | ACTIVE | 10      | 2025-09-15 15:59:58 
@@ -128,7 +128,7 @@
    c6b4a63a-f722-4030-80f7-2867dbd46a52 | paperwork-data                       | paperwork-data                       | ACTIVE | 15      | 2025-09-23 00:43:55 
    043299ec-0c3c-4a42-af59-67f9ec4c1b41 | process-pending-payments             | process-pending-payments             | ACTIVE | 29      | 2025-09-27 03:06:45 
    5a5bd79a-0c6d-42f3-b6f8-f3be6d3fbc06 | check-env                            | check-env                            | ACTIVE | 10      | 2025-09-23 15:19:16 
-   1542e0e6-9925-4a69-ad58-95dee114206f | get-artist-profile-data              | get-artist-profile-data              | ACTIVE | 14      | 2025-10-04 16:51:49 
+   1542e0e6-9925-4a69-ad58-95dee114206f | get-artist-profile-data              | get-artist-profile-data              | ACTIVE | 16      | 2025-10-15 17:37:55 
    ae2d2b65-414b-4a49-a954-e426d912bae1 | admin-artist-payments-list           | admin-artist-payments-list           | ACTIVE | 27      | 2025-10-02 13:53:25 
    4fe6c3a6-014c-4109-bb03-4adeb8f02955 | test-recent-count                    | test-recent-count                    | ACTIVE | 10      | 2025-09-24 00:06:51 
    a70d5e4d-3460-49b1-ab64-c2a378b15a84 | simple-admin-payments                | simple-admin-payments                | ACTIVE | 10      | 2025-09-24 00:36:31 
@@ -149,7 +149,7 @@
    35ece161-b4ea-47a2-818f-8d122971b0e0 | get-event-post-summary               | get-event-post-summary               | ACTIVE | 24      | 2025-10-04 15:17:43 
    84afd9ee-c843-492c-9d78-839966c26ac3 | admin-event-artist-payments          | admin-event-artist-payments          | ACTIVE | 24      | 2025-10-07 17:05:51 
    e45c694b-99a2-48de-94cf-48d52b79980d | fetch-eventbrite-data                | fetch-eventbrite-data                | ACTIVE | 30      | 2025-10-02 19:14:51 
-   2c2aa7e1-0af4-47fa-99f8-d26bceff059f | artist-get-notes                     | artist-get-notes                     | ACTIVE | 17      | 2025-10-03 23:39:42 
+   2c2aa7e1-0af4-47fa-99f8-d26bceff059f | artist-get-notes                     | artist-get-notes                     | ACTIVE | 18      | 2025-10-15 19:33:55 
    f82ae1cf-6da4-45f5-9f67-8729078d5725 | admin-get-manual-payment-request     | admin-get-manual-payment-request     | ACTIVE | 3       | 2025-10-02 18:59:04 
    0b06d3b9-8dfb-4dbf-80ea-249528d328d1 | admin-reconcile-profile              | admin-reconcile-profile              | ACTIVE | 4       | 2025-10-02 19:02:08 
    0cde9220-6e6a-4d40-9f4f-b7c6135ed952 | promo-offers-public                  | promo-offers-public                  | ACTIVE | 3       | 2025-10-03 13:39:03 
@@ -161,7 +161,7 @@
    e3aeae44-f57e-4f97-ab40-3d306ef51f23 | test-au-payment                      | test-au-payment                      | ACTIVE | 3       | 2025-10-04 04:02:29 
    14ef962f-3ac8-461c-92a6-4753e095580c | test-currency-conversion             | test-currency-conversion             | ACTIVE | 5       | 2025-10-04 04:14:24 
    0a11bacc-fb76-4129-ae43-faf37cca302f | admin-get-sample-works               | admin-get-sample-works               | ACTIVE | 8       | 2025-10-05 03:16:50 
-   3e3e483d-5cd4-45ff-84f7-8323fc943bb2 | event-linter                         | event-linter                         | ACTIVE | 44      | 2025-10-08 20:49:42 
+   3e3e483d-5cd4-45ff-84f7-8323fc943bb2 | event-linter                         | event-linter                         | ACTIVE | 51      | 2025-10-15 19:59:09 
    30ac7114-2c2f-4e03-8267-350f15636de0 | admin-update-abhq-bio                | admin-update-abhq-bio                | ACTIVE | 9       | 2025-10-05 03:26:57 
    3258b81e-1735-40e8-9bdb-f1d3391881cc | test-au-onboarding                   | test-au-onboarding                   | ACTIVE | 3       | 2025-10-07 03:04:59 
    2bc8dd67-c6cc-4c46-a8b5-b584c778566f | test-thailand-payment                | test-thailand-payment                | ACTIVE | 3       | 2025-10-07 04:14:41 
@@ -171,5 +171,23 @@
    b0cd555e-9d4e-4804-8ebf-f31946ec4d9f | update-exchange-rates                | update-exchange-rates                | ACTIVE | 2       | 2025-10-07 13:34:25 
    6890d38b-bb72-4d38-be58-e13f1aee9b52 | test-cache-read                      | test-cache-read                      | ACTIVE | 1       | 2025-10-07 16:02:48 
    0b41a432-bc39-42e3-946f-39fa0ba7e3ac | sponsorship-invite-details           | sponsorship-invite-details           | ACTIVE | 1       | 2025-10-07 20:39:18 
-   1cc61af9-5809-4699-94ca-98b2fb64e9dc | sponsorship-track-interaction        | sponsorship-track-interaction        | ACTIVE | 1       | 2025-10-07 20:39:46 
+   1cc61af9-5809-4699-94ca-98b2fb64e9dc | sponsorship-track-interaction        | sponsorship-track-interaction        | ACTIVE | 7       | 2025-10-15 14:56:30 
+   ec8845b5-3182-4313-9bd3-723c74d534f6 | admin-artist-stats                   | admin-artist-stats                   | ACTIVE | 4       | 2025-10-09 16:21:22 
+   e55e9bd9-358f-40a3-a4d7-0fe3f24326b7 | sponsorship-stripe-checkout          | sponsorship-stripe-checkout          | ACTIVE | 5       | 2025-10-09 20:08:28 
+   dbb2823d-913a-4138-9611-a696561a91fa | sponsorship-fulfillment-details      | sponsorship-fulfillment-details      | ACTIVE | 1       | 2025-10-09 16:59:43 
+   f55f6226-ecdc-4b65-b949-6f620365598f | event-linter-ai-analysis             | event-linter-ai-analysis             | ACTIVE | 2       | 2025-10-15 14:32:52 
+   fb6684b1-5d81-47aa-9ff9-6c496e5aa7cd | submit-feedback                      | submit-feedback                      | ACTIVE | 1       | 2025-10-15 14:47:23 
+   dbf70ea3-eacd-4509-a22a-8364e1b600bd | test-fx-quotes-api                   | test-fx-quotes-api                   | ACTIVE | 2       | 2025-10-15 16:31:17 
+   1b7caa43-6a37-4acd-a084-ccdd6e92b8f3 | test-destination-amount-transfer     | test-destination-amount-transfer     | ACTIVE | 1       | 2025-10-15 16:33:27 
+   10a33b89-0fbe-4939-aa9d-c48a32d8eb3e | test-usd-to-aud-transfer             | test-usd-to-aud-transfer             | ACTIVE | 1       | 2025-10-15 16:35:11 
+   da7d3aff-96c2-49be-a134-a611f847841a | test-calculated-aud-payout           | test-calculated-aud-payout           | ACTIVE | 1       | 2025-10-15 16:38:45 
+   14c8e908-3014-4347-8d1b-b89a4e4e3612 | test-stripe-fx-rates                 | test-stripe-fx-rates                 | ACTIVE | 1       | 2025-10-15 16:41:55 
+   fdd71eb3-c8df-4203-b0f9-19621458798b | test-recipient-account-balance       | test-recipient-account-balance       | ACTIVE | 1       | 2025-10-15 16:45:16 
+   45051108-cc6a-4bb5-80f3-a22d4c7149ea | test-stripe-fx-comprehensive         | test-stripe-fx-comprehensive         | ACTIVE | 1       | 2025-10-15 16:54:48 
+   678b0ad3-0910-4805-bf3d-c36eeebd7c27 | test-fx-quotes-preview               | test-fx-quotes-preview               | ACTIVE | 1       | 2025-10-15 16:56:24 
+   801eda72-cb2f-4991-9696-dc609fe9b3a8 | check-other-profiles-balance         | check-other-profiles-balance         | ACTIVE | 1       | 2025-10-15 17:14:36 
+   1a2625b6-01e7-4320-be60-3074cd684472 | test-canada-onboarding               | test-canada-onboarding               | ACTIVE | 1       | 2025-10-15 17:51:48 
+   27499878-b427-4002-9047-8f7f1cbd05a7 | test-account-session                 | test-account-session                 | ACTIVE | 1       | 2025-10-15 18:07:01 
+   9e7b295c-bd43-44a1-a494-8cca5c9136f0 | test-linter-rule                     | test-linter-rule                     | ACTIVE | 1       | 2025-10-15 18:18:58 
+   cc43821c-280b-4445-8d78-35aadf6bf9c8 | test-canada-vs-international         | test-canada-vs-international         | ACTIVE | 1       | 2025-10-15 18:19:19 
 
