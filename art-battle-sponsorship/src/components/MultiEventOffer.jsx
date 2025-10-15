@@ -10,10 +10,12 @@ import {
   Badge,
   Grid,
   Checkbox,
-  Separator
+  Separator,
+  TextField,
+  Dialog
 } from '@radix-ui/themes';
 import { CalendarIcon, RocketIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon, QuestionMarkCircledIcon, MobileIcon } from '@radix-ui/react-icons';
-import { trackInteraction } from '../lib/api';
+import { trackInteraction, validatePhoneNumber } from '../lib/api';
 
 const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfirm, onSkip, discountPercent }) => {
   const [upcomingEvents, setUpcomingEvents] = useState([]);
@@ -22,6 +24,11 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
   const [showDiscountBreakdown, setShowDiscountBreakdown] = useState(false);
   const [requestingCall, setRequestingCall] = useState(false);
   const [callRequested, setCallRequested] = useState(false);
+  const [showPhoneDialog, setShowPhoneDialog] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [phoneError, setPhoneError] = useState('');
+  const [validatingPhone, setValidatingPhone] = useState(false);
+  const [validatedPhone, setValidatedPhone] = useState(null);
 
   useEffect(() => {
     loadUpcomingEvents();
@@ -184,7 +191,43 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
     return Math.round(amount).toLocaleString(getLocale());
   };
 
-  const handleRequestCall = async () => {
+  const handleValidatePhone = async () => {
+    if (!phoneNumber.trim()) {
+      setPhoneError('Phone number is required');
+      return;
+    }
+
+    setValidatingPhone(true);
+    setPhoneError('');
+
+    try {
+      const countryCode = inviteData?.country_code || 'US';
+      const { data, error } = await validatePhoneNumber(phoneNumber, countryCode);
+
+      if (error || !data) {
+        setPhoneError('Failed to validate phone number');
+        setValidatingPhone(false);
+        return;
+      }
+
+      if (!data.valid) {
+        setPhoneError('Please enter a valid phone number');
+        setValidatingPhone(false);
+        return;
+      }
+
+      // Phone is valid, store it and submit
+      setValidatedPhone(data);
+      await submitCallRequest(data);
+    } catch (error) {
+      console.error('Error validating phone:', error);
+      setPhoneError('Failed to validate phone number');
+    } finally {
+      setValidatingPhone(false);
+    }
+  };
+
+  const submitCallRequest = async (phoneData) => {
     setRequestingCall(true);
 
     try {
@@ -195,7 +238,7 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
       const totalPrice = calculateDiscountedTotal();
       const pricePerEvent = totalPrice / totalEvents;
 
-      // Track the interaction with full metadata
+      // Track the interaction with full metadata including phone
       await trackInteraction(hash, 'request_call', selectedPackage.id, {
         inviteData,
         selectedPackage,
@@ -204,10 +247,13 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
         totalPrice,
         pricePerEvent,
         totalEvents,
-        discount
+        discount,
+        phoneNumber: phoneData.phoneNumber,
+        phoneNationalFormat: phoneData.nationalFormat
       });
 
       setCallRequested(true);
+      setShowPhoneDialog(false);
     } catch (error) {
       console.error('Error requesting call:', error);
       alert('Failed to submit call request. Please try again or contact us directly.');
@@ -626,17 +672,18 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
 
               <Separator />
 
-              <Flex justify="between" align="center">
-                <Heading size="5" style={{ color: 'var(--green-11)' }}>Final Price</Heading>
-                <Heading size="6" style={{ color: 'var(--green-11)' }}>
-                  ${formatCurrency(calculateDiscountedTotal())} {selectedPackage.currency || 'USD'}
-                </Heading>
-              </Flex>
-
-              <Flex justify="center">
-                <Text size="2" style={{ color: 'var(--green-11)', fontStyle: 'italic' }}>
-                  only ${formatCurrency(calculateDiscountedTotal() / totalEvents)} per event!
-                </Text>
+              <Flex direction="column" gap="1">
+                <Flex justify="between" align="center">
+                  <Heading size="5" style={{ color: 'var(--green-11)' }}>Final Price</Heading>
+                  <Heading size="6" style={{ color: 'var(--green-11)' }}>
+                    ${formatCurrency(calculateDiscountedTotal())} {selectedPackage.currency || 'USD'}
+                  </Heading>
+                </Flex>
+                <Flex justify="end">
+                  <Text size="2" style={{ color: 'var(--green-11)', fontStyle: 'italic' }}>
+                    only ${formatCurrency(calculateDiscountedTotal() / totalEvents)} per event!
+                  </Text>
+                </Flex>
               </Flex>
             </Flex>
           </Card>
@@ -650,11 +697,11 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
             <Button
               size="3"
               variant="outline"
-              onClick={handleRequestCall}
-              disabled={requestingCall || callRequested}
+              onClick={() => setShowPhoneDialog(true)}
+              disabled={callRequested}
             >
               <MobileIcon />
-              {callRequested ? 'Call Requested - We\'ll Contact You Soon!' : requestingCall ? 'Submitting...' : 'Request a Call'}
+              {callRequested ? 'Call Requested - We\'ll Contact You Soon!' : 'Request a Call'}
             </Button>
 
             {callRequested && (
@@ -669,6 +716,55 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
           </Flex>
         </Flex>
       </Container>
+
+      {/* Phone Number Dialog */}
+      <Dialog.Root open={showPhoneDialog} onOpenChange={setShowPhoneDialog}>
+        <Dialog.Content style={{ maxWidth: '450px' }}>
+          <Dialog.Title>Request a Call</Dialog.Title>
+          <Dialog.Description size="2" mb="4">
+            Please provide your phone number so we can contact you about this sponsorship opportunity.
+          </Dialog.Description>
+
+          <Flex direction="column" gap="3">
+            <Box>
+              <Text size="2" mb="2" weight="bold">Phone Number *</Text>
+              <TextField.Root
+                size="3"
+                placeholder="e.g. (555) 123-4567"
+                value={phoneNumber}
+                onChange={(e) => {
+                  setPhoneNumber(e.target.value);
+                  setPhoneError('');
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleValidatePhone();
+                  }
+                }}
+              />
+              {phoneError && (
+                <Text size="2" style={{ color: 'var(--red-11)', marginTop: '0.5rem' }}>
+                  {phoneError}
+                </Text>
+              )}
+            </Box>
+
+            <Flex gap="3" justify="end" mt="2">
+              <Dialog.Close>
+                <Button variant="soft" color="gray">
+                  Cancel
+                </Button>
+              </Dialog.Close>
+              <Button
+                onClick={handleValidatePhone}
+                disabled={validatingPhone || requestingCall || !phoneNumber.trim()}
+              >
+                {validatingPhone || requestingCall ? 'Submitting...' : 'Submit Request'}
+              </Button>
+            </Flex>
+          </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
     </Box>
   );
 };

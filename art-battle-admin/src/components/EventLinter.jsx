@@ -122,8 +122,6 @@ const EventLinter = () => {
               console.log(`Received ${data.findings.length} findings from phase: ${data.phase}`);
               accumulatedFindings = [...accumulatedFindings, ...data.findings];
               setAllFindings(accumulatedFindings); // useEffect will filter and update findings
-              // Show results as soon as first findings arrive
-              if (loading) setLoading(false);
             } else if (data.error) {
               // Error occurred
               console.error('Linter error:', data.error, data.debug);
@@ -760,10 +758,12 @@ const EventLinter = () => {
         {/* Stats Info */}
         <Flex align="center" gap="2">
           <Text size="1" color="gray">
-            {rules.length || 0} rules / {findings.length} findings
+            {rules.length ? `${rules.length} rules` : 'Loading rules...'} • {findings.length} findings
           </Text>
           {loading && (
-            <ReloadIcon width="12" height="12" className="animate-spin" style={{ color: 'var(--gray-9)' }} />
+            <div style={{ animation: 'spin 1s linear infinite' }}>
+              <ReloadIcon width="14" height="14" style={{ color: 'var(--blue-9)' }} />
+            </div>
           )}
         </Flex>
 
@@ -772,7 +772,7 @@ const EventLinter = () => {
           backgroundColor: 'var(--color-panel-solid)',
           fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace'
         }}>
-          {loading ? (
+          {loading && findings.length === 0 ? (
             <Flex align="center" justify="center" p="6">
               <Spinner size="3" />
             </Flex>
@@ -1175,6 +1175,14 @@ const EventLinter = () => {
       <style jsx>{`
         .hover-row:hover {
           background-color: var(--gray-3) !important;
+        }
+        @keyframes spin {
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(360deg);
+          }
         }
       `}</style>
     </Box>

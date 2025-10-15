@@ -165,3 +165,20 @@ export async function getPurchaseByFulfillmentHash(hash) {
     return { data: null, error: err.message };
   }
 }
+
+/**
+ * Validate phone number using Twilio
+ */
+export async function validatePhoneNumber(phoneNumber, countryCode = 'US') {
+  try {
+    const { data, error } = await supabase.functions.invoke('phone-validation', {
+      body: { phoneNumber, countryCode }
+    });
+
+    if (error) throw error;
+    return { data: data || null, error: null };
+  } catch (err) {
+    console.error('Error validating phone number:', err);
+    return { data: null, error: err.message };
+  }
+}

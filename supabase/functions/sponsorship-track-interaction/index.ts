@@ -81,7 +81,9 @@ serve(async (req) => {
             totalPrice,
             pricePerEvent,
             totalEvents,
-            discount
+            discount,
+            phoneNumber,
+            phoneNationalFormat
           } = metadata
 
           let messageText = `🔔 *Sponsorship Call Request*\n\n`
@@ -114,8 +116,8 @@ serve(async (req) => {
           }
 
           messageText += `\n*Total Price:* $${totalPrice?.toLocaleString() || '0'} ${selectedPackage?.currency || 'USD'}\n`
-          messageText += `\n*Contact:* ${inviteData?.prospect_email || 'No email'}\n`
-          messageText += `*Phone:* ${inviteData?.prospect_phone || 'No phone'}\n`
+          messageText += `\n📞 *CALL THIS NUMBER:* ${phoneNationalFormat || phoneNumber || 'No phone provided'}\n`
+          messageText += `*Email:* ${inviteData?.prospect_email || 'No email'}\n`
 
           await fetch('https://slack.com/api/chat.postMessage', {
             method: 'POST',
