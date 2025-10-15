@@ -86,7 +86,7 @@ const SelfSelectionCTA = ({ packages, onSelect, isExpired = false, inviteData })
             </Text>
           </Box>
 
-          <Grid columns={gridColumns} gap="4" width="100%" style={{ alignItems: 'end', maxWidth: '600px', margin: '0 auto' }}>
+          <Grid columns={gridColumns} gap="5" width="100%" style={{ alignItems: 'stretch', maxWidth: '1200px', margin: '0 auto' }}>
             {/* Personal Tier */}
             {hasPersonalPackages && (
               <Card
@@ -97,26 +97,28 @@ const SelfSelectionCTA = ({ packages, onSelect, isExpired = false, inviteData })
                 cursor: isExpired ? 'not-allowed' : 'pointer',
                 opacity: isExpired ? 0.5 : 1,
                 transition: 'all 0.3s ease',
-                height: 'fit-content'
+                height: 'fit-content',
+                padding: '2rem'
               }}
               onClick={() => !isExpired && onSelect('personal')}
             >
-              <Flex direction="column" gap="3" align="center" justify="center" style={{ textAlign: 'center', minHeight: '100%' }}>
+              <Flex direction="column" gap="4" align="center" justify="center" style={{ textAlign: 'center', minHeight: '100%' }}>
                 <Box
                   style={{
-                    width: '70px',
-                    height: '70px',
+                    width: '90px',
+                    height: '90px',
                     borderRadius: '50%',
                     background: 'var(--indigo-9)',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center'
+                    justifyContent: 'center',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
                   }}
                 >
-                  <PersonIcon width="36" height="36" style={{ color: 'white' }} />
+                  <PersonIcon width="44" height="44" style={{ color: 'white' }} />
                 </Box>
 
-                <Heading size="5">Personal</Heading>
+                <Heading size="6">Personal</Heading>
 
                 <Text size="3" weight="bold" style={{ color: 'var(--accent-11)' }}>
                   {formatPriceRange(personalRange)}
@@ -133,8 +135,21 @@ const SelfSelectionCTA = ({ packages, onSelect, isExpired = false, inviteData })
                   <Text size="1" style={{ color: 'var(--gray-11)' }}>• Benefactor support</Text>
                 </Flex>
 
-                <Button size="3" variant="outline" style={{ width: '100%', marginTop: '0.5rem' }} disabled={isExpired}>
-                  View Options
+                <Button
+                  size="3"
+                  style={{
+                    width: '100%',
+                    marginTop: '0.5rem',
+                    background: 'var(--indigo-9)',
+                    color: 'white',
+                    fontWeight: 'bold',
+                    fontSize: '15px',
+                    padding: '12px 24px',
+                    cursor: 'pointer'
+                  }}
+                  disabled={isExpired}
+                >
+                  View Personal Options →
                 </Button>
               </Flex>
             </Card>
@@ -153,7 +168,8 @@ const SelfSelectionCTA = ({ packages, onSelect, isExpired = false, inviteData })
                 height: 'fit-content',
                 transform: 'scale(1.05)',
                 boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
-                position: 'relative'
+                position: 'relative',
+                padding: '2rem'
               }}
               onClick={() => !isExpired && onSelect('brand')}
             >
@@ -165,34 +181,35 @@ const SelfSelectionCTA = ({ packages, onSelect, isExpired = false, inviteData })
                 transform: 'translateX(-50%)',
                 background: 'var(--accent-9)',
                 color: 'white',
-                padding: '4px 16px',
-                borderRadius: '12px',
-                fontSize: '11px',
+                padding: '6px 20px',
+                borderRadius: '16px',
+                fontSize: '12px',
                 fontWeight: 'bold',
                 textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+                letterSpacing: '0.8px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                whiteSpace: 'nowrap'
               }}>
-                Most Popular
+                Biggest Impact
               </Box>
 
-              <Flex direction="column" gap="3" align="center" justify="center" style={{ textAlign: 'center', minHeight: '100%', paddingTop: '0.5rem' }}>
+              <Flex direction="column" gap="4" align="center" justify="center" style={{ textAlign: 'center', minHeight: '100%', paddingTop: '0.5rem' }}>
                 <Box
                   style={{
-                    width: '80px',
-                    height: '80px',
+                    width: '100px',
+                    height: '100px',
                     borderRadius: '50%',
                     background: 'var(--accent-9)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
+                    boxShadow: '0 6px 16px rgba(0,0,0,0.25)'
                   }}
                 >
-                  <TargetIcon width="40" height="40" style={{ color: 'white' }} />
+                  <TargetIcon width="50" height="50" style={{ color: 'white' }} />
                 </Box>
 
-                <Heading size="6">Brand</Heading>
+                <Heading size="7">Brand</Heading>
 
                 <Text size="4" weight="bold" style={{ color: 'white' }}>
                   {formatPriceRange(brandRange)}
@@ -209,8 +226,22 @@ const SelfSelectionCTA = ({ packages, onSelect, isExpired = false, inviteData })
                   <Text size="1" style={{ color: 'rgba(255,255,255,0.85)' }}>• Multi-event sponsorship</Text>
                 </Flex>
 
-                <Button size="3" style={{ width: '100%', marginTop: '0.5rem', background: 'white', color: 'var(--accent-11)' }} disabled={isExpired}>
-                  View Options
+                <Button
+                  size="3"
+                  style={{
+                    width: '100%',
+                    marginTop: '0.5rem',
+                    background: 'white',
+                    color: 'var(--accent-11)',
+                    fontWeight: 'bold',
+                    fontSize: '16px',
+                    padding: '14px 28px',
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                  }}
+                  disabled={isExpired}
+                >
+                  View Brand Options →
                 </Button>
               </Flex>
             </Card>
@@ -226,26 +257,28 @@ const SelfSelectionCTA = ({ packages, onSelect, isExpired = false, inviteData })
                 cursor: isExpired ? 'not-allowed' : 'pointer',
                 opacity: isExpired ? 0.5 : 1,
                 transition: 'all 0.3s ease',
-                height: 'fit-content'
+                height: 'fit-content',
+                padding: '2rem'
               }}
               onClick={() => !isExpired && onSelect('business')}
             >
-              <Flex direction="column" gap="3" align="center" justify="center" style={{ textAlign: 'center', minHeight: '100%' }}>
+              <Flex direction="column" gap="4" align="center" justify="center" style={{ textAlign: 'center', minHeight: '100%' }}>
                 <Box
                   style={{
-                    width: '70px',
-                    height: '70px',
+                    width: '90px',
+                    height: '90px',
                     borderRadius: '50%',
                     background: 'var(--green-9)',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center'
+                    justifyContent: 'center',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
                   }}
                 >
-                  <StarFilledIcon width="36" height="36" style={{ color: 'white' }} />
+                  <StarFilledIcon width="44" height="44" style={{ color: 'white' }} />
                 </Box>
 
-                <Heading size="5">Tactical</Heading>
+                <Heading size="6">Tactical</Heading>
 
                 <Text size="3" weight="bold" style={{ color: 'var(--accent-11)' }}>
                   {formatPriceRange(businessRange)}
@@ -262,8 +295,21 @@ const SelfSelectionCTA = ({ packages, onSelect, isExpired = false, inviteData })
                   <Text size="1" style={{ color: 'var(--gray-11)' }}>• Specific activations</Text>
                 </Flex>
 
-                <Button size="3" variant="outline" style={{ width: '100%', marginTop: '0.5rem' }} disabled={isExpired}>
-                  View Options
+                <Button
+                  size="3"
+                  style={{
+                    width: '100%',
+                    marginTop: '0.5rem',
+                    background: 'var(--green-9)',
+                    color: 'white',
+                    fontWeight: 'bold',
+                    fontSize: '15px',
+                    padding: '12px 24px',
+                    cursor: 'pointer'
+                  }}
+                  disabled={isExpired}
+                >
+                  View Tactical Options →
                 </Button>
               </Flex>
             </Card>
