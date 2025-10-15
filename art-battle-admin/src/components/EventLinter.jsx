@@ -48,6 +48,11 @@ const EventLinter = () => {
   const [suppressReason, setSuppressReason] = useState('');
   const [suppressDuration, setSuppressDuration] = useState('forever');
 
+  // AI Analysis state
+  const [aiAnalysis, setAiAnalysis] = useState(null);
+  const [analyzingAI, setAnalyzingAI] = useState(false);
+  const [showAIAnalysis, setShowAIAnalysis] = useState(false);
+
   // Load events and run linter via edge function with streaming
   const runLinter = async () => {
     try {
@@ -116,8 +121,9 @@ const EventLinter = () => {
               // New findings batch
               console.log(`Received ${data.findings.length} findings from phase: ${data.phase}`);
               accumulatedFindings = [...accumulatedFindings, ...data.findings];
-              setAllFindings(accumulatedFindings);
-              setFindings(accumulatedFindings); // Will be filtered by useEffect
+              setAllFindings(accumulatedFindings); // useEffect will filter and update findings
+              // Show results as soon as first findings arrive
+              if (loading) setLoading(false);
             } else if (data.error) {
               // Error occurred
               console.error('Linter error:', data.error, data.debug);
@@ -356,6 +362,67 @@ const EventLinter = () => {
     return String.fromCodePoint(...codePoints);
   };
 
+  // AI Analysis function
+  const runAIAnalysis = async () => {
+    try {
+      setAnalyzingAI(true);
+      setAiAnalysis(null);
+
+      // Prepare summary of current filtered findings
+      const summary = {
+        total: findings.length,
+        severityCounts,
+        categories: Array.from(new Set(findings.map(f => f.category))),
+        contexts: Array.from(new Set(findings.map(f => f.context))),
+        sampleFindings: findings.slice(0, 20).map(f => ({
+          severity: f.severity,
+          category: f.category,
+          message: f.message,
+          eventEid: f.eventEid,
+          eventName: f.eventName
+        })),
+        filters: {
+          search: searchQuery,
+          severities: Array.from(severityFilters),
+          category: categoryFilter,
+          context: contextFilter,
+          futureOnly,
+          activeOnly
+        }
+      };
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL || 'https://xsqdkubgyqwpyvfltnrf.supabase.co'}/functions/v1/event-linter-ai-analysis`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session?.access_token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ findings: summary })
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      setAiAnalysis(result.analysis);
+      setShowAIAnalysis(true);
+    } catch (err) {
+      console.error('Error running AI analysis:', err);
+      setAiAnalysis({
+        error: 'Failed to generate AI analysis. Please try again.',
+        details: err.message
+      });
+      setShowAIAnalysis(true);
+    } finally {
+      setAnalyzingAI(false);
+    }
+  };
+
   return (
     <Box p="3">
       <Flex direction="column" gap="3">
@@ -367,11 +434,109 @@ const EventLinter = () => {
               Automated event health checks and operational warnings
             </Text>
           </Box>
-          <Button size="1" onClick={runLinter} disabled={loading}>
-            <ReloadIcon />
-            Refresh
-          </Button>
+          <Flex gap="2">
+            <Button size="1" onClick={runAIAnalysis} disabled={analyzingAI || loading || findings.length === 0} variant="soft">
+              {analyzingAI ? <ReloadIcon className="animate-spin" /> : '🤖'}
+              {analyzingAI ? 'Analyzing...' : 'AI Analyze'}
+            </Button>
+            <Button size="1" onClick={runLinter} disabled={loading}>
+              <ReloadIcon />
+              Refresh
+            </Button>
+          </Flex>
         </Flex>
+
+        {/* AI Analysis Section */}
+        {showAIAnalysis && aiAnalysis && (
+          <Card style={{ backgroundColor: 'var(--indigo-2)', borderColor: 'var(--indigo-6)' }}>
+            <Box p="4">
+              <Flex justify="between" align="start" mb="3">
+                <Flex align="center" gap="2">
+                  <Text size="4" weight="bold">🤖 AI Analysis</Text>
+                  <Badge color="indigo" size="1">Beta</Badge>
+                </Flex>
+                <Button size="1" variant="ghost" onClick={() => setShowAIAnalysis(false)}>
+                  <CrossCircledIcon />
+                </Button>
+              </Flex>
+
+              {aiAnalysis.error ? (
+                <Card style={{ backgroundColor: 'var(--red-2)', borderColor: 'var(--red-6)' }}>
+                  <Box p="3">
+                    <Text size="2" weight="medium" color="red">{aiAnalysis.error}</Text>
+                    {aiAnalysis.details && (
+                      <Text size="1" color="gray" mt="1" style={{ display: 'block' }}>
+                        {aiAnalysis.details}
+                      </Text>
+                    )}
+                  </Box>
+                </Card>
+              ) : (
+                <Flex direction="column" gap="3">
+                  {aiAnalysis.overview && (
+                    <Box>
+                      <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>Overview</Text>
+                      <Text size="2" style={{ lineHeight: '1.6' }}>{aiAnalysis.overview}</Text>
+                    </Box>
+                  )}
+
+                  {aiAnalysis.key_issues && aiAnalysis.key_issues.length > 0 && (
+                    <Box>
+                      <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>Key Issues</Text>
+                      <Flex direction="column" gap="1">
+                        {aiAnalysis.key_issues.map((issue, idx) => (
+                          <Text key={idx} size="2" style={{ paddingLeft: '12px', position: 'relative' }}>
+                            <span style={{ position: 'absolute', left: 0 }}>•</span> {issue}
+                          </Text>
+                        ))}
+                      </Flex>
+                    </Box>
+                  )}
+
+                  {aiAnalysis.recommendations && aiAnalysis.recommendations.length > 0 && (
+                    <Box>
+                      <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>Recommendations</Text>
+                      <Flex direction="column" gap="1">
+                        {aiAnalysis.recommendations.map((rec, idx) => (
+                          <Text key={idx} size="2" style={{ paddingLeft: '12px', position: 'relative' }}>
+                            <span style={{ position: 'absolute', left: 0 }}>→</span> {rec}
+                          </Text>
+                        ))}
+                      </Flex>
+                    </Box>
+                  )}
+
+                  {aiAnalysis.priority_actions && aiAnalysis.priority_actions.length > 0 && (
+                    <Card style={{ backgroundColor: 'var(--amber-2)', borderColor: 'var(--amber-6)' }}>
+                      <Box p="3">
+                        <Text size="2" weight="bold" mb="2" style={{ display: 'block' }}>Priority Actions</Text>
+                        <Flex direction="column" gap="1">
+                          {aiAnalysis.priority_actions.map((action, idx) => (
+                            <Text key={idx} size="2" weight="medium" style={{ paddingLeft: '12px', position: 'relative' }}>
+                              <span style={{ position: 'absolute', left: 0 }}>⚡</span> {action}
+                            </Text>
+                          ))}
+                        </Flex>
+                      </Box>
+                    </Card>
+                  )}
+
+                  <Separator />
+
+                  <Flex justify="between" align="center">
+                    <Text size="1" color="gray">
+                      Analysis based on {findings.length} findings
+                    </Text>
+                    <Button size="1" variant="soft" onClick={runAIAnalysis} disabled={analyzingAI}>
+                      <ReloadIcon />
+                      Regenerate
+                    </Button>
+                  </Flex>
+                </Flex>
+              )}
+            </Box>
+          </Card>
+        )}
 
         {/* Summary Stats - Clickable Filters */}
         <Card size="1">

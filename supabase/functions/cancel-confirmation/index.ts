@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-import { emailTemplates } from '../_shared/emailTemplates.ts';
+import { emailTemplates, formatEventDateTime } from '../_shared/emailTemplates.ts';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
@@ -154,28 +154,13 @@ serve(async (req)=>{
       // Get artist profile with email
       const { data: profileData } = await supabase.from('artist_profiles').select('name, person:people(email)').eq('id', confirmationWithEvent.artist_profile_id).single();
       if (profileData?.person?.email && confirmationWithEvent.events) {
-        const eventDate = confirmationWithEvent.events.event_start_datetime ? new Date(confirmationWithEvent.events.event_start_datetime).toLocaleDateString('en-US', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric'
-        }) : 'TBD';
-        const cancellationDate = new Date().toLocaleDateString('en-US', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit'
-        });
         const emailData = emailTemplates.artistCancelled({
           artistName: profileData.name || 'Artist',
           eventEid: confirmationWithEvent.event_eid,
           eventName: confirmationWithEvent.events.name || confirmationWithEvent.event_eid,
-          eventDate: eventDate,
+          eventStartDateTime: confirmationWithEvent.events.event_start_datetime || '',
           eventVenue: confirmationWithEvent.events.venue || 'TBD',
-          cityName: confirmationWithEvent.events.cities?.name || 'Unknown',
-          cancellationDate: cancellationDate
+          cityName: confirmationWithEvent.events.cities?.name || 'Unknown'
         });
         // Call send-custom-email function
         const emailResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-custom-email`, {
@@ -204,14 +189,9 @@ serve(async (req)=>{
     // Don't fail the cancellation if email fails
     }
     // Send Slack notification about the cancellation
-    const eventDate = confirmationWithEvent.events?.event_start_datetime ? new Date(confirmationWithEvent.events.event_start_datetime).toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    }) : 'Unknown date';
+    const eventDate = confirmationWithEvent.events?.event_start_datetime
+      ? formatEventDateTime(confirmationWithEvent.events.event_start_datetime, confirmationWithEvent.events.cities?.name || 'Unknown')
+      : 'Unknown date';
     // Create rich Slack blocks format matching current confirmation style
     const blocks = [
       {

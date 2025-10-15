@@ -30,7 +30,7 @@ serve(async (req)=>{
     console.log('Populating email queue for event:', eventEid);
     // Get event details - COPY EXACT SCHEMA FROM WORKING FUNCTION
     const { data: event, error: eventError } = await supabase.from('events').select(`
-        id, name, eid, event_start_datetime,
+        id, name, eid, event_start_datetime, venue,
         cities!fk_events_city (
           name
         )
@@ -110,14 +110,8 @@ serve(async (req)=>{
       });
     });
     console.log(`Grouped into ${artistGroups.size} artists`);
-    // Format event date and city name - COPY FROM WORKING FUNCTION
-    const eventDate = event.event_start_datetime ? new Date(event.event_start_datetime).toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    }) : 'the event';
-    const cityName = event.cities?.name || 'our location';
+    // Get city name for timezone conversion
+    const cityName = event.cities?.name || 'Unknown';
     // Process each artist and populate queue
     const queueEntries = [];
     for (const [artistId, { artist, artworks }] of artistGroups){
@@ -176,7 +170,8 @@ serve(async (req)=>{
         artistName: artistName,
         eventEid: event.eid,
         eventName: event.name || event.eid,
-        eventDate: eventDate,
+        eventStartDateTime: event.event_start_datetime || '',
+        eventVenue: event.venue || 'TBD',
         cityName: cityName,
         soldArtworks: soldArtworks,
         noBidArtworks: noBidArtworks,

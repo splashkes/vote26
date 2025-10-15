@@ -111,6 +111,47 @@ rules:
 
   # ==================== PRE-EVENT COMPLETENESS ====================
 
+  - id: event_2weeks_no_venue
+    name: Event 2 Weeks Away - No Venue
+    description: Event in 14 days or less without venue set
+    severity: warning
+    category: data_completeness
+    context: pre_event
+    priority_score: 70
+    conditions:
+      - field: event_start_datetime
+        operator: upcoming_days
+        value: 14
+      - field: event_start_datetime
+        operator: upcoming_days_more_than
+        value: 7
+      - field: venue
+        operator: is_empty
+    message: "Event in {{days_until}} days but venue not set"
+    action_text: "Set Venue"
+    action_url: "/admin/events/{{event_id}}/edit"
+
+  - id: event_week_no_venue
+    name: Event Week Away - No Venue
+    description: Event in 7 days or less without venue set
+    severity: error
+    category: data_completeness
+    context: pre_event
+    priority_score: 88
+    suppress_if: []
+    conditions:
+      - field: event_start_datetime
+        operator: upcoming_days
+        value: 7
+      - field: event_start_datetime
+        operator: upcoming_days_more_than
+        value: 1
+      - field: venue
+        operator: is_empty
+    message: "Event in {{days_until}} days but venue not set"
+    action_text: "Set Venue"
+    action_url: "/admin/events/{{event_id}}/edit"
+
   - id: event_tomorrow_no_venue
     name: Event Tomorrow - No Venue
     description: Event is tomorrow but venue information is missing
@@ -118,6 +159,7 @@ rules:
     category: data_completeness
     context: pre_event
     priority_score: 95
+    suppress_if: [event_week_no_venue]
     conditions:
       - field: event_start_datetime
         operator: upcoming_hours
@@ -368,6 +410,40 @@ rules:
     message: "No tax rate set for auction sales"
     action_text: "Set Tax Rate"
     action_url: "/admin/events/{{event_id}}/financial"
+
+  - id: missing_eventbrite_id_historical
+    name: Missing Eventbrite ID
+    description: Event from past 4 years has no Eventbrite ID configured
+    severity: warning
+    category: data_completeness
+    context: always
+    priority_score: 30
+    conditions:
+      - field: event_start_datetime
+        operator: within_days
+        value: 1460
+      - field: eventbrite_id
+        operator: is_empty
+    message: "No Eventbrite ID linked for historical tracking"
+    action_text: "Add Eventbrite ID"
+    action_url: "/admin/events/{{event_id}}/edit"
+
+  - id: missing_venue_historical
+    name: Missing Venue
+    description: Event from past 4 years has no venue configured
+    severity: warning
+    category: data_completeness
+    context: always
+    priority_score: 50
+    conditions:
+      - field: event_start_datetime
+        operator: within_days
+        value: 1460
+      - field: venue
+        operator: is_empty
+    message: "No venue set - needed for historical records and emails"
+    action_text: "Set Venue"
+    action_url: "/admin/events/{{event_id}}/edit"
 
   # ==================== FUTURE EVENT SUCCESS ====================
 

@@ -1,7 +1,7 @@
 // Email templates for artist notifications
 
 // Utility function to convert UTC datetime to local venue time
-const formatEventDateTime = (utcDateTime: string, cityName: string): string => {
+export const formatEventDateTime = (utcDateTime: string, cityName: string): string => {
   if (!utcDateTime) return 'TBD';
   
   const timezoneMap = {
@@ -67,7 +67,7 @@ export const emailTemplates = {
         
         <p><strong>What's Next:</strong></p>
         <ul>
-          <li>Our team will review your application</li>
+          <li>If we have space available, we will send you an invitation</li>
           <li>Check your artist dashboard for updates</li>
         </ul>
         
@@ -97,7 +97,7 @@ Event Details:
 - City: ${data.cityName}
 
 What's Next:
-- Our team will review your application
+- If we have space available, we will send you an invitation
 - Check your artist dashboard for updates
 
 View your dashboard: https://artb.art/profile
@@ -282,11 +282,23 @@ artbattle.com
     artistName: string
     eventEid: string
     eventName: string
-    eventDate: string
+    eventStartDateTime: string
     eventVenue: string
     cityName: string
-    cancellationDate: string
-  }) => ({
+  }) => {
+    const eventDate = formatEventDateTime(data.eventStartDateTime, data.cityName);
+    const cancellationDate = new Date().toLocaleString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'UTC'
+    });
+
+    return ({
     subject: `Cancellation Confirmed - ${data.eventEid} ${data.cityName}`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333; line-height: 1.6;">
@@ -301,10 +313,10 @@ artbattle.com
         <p><strong>Cancelled Event Details:</strong></p>
         <ul>
           <li><strong>Event:</strong> ${data.eventEid} - ${data.eventName}</li>
-          <li><strong>Date:</strong> ${data.eventDate}</li>
+          <li><strong>Date:</strong> ${eventDate}</li>
           <li><strong>Location:</strong> ${data.eventVenue}</li>
           <li><strong>City:</strong> ${data.cityName}</li>
-          <li><strong>Cancelled On:</strong> ${data.cancellationDate}</li>
+          <li><strong>Cancelled On:</strong> ${cancellationDate}</li>
         </ul>
         
         <p><strong>We're Sorry to See You Go</strong></p>
@@ -331,10 +343,10 @@ We have confirmed the cancellation of your participation in ${data.eventName}.
 
 Cancelled Event Details:
 - Event: ${data.eventEid} - ${data.eventName}
-- Date: ${data.eventDate}
+- Date: ${eventDate}
 - Location: ${data.eventVenue}
 - City: ${data.cityName}
-- Cancelled On: ${data.cancellationDate}
+- Cancelled On: ${cancellationDate}
 
 We're Sorry to See You Go
 We understand that sometimes plans change. You're always welcome to apply for future Art Battle events!
@@ -348,14 +360,15 @@ Questions? Reply to this email or contact us at artists@artbattle.com
 Art Battle - Live Competitive Painting Events
 artbattle.com
     `
-  }),
+    });
+  },
 
   // Artist payment notification email (post-event)
   paymentNotification: (data: {
     artistName: string
     eventEid: string
     eventName: string
-    eventDate: string
+    eventStartDateTime: string
     eventVenue: string
     cityName: string
     soldArtworks: Array<{
@@ -371,7 +384,10 @@ artbattle.com
     paymentMethodText: string
     hasUnpaidSales: boolean
     detailedArtworkList: string
-  }) => ({
+  }) => {
+    const eventDate = formatEventDateTime(data.eventStartDateTime, data.cityName);
+
+    return ({
     subject: data.soldArtworks.length > 0 
       ? `Art Battle ${data.cityName} - Payment Information Required ($${data.totalEarned} owed)`
       : `Art Battle ${data.cityName} - Thank you for participating!`,
@@ -388,15 +404,15 @@ artbattle.com
         
         <p>Hello <strong>${data.artistName}</strong>,</p>
         
-        <p>Thank you for participating in Art Battle ${data.cityName}! ${data.soldArtworks.length > 0 
+        <p>Thank you for participating in Art Battle ${data.cityName}! ${data.soldArtworks.length > 0
           ? `Congratulations on the sale of your painting${data.soldArtworks.length > 1 ? 's' : ''}. We are thrilled that you were able to showcase your skills and share your art with our community.`
           : 'Thank you for showcasing your artistic talents and contributing to the vibrant energy of our event.'
         }</p>
-        
+
         <p><strong>Event Details:</strong></p>
         <ul>
           <li><strong>Event:</strong> ${data.eventEid} - ${data.eventName}</li>
-          <li><strong>Date:</strong> ${data.eventDate}</li>
+          <li><strong>Date:</strong> ${eventDate}</li>
           <li><strong>Location:</strong> ${data.eventVenue}</li>
           <li><strong>City:</strong> ${data.cityName}</li>
         </ul>
@@ -442,14 +458,14 @@ Art Battle - ${data.soldArtworks.length > 0 ? 'Payment Information Required' : '
 
 Hello ${data.artistName},
 
-Thank you for participating in Art Battle ${data.cityName}! ${data.soldArtworks.length > 0 
+Thank you for participating in Art Battle ${data.cityName}! ${data.soldArtworks.length > 0
   ? `Congratulations on the sale of your painting${data.soldArtworks.length > 1 ? 's' : ''}. We are thrilled that you were able to showcase your skills and share your art with our community.`
   : 'Thank you for showcasing your artistic talents and contributing to the vibrant energy of our event.'
 }
 
 Event Details:
 - Event: ${data.eventEid} - ${data.eventName}
-- Date: ${data.eventDate}
+- Date: ${eventDate}
 - Location: ${data.eventVenue}
 - City: ${data.cityName}
 
@@ -485,5 +501,6 @@ Questions? Reply to this email or contact us at artists@artbattle.com
 Art Battle - Live Competitive Painting Events
 artbattle.com
     `
-  })
+    });
+  }
 };
