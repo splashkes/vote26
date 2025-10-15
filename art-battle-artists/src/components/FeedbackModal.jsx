@@ -9,6 +9,7 @@ import {
   Checkbox,
   Callout,
   Slider as RadixSlider,
+  RadioGroup,
   Box,
   Card,
   ScrollArea
@@ -17,10 +18,17 @@ import { InfoCircledIcon, CheckCircledIcon, ChatBubbleIcon } from '@radix-ui/rea
 import { supabase } from '../lib/supabase';
 
 /**
- * Custom Slider Component for Ratings
- * Wraps Radix Slider with labels and value display
+ * Custom Slider Component for NPS Rating
  */
-const RatingSlider = ({ question, value, onChange, min = 1, max = 5, required = false, leftLabel, rightLabel }) => {
+const RatingSlider = ({ question, value, onChange, min = 1, max = 5, required = false }) => {
+  const labels = {
+    1: 'Would not recommend',
+    2: 'Unlikely',
+    3: 'Neutral',
+    4: 'Likely',
+    5: 'Very Likely'
+  };
+
   return (
     <Flex direction="column" gap="2" style={{ width: '100%' }}>
       <Flex justify="between" align="center">
@@ -57,12 +65,43 @@ const RatingSlider = ({ question, value, onChange, min = 1, max = 5, required = 
         />
       </Box>
 
-      {(leftLabel || rightLabel) && (
-        <Flex justify="between" px="2">
-          <Text size="1" color="gray">{leftLabel || min}</Text>
-          <Text size="1" color="gray">{rightLabel || max}</Text>
-        </Flex>
+      <Flex justify="between" px="2">
+        <Text size="1" color="gray">1 - Not at all likely</Text>
+        <Text size="1" color="gray">5 - Extremely likely</Text>
+      </Flex>
+
+      {value && labels[value] && (
+        <Text size="2" align="center" weight="medium" style={{ color: 'var(--crimson-11)' }}>
+          {labels[value]}
+        </Text>
       )}
+    </Flex>
+  );
+};
+
+/**
+ * Multiple Choice Component
+ */
+const MultipleChoice = ({ question, options, value, onChange, required = false }) => {
+  return (
+    <Flex direction="column" gap="2" style={{ width: '100%' }}>
+      <Text size="3" weight="medium">
+        {question}
+        {required && <Text color="red" style={{ display: 'inline' }}> *</Text>}
+      </Text>
+
+      <RadioGroup.Root value={value || ''} onValueChange={onChange}>
+        <Flex direction="column" gap="2">
+          {options.map((option, idx) => (
+            <Text as="label" key={idx} size="2">
+              <Flex gap="2" align="center">
+                <RadioGroup.Item value={option} />
+                <Text>{option}</Text>
+              </Flex>
+            </Text>
+          ))}
+        </Flex>
+      </RadioGroup.Root>
     </Flex>
   );
 };
@@ -80,117 +119,111 @@ const FeedbackModal = ({ open, onOpenChange, event, artistProfile, onSubmitSucce
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
 
-  // Question template structure (from spec)
+  // Question template structure
   const questions = [
-    // Event Experience
+    // Communication & Preparation
     {
-      section: 'Event Experience',
+      section: 'Communication & Preparation',
       items: [
         {
-          id: 'artist_post_event_organization',
-          text: 'How organized was the event?',
-          type: 'slider_1_5',
-          required: false
-        }
-      ]
-    },
-    // Producer & Staff
-    {
-      section: 'Producer & Staff',
-      items: [
-        {
-          id: 'artist_post_event_producer_communication',
-          text: 'How satisfied were you with producer communication?',
-          type: 'slider_1_5',
-          required: false
-        }
-      ]
-    },
-    // Artwork & Materials
-    {
-      section: 'Artwork & Materials',
-      items: [
-        {
-          id: 'artist_post_event_artwork_handling',
-          text: 'How well was your artwork handled and stored?',
-          type: 'slider_1_5',
-          required: false
-        }
-      ]
-    },
-    // Technology
-    {
-      section: 'Technology',
-      items: [
-        {
-          id: 'artist_post_event_technology',
-          text: 'How smooth was the technology (voting, displays, timers)?',
-          type: 'slider_1_5',
-          required: false
-        }
-      ]
-    },
-    // Payment
-    {
-      section: 'Payment',
-      items: [
-        {
-          id: 'artist_post_event_payment',
-          text: 'How easy was it to receive payment?',
-          type: 'slider_1_5',
-          required: false
-        }
-      ]
-    },
-    // Artists
-    {
-      section: 'Artists',
-      items: [
-        {
-          id: 'artist_post_event_peer_quality',
-          text: 'Quality of fellow artists',
-          type: 'slider_1_5',
-          required: false
-        }
-      ]
-    },
-    // Venue
-    {
-      section: 'Venue',
-      items: [
-        {
-          id: 'artist_post_event_venue',
-          text: 'How suitable was the venue?',
-          type: 'slider_1_5',
-          required: false
-        }
-      ]
-    },
-    // Overall (NPS)
-    {
-      section: 'Overall',
-      items: [
-        {
-          id: 'artist_post_event_nps',
-          text: 'How likely are you to participate in another Art Battle event?',
-          type: 'slider_1_10',
-          required: true
-        }
-      ]
-    },
-    // Additional Feedback
-    {
-      section: 'Additional Feedback',
-      items: [
-        {
-          id: 'artist_post_event_highlights',
-          text: 'What was the highlight of this event?',
-          type: 'text',
+          id: 'artist_communication_satisfaction',
+          text: 'How satisfied were you with communication from Art Battle before the event?',
+          type: 'multiple_choice',
+          options: ['Very Satisfied', 'Satisfied', 'Neutral', 'Unsatisfied', 'Very Unsatisfied'],
           required: false
         },
         {
-          id: 'artist_post_event_improvements',
-          text: 'What could we improve?',
+          id: 'artist_preparation_quality',
+          text: 'How well did the team prepare you for the event? (rules, timing, expectations, etc.)',
+          type: 'multiple_choice',
+          options: ['Totally prepared', 'Well prepared', 'Somewhat prepared', 'Unprepared', 'Not at all prepared'],
+          required: false
+        },
+        {
+          id: 'artist_communication_improvements',
+          text: 'If communication or preparation wasn\'t perfect, how can we improve?',
+          type: 'text',
+          required: false
+        }
+      ]
+    },
+    // The Experience
+    {
+      section: 'The Experience',
+      items: [
+        {
+          id: 'artist_overall_satisfaction',
+          text: 'How satisfied were you with your overall Art Battle experience?',
+          type: 'multiple_choice',
+          options: ['Very Satisfied', 'Satisfied', 'Neutral', 'Unsatisfied', 'Very Unsatisfied'],
+          required: false
+        },
+        {
+          id: 'artist_materials_satisfaction',
+          text: 'How satisfied were you with the art materials provided? (canvas, paint, easel, etc.)',
+          type: 'multiple_choice',
+          options: ['Very Satisfied', 'Satisfied', 'Neutral', 'Unsatisfied', 'Very Unsatisfied'],
+          required: false
+        },
+        {
+          id: 'artist_competition_fairness',
+          text: 'How fair did you feel the competition was?',
+          type: 'multiple_choice',
+          options: ['Very fair', 'Mostly fair', 'Somewhat fair', 'Somewhat unfair', 'Not fair at all'],
+          required: false
+        },
+        {
+          id: 'artist_experience_comments',
+          text: 'Do you have any comments about your experience, the materials, or the fairness of the event?',
+          type: 'text',
+          required: false
+        }
+      ]
+    },
+    // Auction & Payment
+    {
+      section: 'Auction & Payment',
+      items: [
+        {
+          id: 'artist_auction_process',
+          text: 'If your artwork sold in the auction, did you feel the process was smooth and fair?',
+          type: 'multiple_choice',
+          options: ['Yes', 'Mostly', 'Somewhat', 'No', 'My work was not in the auction'],
+          required: false
+        },
+        {
+          id: 'artist_payment_status',
+          text: 'Have you received your artist payment (or are you aware of the process and timeline)?',
+          type: 'multiple_choice',
+          options: [
+            'Yes, I\'ve been paid',
+            'Yes, I know when to expect it',
+            'No, I haven\'t been paid or heard anything',
+            'Not applicable (I didn\'t sell or am not owed payment)'
+          ],
+          required: false
+        },
+        {
+          id: 'artist_auction_payment_comments',
+          text: 'Any comments or suggestions about the auction or payment process?',
+          type: 'text',
+          required: false
+        }
+      ]
+    },
+    // Final Thoughts
+    {
+      section: 'Final Thoughts',
+      items: [
+        {
+          id: 'artist_nps_recommendation',
+          text: 'How likely are you to recommend Art Battle to other artists and friends?',
+          type: 'slider_1_5',
+          required: true
+        },
+        {
+          id: 'artist_final_comments',
+          text: 'Any final comments or suggestions?',
           type: 'text',
           required: false
         }
@@ -303,7 +336,7 @@ const FeedbackModal = ({ open, onOpenChange, event, artistProfile, onSubmitSucce
           Event Feedback: {event.name || event.eid}
         </Dialog.Title>
         <Dialog.Description size="2" mb="4">
-          Your feedback helps us improve Art Battle events for everyone. All responses are optional except the overall rating.
+          Thank you for participating in Art Battle! This short survey (2-3 minutes) helps us understand what's working and what can be better.
         </Dialog.Description>
 
         {error && (
@@ -346,22 +379,17 @@ const FeedbackModal = ({ open, onOpenChange, event, artistProfile, onSubmitSucce
                           min={1}
                           max={5}
                           required={item.required}
-                          leftLabel="Poor"
-                          rightLabel="Excellent"
                         />
                       );
-                    } else if (item.type === 'slider_1_10') {
+                    } else if (item.type === 'multiple_choice') {
                       return (
-                        <RatingSlider
+                        <MultipleChoice
                           key={item.id}
                           question={item.text}
+                          options={item.options}
                           value={responses[item.id]}
                           onChange={(val) => handleResponseChange(item.id, val)}
-                          min={1}
-                          max={10}
                           required={item.required}
-                          leftLabel="Not at all likely"
-                          rightLabel="Extremely likely"
                         />
                       );
                     } else if (item.type === 'text') {
