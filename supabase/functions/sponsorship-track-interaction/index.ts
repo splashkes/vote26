@@ -68,70 +68,69 @@ serve(async (req) => {
     // Send Slack notification for request_call interactions
     if (interactionType === 'request_call' && metadata) {
       try {
-        const slackToken = Deno.env.get('SLACK_BOT_TOKEN')
-        const slackChannel = Deno.env.get('SLACK_SPONSORSHIP_CHANNEL') || '#sponsor-inqiure'
+        const slackChannel = '#sponsor-inqiure'
 
-        if (slackToken) {
-          // Format the message with all details
-          const {
-            inviteData,
-            selectedPackage,
-            selectedAddons = [],
-            selectedEvents = [],
-            totalPrice,
-            pricePerEvent,
-            totalEvents,
-            discount,
-            phoneNumber,
-            phoneNationalFormat
-          } = metadata
+        // Format the message with all details
+        const {
+          inviteData,
+          selectedPackage,
+          selectedAddons = [],
+          selectedEvents = [],
+          totalPrice,
+          pricePerEvent,
+          totalEvents,
+          discount,
+          phoneNumber,
+          phoneNationalFormat
+        } = metadata
 
-          let messageText = `🔔 *Sponsorship Call Request*\n\n`
-          messageText += `*Prospect:* ${inviteData?.prospect_company || inviteData?.prospect_name || 'Unknown'}\n`
-          messageText += `*Event:* ${inviteData?.event_name || 'Unknown'} (${inviteData?.event_city || 'Unknown'})\n`
-          messageText += `*Date:* ${inviteData?.event_start_datetime ? new Date(inviteData.event_start_datetime).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : 'Unknown'}\n`
-          messageText += `*Venue:* ${inviteData?.event_venue || 'Unknown'}\n\n`
+        let messageText = `🔔 *Sponsorship Call Request*\n\n`
+        messageText += `*Prospect:* ${inviteData?.prospect_company || inviteData?.prospect_name || 'Unknown'}\n`
+        messageText += `*Event:* ${inviteData?.event_name || 'Unknown'} (${inviteData?.event_city || 'Unknown'})\n`
+        messageText += `*Date:* ${inviteData?.event_start_datetime ? new Date(inviteData.event_start_datetime).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : 'Unknown'}\n`
+        messageText += `*Venue:* ${inviteData?.event_venue || 'Unknown'}\n\n`
 
-          messageText += `*Package Selection:*\n`
-          messageText += `• ${selectedPackage?.name || 'Unknown Package'} ($${selectedPackage?.base_price?.toLocaleString() || '0'})\n`
+        messageText += `*Package Selection:*\n`
+        messageText += `• ${selectedPackage?.name || 'Unknown Package'} ($${selectedPackage?.base_price?.toLocaleString() || '0'})\n`
 
-          if (selectedAddons.length > 0) {
-            messageText += `*Add-ons:*\n`
-            selectedAddons.forEach(addon => {
-              messageText += `• ${addon.name} ($${addon.base_price?.toLocaleString() || '0'})\n`
-            })
-          }
-
-          if (selectedEvents.length > 0) {
-            messageText += `\n*Multi-Event Selection:*\n`
-            messageText += `• Primary Event: ${inviteData?.event_name || 'Unknown'}\n`
-            selectedEvents.forEach(event => {
-              messageText += `• ${event.name}\n`
-            })
-            messageText += `\n*Total Events:* ${totalEvents}\n`
-            if (discount) {
-              messageText += `*Discount:* ${discount}% OFF\n`
-            }
-            messageText += `*Price Per Event:* $${pricePerEvent?.toLocaleString() || '0'}\n`
-          }
-
-          messageText += `\n*Total Price:* $${totalPrice?.toLocaleString() || '0'} ${selectedPackage?.currency || 'USD'}\n`
-          messageText += `\n📞 *CALL THIS NUMBER:* ${phoneNationalFormat || phoneNumber || 'No phone provided'}\n`
-          messageText += `*Email:* ${inviteData?.prospect_email || 'No email'}\n`
-
-          await fetch('https://slack.com/api/chat.postMessage', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${slackToken}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              channel: slackChannel,
-              text: messageText,
-              unfurl_links: false,
-              unfurl_media: false,
-            }),
+        if (selectedAddons.length > 0) {
+          messageText += `*Add-ons:*\n`
+          selectedAddons.forEach(addon => {
+            messageText += `• ${addon.name} ($${addon.base_price?.toLocaleString() || '0'})\n`
           })
+        }
+
+        if (selectedEvents.length > 0) {
+          messageText += `\n*Multi-Event Selection:*\n`
+          messageText += `• Primary Event: ${inviteData?.event_name || 'Unknown'}\n`
+          selectedEvents.forEach(event => {
+            messageText += `• ${event.name}\n`
+          })
+          messageText += `\n*Total Events:* ${totalEvents}\n`
+          if (discount) {
+            messageText += `*Discount:* ${discount}% OFF\n`
+          }
+          messageText += `*Price Per Event:* $${pricePerEvent?.toLocaleString() || '0'}\n`
+        }
+
+        messageText += `\n*Total Price:* $${totalPrice?.toLocaleString() || '0'} ${selectedPackage?.currency || 'USD'}\n`
+        messageText += `\n📞 *CALL THIS NUMBER:* ${phoneNationalFormat || phoneNumber || 'No phone provided'}\n`
+        messageText += `*Email:* ${inviteData?.prospect_email || 'No email'}\n`
+
+        // Queue Slack notification using existing RPC function
+        const { error: slackError } = await supabaseClient.rpc('queue_slack_notification', {
+          p_channel_name: slackChannel,
+          p_message_type: 'sponsorship_call_request',
+          p_text: messageText,
+          p_blocks: null,
+          p_event_id: inviteData?.event_id || null
+        })
+
+        if (slackError) {
+          console.error('Failed to queue Slack notification:', slackError)
+          // Don't fail the interaction tracking
+        } else {
+          console.log('Slack notification queued successfully to', slackChannel)
         }
       } catch (slackError) {
         // Log Slack error but don't fail the interaction tracking
