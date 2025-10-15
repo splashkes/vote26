@@ -94,9 +94,9 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
   };
 
   const getDiscount = (eventCount) => {
-    if (eventCount >= 4) return 50;
-    if (eventCount === 3) return 40;
-    if (eventCount === 2) return 25;
+    if (eventCount >= 4) return 30;
+    if (eventCount === 3) return 20;
+    if (eventCount === 2) return 15;
     return 0;
   };
 
@@ -274,7 +274,7 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                   }}
                 >
                   <Heading size="6" style={{ color: totalEvents === 2 ? 'white' : 'inherit' }}>
-                    25% OFF
+                    15% OFF
                   </Heading>
                   <Text size="2" style={{ color: totalEvents === 2 ? 'rgba(255,255,255,0.9)' : 'var(--gray-11)' }}>
                     2 Events
@@ -290,7 +290,7 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                   }}
                 >
                   <Heading size="6" style={{ color: totalEvents === 3 ? 'white' : 'inherit' }}>
-                    40% OFF
+                    20% OFF
                   </Heading>
                   <Text size="2" style={{ color: totalEvents === 3 ? 'rgba(255,255,255,0.9)' : 'var(--gray-11)' }}>
                     3 Events
@@ -306,7 +306,7 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                   }}
                 >
                   <Heading size="6" style={{ color: totalEvents >= 4 ? 'white' : 'inherit' }}>
-                    50% OFF
+                    30% OFF
                   </Heading>
                   <Text size="2" style={{ color: totalEvents >= 4 ? 'rgba(255,255,255,0.9)' : 'var(--gray-11)' }}>
                     4+ Events
