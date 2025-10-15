@@ -12,13 +12,16 @@ import {
   Checkbox,
   Separator
 } from '@radix-ui/themes';
-import { CalendarIcon, RocketIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon, QuestionMarkCircledIcon } from '@radix-ui/react-icons';
+import { CalendarIcon, RocketIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon, QuestionMarkCircledIcon, MobileIcon } from '@radix-ui/react-icons';
+import { trackInteraction } from '../lib/api';
 
 const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfirm, onSkip, discountPercent }) => {
   const [upcomingEvents, setUpcomingEvents] = useState([]);
   const [selectedEvents, setSelectedEvents] = useState([]);
   const [showBenefits, setShowBenefits] = useState(false);
   const [showDiscountBreakdown, setShowDiscountBreakdown] = useState(false);
+  const [requestingCall, setRequestingCall] = useState(false);
+  const [callRequested, setCallRequested] = useState(false);
 
   useEffect(() => {
     loadUpcomingEvents();
@@ -179,6 +182,38 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
 
   const formatCurrency = (amount) => {
     return Math.round(amount).toLocaleString(getLocale());
+  };
+
+  const handleRequestCall = async () => {
+    setRequestingCall(true);
+
+    try {
+      // Get the invite hash from URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const hash = urlParams.get('i') || window.location.pathname.split('/').pop();
+
+      const totalPrice = calculateDiscountedTotal();
+      const pricePerEvent = totalPrice / totalEvents;
+
+      // Track the interaction with full metadata
+      await trackInteraction(hash, 'request_call', selectedPackage.id, {
+        inviteData,
+        selectedPackage,
+        selectedAddons,
+        selectedEvents,
+        totalPrice,
+        pricePerEvent,
+        totalEvents,
+        discount
+      });
+
+      setCallRequested(true);
+    } catch (error) {
+      console.error('Error requesting call:', error);
+      alert('Failed to submit call request. Please try again or contact us directly.');
+    } finally {
+      setRequestingCall(false);
+    }
   };
 
   const totalEvents = selectedEvents.length + 1;
@@ -607,10 +642,27 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
           </Card>
 
           {/* Actions */}
-          <Flex direction="column" gap="2" align="center">
+          <Flex direction="column" gap="3" align="center">
             <Button size="3" onClick={() => onConfirm(selectedEvents)}>
               Proceed to Checkout
             </Button>
+
+            <Button
+              size="3"
+              variant="outline"
+              onClick={handleRequestCall}
+              disabled={requestingCall || callRequested}
+            >
+              <MobileIcon />
+              {callRequested ? 'Call Requested - We\'ll Contact You Soon!' : requestingCall ? 'Submitting...' : 'Request a Call'}
+            </Button>
+
+            {callRequested && (
+              <Text size="2" weight="bold" style={{ color: 'var(--green-11)' }}>
+                ✓ We've received your request and will contact you shortly!
+              </Text>
+            )}
+
             <Text size="2" style={{ fontStyle: 'italic', color: 'var(--gray-11)' }}>
               Customize your brand name and media files after payment!
             </Text>

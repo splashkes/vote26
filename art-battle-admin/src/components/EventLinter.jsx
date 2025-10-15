@@ -757,6 +757,16 @@ const EventLinter = () => {
           </Flex>
         </Card>
 
+        {/* Stats Info */}
+        <Flex align="center" gap="2">
+          <Text size="1" color="gray">
+            {rules.length || 0} rules / {findings.length} findings
+          </Text>
+          {loading && (
+            <ReloadIcon width="12" height="12" className="animate-spin" style={{ color: 'var(--gray-9)' }} />
+          )}
+        </Flex>
+
         {/* Console-like Results Table */}
         <Card style={{
           backgroundColor: 'var(--color-panel-solid)',
@@ -838,16 +848,6 @@ const EventLinter = () => {
             </Table.Root>
           )}
         </Card>
-
-        {/* Footer Info */}
-        <Flex justify="between" align="center" style={{ fontSize: '11px' }}>
-          <Text size="1" color="gray">
-            {findings.length} findings • {rules.length || 0} rules
-          </Text>
-          <Text size="1" color="gray">
-            {new Date().toLocaleTimeString()}
-          </Text>
-        </Flex>
       </Flex>
 
       {/* Event Details Modal */}
