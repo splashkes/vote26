@@ -149,7 +149,7 @@ const SelfSelectionCTA = ({ packages, onSelect, isExpired = false, inviteData })
                   }}
                   disabled={isExpired}
                 >
-                  View Personal Options →
+                  View Options ➜
                 </Button>
               </Flex>
             </Card>
@@ -176,19 +176,20 @@ const SelfSelectionCTA = ({ packages, onSelect, isExpired = false, inviteData })
               {/* Popular badge */}
               <Box style={{
                 position: 'absolute',
-                top: '-12px',
+                top: '-16px',
                 left: '50%',
                 transform: 'translateX(-50%)',
                 background: 'var(--accent-9)',
                 color: 'white',
-                padding: '6px 20px',
-                borderRadius: '16px',
-                fontSize: '12px',
+                padding: '8px 24px',
+                borderRadius: '20px',
+                fontSize: '13px',
                 fontWeight: 'bold',
                 textTransform: 'uppercase',
-                letterSpacing: '0.8px',
+                letterSpacing: '1px',
                 boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                zIndex: 10
               }}>
                 Biggest Impact
               </Box>
@@ -241,7 +242,7 @@ const SelfSelectionCTA = ({ packages, onSelect, isExpired = false, inviteData })
                   }}
                   disabled={isExpired}
                 >
-                  View Brand Options →
+                  View Options ➜
                 </Button>
               </Flex>
             </Card>
@@ -309,7 +310,7 @@ const SelfSelectionCTA = ({ packages, onSelect, isExpired = false, inviteData })
                   }}
                   disabled={isExpired}
                 >
-                  View Tactical Options →
+                  View Options ➜
                 </Button>
               </Flex>
             </Card>
