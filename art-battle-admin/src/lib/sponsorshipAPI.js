@@ -581,7 +581,6 @@ export async function uploadPackageImage(file, packageTemplateId) {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${session.access_token}`,
-        'X-Package-Template-ID': packageTemplateId,
         'X-Upload-Source': 'admin_package_image'
       },
       body: formData
@@ -593,11 +592,9 @@ export async function uploadPackageImage(file, packageTemplateId) {
     }
 
     const uploadResult = await uploadResponse.json();
-    const imageUrl = uploadResult.url || uploadResult.result?.variants?.[0];
 
-    if (!imageUrl) {
-      throw new Error('No image URL returned from upload');
-    }
+    // Construct Cloudflare image URL
+    const imageUrl = `https://imagedelivery.net/IGZfH_Pl-6S6csykNnXNJw/${uploadResult.id}/public`;
 
     // Get current max display_order
     const { data: existingImages } = await supabase

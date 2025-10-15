@@ -28,6 +28,7 @@ import InvitationAcceptanceModal from './InvitationAcceptanceModal';
 import PaymentStatusBanner from './PaymentStatusBanner';
 import ServerNotes from './ServerNotes';
 import FeedbackInfoBox from './FeedbackInfoBox';
+import ProfileSwitchWarning from './ProfileSwitchWarning';
 
 
 const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
@@ -863,6 +864,12 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
       <FeedbackInfoBox
         artistProfile={selectedProfile}
         confirmations={confirmations}
+      />
+
+      {/* Profile Switch Warning - shows if artist has money on other profiles */}
+      <ProfileSwitchWarning
+        currentProfile={selectedProfile}
+        onProfileSwitch={loadData}
       />
 
       {error && (

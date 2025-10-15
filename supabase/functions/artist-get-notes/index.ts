@@ -153,12 +153,12 @@ serve(async (req) => {
             }
           });
         } else if (events.length > 0) {
-          // Normal flow: check for events older than 14 days
-          const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+          // Normal flow: check for events older than 2 days (TEMPORARY - was 14 days)
+          const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
 
           const oldEvents = events.filter(e => {
             const eventDate = new Date(e.event_start_datetime);
-            return eventDate < fourteenDaysAgo;
+            return eventDate < twoDaysAgo;
           });
 
           // Show manual payment option only if events are old enough
@@ -214,7 +214,7 @@ serve(async (req) => {
                 {
                   emoji: '🤝',
                   title: 'Manual (21+ days after event/sale)',
-                  description: 'Payment from local producer (CashApp, cash, etc.) - available after 14 days'
+                  description: 'Payment from local producer (CashApp, cash, etc.) - available after 2 days (temporary)'
                 }
               ]
             },

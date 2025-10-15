@@ -39,6 +39,57 @@ async function loadRules(supabaseClient: any) {
   }
 }
 
+// Enrich events with computed metrics from database functions
+async function enrichEventsWithMetrics(supabaseClient: any, events: any[]) {
+  // For each event, fetch computed metrics and attach them
+  for (const event of events) {
+    if (!event.eid) continue;
+
+    try {
+      // Fetch all metrics in parallel
+      const [
+        confirmedArtists,
+        appliedArtists,
+        ticketRevenue,
+        auctionRevenue,
+        totalVotes,
+        ticketSales,
+        prevMetrics
+      ] = await Promise.all([
+        supabaseClient.rpc('get_event_confirmed_artists_count_by_eid', { p_eid: event.eid }),
+        supabaseClient.rpc('get_event_applied_artists_count_by_eid', { p_eid: event.eid }),
+        supabaseClient.rpc('get_event_ticket_revenue_by_eid', { p_eid: event.eid }),
+        supabaseClient.rpc('get_event_auction_revenue_by_eid', { p_eid: event.eid }),
+        supabaseClient.rpc('get_event_total_votes_by_eid', { p_eid: event.eid }),
+        supabaseClient.rpc('get_event_ticket_sales_by_eid', { p_eid: event.eid }),
+        supabaseClient.rpc('get_previous_event_metrics', { p_event_id: event.id })
+      ]);
+
+      // Attach metrics to event object
+      event.confirmed_artists_count = confirmedArtists.data || 0;
+      event.event_artists_confirmed_count = confirmedArtists.data || 0; // Alias
+      event.applied_artists_count = appliedArtists.data || 0;
+      event.ticket_revenue = ticketRevenue.data || 0;
+      event.auction_revenue = auctionRevenue.data || 0;
+      event.total_votes = totalVotes.data || 0;
+      event.ticket_sales = ticketSales.data || 0;
+
+      // Attach previous event metrics if available
+      if (prevMetrics.data && prevMetrics.data.length > 0) {
+        const prev = prevMetrics.data[0];
+        event.prev_ticket_revenue = prev.prev_ticket_revenue || 0;
+        event.prev_auction_revenue = prev.prev_auction_revenue || 0;
+        event.prev_total_votes = prev.prev_total_votes || 0;
+      }
+    } catch (error) {
+      // Continue on error - just don't attach metrics for this event
+      console.error(`Failed to fetch metrics for ${event.eid}:`, error);
+    }
+  }
+
+  return events;
+}
+
 // Increment hit count for a rule (fire and forget - don't wait)
 function incrementRuleHit(supabaseClient: any, ruleId: string) {
   supabaseClient.rpc('increment_rule_hit_count', { p_rule_id: ruleId }).then(() => {
@@ -397,16 +448,16 @@ async function runLinterWithStreaming(
     return eidNum < 4000 || eidNum >= 7000;
   });
 
-  // Filter to events from the last 45 days
+  // Filter to events from the last 4 years (to match historical rules)
   if (!filterEid) {
     const now = new Date();
-    const fortyFiveDaysAgo = new Date(now.getTime() - 45 * 24 * 60 * 60 * 1000);
+    const fourYearsAgo = new Date(now.getTime() - 1460 * 24 * 60 * 60 * 1000); // 4 years = 1460 days
     eventsToLint = eventsToLint.filter(e => {
       if (!e.event_start_datetime) return true;
       const eventStart = new Date(e.event_start_datetime);
-      return eventStart >= fortyFiveDaysAgo;
+      return eventStart >= fourYearsAgo;
     });
-    debugInfo.forty_five_day_filtered = eventsToLint.length;
+    debugInfo.historical_filtered = eventsToLint.length;
   }
 
   // Filter by EID if specified
@@ -440,15 +491,16 @@ async function runLinterWithStreaming(
 
   debugInfo.events_to_lint = eventsToLint.length;
 
-  streamWriter.sendProgress('enrichment', `Enriching ${eventsToLint.length} events with metrics...`);
+  streamWriter.sendProgress('enrichment', `Enriching ${eventsToLint.length} events with computed metrics...`);
 
-  // Enrich events (condensed version for brevity - same logic as non-streaming)
-  // [This section would contain the enrichment logic but is omitted for space]
-  // For now, we'll reference that the full enrichment happens here
-
-  // Note: I'm going to create a simplified version that calls the main logic
-  // In production, you'd want to inline all the enrichment code here
-  // For this implementation, I'll stream findings as they're discovered
+  // Enrich events with computed metrics from database functions
+  try {
+    eventsToLint = await enrichEventsWithMetrics(supabaseClient, eventsToLint);
+    debugInfo.events_enriched = eventsToLint.length;
+  } catch (error) {
+    console.error('Error enriching events:', error);
+    // Continue without enrichment - rules that need metrics will just not match
+  }
 
   streamWriter.sendProgress('event_rules', 'Checking event-level rules...');
 
@@ -898,16 +950,16 @@ serve(async (req) => {
       return eidNum < 4000 || eidNum >= 7000;
     });
 
-    // Filter to events from the last 45 days (unless filtering by specific EID)
+    // Filter to events from the last 4 years (to match historical rules)
     if (!filterEid) {
       const now = new Date();
-      const fortyFiveDaysAgo = new Date(now.getTime() - 45 * 24 * 60 * 60 * 1000);
+      const fourYearsAgo = new Date(now.getTime() - 1460 * 24 * 60 * 60 * 1000); // 4 years = 1460 days
       eventsToLint = eventsToLint.filter(e => {
         if (!e.event_start_datetime) return true;
         const eventStart = new Date(e.event_start_datetime);
-        return eventStart >= fortyFiveDaysAgo;
+        return eventStart >= fourYearsAgo;
       });
-      debugInfo.forty_five_day_filtered = eventsToLint.length;
+      debugInfo.historical_filtered = eventsToLint.length;
     }
 
     // Filter by EID if specified
@@ -941,6 +993,16 @@ serve(async (req) => {
     }
 
     debugInfo.events_to_lint = eventsToLint.length;
+
+    // Enrich ALL events with computed metrics from database functions
+    try {
+      eventsToLint = await enrichEventsWithMetrics(supabaseClient, eventsToLint);
+      debugInfo.events_enriched_with_metrics = eventsToLint.length;
+    } catch (error) {
+      console.error('Error enriching events with metrics:', error);
+      debugInfo.enrichment_error = error.message;
+      // Continue without enrichment - rules that need metrics will just not match
+    }
 
     // Only enrich recently ended events (last 30 days) to improve performance
     const recentlyEndedEvents = eventsToLint.filter(e => {

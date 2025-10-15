@@ -148,7 +148,11 @@ const EventApplications = () => {
           venue,
           city:cities(name),
           description,
-          applications_open
+          applications_open,
+          winner_prize,
+          winner_prize_currency,
+          other_prizes,
+          advances_to_event_eid
         `)
         .eq('enabled', true)
         .eq('show_in_app', true)
@@ -575,6 +579,37 @@ const EventApplications = () => {
                             </Text>
                           )}
                         </Flex>
+
+                        {/* Prize Information */}
+                        {(event.winner_prize || event.other_prizes) && (
+                          <Flex direction="column" gap="2" mb="3">
+                            {event.winner_prize && (
+                              <Flex align="center" gap="2">
+                                <Text size="2" style={{ fontSize: '16px' }}>🏆</Text>
+                                <Text size="2" weight="bold" color="amber">
+                                  Winner Prize: {event.winner_prize_currency || '$'}{event.winner_prize.toLocaleString()}
+                                </Text>
+                              </Flex>
+                            )}
+                            {event.other_prizes && (
+                              <Flex align="start" gap="2">
+                                <Text size="2" style={{ fontSize: '16px' }}>🎁</Text>
+                                <Text size="2" color="gray" style={{ flex: 1 }}>
+                                  {event.other_prizes}
+                                </Text>
+                              </Flex>
+                            )}
+                          </Flex>
+                        )}
+
+                        {/* Advancing Information */}
+                        {event.advances_to_event_eid && (
+                          <Flex align="center" gap="2" mb="3">
+                            <Badge color="purple" variant="soft" size="2">
+                              ⭐ Advances to: {event.advances_to_event_eid}
+                            </Badge>
+                          </Flex>
+                        )}
                       </Box>
                     </Flex>
 
@@ -648,7 +683,7 @@ const EventApplications = () => {
                       </Flex>
 
                       {event.description && (
-                        <Text size="2" color="gray" style={{ 
+                        <Text size="2" color="gray" style={{
                           display: '-webkit-box',
                           WebkitLineClamp: 2,
                           WebkitBoxOrient: 'vertical',
@@ -656,6 +691,37 @@ const EventApplications = () => {
                         }}>
                           {event.description}
                         </Text>
+                      )}
+
+                      {/* Prize Information */}
+                      {(event.winner_prize || event.other_prizes) && (
+                        <Flex direction="column" gap="2" mt="3">
+                          {event.winner_prize && (
+                            <Flex align="center" gap="2">
+                              <Text size="2" style={{ fontSize: '16px' }}>🏆</Text>
+                              <Text size="2" weight="bold" color="amber">
+                                Winner Prize: {event.winner_prize_currency || '$'}{event.winner_prize.toLocaleString()}
+                              </Text>
+                            </Flex>
+                          )}
+                          {event.other_prizes && (
+                            <Flex align="start" gap="2">
+                              <Text size="2" style={{ fontSize: '16px' }}>🎁</Text>
+                              <Text size="2" color="gray" style={{ flex: 1 }}>
+                                {event.other_prizes}
+                              </Text>
+                            </Flex>
+                          )}
+                        </Flex>
+                      )}
+
+                      {/* Advancing Information */}
+                      {event.advances_to_event_eid && (
+                        <Flex align="center" gap="2" mt="2">
+                          <Badge color="purple" variant="soft" size="2">
+                            ⭐ Advances to: {event.advances_to_event_eid}
+                          </Badge>
+                        </Flex>
                       )}
                     </Box>
 

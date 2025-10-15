@@ -1,5 +1,5 @@
 import { Box, Container, Flex, Heading, Text, Badge, ScrollArea, Callout } from '@radix-ui/themes';
-import { PlayIcon, ClockIcon, ExclamationTriangleIcon } from '@radix-ui/react-icons';
+import { ClockIcon, ExclamationTriangleIcon } from '@radix-ui/react-icons';
 
 const HeroSection = ({ inviteData }) => {
   // Convert media array to map
@@ -9,7 +9,6 @@ const HeroSection = ({ inviteData }) => {
   });
 
   const heroBg = mediaMap.hero_bg_desktop || 'https://picsum.photos/1920/1080?random=1';
-  const videoPoster = mediaMap.video_poster || 'https://placehold.co/800x450/1a1a1a/white?text=Art+Battle+Highlight+Reel';
 
   // Get sponsor logos from media - looking for sponsor_logo_1 through sponsor_logo_8
   const sponsorLogoUrls = [];
@@ -123,51 +122,24 @@ const HeroSection = ({ inviteData }) => {
               </Callout.Root>
             )}
 
-            {/* Video Placeholder */}
+            {/* Video */}
             <Box style={{
               width: '100%',
               maxWidth: '800px',
-              aspectRatio: '16/9',
-              background: 'var(--gray-12)',
               borderRadius: '12px',
-              position: 'relative',
               overflow: 'hidden',
               boxShadow: '0 20px 60px rgba(0,0,0,0.4)'
             }}>
-              {/* Placeholder for video */}
-              <Flex
-                align="center"
-                justify="center"
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  background: 'linear-gradient(45deg, rgba(0,0,0,0.8), rgba(0,0,0,0.4))'
-                }}
-              >
-                <Box style={{
-                  width: '80px',
-                  height: '80px',
-                  borderRadius: '50%',
-                  background: 'rgba(255,255,255,0.2)',
-                  backdropFilter: 'blur(10px)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  transition: 'transform 0.2s',
-                  ':hover': { transform: 'scale(1.1)' }
-                }}>
-                  <PlayIcon width="32" height="32" style={{ color: 'white', marginLeft: '4px' }} />
-                </Box>
-              </Flex>
-              <video
-                style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.3 }}
-                poster={videoPoster}
-                muted
-                loop
-              >
-                {/* Placeholder - CloudFlare video URL goes here */}
-              </video>
+              <div style={{ position: 'relative', paddingTop: '56.25%' }}>
+                <iframe
+                  src="https://customer-pr5dtb4f2f67rmaa.cloudflarestream.com/2620fef0e55d3e71767afb4c610e14b9/iframe?preload=true&poster=https%3A%2F%2Fcustomer-pr5dtb4f2f67rmaa.cloudflarestream.com%2F2620fef0e55d3e71767afb4c610e14b9%2Fthumbnails%2Fthumbnail.jpg%3Ftime%3D%26height%3D600&primaryColor=%23ebebeb"
+                  loading="lazy"
+                  style={{ border: 'none', position: 'absolute', top: 0, left: 0, height: '100%', width: '100%' }}
+                  allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
+                  allowFullScreen={true}
+                  title="Art Battle Highlight Reel"
+                ></iframe>
+              </div>
             </Box>
 
             {/* Global Stats */}

@@ -122,11 +122,11 @@ const ManualPaymentRequest = ({ artistProfile, noteId, serverEligibility }) => {
         return;
       }
 
-      // Find events older than 14 days
-      const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+      // Find events older than 2 days (TEMPORARY - was 14 days)
+      const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
       const oldEvents = confirmations.filter(conf => {
         const eventDate = new Date(conf.events.event_start_datetime);
-        return eventDate < fourteenDaysAgo;
+        return eventDate < twoDaysAgo;
       });
 
       if (oldEvents.length > 0) {
@@ -261,7 +261,7 @@ const ManualPaymentRequest = ({ artistProfile, noteId, serverEligibility }) => {
       >
         <Flex direction="column" gap="2">
           <Text size="2">
-            You have a recent event more than 14 days old with a balance of{' '}
+            You have a recent event more than 2 days old with a balance of{' '}
             <Text weight="bold">{eligibilityData.balance.toFixed(2)} {eligibilityData.currency}</Text>
             {' '}owing and are eligible for manual payment.
           </Text>

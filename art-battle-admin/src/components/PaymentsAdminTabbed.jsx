@@ -893,6 +893,102 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
     }
   };
 
+  // Handle payment for a single artist from the In Progress tab
+  const handlePaySingleArtist = async (artist) => {
+    console.log('💰 Processing single artist payment...', artist);
+    try {
+      setProcessingPayment(true);
+      setError('');
+
+      const paymentId = artist.payment_id;
+
+      if (!paymentId) {
+        throw new Error('No payment ID found for this artist');
+      }
+
+      // Call the process-pending-payments function with specific payment ID
+      const { data, error } = await supabase.functions.invoke('process-pending-payments', {
+        body: {
+          dry_run: false,
+          limit: 1,
+          payment_id: paymentId
+        }
+      });
+
+      console.log('📨 Payment response:', { data, error });
+
+      if (error) {
+        throw error;
+      }
+
+      // Show success message
+      setError(`✅ Payment processed for ${artist.artist_profiles.name}: ${data.success_count} successful, ${data.failed_count} failed`);
+
+      // Refresh data to show updated status
+      await fetchEnhancedData();
+
+    } catch (err) {
+      console.error('❌ Failed to process single payment:', err);
+      setError('Failed to process payment: ' + err.message);
+    } finally {
+      setProcessingPayment(false);
+    }
+  };
+
+  // Reset/remove an artist from In Progress status
+  const handleResetArtistStatus = async (artist) => {
+    if (!confirm(`Are you sure you want to reset payment status for ${artist.artist_profiles.name}? This will remove them from the In Progress list and they can be re-invited.`)) {
+      return;
+    }
+
+    console.log('🔄 Resetting artist payment status...', artist);
+    try {
+      setProcessingPayment(true);
+      setError('');
+
+      const paymentId = artist.payment_id;
+
+      if (!paymentId) {
+        throw new Error('No payment ID found for this artist');
+      }
+
+      // Delete the payment record to reset their status
+      const { error: deleteError } = await supabase
+        .from('artist_payments')
+        .delete()
+        .eq('id', paymentId);
+
+      if (deleteError) {
+        throw deleteError;
+      }
+
+      // Update artist profile to reset payment account status if it's in_progress
+      const { error: updateError } = await supabase
+        .from('artist_profiles')
+        .update({
+          stripe_recipient_id: null,
+          payment_account_status: null
+        })
+        .eq('id', artist.artist_profiles.id)
+        .eq('payment_account_status', 'in_progress');
+
+      if (updateError) {
+        console.error('Warning: Could not reset artist profile status:', updateError);
+      }
+
+      setError(`✅ Payment status reset for ${artist.artist_profiles.name}. They have been removed from In Progress.`);
+
+      // Refresh data to show updated status
+      await fetchEnhancedData();
+
+    } catch (err) {
+      console.error('❌ Failed to reset artist status:', err);
+      setError('Failed to reset status: ' + err.message);
+    } finally {
+      setProcessingPayment(false);
+    }
+  };
+
   const fetchInvitationHistory = async (artistProfileId) => {
     try {
       setLoadingInvitationHistory(true);
@@ -1829,17 +1925,50 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                         )}
                       </Table.Cell>
                       <Table.Cell>
-                        <Button
-                          size="1"
-                          variant="soft"
-                          onClick={() => {
-                            setSelectedArtist(artist);
-                            setShowArtistDetail(true);
-                          }}
-                        >
-                          <EyeOpenIcon width="12" height="12" />
-                          View Details
-                        </Button>
+                        <Flex gap="2" wrap="wrap">
+                          {artist.latest_payment_status === 'processing' && (
+                            <Button
+                              size="1"
+                              variant="solid"
+                              color="green"
+                              onClick={() => handlePaySingleArtist(artist)}
+                              disabled={processingPayment}
+                              title="Process this payment now"
+                            >
+                              💰 Pay Now
+                            </Button>
+                          )}
+                          <Button
+                            size="1"
+                            variant="soft"
+                            color="purple"
+                            onClick={() => handleViewApiConversations(artist.payment_id)}
+                            title="View Stripe API call logs and errors"
+                          >
+                            📋 API Logs
+                          </Button>
+                          <Button
+                            size="1"
+                            variant="soft"
+                            color="orange"
+                            onClick={() => handleResetArtistStatus(artist)}
+                            disabled={processingPayment}
+                            title="Remove from In Progress and reset status"
+                          >
+                            🔄 Reset
+                          </Button>
+                          <Button
+                            size="1"
+                            variant="soft"
+                            onClick={() => {
+                              setSelectedArtist(artist);
+                              setShowArtistDetail(true);
+                            }}
+                          >
+                            <EyeOpenIcon width="12" height="12" />
+                            View
+                          </Button>
+                        </Flex>
                       </Table.Cell>
                     </Table.Row>
                   ))}

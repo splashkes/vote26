@@ -378,6 +378,7 @@ function App() {
                 inviteData={inviteData}
                 onSelect={handlePackageSelect}
                 onBack={handleBackToLanding}
+                onTierSwitch={handleTierSelect}
               />
             </Box>
           )}

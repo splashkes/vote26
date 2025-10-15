@@ -151,7 +151,7 @@ serve(async (req) => {
       throw new Error('Artist profile not found');
     }
 
-    // Validate required profile information for payments setup (using only artist profile data)
+    // Validate required profile information for payments setup
     const missingFields = [];
     if (!artistProfile.name) {
       missingFields.push('name');
@@ -159,7 +159,7 @@ serve(async (req) => {
     if (!artistProfile.email) {
       missingFields.push('email');
     }
-    if (!artistProfile.phone) {
+    if (!person.phone) {
       missingFields.push('phone');
     }
     if (!artistProfile.country) {
@@ -273,6 +273,10 @@ serve(async (req) => {
             first_name: artistProfile.name.split(' ')[0] || 'Artist',
             last_name: artistProfile.name.split(' ').slice(1).join(' ') || 'Profile',
             email: artistProfile.email,
+            phone: person.phone, // Use phone from people record
+            relationship: {
+              title: 'Artist' // Pre-populate job title
+            }
           },
           business_profile: {
             mcc: '5971', // Art dealers and galleries

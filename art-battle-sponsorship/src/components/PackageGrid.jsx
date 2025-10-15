@@ -1,7 +1,41 @@
-import { Box, Container, Flex, Heading, Text, Card, Button, Badge, Grid } from '@radix-ui/themes';
-import { ChevronLeftIcon, CheckIcon } from '@radix-ui/react-icons';
+import { Box, Container, Flex, Heading, Text, Card, Button, Badge, Grid, Dialog, IconButton } from '@radix-ui/themes';
+import { ChevronLeftIcon, CheckIcon, Cross2Icon } from '@radix-ui/react-icons';
+import { useState, useEffect } from 'react';
 
-const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack, inviteData }) => {
+const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack, inviteData, onTierSwitch }) => {
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [showImageModal, setShowImageModal] = useState(false);
+
+  // Handle browser back button for modal
+  useEffect(() => {
+    const handlePopState = () => {
+      if (showImageModal) {
+        setShowImageModal(false);
+        setSelectedImage(null);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [showImageModal]);
+
+  // Open modal and push history state
+  const openImageModal = (imageUrl) => {
+    setSelectedImage(imageUrl);
+    setShowImageModal(true);
+    window.history.pushState({ imageModal: true }, '', window.location.href);
+  };
+
+  // Close modal and go back if we pushed state
+  const closeImageModal = () => {
+    setShowImageModal(false);
+    setSelectedImage(null);
+    // Only go back if the current state is the image modal
+    if (window.history.state?.imageModal) {
+      window.history.back();
+    }
+  };
+
   if (!packages) return null;
 
   // Filter packages based on tier category
@@ -15,6 +49,21 @@ const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack, invite
     }
     return false;
   });
+
+  // Calculate alternate tier packages for cross-linking
+  let alternateTier = null;
+  let alternateTierLabel = null;
+  let alternatePackages = [];
+
+  if (tier === 'brand') {
+    alternateTier = 'business';
+    alternateTierLabel = 'tactical';
+    alternatePackages = packages.filter(pkg => pkg.category === 'business' && !pkg.is_addon);
+  } else if (tier === 'business') {
+    alternateTier = 'brand';
+    alternateTierLabel = 'brand';
+    alternatePackages = packages.filter(pkg => pkg.category === 'brand' && !pkg.is_addon);
+  }
 
   // Get prospect name for personalization
   const prospectDisplay = inviteData?.prospect_company || inviteData?.prospect_name || '';
@@ -117,7 +166,7 @@ const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack, invite
                     flex: '1 1 300px'
                   }}
                 >
-                  <Flex direction="column" gap="4" style={{ height: '100%' }}>
+                  <Flex direction="column" gap="2" style={{ height: '100%' }}>
                     {/* Limited Badge */}
                     {limitedBadge && (
                       <Badge
@@ -174,13 +223,60 @@ const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack, invite
                                 <Text size="2">{benefit}</Text>
                               </Flex>
                             ))}
+
+                            {/* Visual Samples Thumbnails */}
+                            {pkg.images && pkg.images.length > 0 && (
+                              <Box mt="3" pt="3" style={{ borderTop: '1px solid var(--gray-6)' }}>
+                                <Text size="1" weight="medium" style={{ color: 'var(--gray-11)', marginBottom: '8px', display: 'block' }}>
+                                  Visual Samples
+                                </Text>
+                                <Flex gap="2" wrap="wrap">
+                                  {pkg.images.map((img) => (
+                                    <Box
+                                      key={img.id}
+                                      style={{
+                                        width: '60px',
+                                        height: '60px',
+                                        borderRadius: '4px',
+                                        overflow: 'hidden',
+                                        cursor: 'pointer',
+                                        border: '1px solid var(--gray-6)',
+                                        transition: 'all 0.2s ease'
+                                      }}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openImageModal(img.url);
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        e.currentTarget.style.transform = 'scale(1.05)';
+                                        e.currentTarget.style.borderColor = 'var(--accent-8)';
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        e.currentTarget.style.transform = 'scale(1)';
+                                        e.currentTarget.style.borderColor = 'var(--gray-6)';
+                                      }}
+                                    >
+                                      <img
+                                        src={img.url}
+                                        alt="Package sample"
+                                        style={{
+                                          width: '100%',
+                                          height: '100%',
+                                          objectFit: 'cover'
+                                        }}
+                                      />
+                                    </Box>
+                                  ))}
+                                </Flex>
+                              </Box>
+                            )}
                           </Flex>
                         </Box>
                       )}
                     </Box>
 
                     {/* Pricing */}
-                    <Flex justify="end" align="end" direction="column" gap="1">
+                    <Flex justify="center" align="center" direction="column" gap="1">
                       <Text size="1" weight="medium" style={{ color: 'var(--gray-11)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                         {pkg.currency || 'USD'}
                       </Text>
@@ -220,6 +316,29 @@ const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack, invite
             })}
           </Flex>
 
+          {/* Tier Cross-Link */}
+          {alternateTier && alternatePackages.length > 0 && (
+            <Flex justify="center" style={{ marginTop: '1.5rem' }}>
+              <Text
+                size="2"
+                style={{
+                  color: 'var(--gray-11)',
+                  cursor: 'pointer',
+                  transition: 'color 0.2s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = 'var(--accent-11)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = 'var(--gray-11)';
+                }}
+                onClick={() => onTierSwitch(alternateTier)}
+              >
+                or view {alternatePackages.length} {alternateTierLabel} {alternatePackages.length === 1 ? 'package' : 'packages'}
+              </Text>
+            </Flex>
+          )}
+
           {/* Empty State */}
           {filteredPackages.length === 0 && (
             <Card size="3">
@@ -235,6 +354,55 @@ const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack, invite
           )}
         </Flex>
       </Container>
+
+      {/* Image Modal */}
+      <Dialog.Root open={showImageModal} onOpenChange={(open) => !open && closeImageModal()}>
+        <Dialog.Content style={{ maxWidth: '90vw', maxHeight: '90vh', padding: '0', position: 'relative' }}>
+          {/* Close Button */}
+          <IconButton
+            size="3"
+            variant="solid"
+            color="gray"
+            style={{
+              position: 'absolute',
+              top: '16px',
+              right: '16px',
+              zIndex: 1000,
+              width: '48px',
+              height: '48px',
+              borderRadius: '50%',
+              cursor: 'pointer',
+              background: 'rgba(0, 0, 0, 0.7)',
+              color: 'white',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+            }}
+            onClick={closeImageModal}
+          >
+            <Cross2Icon width="24" height="24" />
+          </IconButton>
+
+          <Box
+            style={{
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'black'
+            }}
+          >
+            <img
+              src={selectedImage}
+              alt="Package sample"
+              style={{
+                maxWidth: '100%',
+                maxHeight: '90vh',
+                objectFit: 'contain'
+              }}
+            />
+          </Box>
+        </Dialog.Content>
+      </Dialog.Root>
     </Box>
   );
 };

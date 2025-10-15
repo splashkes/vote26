@@ -1,5 +1,5 @@
 import { Box, Container, Flex, Heading, Text, Card, Button, Grid } from '@radix-ui/themes';
-import { StarFilledIcon, TargetIcon, PersonIcon } from '@radix-ui/react-icons';
+import { StarFilledIcon, TargetIcon, PersonIcon, ArrowRightIcon } from '@radix-ui/react-icons';
 
 const SelfSelectionCTA = ({ packages, onSelect, isExpired = false, inviteData }) => {
   // Check which tiers have available packages and calculate price ranges
@@ -47,8 +47,11 @@ const SelfSelectionCTA = ({ packages, onSelect, isExpired = false, inviteData })
   // Determine grid columns based on available tiers
   const gridColumns = availableTiers === 1 ? '1' : availableTiers === 2 ? { initial: '1', sm: '2' } : { initial: '1', sm: '3' };
 
+  // Adjust max width based on number of tiers
+  const gridMaxWidth = availableTiers === 2 ? '800px' : '1200px';
+
   return (
-    <Box py="9" style={{ position: 'relative', padding: '3rem 1rem', overflow: 'hidden' }}>
+    <Box py="9" style={{ position: 'relative', padding: '6rem 1rem 3rem 1rem', overflow: 'visible' }}>
       {/* Background Image */}
       <Box style={{
         position: 'absolute',
@@ -77,8 +80,8 @@ const SelfSelectionCTA = ({ packages, onSelect, isExpired = false, inviteData })
         zIndex: 1
       }} />
 
-      <Container size="3" px="4" style={{ position: 'relative', zIndex: 2 }}>
-        <Flex direction="column" gap="6" align="center">
+      <Container size="3" px="4" style={{ position: 'relative', zIndex: 2, overflow: 'visible' }}>
+        <Flex direction="column" gap="6" align="center" style={{ overflow: 'visible' }}>
           <Box style={{ textAlign: 'center' }}>
             <Heading size="7" mb="2">Choose Your Level of Partnership</Heading>
             <Text size="4" style={{ color: 'var(--gray-11)' }}>
@@ -86,22 +89,27 @@ const SelfSelectionCTA = ({ packages, onSelect, isExpired = false, inviteData })
             </Text>
           </Box>
 
-          <Grid columns={gridColumns} gap="5" width="100%" style={{ alignItems: 'stretch', maxWidth: '1200px', margin: '0 auto' }}>
+          <Grid columns={gridColumns} gap="5" width="100%" style={{ alignItems: 'flex-start', maxWidth: gridMaxWidth, margin: '0 auto', overflow: 'visible' }}>
             {/* Personal Tier */}
             {hasPersonalPackages && (
-              <Card
-              size="4"
-              style={{
-                background: 'var(--gray-3)',
-                border: '2px solid var(--gray-6)',
-                cursor: isExpired ? 'not-allowed' : 'pointer',
-                opacity: isExpired ? 0.5 : 1,
-                transition: 'all 0.3s ease',
-                height: 'fit-content',
-                padding: '2rem'
-              }}
-              onClick={() => !isExpired && onSelect('personal')}
-            >
+              <Flex direction="column" align="center" gap="0" style={{ position: 'relative' }}>
+                {/* Spacer for this column */}
+                <Box style={{ height: '40px' }} />
+
+                <Card
+                size="4"
+                style={{
+                  background: 'var(--gray-3)',
+                  border: '2px solid var(--gray-6)',
+                  cursor: isExpired ? 'not-allowed' : 'pointer',
+                  opacity: isExpired ? 0.5 : 1,
+                  transition: 'all 0.3s ease',
+                  height: 'fit-content',
+                  padding: '2rem',
+                  width: '100%'
+                }}
+                onClick={() => !isExpired && onSelect('personal')}
+              >
               <Flex direction="column" gap="4" align="center" justify="center" style={{ textAlign: 'center', minHeight: '100%' }}>
                 <Box
                   style={{
@@ -128,73 +136,56 @@ const SelfSelectionCTA = ({ packages, onSelect, isExpired = false, inviteData })
                   For people who want to make a splash or support {cityName} artists
                 </Text>
 
-                <Flex direction="column" gap="1" style={{ width: '100%' }}>
-                  <Text size="1" style={{ color: 'var(--gray-11)' }}>• Auction credits</Text>
-                  <Text size="1" style={{ color: 'var(--gray-11)' }}>• Large groups</Text>
-                  <Text size="1" style={{ color: 'var(--gray-11)' }}>• Merchandise</Text>
-                  <Text size="1" style={{ color: 'var(--gray-11)' }}>• Benefactor support</Text>
-                </Flex>
-
                 <Button
                   size="3"
                   style={{
                     width: '100%',
                     marginTop: '0.5rem',
-                    background: 'var(--indigo-9)',
+                    background: 'var(--green-9)',
                     color: 'white',
                     fontWeight: 'bold',
-                    fontSize: '15px',
-                    padding: '12px 24px',
-                    cursor: 'pointer'
+                    fontSize: '16px',
+                    padding: '14px 28px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px'
                   }}
                   disabled={isExpired}
                 >
-                  View Options ➜
+                  View {personalPackages.length} Options
+                  <ArrowRightIcon width="18" height="18" />
                 </Button>
               </Flex>
             </Card>
+            </Flex>
             )}
 
             {/* Brand Tier - Emphasized */}
             {hasBrandPackages && (
-              <Card
-              size="4"
-              style={{
-                background: 'linear-gradient(135deg, var(--accent-3) 0%, var(--accent-4) 100%)',
-                border: '3px solid var(--accent-8)',
-                cursor: isExpired ? 'not-allowed' : 'pointer',
-                opacity: isExpired ? 0.5 : 1,
-                transition: 'all 0.3s ease',
-                height: 'fit-content',
-                transform: 'scale(1.05)',
-                boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
-                position: 'relative',
-                padding: '2rem'
-              }}
-              onClick={() => !isExpired && onSelect('brand')}
-            >
-              {/* Popular badge */}
-              <Box style={{
-                position: 'absolute',
-                top: '-16px',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                background: 'var(--accent-9)',
-                color: 'white',
-                padding: '8px 24px',
-                borderRadius: '20px',
-                fontSize: '13px',
-                fontWeight: 'bold',
-                textTransform: 'uppercase',
-                letterSpacing: '1px',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-                whiteSpace: 'nowrap',
-                zIndex: 10
-              }}>
-                Biggest Impact
-              </Box>
+              <Flex direction="column" align="center" gap="0" style={{ position: 'relative' }}>
+                {/* Spacer for this column */}
+                <Box style={{ height: '40px' }} />
 
-              <Flex direction="column" gap="4" align="center" justify="center" style={{ textAlign: 'center', minHeight: '100%', paddingTop: '0.5rem' }}>
+                <Card
+                size="4"
+                style={{
+                  background: 'linear-gradient(135deg, var(--accent-3) 0%, var(--accent-4) 100%)',
+                  border: '3px solid var(--accent-8)',
+                  cursor: isExpired ? 'not-allowed' : 'pointer',
+                  opacity: isExpired ? 0.5 : 1,
+                  transition: 'all 0.3s ease',
+                  height: 'fit-content',
+                  transform: 'scale(1.05)',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+                  padding: '2rem',
+                  width: '100%'
+                }}
+                onClick={() => !isExpired && onSelect('brand')}
+              >
+
+              <Flex direction="column" gap="4" align="center" justify="center" style={{ textAlign: 'center', minHeight: '100%' }}>
                 <Box
                   style={{
                     width: '100px',
@@ -220,49 +211,52 @@ const SelfSelectionCTA = ({ packages, onSelect, isExpired = false, inviteData })
                   Major event impact embedded into the competition experience
                 </Text>
 
-                <Flex direction="column" gap="1" style={{ width: '100%' }}>
-                  <Text size="1" style={{ color: 'rgba(255,255,255,0.85)' }}>• Custom executions</Text>
-                  <Text size="1" style={{ color: 'rgba(255,255,255,0.85)' }}>• Large client or company groups</Text>
-                  <Text size="1" style={{ color: 'rgba(255,255,255,0.85)' }}>• Seasonal sponsorship</Text>
-                  <Text size="1" style={{ color: 'rgba(255,255,255,0.85)' }}>• Multi-event sponsorship</Text>
-                </Flex>
-
                 <Button
                   size="3"
                   style={{
                     width: '100%',
                     marginTop: '0.5rem',
-                    background: 'white',
-                    color: 'var(--accent-11)',
+                    background: 'var(--green-9)',
+                    color: 'white',
                     fontWeight: 'bold',
                     fontSize: '16px',
                     padding: '14px 28px',
                     cursor: 'pointer',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px'
                   }}
                   disabled={isExpired}
                 >
-                  View Options ➜
+                  View {brandPackages.length} Options
+                  <ArrowRightIcon width="18" height="18" />
                 </Button>
               </Flex>
             </Card>
+            </Flex>
             )}
 
             {/* Tactical Tier */}
             {hasBusinessPackages && (
-              <Card
-              size="4"
-              style={{
-                background: 'var(--gray-3)',
-                border: '2px solid var(--gray-6)',
-                cursor: isExpired ? 'not-allowed' : 'pointer',
-                opacity: isExpired ? 0.5 : 1,
-                transition: 'all 0.3s ease',
-                height: 'fit-content',
-                padding: '2rem'
-              }}
-              onClick={() => !isExpired && onSelect('business')}
-            >
+              <Flex direction="column" align="center" gap="0" style={{ position: 'relative' }}>
+                {/* Spacer for this column */}
+                <Box style={{ height: '40px' }} />
+
+                <Card
+                size="4"
+                style={{
+                  background: 'var(--gray-3)',
+                  border: '2px solid var(--gray-6)',
+                  cursor: isExpired ? 'not-allowed' : 'pointer',
+                  opacity: isExpired ? 0.5 : 1,
+                  transition: 'all 0.3s ease',
+                  height: 'fit-content',
+                  padding: '2rem',
+                  width: '100%'
+                }}
+                onClick={() => !isExpired && onSelect('business')}
+              >
               <Flex direction="column" gap="4" align="center" justify="center" style={{ textAlign: 'center', minHeight: '100%' }}>
                 <Box
                   style={{
@@ -289,13 +283,6 @@ const SelfSelectionCTA = ({ packages, onSelect, isExpired = false, inviteData })
                   Buy out specific event experiences like prizing or auction matching
                 </Text>
 
-                <Flex direction="column" gap="1" style={{ width: '100%' }}>
-                  <Text size="1" style={{ color: 'var(--gray-11)' }}>• Opportunity for sampling</Text>
-                  <Text size="1" style={{ color: 'var(--gray-11)' }}>• Selling opportunities</Text>
-                  <Text size="1" style={{ color: 'var(--gray-11)' }}>• Info table placement</Text>
-                  <Text size="1" style={{ color: 'var(--gray-11)' }}>• Specific activations</Text>
-                </Flex>
-
                 <Button
                   size="3"
                   style={{
@@ -304,16 +291,22 @@ const SelfSelectionCTA = ({ packages, onSelect, isExpired = false, inviteData })
                     background: 'var(--green-9)',
                     color: 'white',
                     fontWeight: 'bold',
-                    fontSize: '15px',
-                    padding: '12px 24px',
-                    cursor: 'pointer'
+                    fontSize: '16px',
+                    padding: '14px 28px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px'
                   }}
                   disabled={isExpired}
                 >
-                  View Options ➜
+                  View {businessPackages.length} Options
+                  <ArrowRightIcon width="18" height="18" />
                 </Button>
               </Flex>
             </Card>
+            </Flex>
             )}
           </Grid>
         </Flex>

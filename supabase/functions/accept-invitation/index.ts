@@ -334,12 +334,75 @@ serve(async (req)=>{
     }
     // Update the invitation with accepted_at timestamp
     const { error: invitationUpdateError } = await supabase.from('artist_invitations').update({
-      accepted_at: new Date().toISOString()
+      accepted_at: new Date().toISOString(),
+      status: 'accepted'
     }).eq('id', invitationId);
     if (invitationUpdateError) {
       console.warn('Failed to update invitation accepted_at:', invitationUpdateError.message);
     // Continue anyway - the confirmation is created, which is the important part
     }
+
+    // Add artist to event_artists table (required for payment processing and other systems)
+    try {
+      // Get event_id from event_eid
+      const { data: eventForArtists, error: eventLookupError } = await supabase
+        .from('events')
+        .select('id')
+        .eq('eid', submissionData.eventEid)
+        .single();
+
+      if (eventLookupError) {
+        console.error('Failed to lookup event_id for event_artists:', eventLookupError);
+      } else if (eventForArtists?.id) {
+        // Check if artist already exists in event_artists
+        const { data: existingEventArtist } = await supabase
+          .from('event_artists')
+          .select('id, status')
+          .eq('event_id', eventForArtists.id)
+          .eq('artist_id', submissionData.artistProfileId)
+          .maybeSingle();
+
+        if (existingEventArtist) {
+          // Update existing record
+          const { error: updateEventArtistError } = await supabase
+            .from('event_artists')
+            .update({
+              status: 'confirmed',
+              artist_number: submissionData.artistNumber,
+              notes: 'Confirmed via invitation acceptance'
+            })
+            .eq('id', existingEventArtist.id);
+
+          if (updateEventArtistError) {
+            console.error('Failed to update event_artists:', updateEventArtistError);
+          } else {
+            console.log(`Updated event_artists record for artist ${submissionData.artistNumber} in event ${submissionData.eventEid}`);
+          }
+        } else {
+          // Create new record
+          const { error: insertEventArtistError } = await supabase
+            .from('event_artists')
+            .insert({
+              event_id: eventForArtists.id,
+              artist_id: submissionData.artistProfileId,
+              status: 'confirmed',
+              artist_number: submissionData.artistNumber,
+              added_at: new Date().toISOString(),
+              notes: 'Confirmed via invitation acceptance'
+            });
+
+          if (insertEventArtistError) {
+            console.error('Failed to insert into event_artists:', insertEventArtistError);
+          } else {
+            console.log(`Added to event_artists: artist ${submissionData.artistNumber} for event ${submissionData.eventEid}`);
+          }
+        }
+      }
+    } catch (eventArtistError) {
+      console.error('Error managing event_artists:', eventArtistError);
+      // Don't fail the confirmation if event_artists fails
+    }
+
     const duration = Date.now() - startTime;
     // Send email notification to artist
     try {

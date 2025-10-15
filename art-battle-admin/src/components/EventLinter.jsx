@@ -13,7 +13,9 @@ import {
   Button,
   Dialog,
   Separator,
-  Checkbox
+  Checkbox,
+  Tabs,
+  Code
 } from '@radix-ui/themes';
 import {
   MagnifyingGlassIcon,
@@ -44,9 +46,15 @@ const EventLinter = () => {
   const [selectedFinding, setSelectedFinding] = useState(null);
   const [findingDialogOpen, setFindingDialogOpen] = useState(false);
   const [rules, setRules] = useState([]);
+  const [loadingRules, setLoadingRules] = useState(false);
   const [suppressing, setSuppressing] = useState(false);
   const [suppressReason, setSuppressReason] = useState('');
   const [suppressDuration, setSuppressDuration] = useState('forever');
+  const [activeTab, setActiveTab] = useState('findings');
+  const [selectedRule, setSelectedRule] = useState(null);
+  const [ruleDialogOpen, setRuleDialogOpen] = useState(false);
+  const [testingRule, setTestingRule] = useState(false);
+  const [ruleTestResults, setRuleTestResults] = useState(null);
 
   // AI Analysis state
   const [aiAnalysis, setAiAnalysis] = useState(null);
@@ -114,7 +122,11 @@ const EventLinter = () => {
               // Stream complete
               console.log('Linter complete:', data.summary);
               console.log('Debug info:', data.debug);
-              setRules({ length: data.debug?.rules_loaded || 0 });
+              if (data.debug?.rules) {
+                setRules(data.debug.rules);
+              } else {
+                setRules({ length: data.debug?.rules_loaded || 0 });
+              }
               setLoading(false);
             } else if (data.progress) {
               // Progress update
@@ -302,6 +314,21 @@ const EventLinter = () => {
     return Array.from(ctxs).sort();
   }, [allFindings]);
 
+  // Calculate rule diagnostics
+  const ruleStats = useMemo(() => {
+    if (!Array.isArray(rules)) return [];
+
+    return rules.map(rule => {
+      const findingsForRule = allFindings.filter(f => f.ruleId === rule.id);
+      return {
+        ...rule,
+        findingCount: findingsForRule.length,
+        uniqueEvents: new Set(findingsForRule.map(f => f.eventId).filter(Boolean)).size,
+        lastTriggered: findingsForRule.length > 0 ? 'Active' : 'No findings'
+      };
+    }).sort((a, b) => b.findingCount - a.findingCount); // Sort by most triggered
+  }, [rules, allFindings]);
+
   // Handle EID click to show event details
   const handleEidClick = async (e, finding) => {
     e.stopPropagation();
@@ -413,6 +440,102 @@ const EventLinter = () => {
     return String.fromCodePoint(...codePoints);
   };
 
+  // Load rules from CDN
+  const loadRules = async () => {
+    try {
+      setLoadingRules(true);
+      const response = await fetch('https://artb.tor1.cdn.digitaloceanspaces.com/admin/eventLinterRules.yaml');
+      const yamlText = await response.text();
+
+      // Split by rule blocks (each starts with "\n  - id:")
+      const ruleBlocks = yamlText.split(/\n\s*- id:\s*/);
+      const parsedRules = [];
+
+      // Skip first element (header/comments before first rule)
+      for (let i = 1; i < ruleBlocks.length; i++) {
+        const block = ruleBlocks[i];
+        const lines = block.split('\n');
+
+        // First line is the ID
+        const rule = {
+          id: lines[0].trim(),
+          raw: '  - id: ' + block
+        };
+
+        // Parse other fields
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith('name:')) {
+            rule.name = trimmed.substring(5).trim().replace(/^['"]|['"]$/g, '');
+          }
+          if (trimmed.startsWith('severity:')) {
+            rule.severity = trimmed.substring(9).trim();
+          }
+          if (trimmed.startsWith('category:')) {
+            rule.category = trimmed.substring(9).trim();
+          }
+          if (trimmed.startsWith('description:')) {
+            rule.description = trimmed.substring(12).trim().replace(/^['"]|['"]$/g, '');
+          }
+          if (trimmed.startsWith('context:')) {
+            rule.context = trimmed.substring(8).trim();
+          }
+        }
+
+        parsedRules.push(rule);
+      }
+
+      console.log(`Parsed ${parsedRules.length} rules from YAML`);
+      setRules(parsedRules);
+    } catch (err) {
+      console.error('Error loading rules:', err);
+    } finally {
+      setLoadingRules(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'rules' && rules.length === 0) {
+      loadRules();
+    }
+  }, [activeTab]);
+
+  // Test a specific rule
+  const testRule = async (ruleId) => {
+    try {
+      setTestingRule(true);
+      setRuleTestResults(null);
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL || 'https://xsqdkubgyqwpyvfltnrf.supabase.co'}/functions/v1/test-linter-rule`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session?.access_token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ ruleId })
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      setRuleTestResults(result);
+    } catch (err) {
+      console.error('Error testing rule:', err);
+      setRuleTestResults({
+        error: 'Failed to test rule. Please try again.',
+        details: err.message
+      });
+    } finally {
+      setTestingRule(false);
+    }
+  };
+
   // AI Analysis function
   const runAIAnalysis = async () => {
     try {
@@ -509,8 +632,22 @@ const EventLinter = () => {
           </Flex>
         </Flex>
 
-        {/* AI Analysis Section */}
-        {analyzingAI && (
+        {/* Tabs */}
+        <Tabs.Root value={activeTab} onValueChange={setActiveTab}>
+          <Tabs.List>
+            <Tabs.Trigger value="findings">
+              Findings ({allFindings.length})
+            </Tabs.Trigger>
+            <Tabs.Trigger value="rules">
+              Rules ({Array.isArray(rules) ? rules.length : rules.length || 0})
+            </Tabs.Trigger>
+          </Tabs.List>
+
+          <Box pt="3">
+            <Tabs.Content value="findings">
+              <Flex direction="column" gap="3">
+                {/* AI Analysis Section */}
+                {analyzingAI && (
           <Card style={{ backgroundColor: 'var(--indigo-2)', borderColor: 'var(--indigo-6)' }}>
             <Box p="4">
               <Flex justify="center" align="center" direction="column" gap="3">
@@ -933,7 +1070,393 @@ const EventLinter = () => {
             </Table.Root>
           )}
         </Card>
+              </Flex>
+            </Tabs.Content>
+
+            {/* Rules Tab */}
+            <Tabs.Content value="rules">
+              <Flex direction="column" gap="3">
+                {loadingRules ? (
+                  <Flex align="center" justify="center" p="6">
+                    <Spinner size="3" />
+                  </Flex>
+                ) : ruleStats.length === 0 ? (
+                  <Card>
+                    <Flex align="center" justify="center" p="6" direction="column" gap="2">
+                      <InfoCircledIcon width="24" height="24" color="var(--gray-9)" />
+                      <Text color="gray">No rules loaded</Text>
+                      <Button size="2" onClick={loadRules}>
+                        <ReloadIcon />
+                        Load Rules
+                      </Button>
+                    </Flex>
+                  </Card>
+                ) : (
+                  <>
+                    {/* Rules Summary */}
+                    <Card>
+                      <Flex gap="4" wrap="wrap">
+                        <Box>
+                          <Text size="1" color="gray">Total Rules</Text>
+                          <Text size="5" weight="bold">{ruleStats.length}</Text>
+                        </Box>
+                        <Box>
+                          <Text size="1" color="gray">Active Rules</Text>
+                          <Text size="5" weight="bold">{ruleStats.filter(r => r.findingCount > 0).length}</Text>
+                        </Box>
+                        <Box>
+                          <Text size="1" color="gray">Inactive Rules</Text>
+                          <Text size="5" weight="bold">{ruleStats.filter(r => r.findingCount === 0).length}</Text>
+                        </Box>
+                        <Box>
+                          <Text size="1" color="gray">Total Findings</Text>
+                          <Text size="5" weight="bold">{allFindings.length}</Text>
+                        </Box>
+                      </Flex>
+                    </Card>
+
+                    {/* Rules Table */}
+                    <Card>
+                      <Table.Root variant="surface" size="1">
+                        <Table.Header>
+                          <Table.Row>
+                            <Table.ColumnHeaderCell>Rule ID</Table.ColumnHeaderCell>
+                            <Table.ColumnHeaderCell>Name</Table.ColumnHeaderCell>
+                            <Table.ColumnHeaderCell>Severity</Table.ColumnHeaderCell>
+                            <Table.ColumnHeaderCell>Category</Table.ColumnHeaderCell>
+                            <Table.ColumnHeaderCell>Findings</Table.ColumnHeaderCell>
+                            <Table.ColumnHeaderCell>Events</Table.ColumnHeaderCell>
+                            <Table.ColumnHeaderCell>Status</Table.ColumnHeaderCell>
+                          </Table.Row>
+                        </Table.Header>
+                        <Table.Body>
+                          {ruleStats.map((rule) => (
+                            <Table.Row
+                              key={rule.id}
+                              style={{ cursor: 'pointer' }}
+                              onClick={() => {
+                                setSelectedRule(rule);
+                                setRuleDialogOpen(true);
+                              }}
+                            >
+                              <Table.Cell>
+                                <Code size="1">{rule.id}</Code>
+                              </Table.Cell>
+                              <Table.Cell>
+                                <Text size="2" weight="medium">{rule.name || 'Unnamed'}</Text>
+                              </Table.Cell>
+                              <Table.Cell>
+                                <Badge color={getSeverityColor(rule.severity)} size="1">
+                                  {rule.severity || 'unknown'}
+                                </Badge>
+                              </Table.Cell>
+                              <Table.Cell>
+                                <Text size="1" style={{ textTransform: 'capitalize' }}>
+                                  {rule.category?.replace(/_/g, ' ') || 'N/A'}
+                                </Text>
+                              </Table.Cell>
+                              <Table.Cell>
+                                <Badge color={rule.findingCount > 0 ? 'blue' : 'gray'} variant="soft">
+                                  {rule.findingCount}
+                                </Badge>
+                              </Table.Cell>
+                              <Table.Cell>
+                                <Text size="1" color="gray">{rule.uniqueEvents}</Text>
+                              </Table.Cell>
+                              <Table.Cell>
+                                {rule.findingCount > 0 ? (
+                                  <Badge color="green" size="1">Active</Badge>
+                                ) : (
+                                  <Badge color="gray" size="1" variant="outline">Inactive</Badge>
+                                )}
+                              </Table.Cell>
+                            </Table.Row>
+                          ))}
+                        </Table.Body>
+                      </Table.Root>
+                    </Card>
+                  </>
+                )}
+              </Flex>
+            </Tabs.Content>
+          </Box>
+        </Tabs.Root>
       </Flex>
+
+      {/* Rule Details Modal */}
+      <Dialog.Root open={ruleDialogOpen} onOpenChange={(open) => {
+        setRuleDialogOpen(open);
+        if (!open) {
+          setRuleTestResults(null);
+          setTestingRule(false);
+        }
+      }}>
+        <Dialog.Content style={{ maxWidth: 700 }}>
+          <Dialog.Title>Rule Details</Dialog.Title>
+          <Dialog.Description size="1" mb="4">
+            Comprehensive information about this linter rule
+          </Dialog.Description>
+
+          {selectedRule && (
+            <Flex direction="column" gap="3">
+              {/* Rule Header */}
+              <Card>
+                <Flex direction="column" gap="2">
+                  <Flex justify="between" align="center">
+                    <Code size="2">{selectedRule.id}</Code>
+                    <Badge color={getSeverityColor(selectedRule.severity)} size="2">
+                      {selectedRule.severity}
+                    </Badge>
+                  </Flex>
+                  <Text size="3" weight="bold">{selectedRule.name}</Text>
+                  {selectedRule.description && (
+                    <Text size="2" color="gray">{selectedRule.description}</Text>
+                  )}
+                </Flex>
+              </Card>
+
+              {/* Rule Statistics */}
+              <Card>
+                <Flex direction="column" gap="2">
+                  <Text size="1" weight="bold" color="gray">Statistics</Text>
+                  <Flex gap="4" wrap="wrap">
+                    <Box>
+                      <Text size="1" color="gray">Total Findings</Text>
+                      <Text size="3" weight="bold">{selectedRule.findingCount || 0}</Text>
+                    </Box>
+                    <Box>
+                      <Text size="1" color="gray">Affected Events</Text>
+                      <Text size="3" weight="bold">{selectedRule.uniqueEvents || 0}</Text>
+                    </Box>
+                    <Box>
+                      <Text size="1" color="gray">Category</Text>
+                      <Text size="2" style={{ textTransform: 'capitalize' }}>
+                        {selectedRule.category?.replace(/_/g, ' ') || 'N/A'}
+                      </Text>
+                    </Box>
+                  </Flex>
+                </Flex>
+              </Card>
+
+              {/* Rule Definition (YAML) */}
+              {selectedRule.raw && (
+                <Card>
+                  <Flex direction="column" gap="2">
+                    <Text size="1" weight="bold" color="gray">YAML Definition</Text>
+                    <Box
+                      style={{
+                        backgroundColor: 'var(--gray-2)',
+                        borderRadius: '4px',
+                        padding: '12px',
+                        fontFamily: 'monospace',
+                        fontSize: '11px',
+                        overflow: 'auto',
+                        maxHeight: '300px'
+                      }}
+                    >
+                      <pre>{selectedRule.raw}</pre>
+                    </Box>
+                  </Flex>
+                </Card>
+              )}
+
+              {/* Edit Placeholder */}
+              <Card style={{ backgroundColor: 'var(--gray-2)', borderColor: 'var(--gray-6)' }}>
+                <Flex align="center" gap="2" p="2">
+                  <InfoCircledIcon />
+                  <Text size="1" color="gray">
+                    Rule editing feature coming soon
+                  </Text>
+                </Flex>
+              </Card>
+
+              {/* Rule Diagnostics - Test Button */}
+              {selectedRule.findingCount === 0 && (
+                <Card style={{ backgroundColor: 'var(--blue-2)', borderColor: 'var(--blue-6)' }}>
+                  <Flex direction="column" gap="3" p="2">
+                    <Flex align="center" justify="between">
+                      <Text size="2" weight="bold">Diagnostic Testing</Text>
+                      <Badge color="blue" size="1">Beta</Badge>
+                    </Flex>
+                    <Text size="1" color="gray">
+                      This rule has no findings. Run diagnostic tests to understand why it's not triggering.
+                    </Text>
+                    <Button
+                      size="2"
+                      onClick={() => testRule(selectedRule.id)}
+                      disabled={testingRule}
+                      variant="soft"
+                    >
+                      {testingRule ? (
+                        <>
+                          <ReloadIcon className="animate-spin" />
+                          Testing...
+                        </>
+                      ) : (
+                        <>Test Rule</>
+                      )}
+                    </Button>
+                  </Flex>
+                </Card>
+              )}
+
+              {/* Rule Test Results */}
+              {ruleTestResults && (
+                <Card style={{ backgroundColor: 'var(--violet-2)', borderColor: 'var(--violet-6)' }}>
+                  <Flex direction="column" gap="3" p="3">
+                    <Flex justify="between" align="center">
+                      <Text size="2" weight="bold">Test Results</Text>
+                      <Button
+                        size="1"
+                        variant="ghost"
+                        onClick={() => setRuleTestResults(null)}
+                      >
+                        <CrossCircledIcon />
+                      </Button>
+                    </Flex>
+
+                    {ruleTestResults.error ? (
+                      <Card style={{ backgroundColor: 'var(--red-2)', borderColor: 'var(--red-6)' }}>
+                        <Box p="2">
+                          <Text size="2" weight="medium" color="red">{ruleTestResults.error}</Text>
+                          {ruleTestResults.details && (
+                            <Text size="1" color="gray" mt="1" style={{ display: 'block' }}>
+                              {ruleTestResults.details}
+                            </Text>
+                          )}
+                        </Box>
+                      </Card>
+                    ) : (
+                      <Flex direction="column" gap="3">
+                        {/* Summary Stats */}
+                        <Card>
+                          <Flex gap="4" wrap="wrap" p="2">
+                            <Box>
+                              <Text size="1" color="gray">Events Checked</Text>
+                              <Text size="3" weight="bold">{ruleTestResults.diagnostics?.totalEventsChecked || 0}</Text>
+                            </Box>
+                            <Box>
+                              <Text size="1" color="gray">Matching Events</Text>
+                              <Text size="3" weight="bold" color={ruleTestResults.diagnostics?.matchingEvents > 0 ? 'blue' : 'gray'}>
+                                {ruleTestResults.diagnostics?.matchingEvents || 0}
+                              </Text>
+                            </Box>
+                            <Box>
+                              <Text size="1" color="gray">Almost Matching</Text>
+                              <Text size="3" weight="bold">{ruleTestResults.diagnostics?.almostMatchingEvents?.length || 0}</Text>
+                            </Box>
+                          </Flex>
+                        </Card>
+
+                        {/* Recommendations */}
+                        {ruleTestResults.recommendations && ruleTestResults.recommendations.length > 0 && (
+                          <Card style={{ backgroundColor: 'var(--amber-2)', borderColor: 'var(--amber-6)' }}>
+                            <Box p="2">
+                              <Text size="1" weight="bold" mb="2" style={{ display: 'block' }}>Recommendations</Text>
+                              <Flex direction="column" gap="1">
+                                {ruleTestResults.recommendations.map((rec, idx) => (
+                                  <Text key={idx} size="1" style={{ paddingLeft: '12px', position: 'relative' }}>
+                                    <span style={{ position: 'absolute', left: 0 }}>•</span> {rec}
+                                  </Text>
+                                ))}
+                              </Flex>
+                            </Box>
+                          </Card>
+                        )}
+
+                        {/* Field Presence */}
+                        {ruleTestResults.diagnostics?.fieldPresence && Object.keys(ruleTestResults.diagnostics.fieldPresence).length > 0 && (
+                          <Card>
+                            <Box p="2">
+                              <Text size="1" weight="bold" mb="2" style={{ display: 'block' }}>Field Presence in Database</Text>
+                              <Flex direction="column" gap="2">
+                                {Object.entries(ruleTestResults.diagnostics.fieldPresence).map(([field, stats]) => (
+                                  <Flex key={field} justify="between" align="center">
+                                    <Text size="1" style={{ fontFamily: 'monospace' }}>{field}</Text>
+                                    <Flex gap="2" align="center">
+                                      <Badge color="green" size="1" variant="soft">
+                                        {stats.present} present
+                                      </Badge>
+                                      <Badge color="gray" size="1" variant="soft">
+                                        {stats.missing} missing
+                                      </Badge>
+                                    </Flex>
+                                  </Flex>
+                                ))}
+                              </Flex>
+                            </Box>
+                          </Card>
+                        )}
+
+                        {/* Almost Matching Events */}
+                        {ruleTestResults.diagnostics?.almostMatchingEvents && ruleTestResults.diagnostics.almostMatchingEvents.length > 0 && (
+                          <Card>
+                            <Box p="2">
+                              <Text size="1" weight="bold" mb="2" style={{ display: 'block' }}>Almost Matching Events</Text>
+                              <Text size="1" color="gray" mb="2" style={{ display: 'block' }}>
+                                These events failed by one condition:
+                              </Text>
+                              <Flex direction="column" gap="2">
+                                {ruleTestResults.diagnostics.almostMatchingEvents.map((event, idx) => (
+                                  <Box key={idx}>
+                                    <Flex align="center" gap="2" mb="1">
+                                      <Badge color="gray" size="1">{event.eid}</Badge>
+                                      <Text size="1">{event.name}</Text>
+                                    </Flex>
+                                    <Box style={{ paddingLeft: '12px', fontSize: '11px', fontFamily: 'monospace' }}>
+                                      {Object.entries(event.conditionResults).map(([field, result]) => (
+                                        <div key={field}>
+                                          <Badge color={result.met ? 'green' : 'red'} size="1" variant="soft">
+                                            {result.met ? '✓' : '✗'}
+                                          </Badge>{' '}
+                                          {field}: {JSON.stringify(result.fieldValue)} {result.operator} {JSON.stringify(result.value)}
+                                        </div>
+                                      ))}
+                                    </Box>
+                                  </Box>
+                                ))}
+                              </Flex>
+                            </Box>
+                          </Card>
+                        )}
+
+                        {/* Rule Conditions */}
+                        {ruleTestResults.rule?.conditions && ruleTestResults.rule.conditions.length > 0 && (
+                          <details>
+                            <summary style={{ cursor: 'pointer', fontSize: '12px', color: 'var(--gray-10)' }}>
+                              Show Rule Conditions ({ruleTestResults.rule.conditions.length})
+                            </summary>
+                            <Box mt="2" p="2" style={{
+                              backgroundColor: 'var(--gray-2)',
+                              borderRadius: '4px',
+                              fontSize: '11px',
+                              fontFamily: 'monospace'
+                            }}>
+                              {ruleTestResults.rule.conditions.map((condition, idx) => (
+                                <div key={idx}>
+                                  {condition.field} {condition.operator} {JSON.stringify(condition.value)}
+                                </div>
+                              ))}
+                            </Box>
+                          </details>
+                        )}
+                      </Flex>
+                    )}
+                  </Flex>
+                </Card>
+              )}
+            </Flex>
+          )}
+
+          <Flex gap="3" mt="4" justify="end">
+            <Dialog.Close>
+              <Button variant="soft" color="gray">
+                Close
+              </Button>
+            </Dialog.Close>
+          </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
 
       {/* Event Details Modal */}
       <Dialog.Root open={dialogOpen} onOpenChange={setDialogOpen}>

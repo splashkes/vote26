@@ -1,22 +1,20 @@
-// Stripe Global Payments Payout Edge Function with FX Quotes Integration
-// Creates direct transfers to recipient accounts with automatic FX conversion
-// Date: 2025-10-15 - Updated for FX Quotes API
+// Stripe Global Payments Payout Edge Function
+// Creates direct payouts to recipients using Global Payouts system
+// Date: 2025-09-09
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import Stripe from 'https://esm.sh/stripe@14.21.0?target=deno';
+import Stripe from 'https://esm.sh/stripe@13.0.0?target=deno';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
 };
 
-const STRIPE_PREVIEW_API_VERSION = '2025-07-30.preview';
-
 interface PayoutRequest {
   art_id: string;
-  amount: number; // Amount in artist's local currency (dollars)
-  currency?: string; // Artist's currency (AUD, THB, USD, etc)
+  amount: number; // Amount in dollars (will be converted to cents)
+  currency?: string;
   artist_profile_id?: string; // Optional - will be derived from art_id if not provided
 }
 
@@ -30,8 +28,8 @@ serve(async (req) => {
     // Get request body
     const requestBody: PayoutRequest = await req.json();
     console.log('Global Payments payout request:', requestBody);
-
-    const {
+    
+    const { 
       art_id,
       amount,
       currency = 'USD',
@@ -126,6 +124,38 @@ serve(async (req) => {
       });
     }
 
+    // Convert amount to minor currency units (cents)
+    const amountMinor = Math.round(amount * 100);
+
+    // Generate idempotency key
+    const idempotencyKey = crypto.randomUUID();
+
+    // Create payout request record first (before Stripe call)
+    const { data: payoutRecord, error: insertError } = await supabase
+      .from('global_payment_requests')
+      .insert({
+        artist_profile_id: targetArtistProfileId,
+        art_id: art_id,
+        stripe_recipient_id: globalPaymentAccount.stripe_recipient_id,
+        amount_minor: amountMinor,
+        currency: currency.toUpperCase(),
+        status: 'queued',
+        idempotency_key: idempotencyKey,
+        metadata: {
+          artwork_code: artwork.art_code,
+          artist_name: artwork.artist_profiles?.name,
+          created_via: 'global_payments_payout_function',
+          original_amount: amount
+        }
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error('Error creating payout record:', insertError);
+      throw new Error('Failed to create payout record');
+    }
+
     // Get Stripe secret key
     const stripeSecretKey = Deno.env.get('stripe_intl_secret_key');
     if (!stripeSecretKey) {
@@ -138,173 +168,55 @@ serve(async (req) => {
       httpClient: Stripe.createFetchHttpClient()
     });
 
-    // Get artist's Stripe account to determine currency
-    const artistAccount = await stripe.accounts.retrieve(globalPaymentAccount.stripe_recipient_id);
-    const artistCountry = artistAccount.country;
-    const artistCurrency = (globalPaymentAccount.default_currency || artistAccount.default_currency || currency).toUpperCase();
-
-    console.log(`Artist account: ${artistCountry}, currency: ${artistCurrency}`);
-
-    // Determine if international (non-US/CA) payment requiring FX
-    const isUSCA = (artistCountry === 'US' || artistCountry === 'CA');
-    const targetCurrency = artistCurrency;
-    const targetAmount = amount; // Amount in artist's currency
-
-    let usdAmountToSend = amount;
-    let fxQuoteId = null;
-    let exchangeRate = null;
-    let fxMetadata: any = {};
-
-    // For international artists, use FX Quotes API to calculate USD amount
-    if (!isUSCA && targetCurrency !== 'USD') {
-      console.log(`International payment: ${targetAmount} ${targetCurrency}`);
-
-      try {
-        // Create FX Quote using preview API
-        const authHeader = 'Basic ' + btoa(stripeSecretKey + ':');
-        const fxResponse = await fetch('https://api.stripe.com/v1/fx_quotes', {
-          method: 'POST',
-          headers: {
-            'Authorization': authHeader,
-            'Stripe-Version': STRIPE_PREVIEW_API_VERSION,
-            'Content-Type': 'application/x-www-form-urlencoded'
-          },
-          body: new URLSearchParams({
-            'to_currency': targetCurrency.toLowerCase(),
-            'from_currencies[]': 'usd',
-            'lock_duration': 'hour' // Lock rate for 1 hour
-          })
-        });
-
-        if (!fxResponse.ok) {
-          const errorText = await fxResponse.text();
-          throw new Error(`FX Quote API failed: ${errorText}`);
-        }
-
-        const fxQuote = await fxResponse.json();
-        fxQuoteId = fxQuote.id;
-        exchangeRate = fxQuote.rates.usd.exchange_rate;
-
-        // Calculate USD amount needed for target local currency amount
-        usdAmountToSend = targetAmount / exchangeRate;
-
-        fxMetadata = {
-          fx_quote_id: fxQuoteId,
-          exchange_rate: exchangeRate,
-          target_currency: targetCurrency,
-          target_amount: targetAmount,
-          usd_amount_calculated: usdAmountToSend,
-          fx_rate_details: fxQuote.rates.usd.rate_details,
-          fx_quote_expires_at: new Date(fxQuote.lock_expires_at * 1000).toISOString()
-        };
-
-        console.log(`FX Quote created: ${fxQuoteId}, rate: ${exchangeRate}`);
-        console.log(`Sending ${usdAmountToSend.toFixed(2)} USD for ${targetAmount} ${targetCurrency}`);
-
-      } catch (fxError: any) {
-        console.error('FX Quote API error:', fxError);
-        throw new Error(`Failed to get FX rate: ${fxError.message}`);
-      }
-    } else {
-      console.log(`Domestic payment: ${targetAmount} USD`);
-      fxMetadata = {
-        payment_type: 'domestic',
-        note: 'No FX conversion needed for US/CA accounts'
-      };
-    }
-
-    // Convert USD amount to cents
-    const amountMinorUSD = Math.ceil(usdAmountToSend * 100);
-
-    // Generate idempotency key
-    const idempotencyKey = crypto.randomUUID();
-
-    // Create payout request record first (before Stripe call)
-    const { data: payoutRecord, error: insertError } = await supabase
-      .from('global_payment_requests')
-      .insert({
-        artist_profile_id: targetArtistProfileId,
-        art_id: art_id,
-        stripe_recipient_id: globalPaymentAccount.stripe_recipient_id,
-        amount_minor: Math.round(targetAmount * 100), // Original amount in artist currency
-        currency: targetCurrency,
-        status: 'queued',
-        idempotency_key: idempotencyKey,
-        metadata: {
-          artwork_code: artwork.art_code,
-          artist_name: artwork.artist_profiles?.name,
-          artist_country: artistCountry,
-          created_via: 'global_payments_payout_function_v2',
-          original_amount: targetAmount,
-          original_currency: targetCurrency,
-          ...fxMetadata
-        }
-      })
-      .select()
-      .single();
-
-    if (insertError) {
-      console.error('Error creating payout record:', insertError);
-      throw new Error('Failed to create payout record');
-    }
-
     try {
-      // Create the transfer
-      const transfer = await stripe.transfers.create({
-        amount: amountMinorUSD,
-        currency: 'usd', // Platform always sends USD
-        destination: globalPaymentAccount.stripe_recipient_id,
-        description: `Payment for ${artwork.art_code} - ${artwork.artist_profiles?.name}`,
+      // Create the payout using Global Payouts
+      const payout = await stripe.payouts.create({
+        amount: amountMinor,
+        currency: currency.toLowerCase(),
+        recipient: globalPaymentAccount.stripe_recipient_id,
         metadata: {
           art_id: art_id,
           art_code: artwork.art_code,
           artist_profile_id: targetArtistProfileId,
-          internal_payout_id: payoutRecord.id,
-          target_currency: targetCurrency,
-          target_amount: targetAmount.toString(),
-          fx_quote_id: fxQuoteId || 'none',
-          exchange_rate: exchangeRate?.toString() || 'none'
+          internal_payout_id: payoutRecord.id
         }
       }, {
         idempotencyKey: idempotencyKey
       });
 
-      console.log('Stripe transfer created:', transfer.id);
+      console.log('Stripe payout created:', payout.id);
 
-      // Update our record with Stripe transfer ID and status
+      // Update our record with Stripe payout ID and status
       const { error: updateError } = await supabase
         .from('global_payment_requests')
         .update({
-          stripe_payout_id: transfer.id,
-          status: 'sent',
+          stripe_payout_id: payout.id,
+          status: 'sent', // Global Payouts start as 'sent'
           sent_at: new Date().toISOString(),
           metadata: {
             ...payoutRecord.metadata,
-            stripe_transfer_id: transfer.id,
-            usd_amount_sent_minor: amountMinorUSD,
-            usd_amount_sent: usdAmountToSend.toFixed(2)
+            stripe_status: payout.status,
+            stripe_arrival_date: payout.arrival_date ? new Date(payout.arrival_date * 1000).toISOString() : null
           }
         })
         .eq('id', payoutRecord.id);
 
       if (updateError) {
         console.error('Error updating payout record with Stripe ID:', updateError);
-        // Don't throw - the transfer was created successfully
+        // Don't throw - the payout was created successfully
       }
 
       return new Response(JSON.stringify({
         success: true,
-        message: 'Payment sent successfully',
+        message: 'Payout sent successfully',
         payout: {
           id: payoutRecord.id,
-          stripe_transfer_id: transfer.id,
-          target_amount: targetAmount,
-          target_currency: targetCurrency,
-          usd_amount_sent: usdAmountToSend.toFixed(2),
+          stripe_payout_id: payout.id,
+          amount: amount,
+          currency: currency,
           recipient_id: globalPaymentAccount.stripe_recipient_id,
           status: 'sent',
-          fx_used: !isUSCA && targetCurrency !== 'USD',
-          fx_rate: exchangeRate || null
+          arrival_date: payout.arrival_date ? new Date(payout.arrival_date * 1000).toISOString() : null
         },
         system: 'global_payments'
       }), {
@@ -312,9 +224,9 @@ serve(async (req) => {
         status: 200
       });
 
-    } catch (stripeError: any) {
-      console.error('Stripe transfer failed:', stripeError);
-
+    } catch (stripeError) {
+      console.error('Stripe payout failed:', stripeError);
+      
       // Update our record to reflect the failure
       const { error: failureUpdateError } = await supabase
         .from('global_payment_requests')
@@ -335,10 +247,10 @@ serve(async (req) => {
       }
 
       // Re-throw the Stripe error
-      throw new Error(`Stripe transfer failed: ${stripeError.message}`);
+      throw new Error(`Stripe payout failed: ${stripeError.message}`);
     }
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error in Global Payments payout:', error);
     return new Response(JSON.stringify({
       error: error.message,
@@ -349,3 +261,35 @@ serve(async (req) => {
     });
   }
 });
+
+// TODO: Production Implementation Notes
+//
+// 1. Balance Management:
+//    - Global Payouts require prefunded Stripe balance
+//    - Monitor balance levels and alert when low
+//    - Consider automatic top-ups or manual funding processes
+//
+// 2. Error Handling:
+//    - Implement retry logic for transient failures
+//    - Handle insufficient_funds errors gracefully
+//    - Track failed payouts for manual review
+//
+// 3. Compliance & Validation:
+//    - Validate recipient eligibility before payout
+//    - Check for country-specific requirements
+//    - Handle regulatory restrictions (e.g., sanctions lists)
+//
+// 4. Currency Considerations:
+//    - Support multi-currency payouts based on recipient country
+//    - Handle FX rates and conversion fees
+//    - Maintain currency-specific balances
+//
+// 5. Audit & Reconciliation:
+//    - Log all payout attempts and outcomes
+//    - Regular reconciliation with Stripe records
+//    - Financial reporting and tax implications
+//
+// 6. Webhook Integration:
+//    - Listen for payout.updated events from Stripe
+//    - Update local records based on final payout status
+//    - Handle payout reversals or failures

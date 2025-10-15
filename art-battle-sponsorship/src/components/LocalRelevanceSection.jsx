@@ -11,6 +11,12 @@ const LocalRelevanceSection = ({ inviteData }) => {
     year: 'numeric'
   });
 
+  const eventTime = new Date(inviteData.event_start_datetime).toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+
   // Convert media array to map
   const mediaMap = {};
   inviteData?.media?.forEach(item => {
@@ -75,46 +81,46 @@ const LocalRelevanceSection = ({ inviteData }) => {
 
           {/* Event Details Card */}
           <Card size="3" style={{ background: 'var(--accent-3)', border: '1px solid var(--accent-6)' }}>
-            <Flex direction="column" gap="4">
+            <Flex direction="column" gap="3" align="center" style={{ textAlign: 'center' }}>
+              <Text size="1" weight="bold" style={{ color: 'var(--gray-11)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                Upcoming Event
+              </Text>
+
               <Heading size="6">{inviteData.event_name}</Heading>
 
-              <Grid columns="2" gap="4">
-                <Flex direction="column" gap="1">
-                  <Flex align="center" gap="2">
-                    <CalendarIcon width="16" height="16" />
-                    <Text size="2" weight="bold" style={{ color: 'var(--gray-11)' }}>Date & Time</Text>
-                  </Flex>
-                  <Text size="3">{eventDate}</Text>
-                  <Text size="2" style={{ color: 'var(--gray-11)' }}>7:00 PM - 10:00 PM</Text>
-                </Flex>
+              <Flex direction="column" gap="1">
+                <Text size="3">{eventDate}</Text>
+                <Text size="3">{eventTime}</Text>
+                <Text size="3">{inviteData.event_venue || 'Premium Event Space'}</Text>
+                <Text size="3">{inviteData.event_city}</Text>
+              </Flex>
 
-                <Flex direction="column" gap="1">
-                  <Flex align="center" gap="2">
-                    <ImageIcon width="16" height="16" />
-                    <Text size="2" weight="bold" style={{ color: 'var(--gray-11)' }}>Venue</Text>
-                  </Flex>
-                  <Text size="3">{inviteData.event_venue || 'Premium Event Space'}</Text>
-                  <Text size="2" style={{ color: 'var(--gray-11)' }}>{inviteData.event_city}</Text>
-                </Flex>
+              <Box style={{ width: '100%', height: '1px', background: 'var(--accent-6)', margin: '0.5rem 0' }} />
 
-                <Flex direction="column" gap="1">
-                  <Flex align="center" gap="2">
-                    <PersonIcon width="16" height="16" />
-                    <Text size="2" weight="bold" style={{ color: 'var(--gray-11)' }}>Expected Audience</Text>
-                  </Flex>
-                  <Text size="3">350-400 in person</Text>
-                  <Text size="2" style={{ color: 'var(--gray-11)' }}>1,050-1,200 online viewers</Text>
-                </Flex>
+              <Flex direction="column" gap="1">
+                <Text size="3" weight="bold">Expected Audience</Text>
+                <Text size="2" style={{ color: 'var(--gray-11)' }}>
+                  {inviteData.event_capacity ? `${inviteData.event_capacity.toLocaleString()} in person` : '350-400 in person'}
+                </Text>
+                {inviteData.event_capacity && (
+                  <Text size="2" style={{ color: 'var(--gray-11)' }}>
+                    {(inviteData.event_capacity * 3).toLocaleString()} online viewers
+                  </Text>
+                )}
+              </Flex>
 
+              {inviteData.artists && inviteData.artists.length > 0 && (
                 <Flex direction="column" gap="1">
-                  <Flex align="center" gap="2">
-                    <PersonIcon width="16" height="16" />
-                    <Text size="2" weight="bold" style={{ color: 'var(--gray-11)' }}>Featured Artists</Text>
+                  <Text size="3" weight="bold">Featured Artists</Text>
+                  <Flex direction="column" gap="0">
+                    {inviteData.artists.map((artist, idx) => (
+                      <Text key={artist.id} size="2" style={{ color: 'var(--gray-11)' }}>
+                        {artist.name}
+                      </Text>
+                    ))}
                   </Flex>
-                  <Text size="3">12 local artists</Text>
-                  <Text size="2" style={{ color: 'var(--gray-11)' }}>3 competitive rounds</Text>
                 </Flex>
-              </Grid>
+              )}
             </Flex>
           </Card>
 
