@@ -324,6 +324,57 @@ const EventLinter = () => {
     }
   };
 
+  // Handle EID click by event EID string (e.g., "AB3060")
+  const handleEidClickByEid = async (e, eid) => {
+    e.stopPropagation();
+    try {
+      const { data: event, error } = await supabase
+        .from('events')
+        .select(`
+          *,
+          cities(id, name, country_id, countries(id, name, code))
+        `)
+        .eq('eid', eid)
+        .single();
+
+      if (error) throw error;
+
+      setSelectedEvent(event);
+      setDialogOpen(true);
+    } catch (err) {
+      console.error('Error loading event:', err);
+    }
+  };
+
+  // Render text with clickable event IDs
+  const renderTextWithEventLinks = (text) => {
+    if (!text) return null;
+
+    // Pattern to match event IDs like AB3060
+    const eventIdPattern = /(AB\d+)/g;
+    const parts = text.split(eventIdPattern);
+
+    return parts.map((part, index) => {
+      if (part.match(eventIdPattern)) {
+        return (
+          <span
+            key={index}
+            onClick={(e) => handleEidClickByEid(e, part)}
+            style={{
+              textDecoration: 'underline dotted',
+              cursor: 'pointer',
+              color: 'var(--blue-11)',
+              fontWeight: '500'
+            }}
+          >
+            {part}
+          </span>
+        );
+      }
+      return <span key={index}>{part}</span>;
+    });
+  };
+
   // Handle message click to show finding details
   const handleMessageClick = (e, finding) => {
     e.stopPropagation();
@@ -508,7 +559,7 @@ const EventLinter = () => {
                   {aiAnalysis.overview && (
                     <Box>
                       <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>Overview</Text>
-                      <Text size="2" style={{ lineHeight: '1.6' }}>{aiAnalysis.overview}</Text>
+                      <Text size="2" style={{ lineHeight: '1.6' }}>{renderTextWithEventLinks(aiAnalysis.overview)}</Text>
                     </Box>
                   )}
 
@@ -518,7 +569,7 @@ const EventLinter = () => {
                       <Flex direction="column" gap="1">
                         {aiAnalysis.key_issues.map((issue, idx) => (
                           <Text key={idx} size="2" style={{ paddingLeft: '12px', position: 'relative' }}>
-                            <span style={{ position: 'absolute', left: 0 }}>•</span> {issue}
+                            <span style={{ position: 'absolute', left: 0 }}>•</span> {renderTextWithEventLinks(issue)}
                           </Text>
                         ))}
                       </Flex>
@@ -531,7 +582,7 @@ const EventLinter = () => {
                       <Flex direction="column" gap="1">
                         {aiAnalysis.recommendations.map((rec, idx) => (
                           <Text key={idx} size="2" style={{ paddingLeft: '12px', position: 'relative' }}>
-                            <span style={{ position: 'absolute', left: 0 }}>→</span> {rec}
+                            <span style={{ position: 'absolute', left: 0 }}>→</span> {renderTextWithEventLinks(rec)}
                           </Text>
                         ))}
                       </Flex>
@@ -545,7 +596,7 @@ const EventLinter = () => {
                         <Flex direction="column" gap="1">
                           {aiAnalysis.priority_actions.map((action, idx) => (
                             <Text key={idx} size="2" weight="medium" style={{ paddingLeft: '12px', position: 'relative' }}>
-                              <span style={{ position: 'absolute', left: 0 }}>⚡</span> {action}
+                              <span style={{ position: 'absolute', left: 0 }}>⚡</span> {renderTextWithEventLinks(action)}
                             </Text>
                           ))}
                         </Flex>

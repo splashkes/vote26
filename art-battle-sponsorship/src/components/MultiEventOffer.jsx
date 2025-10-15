@@ -648,11 +648,13 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                     ${formatCurrency(calculateDiscountedTotal())} {selectedPackage.currency || 'USD'}
                   </Heading>
                 </Flex>
-                <Flex justify="end">
-                  <Text size="2" style={{ color: 'var(--green-11)', fontStyle: 'italic' }}>
-                    only ${formatCurrency(calculateDiscountedTotal() / totalEvents)} per event!
-                  </Text>
-                </Flex>
+                {totalEvents > 1 && (
+                  <Flex justify="end">
+                    <Text size="2" style={{ color: 'var(--green-11)', fontStyle: 'italic' }}>
+                      only ${formatCurrency(calculateDiscountedTotal() / totalEvents)} per event!
+                    </Text>
+                  </Flex>
+                )}
               </Flex>
             </Flex>
           </Card>
