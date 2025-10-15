@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Box,
   Flex,
@@ -52,6 +52,8 @@ const EventLinter = () => {
   const [aiAnalysis, setAiAnalysis] = useState(null);
   const [analyzingAI, setAnalyzingAI] = useState(false);
   const [showAIAnalysis, setShowAIAnalysis] = useState(false);
+  const [aiAnalysisTime, setAiAnalysisTime] = useState(0);
+  const aiTimerRef = useRef(null);
 
   // Load events and run linter via edge function with streaming
   const runLinter = async () => {
@@ -365,6 +367,13 @@ const EventLinter = () => {
     try {
       setAnalyzingAI(true);
       setAiAnalysis(null);
+      setAiAnalysisTime(0);
+
+      // Start timer
+      const startTime = Date.now();
+      aiTimerRef.current = setInterval(() => {
+        setAiAnalysisTime(Math.floor((Date.now() - startTime) / 1000));
+      }, 100);
 
       // Prepare summary of current filtered findings
       const summary = {
@@ -372,12 +381,15 @@ const EventLinter = () => {
         severityCounts,
         categories: Array.from(new Set(findings.map(f => f.category))),
         contexts: Array.from(new Set(findings.map(f => f.context))),
-        sampleFindings: findings.slice(0, 20).map(f => ({
+        allFindings: findings.map(f => ({
           severity: f.severity,
           category: f.category,
           message: f.message,
           eventEid: f.eventEid,
-          eventName: f.eventName
+          eventName: f.eventName,
+          ruleId: f.ruleId,
+          ruleName: f.ruleName,
+          context: f.context
         })),
         filters: {
           search: searchQuery,
@@ -407,10 +419,12 @@ const EventLinter = () => {
       }
 
       const result = await response.json();
+      if (aiTimerRef.current) clearInterval(aiTimerRef.current);
       setAiAnalysis(result.analysis);
       setShowAIAnalysis(true);
     } catch (err) {
       console.error('Error running AI analysis:', err);
+      if (aiTimerRef.current) clearInterval(aiTimerRef.current);
       setAiAnalysis({
         error: 'Failed to generate AI analysis. Please try again.',
         details: err.message
@@ -445,7 +459,27 @@ const EventLinter = () => {
         </Flex>
 
         {/* AI Analysis Section */}
-        {showAIAnalysis && aiAnalysis && (
+        {analyzingAI && (
+          <Card style={{ backgroundColor: 'var(--indigo-2)', borderColor: 'var(--indigo-6)' }}>
+            <Box p="4">
+              <Flex justify="center" align="center" direction="column" gap="3">
+                <Flex align="center" gap="2">
+                  <div style={{ animation: 'spin 1s linear infinite' }}>
+                    <ReloadIcon width="20" height="20" style={{ color: 'var(--indigo-9)' }} />
+                  </div>
+                  <Text size="4" weight="bold">Analyzing with AI...</Text>
+                </Flex>
+                <Badge color="indigo" size="2" variant="soft">
+                  {aiAnalysisTime}s
+                </Badge>
+                <Text size="1" color="gray">
+                  Generating insights for {findings.length} findings
+                </Text>
+              </Flex>
+            </Box>
+          </Card>
+        )}
+        {showAIAnalysis && aiAnalysis && !analyzingAI && (
           <Card style={{ backgroundColor: 'var(--indigo-2)', borderColor: 'var(--indigo-6)' }}>
             <Box p="4">
               <Flex justify="between" align="start" mb="3">

@@ -149,11 +149,11 @@ async function generateAIAnalysis(findings: any) {
 }
 
 function createPrompt(findings: any): string {
-  const { total, severityCounts, categories, contexts, sampleFindings, filters } = findings;
+  const { total, severityCounts, categories, contexts, allFindings, filters } = findings;
 
-  // Build sample findings summary
-  const findingsSummary = sampleFindings.map((f: any, idx: number) =>
-    `${idx + 1}. [${f.severity.toUpperCase()}] ${f.category}: ${f.message} (${f.eventEid || 'N/A'} - ${f.eventName || 'Unknown'})`
+  // Build ALL findings summary with rule information
+  const findingsSummary = allFindings.map((f: any, idx: number) =>
+    `${idx + 1}. [${f.severity.toUpperCase()}] ${f.ruleName || f.category}: ${f.message} (${f.eventEid || 'N/A'} - ${f.eventName || 'Unknown'})`
   ).join('\n');
 
   // Build active filters summary
@@ -180,16 +180,18 @@ CURRENT FILTERED VIEW:
 - Contexts: ${contexts.join(', ')}
 ${filtersText}
 
-SAMPLE FINDINGS (first ${sampleFindings.length}):
+ALL FINDINGS (complete list of ${allFindings.length}):
 ${findingsSummary}
 
 ANALYSIS REQUIREMENTS:
-Provide a technical, data-driven analysis focused on operational priorities. Consider:
+Provide a technical, data-driven analysis focused on operational priorities. You have the COMPLETE list of all findings. Consider:
 1. The severity distribution and what it indicates about overall system health
-2. Patterns across events (are issues concentrated in specific events/categories?)
-3. Urgent vs. routine operational needs
-4. Resource allocation recommendations based on issue priority
-5. Any filters applied that may affect the scope of your analysis
+2. Patterns across events (which specific events appear most frequently? Are issues concentrated?)
+3. Pattern recognition (which rule types appear most frequently? Group similar issues)
+4. Urgent vs. routine operational needs (prioritize events happening soon)
+5. Resource allocation recommendations based on issue priority
+6. Identify specific event IDs that need immediate attention
+7. Any filters applied that may affect the scope of your analysis
 
 Return your analysis in JSON format with EXACTLY these 4 fields:
 {
