@@ -27,6 +27,7 @@ import AuthModal from './AuthModal';
 import InvitationAcceptanceModal from './InvitationAcceptanceModal';
 import PaymentStatusBanner from './PaymentStatusBanner';
 import ServerNotes from './ServerNotes';
+import FeedbackInfoBox from './FeedbackInfoBox';
 
 
 const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
@@ -857,6 +858,12 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
 
       {/* Server-side Notes - content and eligibility determined server-side */}
       <ServerNotes artistProfile={selectedProfile} onNavigateToTab={onNavigateToTab} />
+
+      {/* Feedback Info Box - prompts artists to provide feedback for past events */}
+      <FeedbackInfoBox
+        artistProfile={selectedProfile}
+        confirmations={confirmations}
+      />
 
       {error && (
         <Callout.Root color="red">

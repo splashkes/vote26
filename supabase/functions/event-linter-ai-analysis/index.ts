@@ -201,5 +201,12 @@ Return your analysis in JSON format with EXACTLY these 4 fields:
   "priority_actions": ["array", "of", "1-3", "highest", "priority", "actions", "needed", "immediately"]
 }
 
-CRITICAL: Return ONLY these 4 fields with the exact types specified (strings and arrays). Be specific and actionable - reference event IDs, categories, or specific metrics where relevant. If filters are active, acknowledge that your analysis is scoped to the filtered view.`;
+CRITICAL: Return ONLY these 4 fields with the exact types specified (strings and arrays).
+
+Be VERY specific and actionable:
+- Reference specific event IDs (e.g., "AB3037, AB3083, AB3077 all missing venues")
+- Group similar issues (e.g., "15 events in the same category")
+- Identify patterns (e.g., "all Toronto events have X issue")
+- Prioritize by urgency and impact
+- If filters are active, acknowledge that your analysis is scoped to the filtered view.`;
 }

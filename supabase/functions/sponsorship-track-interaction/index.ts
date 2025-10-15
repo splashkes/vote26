@@ -69,7 +69,7 @@ serve(async (req) => {
     if (interactionType === 'request_call' && metadata) {
       try {
         const slackToken = Deno.env.get('SLACK_BOT_TOKEN')
-        const slackChannel = Deno.env.get('SLACK_SPONSORSHIP_CHANNEL') || '#sponsorships'
+        const slackChannel = Deno.env.get('SLACK_SPONSORSHIP_CHANNEL') || '#sponsor-inqiure'
 
         if (slackToken) {
           // Format the message with all details
