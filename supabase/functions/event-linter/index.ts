@@ -39,52 +39,50 @@ async function loadRules(supabaseClient: any) {
   }
 }
 
-// Enrich events with computed metrics from database functions
+// Enrich events with computed metrics from database functions (BATCH VERSION)
 async function enrichEventsWithMetrics(supabaseClient: any, events: any[]) {
-  // For each event, fetch computed metrics and attach them
-  for (const event of events) {
-    if (!event.eid) continue;
+  if (events.length === 0) return events;
 
-    try {
-      // Fetch all metrics in parallel
-      const [
-        confirmedArtists,
-        appliedArtists,
-        ticketRevenue,
-        auctionRevenue,
-        totalVotes,
-        ticketSales,
-        prevMetrics
-      ] = await Promise.all([
-        supabaseClient.rpc('get_event_confirmed_artists_count_by_eid', { p_eid: event.eid }),
-        supabaseClient.rpc('get_event_applied_artists_count_by_eid', { p_eid: event.eid }),
-        supabaseClient.rpc('get_event_ticket_revenue_by_eid', { p_eid: event.eid }),
-        supabaseClient.rpc('get_event_auction_revenue_by_eid', { p_eid: event.eid }),
-        supabaseClient.rpc('get_event_total_votes_by_eid', { p_eid: event.eid }),
-        supabaseClient.rpc('get_event_ticket_sales_by_eid', { p_eid: event.eid }),
-        supabaseClient.rpc('get_previous_event_metrics', { p_event_id: event.id })
-      ]);
+  // Get all EIDs
+  const eids = events.filter(e => e.eid).map(e => e.eid);
+  if (eids.length === 0) return events;
 
-      // Attach metrics to event object
-      event.confirmed_artists_count = confirmedArtists.data || 0;
-      event.event_artists_confirmed_count = confirmedArtists.data || 0; // Alias
-      event.applied_artists_count = appliedArtists.data || 0;
-      event.ticket_revenue = ticketRevenue.data || 0;
-      event.auction_revenue = auctionRevenue.data || 0;
-      event.total_votes = totalVotes.data || 0;
-      event.ticket_sales = ticketSales.data || 0;
+  try {
+    // Fetch all metrics in ONE batch call
+    const { data: metricsData, error } = await supabaseClient
+      .rpc('get_batch_event_metrics', { p_eids: eids });
 
-      // Attach previous event metrics if available
-      if (prevMetrics.data && prevMetrics.data.length > 0) {
-        const prev = prevMetrics.data[0];
-        event.prev_ticket_revenue = prev.prev_ticket_revenue || 0;
-        event.prev_auction_revenue = prev.prev_auction_revenue || 0;
-        event.prev_total_votes = prev.prev_total_votes || 0;
-      }
-    } catch (error) {
-      // Continue on error - just don't attach metrics for this event
-      console.error(`Failed to fetch metrics for ${event.eid}:`, error);
+    if (error) {
+      console.error('Error fetching batch metrics:', error);
+      return events;
     }
+
+    // Create a map of eid -> metrics for fast lookup
+    const metricsMap = new Map();
+    if (metricsData) {
+      metricsData.forEach((m: any) => {
+        metricsMap.set(m.eid, m);
+      });
+    }
+
+    // Attach metrics to each event
+    for (const event of events) {
+      if (!event.eid) continue;
+
+      const metrics = metricsMap.get(event.eid);
+      if (metrics) {
+        event.confirmed_artists_count = metrics.confirmed_artists_count || 0;
+        event.event_artists_confirmed_count = metrics.confirmed_artists_count || 0; // Alias
+        event.applied_artists_count = metrics.applied_artists_count || 0;
+        event.ticket_revenue = metrics.ticket_revenue || 0;
+        event.auction_revenue = metrics.auction_revenue || 0;
+        event.total_votes = metrics.total_votes || 0;
+        event.ticket_sales = metrics.ticket_sales || 0;
+      }
+    }
+  } catch (error) {
+    console.error('Failed to enrich events with metrics:', error);
+    // Continue without enrichment - rules that need metrics will just not match
   }
 
   return events;
