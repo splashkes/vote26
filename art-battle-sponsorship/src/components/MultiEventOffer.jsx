@@ -17,7 +17,7 @@ import { CalendarIcon, RocketIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon, Qu
 import { trackInteraction } from '../lib/api';
 import InternationalPhoneInput from './InternationalPhoneInput';
 
-const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfirm, onSkip, discountPercent }) => {
+const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfirm, onSkip, discountPercent, skipMultiEvent = false }) => {
   const [upcomingEvents, setUpcomingEvents] = useState([]);
   const [selectedEvents, setSelectedEvents] = useState([]);
   const [showBenefits, setShowBenefits] = useState(false);
@@ -250,71 +250,85 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                 objectFit: 'contain'
               }}
             />
-            <Badge color="green" size="3">
-              <RocketIcon width="16" height="16" /> Exclusive Opportunity
-            </Badge>
-            <Heading size="8" mb="2">Sponsor Multiple Events & Save Big</Heading>
-            <Text size="4" style={{ color: 'var(--gray-11)' }}>
-              Lock in discounts by sponsoring more events in {inviteData.event_city}
-            </Text>
+            {!skipMultiEvent && (
+              <>
+                <Badge color="green" size="3">
+                  <RocketIcon width="16" height="16" /> Exclusive Opportunity
+                </Badge>
+                <Heading size="8" mb="2">Sponsor Multiple Events & Save Big</Heading>
+                <Text size="4" style={{ color: 'var(--gray-11)' }}>
+                  Lock in discounts by sponsoring more events in {inviteData.event_city}
+                </Text>
+              </>
+            )}
+            {skipMultiEvent && (
+              <>
+                <Heading size="8" mb="2">Complete Your Sponsorship</Heading>
+                <Text size="4" style={{ color: 'var(--gray-11)' }}>
+                  Review your package and proceed to payment
+                </Text>
+              </>
+            )}
           </Flex>
 
-          {/* Discount Tiers */}
-          <Card size="3" style={{ background: 'var(--accent-2)', border: '1px solid var(--accent-6)' }}>
-            <Flex direction="column" gap="3">
-              <Heading size="5">Multi-Event Discounts</Heading>
-              <Grid columns={{ initial: '1', sm: '3' }} gap="3">
-                <Box
-                  style={{
-                    padding: '1rem',
-                    background: totalEvents === 2 ? 'var(--accent-9)' : 'var(--gray-3)',
-                    borderRadius: '6px',
-                    textAlign: 'center',
-                    transition: 'all 0.3s'
-                  }}
-                >
-                  <Heading size="6" style={{ color: totalEvents === 2 ? 'white' : 'inherit' }}>
-                    15% OFF
-                  </Heading>
-                  <Text size="2" style={{ color: totalEvents === 2 ? 'rgba(255,255,255,0.9)' : 'var(--gray-11)' }}>
-                    2 Events
-                  </Text>
-                </Box>
-                <Box
-                  style={{
-                    padding: '1rem',
-                    background: totalEvents === 3 ? 'var(--accent-9)' : 'var(--gray-3)',
-                    borderRadius: '6px',
-                    textAlign: 'center',
-                    transition: 'all 0.3s'
-                  }}
-                >
-                  <Heading size="6" style={{ color: totalEvents === 3 ? 'white' : 'inherit' }}>
-                    20% OFF
-                  </Heading>
-                  <Text size="2" style={{ color: totalEvents === 3 ? 'rgba(255,255,255,0.9)' : 'var(--gray-11)' }}>
-                    3 Events
-                  </Text>
-                </Box>
-                <Box
-                  style={{
-                    padding: '1rem',
-                    background: totalEvents >= 4 ? 'var(--accent-9)' : 'var(--gray-3)',
-                    borderRadius: '6px',
-                    textAlign: 'center',
-                    transition: 'all 0.3s'
-                  }}
-                >
-                  <Heading size="6" style={{ color: totalEvents >= 4 ? 'white' : 'inherit' }}>
-                    30% OFF
-                  </Heading>
-                  <Text size="2" style={{ color: totalEvents >= 4 ? 'rgba(255,255,255,0.9)' : 'var(--gray-11)' }}>
-                    4+ Events
-                  </Text>
-                </Box>
-              </Grid>
-            </Flex>
-          </Card>
+          {/* Discount Tiers - Only show if multi-event is not skipped */}
+          {!skipMultiEvent && (
+            <Card size="3" style={{ background: 'var(--accent-2)', border: '1px solid var(--accent-6)' }}>
+              <Flex direction="column" gap="3">
+                <Heading size="5">Multi-Event Discounts</Heading>
+                <Grid columns={{ initial: '1', sm: '3' }} gap="3">
+                  <Box
+                    style={{
+                      padding: '1rem',
+                      background: totalEvents === 2 ? 'var(--accent-9)' : 'var(--gray-3)',
+                      borderRadius: '6px',
+                      textAlign: 'center',
+                      transition: 'all 0.3s'
+                    }}
+                  >
+                    <Heading size="6" style={{ color: totalEvents === 2 ? 'white' : 'inherit' }}>
+                      15% OFF
+                    </Heading>
+                    <Text size="2" style={{ color: totalEvents === 2 ? 'rgba(255,255,255,0.9)' : 'var(--gray-11)' }}>
+                      2 Events
+                    </Text>
+                  </Box>
+                  <Box
+                    style={{
+                      padding: '1rem',
+                      background: totalEvents === 3 ? 'var(--accent-9)' : 'var(--gray-3)',
+                      borderRadius: '6px',
+                      textAlign: 'center',
+                      transition: 'all 0.3s'
+                    }}
+                  >
+                    <Heading size="6" style={{ color: totalEvents === 3 ? 'white' : 'inherit' }}>
+                      20% OFF
+                    </Heading>
+                    <Text size="2" style={{ color: totalEvents === 3 ? 'rgba(255,255,255,0.9)' : 'var(--gray-11)' }}>
+                      3 Events
+                    </Text>
+                  </Box>
+                  <Box
+                    style={{
+                      padding: '1rem',
+                      background: totalEvents >= 4 ? 'var(--accent-9)' : 'var(--gray-3)',
+                      borderRadius: '6px',
+                      textAlign: 'center',
+                      transition: 'all 0.3s'
+                    }}
+                  >
+                    <Heading size="6" style={{ color: totalEvents >= 4 ? 'white' : 'inherit' }}>
+                      30% OFF
+                    </Heading>
+                    <Text size="2" style={{ color: totalEvents >= 4 ? 'rgba(255,255,255,0.9)' : 'var(--gray-11)' }}>
+                      4+ Events
+                    </Text>
+                  </Box>
+                </Grid>
+              </Flex>
+            </Card>
+          )}
 
           {/* Current Selection Summary */}
           <Card size="3" style={{ background: 'var(--blue-2)', border: '2px solid var(--blue-8)' }}>
@@ -438,11 +452,12 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
             </Flex>
           </Card>
 
-          {/* Upcoming Events */}
-          <Box>
-            <Heading size="5" mb="3">Add More Events</Heading>
-            <Flex direction="column" gap="3">
-              {upcomingEvents.map(event => {
+          {/* Upcoming Events - Only show if multi-event is not skipped */}
+          {!skipMultiEvent && (
+            <Box>
+              <Heading size="5" mb="3">Add More Events</Heading>
+              <Flex direction="column" gap="3">
+                {upcomingEvents.map(event => {
                 const isSelected = selectedEvents.find(e => e.id === event.id);
                 const isChampionship = event.isChampionship;
 
@@ -556,8 +571,9 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
               })}
             </Flex>
           </Box>
+          )}
 
-          <Separator />
+          {!skipMultiEvent && <Separator />}
 
           {/* Pricing Summary */}
           <Card size="3" style={{ background: 'var(--green-2)', border: '1px solid var(--green-6)' }}>

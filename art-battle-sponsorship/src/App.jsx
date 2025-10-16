@@ -404,6 +404,7 @@ function App() {
                 selectedPackage={selectedPackage}
                 selectedAddons={selectedAddons}
                 discountPercent={inviteData.discount_percent}
+                skipMultiEvent={inviteData.skip_multi_event}
                 onConfirm={handleCheckout}
                 onSkip={handleCheckout}
               />

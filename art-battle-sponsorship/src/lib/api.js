@@ -8,17 +8,21 @@ import { supabase } from './supabase';
  * Get sponsorship invite details by hash
  */
 export async function getSponsorshipInvite(hash) {
-  try {
-    const { data, error } = await supabase.functions.invoke('sponsorship-invite-details', {
-      body: { hash }
-    });
+  const { data, error } = await supabase.functions.invoke('sponsorship-invite-details', {
+    body: { hash }
+  });
 
-    if (error) throw error;
-    return { data: data || null, error: null };
-  } catch (err) {
-    console.error('Error fetching sponsorship invite:', err);
-    return { data: null, error: err.message };
+  // When edge function returns non-2xx, Supabase puts the response body in 'data'
+  // and creates a generic error. Check data.error first for the friendly message.
+  if (data && data.error) {
+    return { data: null, error: data.error };
   }
+
+  if (error) {
+    return { data: null, error: 'Unable to load invitation. Please check your link.' };
+  }
+
+  return { data: data || null, error: null };
 }
 
 /**

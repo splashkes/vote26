@@ -445,7 +445,8 @@ export async function generateSponsorshipInvite(inviteData) {
       p_prospect_company: inviteData.prospectCompany,
       p_discount_percent: inviteData.discountPercent,
       p_valid_until: inviteData.validUntil,
-      p_notes: inviteData.notes
+      p_notes: inviteData.notes,
+      p_skip_multi_event: inviteData.skipMultiEvent || false
     });
 
     if (error) throw error;

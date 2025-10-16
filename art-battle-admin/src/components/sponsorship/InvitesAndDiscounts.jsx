@@ -63,7 +63,7 @@ const InvitesAndDiscounts = () => {
     discountPercent: 0,
     validUntil: '',
     notes: '',
-    multiEventEnabled: true
+    skipMultiEvent: false
   });
   const [generatingInvite, setGeneratingInvite] = useState(false);
   const [generatedLink, setGeneratedLink] = useState(null);
@@ -228,7 +228,7 @@ const InvitesAndDiscounts = () => {
         discountPercent: parseFloat(inviteForm.discountPercent) || 0,
         validUntil: inviteForm.validUntil ? new Date(inviteForm.validUntil).toISOString() : null,
         notes: inviteForm.notes,
-        multiEventEnabled: inviteForm.multiEventEnabled
+        skipMultiEvent: inviteForm.skipMultiEvent
       });
 
       if (error) throw new Error(error);
@@ -272,7 +272,7 @@ const InvitesAndDiscounts = () => {
       discountPercent: 0,
       validUntil: '',
       notes: '',
-      multiEventEnabled: true
+      skipMultiEvent: false
     });
   };
 
@@ -633,19 +633,19 @@ const InvitesAndDiscounts = () => {
                       />
                     </Box>
 
-                    {/* Multi-Event Enable Checkbox */}
+                    {/* Skip Multi-Event Checkbox */}
                     <Card>
                       <Flex align="center" gap="2">
                         <Checkbox
-                          checked={inviteForm.multiEventEnabled}
+                          checked={inviteForm.skipMultiEvent}
                           onCheckedChange={(checked) =>
-                            setInviteForm({ ...inviteForm, multiEventEnabled: checked })
+                            setInviteForm({ ...inviteForm, skipMultiEvent: checked })
                           }
                         />
                         <Box>
-                          <Text size="2" weight="bold">Enable Multi-Event Stage</Text>
+                          <Text size="2" weight="bold">Hide multi-event discount stage</Text>
                           <Text size="1" color="gray" style={{ display: 'block' }}>
-                            Allow sponsor to select from multiple events in this city
+                            Hide the multi-event selection stage (for season packages)
                           </Text>
                         </Box>
                       </Flex>
