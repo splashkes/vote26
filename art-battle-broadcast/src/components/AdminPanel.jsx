@@ -763,26 +763,42 @@ const AdminPanel = ({
     try {
       // Check if query is numeric for entry_id search
       const isNumeric = /^\d+$/.test(query);
-      
+
       // Build OR conditions - include entry_id only if query is numeric
       let orConditions = `name.ilike.%${query}%,city_text.ilike.%${query}%,instagram.ilike.%${query}%`;
       if (isNumeric) {
         orConditions += `,entry_id.eq.${query}`;
       }
-      
+
       // Server-side search with OR conditions for name, city, instagram, and entry_id (if numeric)
+      // Filter out superseded profiles and order by primary profile selection
       const { data, error } = await supabase
         .from('artist_profiles')
-        .select('id, name, city_text, instagram, entry_id, person_id')
+        .select('id, name, city_text, instagram, entry_id, person_id, set_primary_profile_at, created_at')
         .not('name', 'is', null)
+        .is('superseded_by', null) // Only show active (non-superseded) profiles
         .or(orConditions)
-        .order('person_id', { nullsLast: true })
-        .order('name')
-        .limit(20); // Limit results to 20 for performance
+        .order('set_primary_profile_at', { ascending: false, nullsLast: true }) // Primary profiles first
+        .order('created_at', { ascending: false }) // Then most recent
+        .limit(50); // Increased limit to allow for deduplication
 
       if (error) throw error;
-      
-      setSearchResults(data || []);
+
+      // Client-side deduplication by person_id - keep only first (primary) profile per person
+      const seenPersonIds = new Set();
+      const deduplicatedResults = (data || []).filter(artist => {
+        // Keep profiles without person_id (orphaned profiles)
+        if (!artist.person_id) return true;
+
+        // Skip if we've already seen this person_id
+        if (seenPersonIds.has(artist.person_id)) return false;
+
+        // Mark this person_id as seen
+        seenPersonIds.add(artist.person_id);
+        return true;
+      }).slice(0, 20); // Limit final results to 20
+
+      setSearchResults(deduplicatedResults);
       setShowCreateArtist(query.length > 2); // Show create option after 3+ chars
     } catch (error) {
       console.error('Error searching artists:', error);
