@@ -1,6 +1,6 @@
 // Stripe Global Payments Payout Edge Function with FX Quotes Integration
-// Creates direct transfers to recipient accounts with automatic FX conversion
-// Date: 2025-10-15 - Updated for FX Quotes API
+// SINGLE SOURCE OF TRUTH for all artist payments with automatic FX conversion
+// Date: 2025-10-16 - Unified payment processor
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -14,10 +14,14 @@ const corsHeaders = {
 const STRIPE_PREVIEW_API_VERSION = '2025-07-30.preview';
 
 interface PayoutRequest {
-  art_id: string;
-  amount: number; // Amount in artist's local currency (dollars)
-  currency?: string; // Artist's currency (AUD, THB, USD, etc)
-  artist_profile_id?: string; // Optional - will be derived from art_id if not provided
+  // NEW: Support both payment types
+  art_id?: string;                    // For art-based payments (global_payment_requests)
+  artist_payment_id?: string;         // For direct artist payments (artist_payments)
+
+  // Optional overrides
+  amount?: number;                    // Amount in artist's local currency (dollars)
+  currency?: string;                  // Artist's currency (AUD, THB, USD, etc)
+  artist_profile_id?: string;         // Optional - will be derived if not provided
 }
 
 serve(async (req) => {
@@ -33,13 +37,18 @@ serve(async (req) => {
 
     const {
       art_id,
-      amount,
-      currency = 'USD',
-      artist_profile_id
+      artist_payment_id,
+      amount: amountOverride,
+      currency: currencyOverride,
+      artist_profile_id: artistProfileIdOverride
     } = requestBody;
 
-    if (!art_id || !amount || amount <= 0) {
-      throw new Error('art_id and positive amount are required');
+    // Validate: must have either art_id OR artist_payment_id
+    if (!art_id && !artist_payment_id) {
+      throw new Error('Either art_id or artist_payment_id is required');
+    }
+    if (art_id && artist_payment_id) {
+      throw new Error('Provide either art_id OR artist_payment_id, not both');
     }
 
     // Initialize Supabase client with service role
@@ -47,38 +56,122 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get artwork and verify it exists, plus get artist info
-    const { data: artwork, error: artworkError } = await supabase
-      .from('art')
-      .select(`
-        id,
-        art_code,
-        artist_profile_id,
-        current_bid,
-        status,
-        artist_profiles:artist_profile_id (
+    // Get payment details and artist info based on payment type
+    let targetArtistProfileId: string;
+    let artistName: string;
+    let paymentAmount: number;
+    let paymentCurrency: string;
+    let paymentDescription: string;
+    let referenceId: string;
+    let existingPaymentId: string | null = null;
+
+    if (artist_payment_id) {
+      // CASE 1: Direct artist payment from artist_payments table
+      console.log(`Processing artist_payment: ${artist_payment_id}`);
+
+      const { data: payment, error: paymentError } = await supabase
+        .from('artist_payments')
+        .select(`
           id,
-          name,
-          person_id,
-          people:person_id (
-            first_name,
-            last_name,
-            email
+          artist_profile_id,
+          gross_amount,
+          currency,
+          description,
+          status,
+          stripe_transfer_id,
+          artist_profiles:artist_profile_id (
+            name,
+            person_id
           )
-        )
-      `)
-      .eq('id', art_id)
-      .single();
+        `)
+        .eq('id', artist_payment_id)
+        .single();
 
-    if (artworkError || !artwork) {
-      throw new Error('Artwork not found: ' + (artworkError?.message || 'No artwork found'));
-    }
+      if (paymentError || !payment) {
+        throw new Error('Artist payment not found: ' + (paymentError?.message || 'No payment found'));
+      }
 
-    const targetArtistProfileId = artist_profile_id || artwork.artist_profile_id;
+      // Check if already processed
+      if (payment.status === 'paid' && payment.stripe_transfer_id) {
+        return new Response(JSON.stringify({
+          message: 'Payment already processed',
+          existing_transfer_id: payment.stripe_transfer_id,
+          status: payment.status,
+          system: 'global_payments'
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200
+        });
+      }
 
-    // Verify artist profile matches if provided
-    if (artist_profile_id && artist_profile_id !== artwork.artist_profile_id) {
-      throw new Error('Artist profile ID does not match artwork');
+      targetArtistProfileId = artistProfileIdOverride || payment.artist_profile_id;
+      artistName = payment.artist_profiles?.name || 'Unknown Artist';
+      paymentAmount = amountOverride || payment.gross_amount;
+      paymentCurrency = currencyOverride || payment.currency;
+      paymentDescription = payment.description || `Payment to ${artistName}`;
+      referenceId = artist_payment_id;
+      existingPaymentId = artist_payment_id;
+
+    } else {
+      // CASE 2: Art-based payment from art table (legacy/new global_payment_requests)
+      console.log(`Processing art_payment: ${art_id}`);
+
+      const { data: artwork, error: artworkError } = await supabase
+        .from('art')
+        .select(`
+          id,
+          art_code,
+          artist_profile_id,
+          current_bid,
+          status,
+          artist_profiles:artist_profile_id (
+            id,
+            name,
+            person_id
+          )
+        `)
+        .eq('id', art_id)
+        .single();
+
+      if (artworkError || !artwork) {
+        throw new Error('Artwork not found: ' + (artworkError?.message || 'No artwork found'));
+      }
+
+      targetArtistProfileId = artistProfileIdOverride || artwork.artist_profile_id;
+      artistName = artwork.artist_profiles?.name || 'Unknown Artist';
+      paymentAmount = amountOverride;
+      if (!paymentAmount) {
+        throw new Error('amount is required for art-based payments');
+      }
+      paymentCurrency = currencyOverride || 'USD';
+      paymentDescription = `Payment for ${artwork.art_code} - ${artistName}`;
+      referenceId = art_id!;
+
+      // Check if payout already exists for this artwork
+      const { data: existingPayout, error: existingError } = await supabase
+        .from('global_payment_requests')
+        .select('id, status, stripe_payout_id')
+        .eq('art_id', art_id)
+        .single();
+
+      if (existingError && existingError.code !== 'PGRST116') {
+        throw new Error('Error checking existing payout: ' + existingError.message);
+      }
+
+      if (existingPayout) {
+        return new Response(JSON.stringify({
+          message: 'Payout already exists for this artwork',
+          existing_payout: {
+            id: existingPayout.id,
+            status: existingPayout.status,
+            stripe_payout_id: existingPayout.stripe_payout_id
+          },
+          system: 'global_payments'
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200
+        });
+      }
     }
 
     // Get Global Payments account for this artist
@@ -100,32 +193,6 @@ serve(async (req) => {
       throw new Error('No Stripe recipient ID found for artist');
     }
 
-    // Check if payout already exists for this artwork
-    const { data: existingPayout, error: existingError } = await supabase
-      .from('global_payment_requests')
-      .select('id, status, stripe_payout_id')
-      .eq('art_id', art_id)
-      .single();
-
-    if (existingError && existingError.code !== 'PGRST116') {
-      throw new Error('Error checking existing payout: ' + existingError.message);
-    }
-
-    if (existingPayout) {
-      return new Response(JSON.stringify({
-        message: 'Payout already exists for this artwork',
-        existing_payout: {
-          id: existingPayout.id,
-          status: existingPayout.status,
-          stripe_payout_id: existingPayout.stripe_payout_id
-        },
-        system: 'global_payments'
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200
-      });
-    }
-
     // Get Stripe secret key
     const stripeSecretKey = Deno.env.get('stripe_intl_secret_key');
     if (!stripeSecretKey) {
@@ -138,26 +205,32 @@ serve(async (req) => {
       httpClient: Stripe.createFetchHttpClient()
     });
 
-    // Get artist's Stripe account to determine currency
+    // Get artist's Stripe account info
     const artistAccount = await stripe.accounts.retrieve(globalPaymentAccount.stripe_recipient_id);
     const artistCountry = artistAccount.country;
-    const artistCurrency = (globalPaymentAccount.default_currency || artistAccount.default_currency || currency).toUpperCase();
+    const artistAccountCurrency = (artistAccount.default_currency || globalPaymentAccount.default_currency || 'USD').toUpperCase();
 
-    console.log(`Artist account: ${artistCountry}, currency: ${artistCurrency}`);
+    // IMPORTANT: Payment currency = debt currency (based on event location)
+    // For artist_payments: Use the payment's currency (the actual debt)
+    // For art_payments: Use provided currency or account default
+    const targetCurrency = paymentCurrency.toUpperCase();
+
+    console.log(`Artist: ${artistName}, Country: ${artistCountry}`);
+    console.log(`Debt: ${paymentAmount} ${targetCurrency} (event currency)`);
+    console.log(`Artist account currency: ${artistAccountCurrency}`);
 
     // Determine if international (non-US/CA) payment requiring FX
     const isUSCA = (artistCountry === 'US' || artistCountry === 'CA');
-    const targetCurrency = artistCurrency;
-    const targetAmount = amount; // Amount in artist's currency
+    const targetAmount = paymentAmount; // Amount in debt currency
 
-    let usdAmountToSend = amount;
+    let usdAmountToSend = paymentAmount;
     let fxQuoteId = null;
     let exchangeRate = null;
     let fxMetadata: any = {};
 
     // For international artists, use FX Quotes API to calculate USD amount
     if (!isUSCA && targetCurrency !== 'USD') {
-      console.log(`International payment: ${targetAmount} ${targetCurrency}`);
+      console.log(`🌍 International payment: ${targetAmount} ${targetCurrency}`);
 
       try {
         // Create FX Quote using preview API
@@ -198,15 +271,15 @@ serve(async (req) => {
           fx_quote_expires_at: new Date(fxQuote.lock_expires_at * 1000).toISOString()
         };
 
-        console.log(`FX Quote created: ${fxQuoteId}, rate: ${exchangeRate}`);
-        console.log(`Sending ${usdAmountToSend.toFixed(2)} USD for ${targetAmount} ${targetCurrency}`);
+        console.log(`💱 FX Quote: ${fxQuoteId}, rate: ${exchangeRate}`);
+        console.log(`💵 Sending ${usdAmountToSend.toFixed(2)} USD → ${targetAmount} ${targetCurrency}`);
 
       } catch (fxError: any) {
         console.error('FX Quote API error:', fxError);
         throw new Error(`Failed to get FX rate: ${fxError.message}`);
       }
     } else {
-      console.log(`Domestic payment: ${targetAmount} USD`);
+      console.log(`🏠 Domestic payment: ${targetAmount} USD`);
       fxMetadata = {
         payment_type: 'domestic',
         note: 'No FX conversion needed for US/CA accounts'
@@ -219,92 +292,137 @@ serve(async (req) => {
     // Generate idempotency key
     const idempotencyKey = crypto.randomUUID();
 
-    // Create payout request record first (before Stripe call)
-    const { data: payoutRecord, error: insertError } = await supabase
-      .from('global_payment_requests')
-      .insert({
-        artist_profile_id: targetArtistProfileId,
-        art_id: art_id,
-        stripe_recipient_id: globalPaymentAccount.stripe_recipient_id,
-        amount_minor: Math.round(targetAmount * 100), // Original amount in artist currency
-        currency: targetCurrency,
-        status: 'queued',
-        idempotency_key: idempotencyKey,
-        metadata: {
-          artwork_code: artwork.art_code,
-          artist_name: artwork.artist_profiles?.name,
-          artist_country: artistCountry,
-          created_via: 'global_payments_payout_function_v2',
-          original_amount: targetAmount,
-          original_currency: targetCurrency,
-          ...fxMetadata
-        }
-      })
-      .select()
-      .single();
-
-    if (insertError) {
-      console.error('Error creating payout record:', insertError);
-      throw new Error('Failed to create payout record');
-    }
+    // Log API conversation to database
+    const logApiConversation = async (status: number, response: any, error: string | null) => {
+      await supabase
+        .from('stripe_api_conversations')
+        .insert({
+          payment_id: existingPaymentId,
+          artist_profile_id: targetArtistProfileId,
+          stripe_account_id: globalPaymentAccount.stripe_recipient_id,
+          api_endpoint: 'https://api.stripe.com/v1/transfers',
+          request_method: 'POST',
+          request_body: {
+            amount: amountMinorUSD,
+            currency: 'usd',
+            destination: globalPaymentAccount.stripe_recipient_id,
+            description: paymentDescription,
+            metadata: {
+              artist_profile_id: targetArtistProfileId,
+              artist_name: artistName,
+              target_currency: targetCurrency,
+              target_amount: targetAmount.toString(),
+              fx_quote_id: fxQuoteId || 'none',
+              reference_id: referenceId
+            }
+          },
+          response_status: status,
+          response_body: response,
+          error_message: error,
+          created_by: 'stripe-global-payments-payout'
+        });
+    };
 
     try {
-      // Create the transfer
+      // Create the Stripe transfer
+      console.log(`🚀 Creating transfer: ${amountMinorUSD} cents USD to ${globalPaymentAccount.stripe_recipient_id}`);
+
       const transfer = await stripe.transfers.create({
         amount: amountMinorUSD,
         currency: 'usd', // Platform always sends USD
         destination: globalPaymentAccount.stripe_recipient_id,
-        description: `Payment for ${artwork.art_code} - ${artwork.artist_profiles?.name}`,
+        description: paymentDescription,
         metadata: {
-          art_id: art_id,
-          art_code: artwork.art_code,
           artist_profile_id: targetArtistProfileId,
-          internal_payout_id: payoutRecord.id,
+          artist_name: artistName,
           target_currency: targetCurrency,
           target_amount: targetAmount.toString(),
           fx_quote_id: fxQuoteId || 'none',
-          exchange_rate: exchangeRate?.toString() || 'none'
+          exchange_rate: exchangeRate?.toString() || 'none',
+          reference_id: referenceId,
+          payment_type: artist_payment_id ? 'artist_payment' : 'art_payment'
         }
       }, {
         idempotencyKey: idempotencyKey
       });
 
-      console.log('Stripe transfer created:', transfer.id);
+      console.log(`✅ Stripe transfer created: ${transfer.id}`);
 
-      // Update our record with Stripe transfer ID and status
-      const { error: updateError } = await supabase
-        .from('global_payment_requests')
-        .update({
-          stripe_payout_id: transfer.id,
-          status: 'sent',
-          sent_at: new Date().toISOString(),
-          metadata: {
-            ...payoutRecord.metadata,
+      // Log successful API call
+      await logApiConversation(200, transfer, null);
+
+      // Update the appropriate table based on payment type
+      if (artist_payment_id) {
+        // Update artist_payments table
+        const { error: updateError } = await supabase
+          .from('artist_payments')
+          .update({
+            status: 'paid',
             stripe_transfer_id: transfer.id,
-            usd_amount_sent_minor: amountMinorUSD,
-            usd_amount_sent: usdAmountToSend.toFixed(2)
-          }
-        })
-        .eq('id', payoutRecord.id);
+            paid_at: new Date().toISOString(),
+            metadata: {
+              stripe_transfer_id: transfer.id,
+              usd_amount_sent: usdAmountToSend.toFixed(2),
+              usd_amount_sent_minor: amountMinorUSD,
+              processed_by: 'stripe-global-payments-payout',
+              processed_at: new Date().toISOString(),
+              ...fxMetadata
+            }
+          })
+          .eq('id', artist_payment_id);
 
-      if (updateError) {
-        console.error('Error updating payout record with Stripe ID:', updateError);
-        // Don't throw - the transfer was created successfully
+        if (updateError) {
+          console.error('Error updating artist_payments:', updateError);
+          // Don't throw - transfer succeeded
+        }
+
+      } else {
+        // Create global_payment_requests record
+        const { error: insertError } = await supabase
+          .from('global_payment_requests')
+          .insert({
+            artist_profile_id: targetArtistProfileId,
+            art_id: art_id,
+            stripe_recipient_id: globalPaymentAccount.stripe_recipient_id,
+            stripe_payout_id: transfer.id,
+            amount_minor: Math.round(targetAmount * 100),
+            currency: targetCurrency,
+            status: 'sent',
+            sent_at: new Date().toISOString(),
+            idempotency_key: idempotencyKey,
+            metadata: {
+              artist_name: artistName,
+              artist_country: artistCountry,
+              created_via: 'stripe-global-payments-payout-v3',
+              original_amount: targetAmount,
+              original_currency: targetCurrency,
+              usd_amount_sent: usdAmountToSend.toFixed(2),
+              usd_amount_sent_minor: amountMinorUSD,
+              stripe_transfer_id: transfer.id,
+              ...fxMetadata
+            }
+          });
+
+        if (insertError) {
+          console.error('Error creating global_payment_requests:', insertError);
+          // Don't throw - transfer succeeded
+        }
       }
 
       return new Response(JSON.stringify({
         success: true,
         message: 'Payment sent successfully',
         payout: {
-          id: payoutRecord.id,
           stripe_transfer_id: transfer.id,
+          artist_name: artistName,
           target_amount: targetAmount,
           target_currency: targetCurrency,
           usd_amount_sent: usdAmountToSend.toFixed(2),
           recipient_id: globalPaymentAccount.stripe_recipient_id,
           status: 'sent',
           fx_used: !isUSCA && targetCurrency !== 'USD',
-          fx_rate: exchangeRate || null
+          fx_rate: exchangeRate || null,
+          fx_quote_id: fxQuoteId || null
         },
         system: 'global_payments'
       }), {
@@ -313,25 +431,25 @@ serve(async (req) => {
       });
 
     } catch (stripeError: any) {
-      console.error('Stripe transfer failed:', stripeError);
+      console.error('❌ Stripe transfer failed:', stripeError);
 
-      // Update our record to reflect the failure
-      const { error: failureUpdateError } = await supabase
-        .from('global_payment_requests')
-        .update({
-          status: 'failed',
-          error_code: stripeError.code || 'unknown_error',
-          error_message: stripeError.message,
-          metadata: {
-            ...payoutRecord.metadata,
-            stripe_error: stripeError.message,
-            failed_at: new Date().toISOString()
-          }
-        })
-        .eq('id', payoutRecord.id);
+      // Log failed API call
+      await logApiConversation(400, { error: stripeError.message }, stripeError.message);
 
-      if (failureUpdateError) {
-        console.error('Error updating failed payout record:', failureUpdateError);
+      // Update payment record to reflect failure
+      if (artist_payment_id) {
+        await supabase
+          .from('artist_payments')
+          .update({
+            status: 'failed',
+            error_message: stripeError.message,
+            metadata: {
+              error_message: stripeError.message,
+              failed_at: new Date().toISOString(),
+              processed_by: 'stripe-global-payments-payout'
+            }
+          })
+          .eq('id', artist_payment_id);
       }
 
       // Re-throw the Stripe error
@@ -339,7 +457,7 @@ serve(async (req) => {
     }
 
   } catch (error: any) {
-    console.error('Error in Global Payments payout:', error);
+    console.error('❌ Error in Global Payments payout:', error);
     return new Response(JSON.stringify({
       error: error.message,
       system: 'global_payments'

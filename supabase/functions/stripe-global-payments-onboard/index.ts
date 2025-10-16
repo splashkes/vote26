@@ -31,13 +31,13 @@ serve(async (req) => {
     const requestBody: OnboardingRequest = await req.json();
     console.log('Global Payments onboarding request:', requestBody);
     
-    const { 
-      person_id, 
-      return_url, 
-      refresh_url, 
-      country, 
-      currency = 'USD',
-      stripe_recipient_id 
+    const {
+      person_id,
+      return_url,
+      refresh_url,
+      country,
+      currency: currencyOverride, // Don't default here - derive from country
+      stripe_recipient_id
     } = requestBody;
 
     if (!person_id || !return_url || !refresh_url) {
@@ -173,10 +173,101 @@ serve(async (req) => {
     // Always use country from artist profile (ignore request parameter)
     const finalCountry = artistProfile.country;
 
-    console.log('=== COUNTRY DEBUG ===');
+    // Map country to currency (can be overridden by currencyOverride)
+    const countryCurrencyMap: { [key: string]: string } = {
+      'US': 'USD',
+      'CA': 'CAD',
+      'AU': 'AUD',
+      'GB': 'GBP',
+      'NZ': 'NZD',
+      'MX': 'MXN',
+      'BR': 'BRL',
+      'AR': 'ARS',
+      'CL': 'CLP',
+      'CO': 'COP',
+      'PE': 'PEN',
+      'UY': 'UYU',
+      'EC': 'USD',
+      'BO': 'BOB',
+      'PY': 'PYG',
+      'VE': 'VES',
+      'CR': 'CRC',
+      'PA': 'USD',
+      'GT': 'GTQ',
+      'SV': 'USD',
+      'HN': 'HNL',
+      'NI': 'NIO',
+      'DO': 'DOP',
+      'JM': 'JMD',
+      'TT': 'TTD',
+      'BS': 'BSD',
+      'BB': 'BBD',
+      'IN': 'INR',
+      'SG': 'SGD',
+      'MY': 'MYR',
+      'TH': 'THB',
+      'PH': 'PHP',
+      'ID': 'IDR',
+      'VN': 'VND',
+      'KR': 'KRW',
+      'JP': 'JPY',
+      'CN': 'CNY',
+      'HK': 'HKD',
+      'TW': 'TWD',
+      'AE': 'AED',
+      'SA': 'SAR',
+      'IL': 'ILS',
+      'ZA': 'ZAR',
+      'NG': 'NGN',
+      'KE': 'KES',
+      'GH': 'GHS',
+      'EG': 'EGP',
+      'MA': 'MAD',
+      'TN': 'TND',
+      'AT': 'EUR',
+      'BE': 'EUR',
+      'BG': 'BGN',
+      'HR': 'EUR',
+      'CY': 'EUR',
+      'CZ': 'CZK',
+      'DK': 'DKK',
+      'EE': 'EUR',
+      'FI': 'EUR',
+      'FR': 'EUR',
+      'DE': 'EUR',
+      'GR': 'EUR',
+      'HU': 'HUF',
+      'IE': 'EUR',
+      'IT': 'EUR',
+      'LV': 'EUR',
+      'LT': 'EUR',
+      'LU': 'EUR',
+      'MT': 'EUR',
+      'NL': 'EUR',
+      'NO': 'NOK',
+      'PL': 'PLN',
+      'PT': 'EUR',
+      'RO': 'RON',
+      'SK': 'EUR',
+      'SI': 'EUR',
+      'ES': 'EUR',
+      'SE': 'SEK',
+      'CH': 'CHF',
+      'TR': 'TRY',
+      'UA': 'UAH',
+      'RU': 'RUB'
+    };
+
+    const derivedCurrency = countryCurrencyMap[finalCountry] || 'USD';
+    const finalCurrency = currencyOverride || derivedCurrency;
+
+    console.log('=== COUNTRY & CURRENCY DEBUG ===');
     console.log('country from request:', country);
     console.log('artistProfile.country:', artistProfile.country);
     console.log('finalCountry:', finalCountry);
+    console.log('derivedCurrency from country:', derivedCurrency);
+    console.log('currencyOverride:', currencyOverride);
+    console.log('finalCurrency:', finalCurrency);
     console.log('artistProfile.name:', artistProfile.name);
     console.log('artistProfile.email:', artistProfile.email);
     
@@ -265,6 +356,7 @@ serve(async (req) => {
           type: 'custom',
           country: finalCountry,
           email: artistProfile.email,
+          default_currency: finalCurrency.toLowerCase(), // CRITICAL: Set account currency based on country
           capabilities: {
             transfers: { requested: true },
           },
@@ -377,7 +469,7 @@ serve(async (req) => {
               artist_profile_id: artistProfile.id,
               stripe_recipient_id: stripeAccount.id,
               country: finalCountry,
-              default_currency: currency,
+              default_currency: finalCurrency, // Use derived currency, not hardcoded USD
               status: 'invited',
               metadata: {
                 created_via: 'global_payments_onboard_function',
