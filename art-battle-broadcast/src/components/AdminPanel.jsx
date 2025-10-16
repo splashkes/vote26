@@ -818,15 +818,73 @@ const AdminPanel = ({
         throw new Error(`Could not find UUID for event ${eventId}`);
       }
 
-      // First get the artist's entry_id to use as artist_number
+      // Get the artist profile data including person_id
       const { data: artistData, error: fetchError } = await supabase
         .from('artist_profiles')
-        .select('entry_id')
+        .select('entry_id, phone, email, name, person_id')
         .eq('id', artistId)
         .single();
 
       if (fetchError) {
         throw fetchError;
+      }
+
+      // Auto-link artist to person if not already linked
+      if (!artistData.person_id && artistData.phone) {
+        console.log(`Auto-linking artist ${artistData.name} (${artistId}) via phone ${artistData.phone}`);
+
+        // Find or create person record with this phone
+        let { data: person, error: personFindError } = await supabase
+          .from('people')
+          .select('id')
+          .eq('phone', artistData.phone)
+          .maybeSingle();
+
+        if (personFindError) {
+          console.error('Error finding person:', personFindError);
+          // Continue without linking - artist can still be added to event
+        } else if (!person) {
+          // Create new person record
+          console.log(`Creating new person record for phone ${artistData.phone}`);
+          const { data: newPerson, error: personCreateError } = await supabase
+            .from('people')
+            .insert({
+              phone: artistData.phone,
+              email: artistData.email,
+              name: artistData.name,
+              type: 'artist'
+            })
+            .select('id')
+            .single();
+
+          if (personCreateError) {
+            console.error('Error creating person:', personCreateError);
+            // Continue without linking
+          } else {
+            person = newPerson;
+          }
+        }
+
+        // Link artist_profile to person
+        if (person) {
+          const { error: linkError } = await supabase
+            .from('artist_profiles')
+            .update({
+              person_id: person.id,
+              set_primary_profile_at: new Date().toISOString(),
+              linked_how: 'artb-admin-event'
+            })
+            .eq('id', artistId);
+
+          if (linkError) {
+            console.error('Error linking artist to person:', linkError);
+            // Continue - artist can still be added to event even if linking fails
+          } else {
+            console.log(`✅ Successfully linked artist ${artistData.name} to person ${person.id}`);
+          }
+        }
+      } else if (!artistData.phone) {
+        console.warn(`Artist ${artistData.name} has no phone number - cannot auto-link to person`);
       }
 
       // Add artist to event_artists table instead of round_contestants
