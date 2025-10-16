@@ -774,7 +774,7 @@ const AdminPanel = ({
       // Filter out superseded profiles and order by primary profile selection
       const { data, error } = await supabase
         .from('artist_profiles')
-        .select('id, name, city_text, instagram, entry_id, person_id, set_primary_profile_at, created_at')
+        .select('id, name, city_text, instagram, entry_id, person_id, phone, set_primary_profile_at, created_at')
         .not('name', 'is', null)
         .is('superseded_by', null) // Only show active (non-superseded) profiles
         .or(orConditions)
@@ -784,17 +784,36 @@ const AdminPanel = ({
 
       if (error) throw error;
 
-      // Client-side deduplication by person_id - keep only first (primary) profile per person
+      // Normalize phone number for comparison (remove +, spaces, dashes, parentheses)
+      const normalizePhone = (phone) => {
+        if (!phone) return null;
+        return phone.replace(/[\s\-\(\)\+]/g, '');
+      };
+
+      // Client-side deduplication by person_id AND phone number
+      // Keep only first (primary) profile per person AND per phone number
       const seenPersonIds = new Set();
+      const seenPhones = new Set();
       const deduplicatedResults = (data || []).filter(artist => {
-        // Keep profiles without person_id (orphaned profiles)
-        if (!artist.person_id) return true;
+        // Check person_id deduplication
+        if (artist.person_id && seenPersonIds.has(artist.person_id)) {
+          return false;
+        }
 
-        // Skip if we've already seen this person_id
-        if (seenPersonIds.has(artist.person_id)) return false;
+        // Check phone number deduplication (normalized)
+        const normalizedPhone = normalizePhone(artist.phone);
+        if (normalizedPhone && seenPhones.has(normalizedPhone)) {
+          return false;
+        }
 
-        // Mark this person_id as seen
-        seenPersonIds.add(artist.person_id);
+        // Mark as seen
+        if (artist.person_id) {
+          seenPersonIds.add(artist.person_id);
+        }
+        if (normalizedPhone) {
+          seenPhones.add(normalizedPhone);
+        }
+
         return true;
       }).slice(0, 20); // Limit final results to 20
 
