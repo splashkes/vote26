@@ -761,63 +761,32 @@ const AdminPanel = ({
     }
 
     try {
-      // Check if query is numeric for entry_id search
-      const isNumeric = /^\d+$/.test(query);
+      // Call edge function for server-side search with phone deduplication
+      const { data: { session } } = await supabase.auth.getSession();
 
-      // Build OR conditions - include entry_id only if query is numeric
-      let orConditions = `name.ilike.%${query}%,city_text.ilike.%${query}%,instagram.ilike.%${query}%`;
-      if (isNumeric) {
-        orConditions += `,entry_id.eq.${query}`;
+      if (!session) {
+        throw new Error('Not authenticated');
       }
 
-      // Server-side search with OR conditions for name, city, instagram, and entry_id (if numeric)
-      // Filter out superseded profiles and order by primary profile selection
-      const { data, error } = await supabase
-        .from('artist_profiles')
-        .select('id, name, city_text, instagram, entry_id, person_id, phone, set_primary_profile_at, created_at')
-        .not('name', 'is', null)
-        .is('superseded_by', null) // Only show active (non-superseded) profiles
-        .or(orConditions)
-        .order('set_primary_profile_at', { ascending: false, nullsLast: true }) // Primary profiles first
-        .order('created_at', { ascending: false }) // Then most recent
-        .limit(50); // Increased limit to allow for deduplication
-
-      if (error) throw error;
-
-      // Normalize phone number for comparison (remove +, spaces, dashes, parentheses)
-      const normalizePhone = (phone) => {
-        if (!phone) return null;
-        return phone.replace(/[\s\-\(\)\+]/g, '');
-      };
-
-      // Client-side deduplication by person_id AND phone number
-      // Keep only first (primary) profile per person AND per phone number
-      const seenPersonIds = new Set();
-      const seenPhones = new Set();
-      const deduplicatedResults = (data || []).filter(artist => {
-        // Check person_id deduplication
-        if (artist.person_id && seenPersonIds.has(artist.person_id)) {
-          return false;
+      const response = await fetch(
+        `https://xsqdkubgyqwpyvfltnrf.supabase.co/functions/v1/admin-artist-search-broadcast`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ query }),
         }
+      );
 
-        // Check phone number deduplication (normalized)
-        const normalizedPhone = normalizePhone(artist.phone);
-        if (normalizedPhone && seenPhones.has(normalizedPhone)) {
-          return false;
-        }
+      if (!response.ok) {
+        throw new Error(`Search failed: ${response.statusText}`);
+      }
 
-        // Mark as seen
-        if (artist.person_id) {
-          seenPersonIds.add(artist.person_id);
-        }
-        if (normalizedPhone) {
-          seenPhones.add(normalizedPhone);
-        }
+      const { data } = await response.json();
 
-        return true;
-      }).slice(0, 20); // Limit final results to 20
-
-      setSearchResults(deduplicatedResults);
+      setSearchResults(data || []);
       setShowCreateArtist(query.length > 2); // Show create option after 3+ chars
     } catch (error) {
       console.error('Error searching artists:', error);
