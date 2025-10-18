@@ -27,6 +27,63 @@ serve(async (req) => {
   }
 
   try {
+    // First verify authentication
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Authorization required' }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
+    // Create client with user's JWT for auth verification
+    const userClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      {
+        global: {
+          headers: {
+            Authorization: authHeader
+          }
+        }
+      }
+    );
+
+    // Verify user is authenticated
+    const { data: { user }, error: userError } = await userClient.auth.getUser();
+
+    if (userError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid or expired token' }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
+    // Check if user is an ABHQ admin
+    const { data: adminCheck, error: adminError } = await userClient
+      .from('abhq_admin_users')
+      .select('active')
+      .eq('user_id', user.id)
+      .eq('active', true)
+      .single();
+
+    if (adminError || !adminCheck) {
+      return new Response(
+        JSON.stringify({ error: 'Admin access required' }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
+    // Now create service client for actual operations
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -34,20 +91,22 @@ serve(async (req) => {
 
     let limit = 10;
     let dry_run = false;
+    let payment_id = null;
 
     try {
       const body = await req.json();
       limit = body.limit || 10;
       dry_run = body.dry_run || false;
+      payment_id = body.payment_id || null;
     } catch (jsonError) {
       // Use defaults if JSON parsing fails (e.g., empty body)
       console.log('JSON parsing failed, using defaults');
     }
 
-    console.log(`Processing pending payments (limit: ${limit}, dry_run: ${dry_run})`);
+    console.log(`Processing pending payments (limit: ${limit}, dry_run: ${dry_run}, payment_id: ${payment_id})`);
 
-    // Get pending payments that need to be processed
-    const { data: pendingPayments, error: fetchError } = await supabaseClient
+    // Build query for pending payments
+    let query = supabaseClient
       .from('artist_payments')
       .select(`
         id,
@@ -64,9 +123,17 @@ serve(async (req) => {
       `)
       .eq('status', 'processing')
       .eq('payment_type', 'automated')
-      .not('metadata->stripe_account_id', 'is', null)
-      .order('created_at', { ascending: true })
-      .limit(limit);
+      .not('metadata->stripe_account_id', 'is', null);
+
+    // If specific payment_id provided, filter to just that payment
+    if (payment_id) {
+      query = query.eq('id', payment_id);
+    } else {
+      query = query.order('created_at', { ascending: true }).limit(limit);
+    }
+
+    // Get pending payments that need to be processed
+    const { data: pendingPayments, error: fetchError } = await query;
 
     if (fetchError) {
       throw new Error(`Failed to fetch pending payments: ${fetchError.message}`);

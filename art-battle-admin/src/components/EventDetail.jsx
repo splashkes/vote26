@@ -57,7 +57,8 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   UpdateIcon,
-  PlusIcon
+  PlusIcon,
+  Pencil1Icon
 } from '@radix-ui/react-icons';
 import { getRFMScore, getBatchRFMScores, getSegmentColor, getSegmentTier } from '../lib/rfmScoring';
 import PersonTile from './PersonTile';
@@ -122,6 +123,10 @@ const EventDetail = () => {
   const [editingTaxRate, setEditingTaxRate] = useState(false);
   const [taxRateValue, setTaxRateValue] = useState('');
   const [updatingTaxRate, setUpdatingTaxRate] = useState(false);
+
+  const [editingArtBattleLink, setEditingArtBattleLink] = useState(false);
+  const [artBattleLinkValue, setArtBattleLinkValue] = useState('');
+  const [updatingArtBattleLink, setUpdatingArtBattleLink] = useState(false);
 
   const [approvingEventInfo, setApprovingEventInfo] = useState(false);
 
@@ -633,6 +638,42 @@ const EventDetail = () => {
       showAdminMessage('error', 'Failed to update tax rate');
     } finally {
       setUpdatingTaxRate(false);
+    }
+  };
+
+  const updateArtBattleLink = async () => {
+    if (!artBattleLinkValue.trim()) {
+      setEditingArtBattleLink(false);
+      return;
+    }
+
+    try {
+      setUpdatingArtBattleLink(true);
+
+      const { error } = await supabase
+        .from('events')
+        .update({
+          artbattle_link: artBattleLinkValue.trim()
+        })
+        .eq('id', eventId);
+
+      if (error) throw error;
+
+      setEvent(prev => ({
+        ...prev,
+        artbattle_link: artBattleLinkValue.trim()
+      }));
+
+      setEditingArtBattleLink(false);
+      setArtBattleLinkValue('');
+      showAdminMessage('success', 'Art Battle link updated successfully');
+
+    } catch (err) {
+      console.error('Error updating Art Battle link:', err);
+      setError('Failed to update Art Battle link: ' + err.message);
+      showAdminMessage('error', 'Failed to update Art Battle link');
+    } finally {
+      setUpdatingArtBattleLink(false);
     }
   };
 
@@ -2840,6 +2881,86 @@ The Art Battle Team`);
 
               {/* Details Grid */}
               <Flex direction="column" gap="2">
+                {/* Public Event Links */}
+                <Flex gap="3" wrap="wrap" align="center">
+                  {/* Art Battle Link */}
+                  {event.eid && (
+                    <Flex gap="2" align="center">
+                      <Text size="2">Art Battle:</Text>
+                      {editingArtBattleLink ? (
+                        <>
+                          <TextField.Root
+                            size="1"
+                            value={artBattleLinkValue}
+                            onChange={(e) => setArtBattleLinkValue(e.target.value)}
+                            placeholder={`https://artbattle.com/${event.eid}`}
+                            style={{ width: '300px' }}
+                          />
+                          <Button
+                            size="1"
+                            onClick={updateArtBattleLink}
+                            disabled={updatingArtBattleLink}
+                          >
+                            {updatingArtBattleLink ? 'Saving...' : 'Save'}
+                          </Button>
+                          <Button
+                            size="1"
+                            variant="soft"
+                            onClick={() => {
+                              setEditingArtBattleLink(false);
+                              setArtBattleLinkValue('');
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <a
+                            href={event.artbattle_link || `https://artbattle.com/${event.eid}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ fontSize: '0.875rem', color: 'var(--accent-9)', textDecoration: 'underline' }}
+                          >
+                            {event.artbattle_link ?
+                              event.artbattle_link.replace('https://', '').replace('http://', '') :
+                              `artbattle.com/${event.eid}`}
+                          </a>
+                          <IconButton
+                            size="1"
+                            variant="ghost"
+                            onClick={() => {
+                              setEditingArtBattleLink(true);
+                              setArtBattleLinkValue(event.artbattle_link || `https://artbattle.com/${event.eid}`);
+                            }}
+                            title="Edit Art Battle link"
+                          >
+                            <Pencil1Icon width="12" height="12" />
+                          </IconButton>
+                        </>
+                      )}
+                    </Flex>
+                  )}
+
+                  {/* Eventbrite Public Link */}
+                  {event.eventbrite_id && (
+                    <>
+                      {event.eid && <Text size="2" color="gray">•</Text>}
+                      <Flex gap="2" align="center">
+                        <Text size="2">Eventbrite:</Text>
+                        <a
+                          href={`https://eventbrite.com/e/${event.eventbrite_id}?aff=artbadmin`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ fontSize: '0.875rem', color: 'var(--accent-9)', textDecoration: 'underline' }}
+                        >
+                          Eventbrite Public Link
+                        </a>
+                      </Flex>
+                    </>
+                  )}
+                </Flex>
+
                 {/* Tickets Line */}
                 {event.ticket_link && (
                   <Flex gap="2" wrap="wrap" align="center">

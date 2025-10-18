@@ -198,21 +198,39 @@ const ArtistDetailModal = ({
 
     setBioSaving(true);
     try {
-      const { error } = await supabase
-        .from('artist_profiles')
-        .update({ abhq_bio: bioText.trim() || null })
-        .eq('id', artist.artist_profile_id);
+      // Get the current session for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Not authenticated');
+      }
+
+      // Use edge function to update abhq_bio (consistent with EventDetail.jsx)
+      const { data, error } = await supabase.functions.invoke('admin-update-abhq-bio', {
+        body: {
+          profile_id: artist.artist_profile_id,
+          abhq_bio: bioText.trim() || null
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
 
       if (error) throw error;
-      
+
+      if (!data?.success) {
+        throw new Error(data?.error || 'Failed to update bio');
+      }
+
       // Update the full artist profile state
       if (fullArtistProfile) {
         setFullArtistProfile({ ...fullArtistProfile, abhq_bio: bioText.trim() || null });
       }
-      
+
       setEditingBio(false);
+      console.log('Bio saved successfully via edge function');
     } catch (error) {
       console.error('Error saving bio:', error);
+      alert(`Error saving bio: ${error.message}`);
     } finally {
       setBioSaving(false);
     }

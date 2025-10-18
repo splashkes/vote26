@@ -550,12 +550,28 @@ const ArtistsManagement = () => {
 
     setBioSaving(true);
     try {
-      const { error } = await supabase
-        .from('artist_profiles')
-        .update({ abhq_bio: bioText })
-        .eq('id', selectedArtist.artist_profiles.id);
+      // Get the current session for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Not authenticated');
+      }
+
+      // Use edge function to update abhq_bio (consistent with EventDetail.jsx)
+      const { data, error } = await supabase.functions.invoke('admin-update-abhq-bio', {
+        body: {
+          profile_id: selectedArtist.artist_profiles.id,
+          abhq_bio: bioText
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
 
       if (error) throw error;
+
+      if (!data?.success) {
+        throw new Error(data?.error || 'Failed to update bio');
+      }
 
       // Update the selected artist in state
       setSelectedArtist(prev => ({
@@ -568,8 +584,8 @@ const ArtistsManagement = () => {
 
       // Update the artist in all relevant lists
       const updateArtistInList = (list, setList) => {
-        setList(prev => prev.map(artist => 
-          artist.artist_number === selectedArtist.artist_number 
+        setList(prev => prev.map(artist =>
+          artist.artist_number === selectedArtist.artist_number
             ? {
                 ...artist,
                 artist_profiles: {
@@ -587,10 +603,10 @@ const ArtistsManagement = () => {
       updateArtistInList(artistProfiles, setArtistProfiles);
 
       setEditingBio(false);
-      console.log('Bio saved successfully');
+      console.log('Bio saved successfully via edge function');
     } catch (error) {
       console.error('Error saving bio:', error);
-      alert('Error saving bio. Please try again.');
+      alert(`Error saving bio: ${error.message}`);
     } finally {
       setBioSaving(false);
     }

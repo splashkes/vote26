@@ -921,8 +921,8 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
         throw error;
       }
 
-      // Show success message
-      setError(`✅ Payment processed for ${artist.artist_profiles.name}: ${data.success_count} successful, ${data.failed_count} failed`);
+      // Show success message (use successful_count and failed_count from edge function response)
+      setError(`✅ Payment processed for ${artist.artist_profiles.name}: ${data.successful_count || data.success_count || 0} successful, ${data.failed_count || 0} failed`);
 
       // Refresh data to show updated status
       await fetchEnhancedData();
