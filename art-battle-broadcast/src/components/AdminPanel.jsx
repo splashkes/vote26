@@ -1479,6 +1479,33 @@ const AdminPanel = ({
         throw new Error('Event ID is missing');
       }
 
+      // Immediately update local state to avoid display lag
+      if (roundNumber !== null) {
+        if (action === 'start') {
+          // Set expected closing time immediately to avoid "0:00" display
+          const expectedClosingTime = new Date(Date.now() + duration * 60000).toISOString();
+          setRoundTimerData(prev => ({
+            ...prev,
+            [roundNumber]: {
+              ...prev[roundNumber],
+              earliestClosing: expectedClosingTime,
+              // Keep other fields if they exist
+              ...(prev[roundNumber] || {})
+            }
+          }));
+        } else if (action === 'cancel') {
+          // Clear timer data immediately when canceling
+          setRoundTimerData(prev => ({
+            ...prev,
+            [roundNumber]: {
+              ...prev[roundNumber],
+              earliestClosing: null,
+              withTimers: 0
+            }
+          }));
+        }
+      }
+
       // Convert EID to UUID for admin RPC calls
       const { getEventUuidFromEid } = await import('../lib/adminHelpers');
       const eventUuid = await getEventUuidFromEid(eventId);
@@ -2452,7 +2479,20 @@ const AdminPanel = ({
 
                     // Get timer data for this round
                     const timerData = roundTimerData[round] || {};
-                    const earliestClosing = timerData.earliestClosing ? new Date(timerData.earliestClosing) : null;
+
+                    // Get earliest closing time - use roundTimerData if available, otherwise calculate from artworks
+                    let earliestClosing = timerData.earliestClosing ? new Date(timerData.earliestClosing) : null;
+
+                    // Fallback: If we have timed artworks but no round timer data yet, calculate from artworks
+                    if (!earliestClosing && timedArtworks.length > 0) {
+                      const closingTimes = timedArtworks
+                        .map(a => a.closing_time ? new Date(a.closing_time) : null)
+                        .filter(Boolean);
+                      if (closingTimes.length > 0) {
+                        earliestClosing = new Date(Math.min(...closingTimes.map(d => d.getTime())));
+                      }
+                    }
+
                     const timeRemaining = earliestClosing ? Math.max(0, earliestClosing - localTime) : 0;
 
                     if (round === 0 && roundArtworks.length === 0) return null; // Skip if no unassigned artworks
