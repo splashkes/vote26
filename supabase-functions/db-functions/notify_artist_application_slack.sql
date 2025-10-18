@@ -50,15 +50,15 @@
               RETURN NEW;                                                                                                    +
           END IF;                                                                                                            +
                                                                                                                              +
-          -- Format event date for header                                                                                    +
+          -- Get city name                                                                                                   +
+          city_name := COALESCE(event_info.city_name, 'Unknown City');                                                       +
+                                                                                                                             +
+          -- Format event date in LOCAL VENUE TIMEZONE                                                                       +
           IF event_info.event_start_datetime IS NOT NULL THEN                                                                +
-              event_date := TO_CHAR(event_info.event_start_datetime, 'Mon DD, YYYY');                                        +
+              event_date := format_event_datetime_local(event_info.event_start_datetime, city_name);                         +
           ELSE                                                                                                               +
               event_date := 'TBD';                                                                                           +
           END IF;                                                                                                            +
-                                                                                                                             +
-          -- Get city name                                                                                                   +
-          city_name := COALESCE(event_info.city_name, 'Unknown City');                                                       +
                                                                                                                              +
           -- Get first sample work image - simplified                                                                        +
           sample_image_url := NULL;                                                                                          +
@@ -98,7 +98,7 @@
               message_preview := '_No message provided_';                                                                    +
           END IF;                                                                                                            +
                                                                                                                              +
-          -- Header format with emoji: "📝 ARTIST NAME applied to ABXXXX (CITY - DATE)"                                       +
+          -- Header format with emoji: "📝 ARTIST NAME applied to ABXXXX (CITY - DATE IN LOCAL TIME)"                         +
           header_text := '📝 ' || COALESCE(TRIM(artist_info.name), 'Unknown Artist') || ' applied to ' ||                     +
                          NEW.event_eid || ' (' || city_name || ' - ' || event_date || ')';                                   +
                                                                                                                              +

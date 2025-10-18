@@ -14,6 +14,8 @@
       pronouns TEXT;                                                                                                                     +
       social_info TEXT;                                                                                                                  +
       confirmation_message TEXT;                                                                                                         +
+      event_date_local TEXT;                                                                                                             +
+      city_name TEXT;                                                                                                                    +
   BEGIN                                                                                                                                  +
       BEGIN                                                                                                                              +
           -- Get artist profile information                                                                                              +
@@ -22,11 +24,22 @@
           FROM artist_profiles ap                                                                                                        +
           WHERE ap.id = NEW.artist_profile_id;                                                                                           +
                                                                                                                                          +
-          -- Get event information                                                                                                       +
-          SELECT e.name, e.eid, e.event_start_datetime, e.id, e.slack_channel                                                            +
+          -- Get event information INCLUDING city                                                                                        +
+          SELECT e.name, e.eid, e.event_start_datetime, e.id, e.slack_channel, c.name as city_name                                       +
           INTO event_info                                                                                                                +
           FROM events e                                                                                                                  +
+          LEFT JOIN cities c ON e.city_id = c.id                                                                                         +
           WHERE e.eid = NEW.event_eid;                                                                                                   +
+                                                                                                                                         +
+          -- Get city name                                                                                                               +
+          city_name := COALESCE(event_info.city_name, 'Unknown City');                                                                   +
+                                                                                                                                         +
+          -- Format event date in LOCAL VENUE TIMEZONE                                                                                   +
+          IF event_info.event_start_datetime IS NOT NULL THEN                                                                            +
+              event_date_local := format_event_datetime_local(event_info.event_start_datetime, city_name);                               +
+          ELSE                                                                                                                           +
+              event_date_local := 'TBD';                                                                                                 +
+          END IF;                                                                                                                        +
                                                                                                                                          +
           -- Determine Slack channel from event or fallback                                                                              +
           IF event_info.slack_channel IS NOT NULL AND LENGTH(TRIM(event_info.slack_channel)) > 0 THEN                                    +
@@ -131,7 +144,7 @@
               );                                                                                                                         +
           END IF;                                                                                                                        +
                                                                                                                                          +
-          -- Context with event details (same style as invites)                                                                          +
+          -- Context with event details using LOCAL TIMEZONE DATE                                                                        +
           slack_blocks := slack_blocks || jsonb_build_array(                                                                             +
               jsonb_build_object(                                                                                                        +
                   'type', 'context',                                                                                                     +
@@ -139,7 +152,7 @@
                       jsonb_build_object(                                                                                                +
                           'type', 'mrkdwn',                                                                                              +
                           'text', '*Event:* ' || COALESCE(event_info.name, 'Unknown Event') || ' • ' ||                                  +
-                                  COALESCE(TO_CHAR(event_info.event_start_datetime, 'Month DD, YYYY'), 'TBD') ||                         +
+                                  event_date_local ||                                                                                    +
                                   ' • *Confirmed:* ' || TO_CHAR(NOW(), 'YYYY-MM-DD HH24:MI UTC')                                         +
                       )                                                                                                                  +
                   )                                                                                                                      +

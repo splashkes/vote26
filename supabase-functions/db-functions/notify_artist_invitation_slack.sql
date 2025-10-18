@@ -16,6 +16,8 @@
       email_status_text TEXT;                                                                                                         +
       email_status_emoji TEXT;                                                                                                        +
       email_source TEXT;                                                                                                              +
+      event_date_local TEXT;                                                                                                          +
+      city_name TEXT;                                                                                                                 +
   BEGIN                                                                                                                               +
       BEGIN                                                                                                                           +
           -- Get artist profile information including email from ALL possible sources                                                 +
@@ -30,11 +32,22 @@
           LEFT JOIN auth.users au ON p.auth_user_id = au.id                                                                           +
           WHERE ap.id = NEW.artist_profile_id;                                                                                        +
                                                                                                                                       +
-          -- Get event information using event_eid                                                                                    +
-          SELECT e.name, e.eid, e.event_start_datetime, e.id, e.slack_channel                                                         +
+          -- Get event information using event_eid INCLUDING city                                                                     +
+          SELECT e.name, e.eid, e.event_start_datetime, e.id, e.slack_channel, c.name as city_name                                    +
           INTO event_info                                                                                                             +
           FROM events e                                                                                                               +
+          LEFT JOIN cities c ON e.city_id = c.id                                                                                      +
           WHERE e.eid = NEW.event_eid;                                                                                                +
+                                                                                                                                      +
+          -- Get city name                                                                                                            +
+          city_name := COALESCE(event_info.city_name, 'Unknown City');                                                                +
+                                                                                                                                      +
+          -- Format event date in LOCAL VENUE TIMEZONE                                                                                +
+          IF event_info.event_start_datetime IS NOT NULL THEN                                                                         +
+              event_date_local := format_event_datetime_local(event_info.event_start_datetime, city_name);                            +
+          ELSE                                                                                                                        +
+              event_date_local := 'TBD';                                                                                              +
+          END IF;                                                                                                                     +
                                                                                                                                       +
           -- Get admin who sent the invitation from metadata                                                                          +
           sent_by_email := COALESCE(NEW.metadata->>'sent_by', 'System');                                                              +
@@ -128,14 +141,14 @@
                       )                                                                                                               +
                   )                                                                                                                   +
               ),                                                                                                                      +
-              -- Context with event details                                                                                           +
+              -- Context with event details using LOCAL TIMEZONE DATE                                                                 +
               jsonb_build_object(                                                                                                     +
                   'type', 'context',                                                                                                  +
                   'elements', jsonb_build_array(                                                                                      +
                       jsonb_build_object(                                                                                             +
                           'type', 'mrkdwn',                                                                                           +
                           'text', '*Event:* ' || COALESCE(event_info.name, 'Unknown Event') || ' • ' ||                               +
-                                  COALESCE(TO_CHAR(event_info.event_start_datetime, 'Month DD, YYYY'), 'TBD') ||                      +
+                                  event_date_local ||                                                                                 +
                                   ' • *Invited:* ' || TO_CHAR(NOW(), 'YYYY-MM-DD HH24:MI UTC')                                        +
                       )                                                                                                               +
                   )                                                                                                                   +
