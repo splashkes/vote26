@@ -232,7 +232,9 @@ const AdminPanel = ({
   const [eventArtists, setEventArtists] = useState([]); // Artists added to event (including unassigned)
   const [selectedEasel, setSelectedEasel] = useState(null);
   const [roundTimers, setRoundTimers] = useState({}); // Track timer states for each round
+  const [roundTimerData, setRoundTimerData] = useState({}); // Store detailed timer data per round
   const [confirmCancelTimer, setConfirmCancelTimer] = useState(null); // For cancel confirmation modal
+  const [confirmCancelRoundTimer, setConfirmCancelRoundTimer] = useState(null); // For round-specific cancel confirmation
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [auctionArtworks, setAuctionArtworks] = useState([]);
   const [auctionBids, setAuctionBids] = useState({});
@@ -380,6 +382,7 @@ const AdminPanel = ({
       if (adminMode === 'auction' && adminLevel !== null) {
         fetchAuctionData();
         fetchAuctionTimerStatus();
+        fetchRoundTimerStatus(); // Fetch round-specific timer data
       }
     }
   }, [eventId, adminLevel]);
@@ -420,6 +423,7 @@ const AdminPanel = ({
     if (eventId && adminMode === 'auction' && adminLevel !== null) {
       fetchAuctionData();
       fetchAuctionTimerStatus();
+      fetchRoundTimerStatus(); // Fetch round-specific timer data
     }
   }, [adminMode, adminLevel]);
 
@@ -470,6 +474,7 @@ const AdminPanel = ({
           // Refresh auction data on any art table changes
           fetchAuctionData();
           fetchAuctionTimerStatus();
+          fetchRoundTimerStatus(); // Update round-specific timers
         }
       )
       .on(
@@ -1465,10 +1470,10 @@ const AdminPanel = ({
     }
   }
 
-  const handleTimerAction = async (action, duration = 12) => {
+  const handleTimerAction = async (action, duration = 12, roundNumber = null) => {
     setTimerActionLoading(true);
     try {
-      console.log('Timer action:', action, 'Duration:', duration, 'Event ID:', eventId, 'Event ID type:', typeof eventId);
+      console.log('Timer action:', action, 'Duration:', duration, 'Round:', roundNumber, 'Event ID:', eventId);
 
       if (!eventId) {
         throw new Error('Event ID is missing');
@@ -1487,19 +1492,32 @@ const AdminPanel = ({
           p_event_id: eventUuid,
           p_action: action,
           p_duration_minutes: duration,
-          p_admin_phone: null // Optional parameter
+          p_admin_phone: null, // Optional parameter
+          p_round_number: roundNumber // NEW: Pass round number
         });
-      
+
       console.log('Timer RPC response:', { data, error });
       if (error) {
         console.error('RPC Error details:', error);
         throw error;
       }
-      
+
       if (data?.success) {
         showAdminMessage('success', data.message + (data.sms_sent ? ` (${data.sms_sent} SMS notifications sent)` : ''));
         await fetchAuctionTimerStatus();
+        await fetchRoundTimerStatus(); // Fetch per-round timer status
         await fetchAuctionData();
+
+        // Update round-specific timer state
+        if (roundNumber !== null && data.closing_time) {
+          setRoundTimerData(prev => ({
+            ...prev,
+            [roundNumber]: {
+              closing_time: data.closing_time,
+              artworks_count: data.artworks_updated
+            }
+          }));
+        }
       } else {
         console.error('Function returned error:', data);
         showAdminMessage('error', data?.error || 'Failed to update timer');
@@ -1509,6 +1527,40 @@ const AdminPanel = ({
       alert('Failed to update timer: ' + error.message);
     } finally {
       setTimerActionLoading(false);
+    }
+  };
+
+  const fetchRoundTimerStatus = async () => {
+    try {
+      if (!eventId) return;
+
+      // Convert EID to UUID for admin RPC calls
+      const { getEventUuidFromEid } = await import('../lib/adminHelpers');
+      const eventUuid = await getEventUuidFromEid(eventId);
+
+      if (!eventUuid) return;
+
+      const { data, error } = await supabase
+        .rpc('get_auction_timer_status_by_round', { p_event_id: eventUuid });
+
+      if (error) throw error;
+
+      // Convert the data into a more usable format
+      const timerData = {};
+      if (data) {
+        data.forEach(round => {
+          timerData[round.round_number] = {
+            total: round.artworks_total,
+            withTimers: round.artworks_with_timers,
+            active: round.artworks_active,
+            earliestClosing: round.earliest_closing,
+            latestClosing: round.latest_closing
+          };
+        });
+      }
+      setRoundTimerData(timerData);
+    } catch (error) {
+      console.error('Error fetching round timer status:', error);
     }
   };
 
@@ -2338,106 +2390,182 @@ const AdminPanel = ({
         {/* Auction Controls */}
         <Tabs.Content value="auction">
           <Flex direction="column" gap="4">
-            {/* Auction Timer */}
-            <Card size="2" data-auction-timer>
-              <Heading size="3" mb="3">Auction Timer</Heading>
+            {/* Auction Overview */}
+            <Card size="2">
+              <Heading size="3" mb="3">Auction Overview</Heading>
+              <Grid columns="4" gap="3">
+                <Box>
+                  <Text size="5" weight="bold" style={{ color: 'var(--blue-11)' }}>
+                    {auctionArtworks.length}
+                  </Text>
+                  <Text size="1" color="gray">Total Artworks</Text>
+                </Box>
+                <Box>
+                  <Text size="5" weight="bold" style={{ color: 'var(--green-11)' }}>
+                    {auctionArtworks.filter(a => a.status === 'active').length}
+                  </Text>
+                  <Text size="1" color="gray">Active</Text>
+                </Box>
+                <Box>
+                  <Text size="5" weight="bold" style={{ color: 'var(--purple-11)' }}>
+                    {auctionArtworks.filter(a => a.closing_time).length}
+                  </Text>
+                  <Text size="1" color="gray">With Timers</Text>
+                </Box>
+                <Box>
+                  <Text size="5" weight="bold" style={{ color: 'var(--orange-11)' }}>
+                    {Object.keys(auctionBids).length}
+                  </Text>
+                  <Text size="1" color="gray">With Bids</Text>
+                </Box>
+              </Grid>
+            </Card>
+
+            {/* Round-Specific Auction Controls */}
+            <Card size="2">
+              <Heading size="3" mb="3">Round Auction Controls</Heading>
               <Text size="2" color="gray" style={{ display: 'block', marginBottom: '1rem' }}>
-                Artworks close individually and may vary in close time based on bidding action
+                Start auction timers per round - artworks close individually and may vary based on bidding action
               </Text>
-              
-              {/* Timer Status */}
-              {auctionTimerStatus && auctionTimerStatus.timer_active ? (
-                <Box>
-                  <Text size="6" weight="bold" style={{ display: 'block', marginBottom: '0.5rem' }}>
-                    {(() => {
-                      const timeLeft = Math.max(0, auctionEndTime - localTime);
-                      const minutes = Math.floor(timeLeft / 60000);
-                      const seconds = Math.floor((timeLeft % 60000) / 1000);
-                      return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-                    })()}
-                  </Text>
-                  <Text size="2" color="gray" style={{ display: 'block', marginBottom: '0.5rem' }}>
-                    Earliest closing: {auctionTimerStatus.earliest_closing ? new Date(auctionTimerStatus.earliest_closing).toLocaleTimeString() : 'N/A'}
-                  </Text>
-                  <Text size="2" color="gray" style={{ display: 'block', marginBottom: '1rem' }}>
-                    {auctionTimerStatus.artworks_with_timers} artwork{auctionTimerStatus.artworks_with_timers !== 1 ? 's' : ''} with active timers
-                  </Text>
-                  
-                  <Flex gap="2" wrap="wrap">
-                    <Button 
-                      size="2" 
-                      variant="soft"
-                      onClick={() => handleTimerAction('extend')}
-                      disabled={timerActionLoading}
-                    >
-                      +5 min (All)
-                    </Button>
-                    <Button 
-                      size="2" 
-                      variant="soft" 
-                      color="orange"
-                      onClick={() => handleTimerAction('cancel')}
-                      disabled={timerActionLoading}
-                    >
-                      Cancel All Timers
-                    </Button>
-                    <Button 
-                      size="2" 
-                      variant="soft" 
-                      color="red"
-                      onClick={() => setConfirmCloseAuction(true)}
-                      disabled={timerActionLoading}
-                    >
-                      Close Auction Now
-                    </Button>
-                  </Flex>
-                </Box>
-              ) : (
-                <Box>
-                  <Text size="2" color="gray" style={{ display: 'block', marginBottom: '1rem' }}>
-                    No active auction timers
-                  </Text>
-                  
-                  {/* Auction Statistics */}
-                  <Flex direction="column" gap="2" mb="3">
-                    <Text size="3" weight="bold" style={{ display: 'block' }}>
-                      Auction Statistics
-                    </Text>
-                    <Grid columns="3" gap="4" style={{ maxWidth: '400px' }}>
-                      <Box>
-                        <Text size="3" weight="bold" style={{ display: 'block', color: 'var(--blue-11)' }}>
-                          {auctionArtworks.length}
-                        </Text>
-                        <Text size="1" color="gray">Artworks</Text>
-                      </Box>
-                      <Box>
-                        <Text size="3" weight="bold" style={{ display: 'block', color: 'var(--green-11)' }}>
-                          {Object.keys(auctionBids).length}
-                        </Text>
-                        <Text size="1" color="gray">With Bids</Text>
-                      </Box>
-                    </Grid>
-                  </Flex>
-                  
-                  {/* 12min auction button - only show if there are active artworks with artists that don't have timers */}
-                  {auctionArtworks.filter(a => a.artist_id && a.status === 'active' && !a.closing_time).length > 0 && (
-                    <Flex gap="2" mt="3">
-                      <Button 
-                        size="2" 
-                        variant="solid"
-                        onClick={() => handleTimerAction('start', 12)}
-                        disabled={timerActionLoading}
-                      >
-                        Start 12min Auction
-                      </Button>
-                      <Text size="1" color="gray" style={{ alignSelf: 'center' }}>
-                        Note: Button may have errors - investigate if issues occur
-                      </Text>
-                    </Flex>
-                  )}
-                </Box>
-              )}
-              
+
+              {/* Group artworks by round and display controls */}
+              <Flex direction="column" gap="3">
+                {(() => {
+                  // Group artworks by round
+                  const artworksByRound = auctionArtworks.reduce((acc, artwork) => {
+                    const round = artwork.round || 0; // Use 0 for unassigned
+                    if (!acc[round]) acc[round] = [];
+                    acc[round].push(artwork);
+                    return acc;
+                  }, {});
+
+                  // Sort rounds numerically
+                  const sortedRounds = Object.keys(artworksByRound)
+                    .map(Number)
+                    .sort((a, b) => a - b);
+
+                  return sortedRounds.map(round => {
+                    const roundArtworks = artworksByRound[round];
+                    const activeArtworks = roundArtworks.filter(a => a.status === 'active' && a.artist_id);
+                    const timedArtworks = activeArtworks.filter(a => a.closing_time);
+                    const untimedArtworks = activeArtworks.filter(a => !a.closing_time);
+
+                    // Get timer data for this round
+                    const timerData = roundTimerData[round] || {};
+                    const earliestClosing = timerData.earliestClosing ? new Date(timerData.earliestClosing) : null;
+                    const timeRemaining = earliestClosing ? Math.max(0, earliestClosing - localTime) : 0;
+
+                    if (round === 0 && roundArtworks.length === 0) return null; // Skip if no unassigned artworks
+
+                    return (
+                      <Card key={round} size="2" variant="surface">
+                        <Flex justify="between" align="start" gap="3">
+                          <Box style={{ flex: 1 }}>
+                            <Text size="4" weight="bold" style={{ display: 'block' }}>
+                              {round === 0 ? 'Unassigned' : `Round ${round}`}
+                            </Text>
+                            <Text size="2" color="gray" style={{ display: 'block', marginTop: '0.25rem' }}>
+                              {activeArtworks.length} active artwork{activeArtworks.length !== 1 ? 's' : ''}
+                              {timedArtworks.length > 0 && ` (${timedArtworks.length} with timer${timedArtworks.length !== 1 ? 's' : ''})`}
+                            </Text>
+                          </Box>
+
+                          {timedArtworks.length > 0 ? (
+                            <Box style={{ textAlign: 'right' }}>
+                              <Text size="5" weight="bold" style={{
+                                display: 'block',
+                                color: timeRemaining < 60000 ? 'var(--red-11)' :
+                                       timeRemaining < 120000 ? 'var(--orange-11)' :
+                                       'var(--green-11)'
+                              }}>
+                                {(() => {
+                                  const minutes = Math.floor(timeRemaining / 60000);
+                                  const seconds = Math.floor((timeRemaining % 60000) / 1000);
+                                  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                                })()}
+                              </Text>
+                              <Flex gap="2" mt="2" justify="end">
+                                <Button
+                                  size="1"
+                                  variant="soft"
+                                  onClick={() => handleTimerAction('extend', 5, round)}
+                                  disabled={timerActionLoading}
+                                >
+                                  +5 min
+                                </Button>
+                                <Button
+                                  size="1"
+                                  color="red"
+                                  variant="soft"
+                                  onClick={() => {
+                                    if (confirm(`Cancel all timers for Round ${round}?`)) {
+                                      handleTimerAction('cancel', 0, round);
+                                    }
+                                  }}
+                                  disabled={timerActionLoading}
+                                >
+                                  Cancel
+                                </Button>
+                              </Flex>
+                            </Box>
+                          ) : (
+                            round !== 0 && untimedArtworks.length > 0 && (
+                              <Button
+                                size="2"
+                                variant="solid"
+                                onClick={() => handleTimerAction('start', 12, round)}
+                                disabled={timerActionLoading}
+                              >
+                                Start 12min Auction
+                              </Button>
+                            )
+                          )}
+                        </Flex>
+                      </Card>
+                    );
+                  }).filter(Boolean);
+                })()}
+              </Flex>
+
+              {/* Global Controls */}
+              <Separator size="4" my="3" />
+              <Flex gap="2" wrap="wrap">
+                <Button
+                  size="2"
+                  variant="soft"
+                  onClick={() => {
+                    if (confirm('Start 12-minute auction for ALL rounds?')) {
+                      handleTimerAction('start', 12);
+                    }
+                  }}
+                  disabled={timerActionLoading}
+                >
+                  Start All Rounds (12min)
+                </Button>
+                <Button
+                  size="2"
+                  variant="soft"
+                  color="orange"
+                  onClick={() => {
+                    if (confirm('Cancel ALL auction timers?')) {
+                      handleTimerAction('cancel');
+                    }
+                  }}
+                  disabled={timerActionLoading}
+                >
+                  Cancel All Timers
+                </Button>
+                <Button
+                  size="2"
+                  variant="soft"
+                  color="red"
+                  onClick={() => setConfirmCloseAuction(true)}
+                  disabled={timerActionLoading}
+                >
+                  Force Close All Now
+                </Button>
+              </Flex>
+
               {timerActionLoading && (
                 <Text size="2" color="gray" style={{ display: 'block', marginTop: '0.5rem' }}>
                   Processing...
