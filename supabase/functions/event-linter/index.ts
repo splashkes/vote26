@@ -500,9 +500,70 @@ async function runLinterWithStreaming(
     // Continue without enrichment - rules that need metrics will just not match
   }
 
+  // Generate overview/dashboard findings from aggregate metrics
+  // Only generate when not filtering by specific event
+  const overviewFindings: any[] = [];
+
+  if (!filterEid) {
+    streamWriter.sendProgress('overview_metrics', 'Generating operational overview...');
+
+    try {
+      const { data: overviewMetrics, error: overviewError } = await supabaseClient
+        .rpc('get_all_overview_metrics');
+
+      if (!overviewError && overviewMetrics) {
+        for (const metric of overviewMetrics) {
+          const rule = rules.find((r: any) => r.id === metric.rule_id);
+          if (rule && rule.context === 'dashboard') {
+            // Interpolate metrics into message with format support
+            let message = rule.message;
+            const metrics = metric.metrics;
+
+            // Replace variables with format specifiers (e.g., {change:+;-})
+            message = message.replace(/\{([^}:]+)(?::([^}]+))?\}/g, (match, key, format) => {
+              if (!(key in metrics)) return match;
+              const value = metrics[key];
+
+              // Handle format specifiers
+              if (format === '+;-' && typeof value === 'number') {
+                // Show sign for positive numbers
+                return value > 0 ? `+${value}` : String(value);
+              }
+
+              return String(value);
+            });
+
+            overviewFindings.push({
+              ruleId: rule.id,
+              ruleName: rule.name,
+              severity: 'overview',
+              category: rule.category,
+              context: rule.context,
+              emoji: '📊',
+              message: message,
+              eventId: null,  // Overview findings don't belong to specific events
+              eventEid: '',
+              eventName: 'DASH',
+              timestamp: new Date().toISOString(),
+              metrics: metrics  // Include full metrics with weekly_data for graphing
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error generating overview metrics:', error);
+      // Continue without overview - not critical
+    }
+
+    // Send overview findings
+    if (overviewFindings.length > 0) {
+      streamWriter.sendFindings(overviewFindings, 'overview_metrics');
+    }
+  }
+
   streamWriter.sendProgress('event_rules', 'Checking event-level rules...');
 
-  let allFindings: any[] = [];
+  let allFindings: any[] = [...overviewFindings];
 
   // Run event-level rules
   const eventFindings: any[] = [];
@@ -1241,6 +1302,58 @@ serve(async (req) => {
 
     // Run linter on events
     let findings: any[] = [];
+
+    // Generate overview/dashboard findings from aggregate metrics (NON-STREAMING MODE)
+    // Only generate when not filtering by specific event
+    if (!filterEid) {
+      try {
+        const { data: overviewMetrics, error: overviewError } = await supabaseClient
+          .rpc('get_all_overview_metrics');
+
+        if (!overviewError && overviewMetrics) {
+          for (const metric of overviewMetrics) {
+            const rule = rules.find((r: any) => r.id === metric.rule_id);
+            if (rule && rule.context === 'dashboard') {
+              // Interpolate metrics into message with format support
+              let message = rule.message;
+              const metrics = metric.metrics;
+
+              // Replace variables with format specifiers (e.g., {change:+;-})
+              message = message.replace(/\{([^}:]+)(?::([^}]+))?\}/g, (match, key, format) => {
+                if (!(key in metrics)) return match;
+                const value = metrics[key];
+
+                // Handle format specifiers
+                if (format === '+;-' && typeof value === 'number') {
+                  // Show sign for positive numbers
+                  return value > 0 ? `+${value}` : String(value);
+                }
+
+                return String(value);
+              });
+
+              findings.push({
+                ruleId: rule.id,
+                ruleName: rule.name,
+                severity: 'overview',
+                category: rule.category,
+                context: rule.context,
+                emoji: '📊',
+                message: message,
+                eventId: null,
+                eventEid: '',
+                eventName: 'DASH',
+                timestamp: new Date().toISOString(),
+                metrics: metrics  // Include full metrics with weekly_data for graphing
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error generating overview metrics (non-streaming):', error);
+      }
+    }
+
     for (const event of eventsToLint) {
       // Check EID format (special validation)
       if (event.eid && !/^AB\d{3,4}$/.test(event.eid)) {

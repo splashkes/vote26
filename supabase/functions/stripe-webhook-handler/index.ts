@@ -6,6 +6,28 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import Stripe from 'https://esm.sh/stripe@13.0.0?target=deno';
 serve(async (req)=>{
   const signature = req.headers.get('stripe-signature');
+
+  // Debug info collection
+  const debugInfo = {
+    signaturePresent: !!signature,
+    signatureLength: signature?.length,
+    signatureStart: signature?.substring(0, 50),
+    bodyLength: 0,
+    bodyStart: '',
+    envVarsPresent: {
+      canada_webhook: false,
+      canada_backup: false,
+      intl_webhook: false,
+      intl_backup: false,
+      connect_webhook: false,
+      canada_key: false,
+      intl_key: false,
+      supabase_url: false,
+      supabase_key: false
+    },
+    errors: []
+  };
+
   if (!signature) {
     return new Response('No signature', {
       status: 400
@@ -14,6 +36,20 @@ serve(async (req)=>{
   try {
     // Get raw body for signature verification
     const body = await req.text();
+    debugInfo.bodyLength = body.length;
+    debugInfo.bodyStart = body.substring(0, 100);
+
+    // Check environment variables
+    debugInfo.envVarsPresent.canada_webhook = !!Deno.env.get('stripe_webhook_secret_canada');
+    debugInfo.envVarsPresent.canada_backup = !!Deno.env.get('stripe_webhook_secret_canada_backup');
+    debugInfo.envVarsPresent.intl_webhook = !!Deno.env.get('stripe_webhook_secret_intl');
+    debugInfo.envVarsPresent.intl_backup = !!Deno.env.get('stripe_webhook_secret_intl_backup');
+    debugInfo.envVarsPresent.connect_webhook = !!Deno.env.get('stripe_webhook_secret_connect');
+    debugInfo.envVarsPresent.canada_key = !!Deno.env.get('stripe_canada_secret_key');
+    debugInfo.envVarsPresent.intl_key = !!Deno.env.get('stripe_intl_secret_key');
+    debugInfo.envVarsPresent.supabase_url = !!Deno.env.get('SUPABASE_URL');
+    debugInfo.envVarsPresent.supabase_key = !!Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
     // Determine which Stripe account based on webhook endpoint
     // You might want to use different endpoints for Canada vs International
     // For now, we'll check both
@@ -22,6 +58,7 @@ serve(async (req)=>{
     // Try Canada webhook secret first
     const canadaWebhookSecret = Deno.env.get('stripe_webhook_secret_canada');
     if (canadaWebhookSecret) {
+      debugInfo.errors.push('Trying Canada webhook');
       const canadaStripeKey = Deno.env.get('stripe_canada_secret_key');
       const stripeCanada = new Stripe(canadaStripeKey, {
         apiVersion: '2023-10-16',
@@ -31,6 +68,7 @@ serve(async (req)=>{
         event = await stripeCanada.webhooks.constructEventAsync(body, signature, canadaWebhookSecret);
         stripeAccountRegion = 'canada';
       } catch (err) {
+        debugInfo.errors.push(`Canada webhook failed: ${err.message}`);
       // Not from Canada account, try canada backup
       }
     }
@@ -57,6 +95,7 @@ serve(async (req)=>{
     if (!event) {
       const intlWebhookSecret = Deno.env.get('stripe_webhook_secret_intl');
       if (intlWebhookSecret) {
+        debugInfo.errors.push('Trying International webhook');
         const intlStripeKey = Deno.env.get('stripe_intl_secret_key');
         const stripeIntl = new Stripe(intlStripeKey, {
           apiVersion: '2023-10-16',
@@ -66,6 +105,7 @@ serve(async (req)=>{
           event = await stripeIntl.webhooks.constructEventAsync(body, signature, intlWebhookSecret);
           stripeAccountRegion = 'international';
         } catch (err) {
+          debugInfo.errors.push(`International webhook failed: ${err.message}`);
         // Not from international account, try international backup
         }
       }
@@ -84,13 +124,55 @@ serve(async (req)=>{
           event = await stripeIntl.webhooks.constructEventAsync(body, signature, intlBackupWebhookSecret);
           stripeAccountRegion = 'international';
         } catch (err) {
-        // All webhook secrets failed
+        // Not from international backup, try Connect webhook
         }
       }
     }
+
+    // Try Connect webhook secret (for connected account events)
+    // Connect webhooks are platform-agnostic and use a single secret
     if (!event) {
-      console.error('Failed to verify webhook signature');
-      return new Response('Invalid signature', {
+      const connectWebhookSecret = Deno.env.get('stripe_webhook_secret_connect');
+      if (connectWebhookSecret) {
+        debugInfo.errors.push(`Connect webhook secret found, length: ${connectWebhookSecret.length}`);
+        // Connect webhooks don't need a specific Stripe key - use any valid key
+        const stripeKey = Deno.env.get('stripe_canada_secret_key') || Deno.env.get('stripe_intl_secret_key');
+        if (stripeKey) {
+          debugInfo.errors.push(`Using Stripe key for Connect verification`);
+          const stripe = new Stripe(stripeKey, {
+            apiVersion: '2023-10-16',
+            httpClient: Stripe.createFetchHttpClient()
+          });
+          try {
+            event = await stripe.webhooks.constructEventAsync(body, signature, connectWebhookSecret);
+            // Determine region based on the account in the event
+            if (event.account) {
+              // Connect events include the account ID
+              stripeAccountRegion = 'connect';
+            }
+          } catch (err) {
+            // Connect webhook verification failed
+            debugInfo.errors.push(`Connect webhook verification failed: ${err.message}`);
+            debugInfo.errors.push(`Error type: ${err.type || 'unknown'}`);
+            debugInfo.errors.push(`Error code: ${err.code || 'unknown'}`);
+          }
+        } else {
+          debugInfo.errors.push('No Stripe API key found for Connect webhook verification');
+        }
+      } else {
+        debugInfo.errors.push('No Connect webhook secret found in environment');
+      }
+    }
+
+    if (!event) {
+      // Return debug info in the response so Stripe will show it
+      return new Response(JSON.stringify({
+        error: 'Invalid signature',
+        debug: debugInfo
+      }), {
+        headers: {
+          'Content-Type': 'application/json'
+        },
         status: 400
       });
     }

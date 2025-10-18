@@ -287,6 +287,9 @@ const ProfileForm = ({ existingProfile = null, onSuccess }) => {
                 {validationErrors.name && (
                   <Text size="1" color="red">{validationErrors.name}</Text>
                 )}
+                <Text size="1" color="gray">
+                  This name will be shown for public voting if selected
+                </Text>
               </Flex>
 
               <Flex direction="column" gap="2">

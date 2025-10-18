@@ -353,12 +353,13 @@ serve(async (req) => {
         console.log('Service Agreement:', serviceAgreement);
 
         const accountData: any = {
-          type: 'custom',
+          type: 'express', // CHANGED: Express accounts have simpler onboarding for individual artists
           country: finalCountry,
           email: artistProfile.email,
           default_currency: finalCurrency.toLowerCase(), // CRITICAL: Set account currency based on country
           capabilities: {
             transfers: { requested: true },
+            // Express accounts automatically get appropriate capabilities
           },
           business_type: 'individual',
           individual: {
@@ -380,16 +381,16 @@ serve(async (req) => {
           },
         };
 
-        // Add service agreement for international artists
+        // Add service agreement for international artists (Express accounts)
+        // Note: Express accounts handle most compliance automatically
         if (!isUSorCA) {
           accountData.tos_acceptance = {
             service_agreement: 'recipient'
           };
-          console.log('Added recipient service agreement for international artist');
+          console.log('Added recipient service agreement for international Express account');
         } else {
-          // For US/CA, add card_payments capability (full service agreement - default)
-          accountData.capabilities.card_payments = { requested: true };
-          console.log('Using full service agreement (default) for US/CA artist');
+          // For US/CA Express accounts, capabilities are handled automatically
+          console.log('Using Express account for US/CA artist - simplified onboarding');
         }
         
         console.log('Account data being sent to Stripe:', JSON.stringify(accountData, null, 2));
@@ -476,7 +477,7 @@ serve(async (req) => {
                 created_at: new Date().toISOString(),
                 person_email: artistProfile.email,
                 person_name: artistProfile.name,
-                stripe_account_type: 'custom',
+                stripe_account_type: 'express', // Using Express for simpler onboarding
                 service_agreement: serviceAgreement,
                 onboarding_started_at: new Date().toISOString()
               }
@@ -500,7 +501,7 @@ serve(async (req) => {
               updated_at: new Date().toISOString(),
               metadata: {
                 ...globalPaymentRecord.metadata,
-                stripe_account_type: 'custom',
+                stripe_account_type: 'express', // Using Express for simpler onboarding
                 service_agreement: serviceAgreement,
                 onboarding_restarted_at: new Date().toISOString()
               }

@@ -41,6 +41,7 @@ const EventLinter = () => {
   const [hideArtistFindings, setHideArtistFindings] = useState(false);
   const [hideEventFindings, setHideEventFindings] = useState(false);
   const [hideCityFindings, setHideCityFindings] = useState(false);
+  const [showOnlyOverview, setShowOnlyOverview] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedFinding, setSelectedFinding] = useState(null);
@@ -256,6 +257,11 @@ const EventLinter = () => {
   useEffect(() => {
     let filtered = allFindings;
 
+    // Show only overview findings
+    if (showOnlyOverview) {
+      filtered = filtered.filter(f => f.severity === 'overview');
+    }
+
     // Filter by severities (if any selected)
     if (severityFilters.size > 0) {
       filtered = filtered.filter(f => severityFilters.has(f.severity));
@@ -298,7 +304,7 @@ const EventLinter = () => {
     }
 
     setFindings(filtered);
-  }, [searchQuery, severityFilters, categoryFilter, contextFilter, hideArtistFindings, hideEventFindings, hideCityFindings, allFindings]);
+  }, [searchQuery, severityFilters, categoryFilter, contextFilter, hideArtistFindings, hideEventFindings, hideCityFindings, showOnlyOverview, allFindings]);
 
   // Get severity counts
   const severityCounts = useMemo(() => getSeverityCounts(allFindings), [allFindings]);
@@ -426,6 +432,7 @@ const EventLinter = () => {
       case 'warning': return 'orange';
       case 'info': return 'blue';
       case 'success': return 'green';
+      case 'overview': return 'indigo';
       default: return 'gray';
     }
   };
@@ -854,6 +861,24 @@ const EventLinter = () => {
             </Badge>
 
             <Badge
+              color="indigo"
+              size="1"
+              style={{ cursor: 'pointer' }}
+              variant={severityFilters.has('overview') ? 'solid' : 'soft'}
+              onClick={() => {
+                const newFilters = new Set(severityFilters);
+                if (newFilters.has('overview')) {
+                  newFilters.delete('overview');
+                } else {
+                  newFilters.add('overview');
+                }
+                setSeverityFilters(newFilters);
+              }}
+            >
+              📊 {severityCounts.overview || 0} Overview
+            </Badge>
+
+            <Badge
               color="purple"
               size="1"
               style={{ cursor: 'pointer' }}
@@ -901,6 +926,16 @@ const EventLinter = () => {
               onClick={() => setHideCityFindings(!hideCityFindings)}
             >
               🏙️ Hide Cities
+            </Badge>
+
+            <Badge
+              color="indigo"
+              size="1"
+              style={{ cursor: 'pointer' }}
+              variant={showOnlyOverview ? 'solid' : 'soft'}
+              onClick={() => setShowOnlyOverview(!showOnlyOverview)}
+            >
+              📊 Overview Only
             </Badge>
 
             <Text size="1" color="gray">
@@ -953,7 +988,7 @@ const EventLinter = () => {
               </Select.Root>
             </Box>
 
-            {(searchQuery || severityFilters.size > 0 || categoryFilter !== 'all' || contextFilter !== 'all' || futureOnly || activeOnly || hideEventFindings || hideArtistFindings || hideCityFindings) && (
+            {(searchQuery || severityFilters.size > 0 || categoryFilter !== 'all' || contextFilter !== 'all' || futureOnly || activeOnly || hideEventFindings || hideArtistFindings || hideCityFindings || showOnlyOverview) && (
               <Button
                 size="1"
                 variant="ghost"
@@ -968,6 +1003,7 @@ const EventLinter = () => {
                   setHideEventFindings(false);
                   setHideArtistFindings(false);
                   setHideCityFindings(false);
+                  setShowOnlyOverview(false);
                 }}
               >
                 <CrossCircledIcon />
@@ -1025,12 +1061,16 @@ const EventLinter = () => {
                       <Text size="2">{finding.emoji}</Text>
                     </Table.Cell>
                     <Table.Cell
-                      style={{ padding: '4px 8px', cursor: 'pointer' }}
-                      onClick={(e) => handleEidClick(e, finding)}
+                      style={{ padding: '4px 8px', cursor: finding.eventEid ? 'pointer' : 'default' }}
+                      onClick={(e) => finding.eventEid && handleEidClick(e, finding)}
                     >
-                      <Badge color={finding.artistNumber ? 'purple' : finding.cityId ? 'blue' : 'gray'} variant="soft" size="1">
-                        {finding.cityId ? getFlagEmoji(finding.countryCode) : (finding.eventEid || (finding.artistNumber ? `#${finding.artistNumber}` : 'N/A'))}
-                      </Badge>
+                      {finding.eventEid ? (
+                        <Badge color={finding.artistNumber ? 'purple' : finding.cityId ? 'blue' : 'gray'} variant="soft" size="1">
+                          {finding.cityId ? getFlagEmoji(finding.countryCode) : (finding.eventEid || (finding.artistNumber ? `#${finding.artistNumber}` : 'N/A'))}
+                        </Badge>
+                      ) : (
+                        <Text size="1" color="gray">-</Text>
+                      )}
                     </Table.Cell>
                     <Table.Cell style={{ padding: '4px 8px' }}>
                       <Text size="1" weight="medium" style={{
