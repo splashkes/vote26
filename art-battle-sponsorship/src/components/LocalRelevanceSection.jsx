@@ -183,22 +183,8 @@ const LocalRelevanceSection = ({ inviteData }) => {
 
           {/* Social Proof - Testimonials */}
           <Box>
-            <Heading size="5" mb="4">What Our Sponsors Say</Heading>
+            <Heading size="5" mb="4">What Our Partners Say</Heading>
             <Grid columns={{ initial: '1', md: '3' }} gap="4">
-              <Card size="3" style={{ background: 'var(--gray-3)' }}>
-                <Flex direction="column" gap="2">
-                  <Flex gap="1" mb="2">
-                    {[1, 2, 3, 4, 5].map((i) => (
-                      <Text key={i} style={{ color: '#FFD700', fontSize: '14px' }}>★</Text>
-                    ))}
-                  </Flex>
-                  <Text size="3" weight="bold">"We've sponsored three Art Battle events now and the ROI has been outstanding. The crowd is engaged, the energy is infectious, and we've seen a genuine uptick in foot traffic to our shop."</Text>
-                  <Text size="2" style={{ color: 'var(--gray-11)' }}>
-                    — Sarah Chen, Berkeley Print Studio, Berkeley
-                  </Text>
-                </Flex>
-              </Card>
-
               <Card size="3" style={{ background: 'var(--gray-3)' }}>
                 <Flex direction="column" gap="2">
                   <Flex gap="1" mb="2">
@@ -220,9 +206,23 @@ const LocalRelevanceSection = ({ inviteData }) => {
                       <Text key={i} style={{ color: '#FFD700', fontSize: '14px' }}>★</Text>
                     ))}
                   </Flex>
-                  <Text size="3" weight="bold">"This was our first time sponsoring a live event and the Art Battle team made it so easy. The demographic was perfect for our boutique and we gained a ton of Instagram followers. Worth every penny."</Text>
+                  <Text size="3" weight="bold">"We really enjoyed working with Art Battle on our 4th annual event! Our guests had a great time watching the artists and bidding on their work, and we heard wonderful feedback from those who got to meet the artists as well. Thank you for your continued partnership — we love Art Battle!"</Text>
                   <Text size="2" style={{ color: 'var(--gray-11)' }}>
-                    — Jennifer Lawson, Stitch & Thread Co., Toronto
+                    — Kim Tran, Help For Children
+                  </Text>
+                </Flex>
+              </Card>
+
+              <Card size="3" style={{ background: 'var(--gray-3)' }}>
+                <Flex direction="column" gap="2">
+                  <Flex gap="1" mb="2">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <Text key={i} style={{ color: '#FFD700', fontSize: '14px' }}>★</Text>
+                    ))}
+                  </Flex>
+                  <Text size="3" weight="bold">"Participating with Art Battle is a fantastic experience for our guests. We are pleased to be supporters of emerging artists in the area."</Text>
+                  <Text size="2" style={{ color: 'var(--gray-11)' }}>
+                    — Springline, Menlo Park
                   </Text>
                 </Flex>
               </Card>

@@ -158,7 +158,7 @@ const HeroSection = ({ inviteData }) => {
               </Box>
             </Flex>
 
-            {/* Sponsor Logos - Clean Transparent Display */}
+            {/* Sponsor Logos - Infinite Scrolling with Fade */}
             {sponsorLogoUrls.length > 0 && (
               <>
                 <Box style={{
@@ -178,37 +178,69 @@ const HeroSection = ({ inviteData }) => {
                     Trusted by Leading Brands
                   </Text>
 
-                  <Flex gap="6" wrap="wrap" justify="center" align="center" style={{ maxWidth: '900px' }}>
-                    {sponsorLogoUrls.map((logoUrl, idx) => {
-                      // Use CloudFlare flexible variants for optimized sizing
-                      const optimizedUrl = logoUrl.replace('/public', '/w=280,h=120,fit=scale-down');
-
-                      return (
-                        <img
-                          key={idx}
-                          src={optimizedUrl}
-                          alt={`Sponsor ${idx + 1}`}
-                          style={{
-                            maxHeight: '120px',
-                            maxWidth: '280px',
-                            width: 'auto',
-                            height: 'auto',
-                            objectFit: 'contain',
-                            display: 'block',
-                            opacity: 0.9,
-                            transition: 'opacity 0.2s ease',
-                            cursor: 'default'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.opacity = '1';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.opacity = '0.9';
-                          }}
-                        />
-                      );
-                    })}
-                  </Flex>
+                  {/* Marquee Container with Mask */}
+                  <Box style={{
+                    position: 'relative',
+                    width: '100%',
+                    maxWidth: '900px',
+                    overflow: 'hidden',
+                    padding: '1rem 0',
+                    maskImage: 'linear-gradient(to right, transparent 0%, black 15%, black 85%, transparent 100%)',
+                    WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 15%, black 85%, transparent 100%)'
+                  }}>
+                    {/* Scrolling Track */}
+                    <Box style={{
+                      display: 'flex',
+                      gap: '2rem',
+                      animation: 'marquee 32s linear infinite',
+                      willChange: 'transform'
+                    }}>
+                      {/* First set of logos */}
+                      {sponsorLogoUrls.map((logoUrl, idx) => {
+                        const optimizedUrl = logoUrl.replace('/public', '/w=280,h=120,fit=scale-down');
+                        return (
+                          <img
+                            key={`logo-1-${idx}`}
+                            src={optimizedUrl}
+                            alt={`Sponsor ${idx + 1}`}
+                            style={{
+                              maxHeight: '100px',
+                              maxWidth: '220px',
+                              minWidth: '180px',
+                              width: 'auto',
+                              height: 'auto',
+                              objectFit: 'contain',
+                              display: 'block',
+                              opacity: 0.9,
+                              flexShrink: 0
+                            }}
+                          />
+                        );
+                      })}
+                      {/* Duplicate set for seamless loop */}
+                      {sponsorLogoUrls.map((logoUrl, idx) => {
+                        const optimizedUrl = logoUrl.replace('/public', '/w=280,h=120,fit=scale-down');
+                        return (
+                          <img
+                            key={`logo-2-${idx}`}
+                            src={optimizedUrl}
+                            alt={`Sponsor ${idx + 1}`}
+                            style={{
+                              maxHeight: '100px',
+                              maxWidth: '220px',
+                              minWidth: '180px',
+                              width: 'auto',
+                              height: 'auto',
+                              objectFit: 'contain',
+                              display: 'block',
+                              opacity: 0.9,
+                              flexShrink: 0
+                            }}
+                          />
+                        );
+                      })}
+                    </Box>
+                  </Box>
                 </Flex>
 
                 <Box style={{
@@ -217,6 +249,18 @@ const HeroSection = ({ inviteData }) => {
                   background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)',
                   margin: '1.5rem 0 1rem 0'
                 }} />
+
+                {/* CSS Animation */}
+                <style>{`
+                  @keyframes marquee {
+                    0% {
+                      transform: translateX(0);
+                    }
+                    100% {
+                      transform: translateX(-50%);
+                    }
+                  }
+                `}</style>
               </>
             )}
           </Flex>
