@@ -582,7 +582,7 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                 </Flex>
 
                 {/* Sponsorship Package Details */}
-                <Box mt="3" mb="2">
+                <Box mt="3" mb="2" style={{ textAlign: 'center' }}>
                   <Text size="2" weight="bold" mb="1" style={{ color: 'var(--gray-12)' }}>Sponsorship Package:</Text>
                   <Heading size="4" mb="1">Art Battle {inviteData.event_city} {selectedPackage.name}</Heading>
                   {selectedAddons.length > 0 && (
@@ -596,7 +596,7 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                     variant="ghost"
                     size="1"
                     onClick={() => setShowBenefits(!showBenefits)}
-                    style={{ padding: '0.25rem 0.5rem', justifyContent: 'flex-start', marginTop: '0.25rem' }}
+                    style={{ padding: '0.25rem 0.5rem', marginTop: '0.25rem' }}
                   >
                     <Flex align="center" gap="1">
                       {showBenefits ? (
@@ -621,7 +621,10 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                       style={{
                         background: 'var(--gray-3)',
                         borderRadius: '6px',
-                        border: '1px solid var(--gray-6)'
+                        border: '1px solid var(--gray-6)',
+                        maxWidth: '500px',
+                        margin: '0.5rem auto 0 auto',
+                        textAlign: 'left'
                       }}
                     >
                       <Flex direction="column" gap="3">
@@ -670,11 +673,9 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                 </Box>
 
                 {totalEvents > 1 && (
-                  <Flex justify="start">
-                    <Text size="2" style={{ color: 'var(--green-11)', fontStyle: 'italic' }}>
-                      only ${formatCurrency(calculateDiscountedTotal() / totalEvents)} per event!
-                    </Text>
-                  </Flex>
+                  <Text size="2" style={{ color: 'var(--green-11)', fontStyle: 'italic', textAlign: 'center', display: 'block' }}>
+                    only ${formatCurrency(calculateDiscountedTotal() / totalEvents)} per event!
+                  </Text>
                 )}
               </Flex>
             </Flex>
