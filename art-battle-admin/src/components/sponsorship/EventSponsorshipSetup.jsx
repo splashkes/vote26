@@ -425,14 +425,15 @@ const EventSponsorshipSetup = ({ event }) => {
                                   </Table.Cell>
 
                                   <Table.Cell>
-                                    <Button
+                                    <IconButton
                                       size="1"
                                       variant="soft"
                                       color="red"
                                       onClick={() => handleHidePackage(template.id)}
+                                      title="Hide package"
                                     >
-                                      <Cross2Icon /> Hide
-                                    </Button>
+                                      <Cross2Icon />
+                                    </IconButton>
                                   </Table.Cell>
                                 </Table.Row>
 
@@ -548,14 +549,15 @@ const EventSponsorshipSetup = ({ event }) => {
                                       </Table.Cell>
 
                                       <Table.Cell>
-                                        <Button
+                                        <IconButton
                                           size="1"
                                           variant="soft"
                                           color="green"
                                           onClick={() => handleRestorePackage(template.id)}
+                                          title="Restore package"
                                         >
-                                          + Restore
-                                        </Button>
+                                          <CheckIcon />
+                                        </IconButton>
                                       </Table.Cell>
                                     </Table.Row>
                                   );
