@@ -587,19 +587,19 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                   mb="2"
                   p="4"
                   style={{
-                    background: 'white',
+                    background: '#1a1a1a',
                     borderLeft: '4px solid #f6d365',
                     borderRadius: '8px',
-                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+                    boxShadow: 'inset 0 2px 8px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.2)',
                     textAlign: 'center',
                     maxWidth: '600px',
                     margin: '1rem auto'
                   }}
                 >
-                  <Text size="2" weight="bold" mb="1" style={{ color: 'var(--gray-12)' }}>{prospectDisplay}</Text>
-                  <Heading size="4" mb="1">Art Battle {inviteData.event_city} {selectedPackage.name}</Heading>
+                  <Text size="2" weight="bold" mb="1" style={{ color: '#f6d365' }}>{prospectDisplay}</Text>
+                  <Heading size="4" mb="1" style={{ color: 'white' }}>Art Battle {inviteData.event_city} {selectedPackage.name}</Heading>
                   {selectedAddons.length > 0 && (
-                    <Text size="2" style={{ color: 'var(--gray-11)', display: 'block', marginBottom: '0.25rem' }}>
+                    <Text size="2" style={{ color: '#e0e0e0', display: 'block', marginBottom: '0.25rem' }}>
                       + {selectedAddons.map(a => a.name).join(', ')}
                     </Text>
                   )}
@@ -609,18 +609,18 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                     variant="ghost"
                     size="1"
                     onClick={() => setShowBenefits(!showBenefits)}
-                    style={{ padding: '0.25rem 0.5rem', marginTop: '0.25rem' }}
+                    style={{ padding: '0.25rem 0.5rem', marginTop: '0.25rem', color: '#e0e0e0' }}
                   >
                     <Flex align="center" gap="1">
                       {showBenefits ? (
                         <>
-                          <ChevronUpIcon width="14" height="14" />
-                          <Text size="1">Hide benefits</Text>
+                          <ChevronUpIcon width="14" height="14" style={{ color: '#e0e0e0' }} />
+                          <Text size="1" style={{ color: '#e0e0e0' }}>Hide benefits</Text>
                         </>
                       ) : (
                         <>
-                          <ChevronDownIcon width="14" height="14" />
-                          <Text size="1">{(selectedPackage.benefits?.length || 0) + selectedAddons.reduce((sum, addon) => sum + (addon.benefits?.length || 0), 0)} benefits</Text>
+                          <ChevronDownIcon width="14" height="14" style={{ color: '#e0e0e0' }} />
+                          <Text size="1" style={{ color: '#e0e0e0' }}>{(selectedPackage.benefits?.length || 0) + selectedAddons.reduce((sum, addon) => sum + (addon.benefits?.length || 0), 0)} benefits</Text>
                         </>
                       )}
                     </Flex>
@@ -632,18 +632,19 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                       mt="2"
                       p="3"
                       style={{
-                        background: 'var(--gray-2)',
+                        background: '#2a2a2a',
                         borderRadius: '6px',
-                        border: '1px solid var(--gray-6)',
+                        border: '1px solid #404040',
                         maxWidth: '500px',
                         margin: '0.5rem auto 0 auto',
-                        textAlign: 'left'
+                        textAlign: 'left',
+                        boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.2)'
                       }}
                     >
                       <Flex direction="column" gap="3">
                         {/* Package Benefits */}
                         <Box>
-                          <Text size="2" weight="bold" mb="2" style={{ display: 'block', color: '#1a1a1a' }}>
+                          <Text size="2" weight="bold" mb="2" style={{ display: 'block', color: '#f6d365' }}>
                             Art Battle {inviteData.event_city} {selectedPackage.name}
                           </Text>
                           <Flex direction="column" gap="1">
@@ -652,9 +653,9 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                                 <CheckIcon
                                   width="14"
                                   height="14"
-                                  style={{ color: 'var(--green-9)', marginTop: '2px', flexShrink: 0 }}
+                                  style={{ color: '#4ade80', marginTop: '2px', flexShrink: 0 }}
                                 />
-                                <Text size="2" style={{ color: '#1a1a1a' }}>{benefit}</Text>
+                                <Text size="2" style={{ color: '#e0e0e0' }}>{benefit}</Text>
                               </Flex>
                             ))}
                           </Flex>
@@ -663,7 +664,7 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                         {/* Addon Benefits */}
                         {selectedAddons.map((addon, addonIdx) => (
                           <Box key={addonIdx}>
-                            <Text size="2" weight="bold" mb="2" style={{ display: 'block', color: '#1a1a1a' }}>
+                            <Text size="2" weight="bold" mb="2" style={{ display: 'block', color: '#f6d365' }}>
                               {addon.name}
                             </Text>
                             <Flex direction="column" gap="1">
@@ -672,9 +673,9 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                                   <CheckIcon
                                     width="14"
                                     height="14"
-                                    style={{ color: 'var(--green-9)', marginTop: '2px', flexShrink: 0 }}
+                                    style={{ color: '#4ade80', marginTop: '2px', flexShrink: 0 }}
                                   />
-                                  <Text size="2" style={{ color: '#1a1a1a' }}>{benefit}</Text>
+                                  <Text size="2" style={{ color: '#e0e0e0' }}>{benefit}</Text>
                                 </Flex>
                               ))}
                             </Flex>
@@ -685,7 +686,7 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                   )}
 
                   {totalEvents > 1 && (
-                    <Text size="2" style={{ color: '#b8860b', fontStyle: 'italic', fontWeight: 'bold', textAlign: 'center', display: 'block', marginTop: '1rem' }}>
+                    <Text size="2" style={{ color: '#f6d365', fontStyle: 'italic', fontWeight: 'bold', textAlign: 'center', display: 'block', marginTop: '1rem' }}>
                       For {totalEvents} events at only ${formatCurrency(calculateDiscountedTotal() / totalEvents)} per event!
                     </Text>
                   )}
