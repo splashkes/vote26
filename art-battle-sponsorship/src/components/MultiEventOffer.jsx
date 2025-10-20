@@ -581,9 +581,20 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                   </Heading>
                 </Flex>
 
-                {/* Sponsorship Package Details */}
-                <Box mt="3" mb="2" style={{ textAlign: 'center' }}>
-                  <Text size="2" weight="bold" mb="1" style={{ color: 'var(--gray-12)' }}>Sponsorship Package:</Text>
+                {/* Sponsorship Package Details - Gold Glowing Box */}
+                <Box
+                  mt="3"
+                  mb="2"
+                  p="4"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(246, 211, 101, 0.1) 0%, rgba(253, 160, 133, 0.1) 100%)',
+                    border: '2px solid #f6d365',
+                    borderRadius: '12px',
+                    boxShadow: '0 0 20px rgba(246, 211, 101, 0.4), 0 0 40px rgba(246, 211, 101, 0.2)',
+                    textAlign: 'center'
+                  }}
+                >
+                  <Text size="2" weight="bold" mb="1" style={{ color: 'var(--gray-12)' }}>{prospectDisplay}</Text>
                   <Heading size="4" mb="1">Art Battle {inviteData.event_city} {selectedPackage.name}</Heading>
                   {selectedAddons.length > 0 && (
                     <Text size="2" style={{ color: 'var(--gray-11)', display: 'block', marginBottom: '0.25rem' }}>
@@ -619,9 +630,9 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                       mt="2"
                       p="3"
                       style={{
-                        background: 'var(--gray-3)',
+                        background: 'rgba(255, 255, 255, 0.8)',
                         borderRadius: '6px',
-                        border: '1px solid var(--gray-6)',
+                        border: '1px solid rgba(246, 211, 101, 0.6)',
                         maxWidth: '500px',
                         margin: '0.5rem auto 0 auto',
                         textAlign: 'left'
@@ -670,13 +681,13 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                       </Flex>
                     </Box>
                   )}
-                </Box>
 
-                {totalEvents > 1 && (
-                  <Text size="2" style={{ color: 'var(--green-11)', fontStyle: 'italic', textAlign: 'center', display: 'block' }}>
-                    only ${formatCurrency(calculateDiscountedTotal() / totalEvents)} per event!
-                  </Text>
-                )}
+                  {totalEvents > 1 && (
+                    <Text size="2" style={{ color: '#b8860b', fontStyle: 'italic', fontWeight: 'bold', textAlign: 'center', display: 'block', marginTop: '1rem' }}>
+                      For {totalEvents} events at only ${formatCurrency(calculateDiscountedTotal() / totalEvents)} per event!
+                    </Text>
+                  )}
+                </Box>
               </Flex>
             </Flex>
           </Card>
