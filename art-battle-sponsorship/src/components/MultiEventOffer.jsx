@@ -586,7 +586,7 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                   <Text size="2" weight="bold" mb="1" style={{ color: 'var(--gray-12)' }}>Sponsorship Package:</Text>
                   <Heading size="4" mb="1">Art Battle {inviteData.event_city} {selectedPackage.name}</Heading>
                   {selectedAddons.length > 0 && (
-                    <Text size="2" style={{ color: 'var(--gray-11)' }}>
+                    <Text size="2" style={{ color: 'var(--gray-11)', display: 'block', marginBottom: '0.25rem' }}>
                       + {selectedAddons.map(a => a.name).join(', ')}
                     </Text>
                   )}
@@ -596,7 +596,7 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                     variant="ghost"
                     size="1"
                     onClick={() => setShowBenefits(!showBenefits)}
-                    style={{ padding: '0.25rem 0.5rem', justifyContent: 'flex-start', marginTop: '0.5rem' }}
+                    style={{ padding: '0.25rem 0.5rem', justifyContent: 'flex-start', marginTop: '0.25rem' }}
                   >
                     <Flex align="center" gap="1">
                       {showBenefits ? (
@@ -670,7 +670,7 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                 </Box>
 
                 {totalEvents > 1 && (
-                  <Flex justify="end">
+                  <Flex justify="start">
                     <Text size="2" style={{ color: 'var(--green-11)', fontStyle: 'italic' }}>
                       only ${formatCurrency(calculateDiscountedTotal() / totalEvents)} per event!
                     </Text>
