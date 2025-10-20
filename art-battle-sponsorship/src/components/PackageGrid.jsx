@@ -227,9 +227,6 @@ const PackageGrid = ({ packages, tier, discountPercent, onSelect, onBack, invite
                             {/* Visual Samples Thumbnails */}
                             {pkg.images && pkg.images.length > 0 && (
                               <Box mt="3" pt="3" style={{ borderTop: '1px solid var(--gray-6)' }}>
-                                <Text size="1" weight="medium" style={{ color: 'var(--gray-11)', marginBottom: '8px', display: 'block' }}>
-                                  Visual Samples
-                                </Text>
                                 <Flex gap="2" wrap="wrap">
                                   {pkg.images.map((img) => (
                                     <Box

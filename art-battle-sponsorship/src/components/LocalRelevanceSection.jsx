@@ -38,6 +38,14 @@ const LocalRelevanceSection = ({ inviteData }) => {
 
   return (
     <Box style={{ position: 'relative', padding: '3rem 1rem', overflow: 'hidden' }}>
+      {/* Responsive styles for event card */}
+      <style>{`
+        @media (min-width: 768px) {
+          .event-details-card {
+            width: 50% !important;
+          }
+        }
+      `}</style>
       {/* Background Image */}
       <Box style={{
         position: 'absolute',
@@ -80,7 +88,15 @@ const LocalRelevanceSection = ({ inviteData }) => {
           </Box>
 
           {/* Event Details Card */}
-          <Card size="3" style={{ background: 'var(--accent-3)', border: '1px solid var(--accent-6)' }}>
+          <Card size="3" style={{
+            background: 'var(--accent-3)',
+            border: '1px solid var(--accent-6)',
+            width: '85%',
+            maxWidth: 'none',
+            margin: '0 auto'
+          }}
+          className="event-details-card"
+          >
             <Flex direction="column" gap="3" align="center" style={{ textAlign: 'center' }}>
               <Text size="1" weight="bold" style={{ color: 'var(--gray-11)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
                 Upcoming Event
@@ -98,28 +114,51 @@ const LocalRelevanceSection = ({ inviteData }) => {
               <Box style={{ width: '100%', height: '1px', background: 'var(--accent-6)', margin: '0.5rem 0' }} />
 
               <Flex direction="column" gap="1">
-                <Text size="3" weight="bold">Expected Audience</Text>
+                <Text size="3" weight="bold">Audience</Text>
                 <Text size="2" style={{ color: 'var(--gray-11)' }}>
-                  {inviteData.event_capacity ? `${inviteData.event_capacity.toLocaleString()} in person` : '350-400 in person'}
+                  {inviteData.event_capacity ? `${Math.round(inviteData.event_capacity + 50).toLocaleString()} at venue` : '400 at venue'}
                 </Text>
                 {inviteData.event_capacity && (
                   <Text size="2" style={{ color: 'var(--gray-11)' }}>
-                    {(inviteData.event_capacity * 3).toLocaleString()} online viewers
+                    {Math.round(inviteData.event_capacity * 3).toLocaleString()} online
+                  </Text>
+                )}
+                {inviteData.city_audience_count && (
+                  <Text size="2" weight="bold" style={{ color: 'var(--gray-11)' }}>
+                    {inviteData.city_audience_count.toLocaleString()} total {inviteData.event_city} audience
                   </Text>
                 )}
               </Flex>
 
               {inviteData.artists && inviteData.artists.length > 0 && (
-                <Flex direction="column" gap="1">
-                  <Text size="3" weight="bold">Featured Artists</Text>
-                  <Flex direction="column" gap="0">
-                    {inviteData.artists.map((artist, idx) => (
-                      <Text key={artist.id} size="2" style={{ color: 'var(--gray-11)' }}>
-                        {artist.name}
-                      </Text>
-                    ))}
+                <>
+                  <Box style={{ width: '100%', height: '1px', background: 'var(--accent-6)', margin: '0.5rem 0' }} />
+
+                  <Flex direction="column" gap="1">
+                    <Text size="3" weight="bold">Featured Artists at this show</Text>
+                    <Flex direction="column" gap="0">
+                      {inviteData.artists.map((artist, idx) => (
+                        artist.instagram ? (
+                          <a
+                            key={artist.id}
+                            href={`https://instagram.com/${artist.instagram.replace('@', '')}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ textDecoration: 'none' }}
+                          >
+                            <Text size="2" style={{ color: 'var(--accent-11)', textDecoration: 'underline' }}>
+                              {artist.name}
+                            </Text>
+                          </a>
+                        ) : (
+                          <Text key={artist.id} size="2" style={{ color: 'var(--gray-11)' }}>
+                            {artist.name}
+                          </Text>
+                        )
+                      ))}
+                    </Flex>
                   </Flex>
-                </Flex>
+                </>
               )}
             </Flex>
           </Card>

@@ -14,6 +14,7 @@ import {
 import { ArrowLeftIcon, CalendarIcon } from '@radix-ui/react-icons';
 import { supabase } from '../lib/supabase';
 import ArtistWorkflow from './ArtistWorkflow';
+import CityActivityCharts from './CityActivityCharts';
 import { getCountryFlag } from '../lib/countryFlags';
 
 const CityDetail = () => {
@@ -160,6 +161,15 @@ const CityDetail = () => {
             </Badge>
           </Flex>
         </Flex>
+
+        {/* Activity Charts */}
+        {events.length > 0 && (
+          <CityActivityCharts
+            cityId={cityId}
+            cityName={cityInfo.name}
+            events={events}
+          />
+        )}
 
         {/* Upcoming Events */}
         {upcomingEvents.length > 0 && (

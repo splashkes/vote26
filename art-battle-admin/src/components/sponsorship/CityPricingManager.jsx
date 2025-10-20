@@ -13,9 +13,10 @@ import {
   Heading,
   Badge,
   ScrollArea,
-  Separator
+  Separator,
+  IconButton
 } from '@radix-ui/themes';
-import { MagnifyingGlassIcon, CheckIcon, Cross2Icon } from '@radix-ui/react-icons';
+import { MagnifyingGlassIcon, CheckIcon, Cross2Icon, ChevronDownIcon, ChevronUpIcon } from '@radix-ui/react-icons';
 import {
   getAllPackageTemplates,
   getRecentAndUpcomingCities,
@@ -38,6 +39,9 @@ const CityPricingManager = () => {
   // City pricing form
   const [cityPrices, setCityPrices] = useState({});
   const [hasChanges, setHasChanges] = useState(false);
+
+  // UI state
+  const [showHiddenPackages, setShowHiddenPackages] = useState(false);
 
   // Recently configured cities
   const [recentCities, setRecentCities] = useState([]);
@@ -167,6 +171,24 @@ const CityPricingManager = () => {
     return Object.values(cityPrices).filter(p => p.price && parseFloat(p.price) > 0).length;
   };
 
+  const handleHidePackage = (templateId) => {
+    handlePriceChange(templateId, 'price', '0');
+  };
+
+  const getActivePackages = () => {
+    return templates.filter(template => {
+      const priceData = cityPrices[template.id];
+      return priceData?.price && parseFloat(priceData.price) > 0;
+    });
+  };
+
+  const getHiddenPackages = () => {
+    return templates.filter(template => {
+      const priceData = cityPrices[template.id];
+      return !priceData?.price || parseFloat(priceData.price) <= 0;
+    });
+  };
+
   if (loading) {
     return (
       <Flex justify="center" align="center" style={{ minHeight: '200px' }}>
@@ -259,8 +281,13 @@ const CityPricingManager = () => {
           <Flex justify="between" align="center" mb="3">
             <Box>
               <Heading size="4">Package Pricing for {selectedCity.name}</Heading>
-              <Text size="2" color="gray">
-                {getPricedCount()} of {templates.length} packages priced
+              <Callout.Root color="blue" size="1" mt="2">
+                <Callout.Text>
+                  <strong>Note:</strong> These prices are shared across all sponsor prospects in {selectedCity.name}. Set price to zero to hide a package from invites.
+                </Callout.Text>
+              </Callout.Root>
+              <Text size="2" color="gray" mt="2" style={{ display: 'block' }}>
+                {getPricedCount()} of {templates.length} packages active
               </Text>
             </Box>
             <Button
@@ -272,95 +299,213 @@ const CityPricingManager = () => {
             </Button>
           </Flex>
 
-          <Table.Root variant="surface">
-            <Table.Header>
-              <Table.Row>
-                <Table.ColumnHeaderCell>Package</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell>Category</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell width="150px">Price</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell width="120px">Currency</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell width="60px">Status</Table.ColumnHeaderCell>
-              </Table.Row>
-            </Table.Header>
-
-            <Table.Body>
-              {templates.map(template => {
-                const priceData = cityPrices[template.id] || {};
-                const hasPricing = priceData.price && parseFloat(priceData.price) > 0;
-
-                return (
-                  <Table.Row key={template.id}>
-                    <Table.Cell>
-                      <Box>
-                        <Text weight="bold">{template.name}</Text>
-                        {template.description && (
-                          <Text size="1" color="gray" style={{ display: 'block' }}>
-                            {template.description.substring(0, 60)}...
-                          </Text>
-                        )}
-                      </Box>
-                    </Table.Cell>
-
-                    <Table.Cell>
-                      <Badge
-                        color={
-                          template.category === 'personal' ? 'indigo' :
-                          template.category === 'brand' ? 'blue' :
-                          template.category === 'business' ? 'green' :
-                          template.category === 'addon' ? 'orange' : 'gray'
-                        }
-                        size="1"
-                      >
-                        {template.category === 'personal' ? 'Personal' :
-                         template.category === 'brand' ? 'Brand' :
-                         template.category === 'business' ? 'Business' :
-                         template.category === 'addon' ? 'Add-on' :
-                         template.category || 'Unknown'}
-                      </Badge>
-                    </Table.Cell>
-
-                    <Table.Cell>
-                      <TextField.Root
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={priceData.price || ''}
-                        onChange={(e) => handlePriceChange(template.id, 'price', e.target.value)}
-                        placeholder="0.00"
-                        size="2"
-                      />
-                    </Table.Cell>
-
-                    <Table.Cell>
-                      <Select.Root
-                        value={priceData.currency || 'USD'}
-                        onValueChange={(value) => handlePriceChange(template.id, 'currency', value)}
-                        size="2"
-                      >
-                        <Select.Trigger style={{ width: '100%' }} />
-                        <Select.Content>
-                          <Select.Item value="USD">USD</Select.Item>
-                          <Select.Item value="CAD">CAD</Select.Item>
-                          <Select.Item value="EUR">EUR</Select.Item>
-                          <Select.Item value="GBP">GBP</Select.Item>
-                          <Select.Item value="AUD">AUD</Select.Item>
-                          <Select.Item value="NZD">NZD</Select.Item>
-                        </Select.Content>
-                      </Select.Root>
-                    </Table.Cell>
-
-                    <Table.Cell>
-                      {hasPricing ? (
-                        <CheckIcon color="green" />
-                      ) : (
-                        <Cross2Icon color="gray" />
-                      )}
-                    </Table.Cell>
+          {/* Active Packages */}
+          {getActivePackages().length > 0 && (
+            <>
+              <Heading size="3" mb="2">Active Packages</Heading>
+              <Table.Root variant="surface" mb="4">
+                <Table.Header>
+                  <Table.Row>
+                    <Table.ColumnHeaderCell>Package</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Category</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell width="150px">Price</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell width="120px">Currency</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell width="60px"></Table.ColumnHeaderCell>
                   </Table.Row>
-                );
-              })}
-            </Table.Body>
-          </Table.Root>
+                </Table.Header>
+
+                <Table.Body>
+                  {getActivePackages().map(template => {
+                    const priceData = cityPrices[template.id] || {};
+
+                    return (
+                      <Table.Row key={template.id}>
+                        <Table.Cell>
+                          <Box>
+                            <Text weight="bold">{template.name}</Text>
+                            {template.description && (
+                              <Text size="1" color="gray" style={{ display: 'block' }}>
+                                {template.description.substring(0, 60)}...
+                              </Text>
+                            )}
+                          </Box>
+                        </Table.Cell>
+
+                        <Table.Cell>
+                          <Badge
+                            color={
+                              template.category === 'personal' ? 'indigo' :
+                              template.category === 'brand' ? 'blue' :
+                              template.category === 'business' ? 'green' :
+                              template.category === 'addon' ? 'orange' : 'gray'
+                            }
+                            size="1"
+                          >
+                            {template.category === 'personal' ? 'Personal' :
+                             template.category === 'brand' ? 'Brand' :
+                             template.category === 'business' ? 'Business' :
+                             template.category === 'addon' ? 'Add-on' :
+                             template.category || 'Unknown'}
+                          </Badge>
+                        </Table.Cell>
+
+                        <Table.Cell>
+                          <TextField.Root
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={priceData.price || ''}
+                            onChange={(e) => handlePriceChange(template.id, 'price', e.target.value)}
+                            placeholder="0.00"
+                            size="2"
+                          />
+                        </Table.Cell>
+
+                        <Table.Cell>
+                          <Select.Root
+                            value={priceData.currency || 'USD'}
+                            onValueChange={(value) => handlePriceChange(template.id, 'currency', value)}
+                            size="2"
+                          >
+                            <Select.Trigger style={{ width: '100%' }} />
+                            <Select.Content>
+                              <Select.Item value="USD">USD</Select.Item>
+                              <Select.Item value="CAD">CAD</Select.Item>
+                              <Select.Item value="EUR">EUR</Select.Item>
+                              <Select.Item value="GBP">GBP</Select.Item>
+                              <Select.Item value="AUD">AUD</Select.Item>
+                              <Select.Item value="NZD">NZD</Select.Item>
+                            </Select.Content>
+                          </Select.Root>
+                        </Table.Cell>
+
+                        <Table.Cell>
+                          <IconButton
+                            size="1"
+                            variant="ghost"
+                            color="red"
+                            onClick={() => handleHidePackage(template.id)}
+                            title="Hide package (set to zero)"
+                          >
+                            <Cross2Icon />
+                          </IconButton>
+                        </Table.Cell>
+                      </Table.Row>
+                    );
+                  })}
+                </Table.Body>
+              </Table.Root>
+            </>
+          )}
+
+          {/* Hidden Packages */}
+          {getHiddenPackages().length > 0 && (
+            <>
+              <Separator size="4" mb="3" />
+              <Flex
+                align="center"
+                justify="between"
+                mb="3"
+                style={{ cursor: 'pointer' }}
+                onClick={() => setShowHiddenPackages(!showHiddenPackages)}
+              >
+                <Flex align="center" gap="2">
+                  <Heading size="3">Hidden Packages</Heading>
+                  <Badge color="gray" size="1">{getHiddenPackages().length}</Badge>
+                </Flex>
+                <IconButton size="1" variant="ghost">
+                  {showHiddenPackages ? <ChevronUpIcon /> : <ChevronDownIcon />}
+                </IconButton>
+              </Flex>
+
+              {showHiddenPackages && (
+                <>
+                  <Text size="2" color="gray" mb="3" style={{ display: 'block' }}>
+                    These packages have no price set and will not appear in sponsor invites. Set a price to make them available.
+                  </Text>
+                  <Table.Root variant="surface">
+                    <Table.Header>
+                      <Table.Row>
+                        <Table.ColumnHeaderCell>Package</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell>Category</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell width="150px">Price</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell width="120px">Currency</Table.ColumnHeaderCell>
+                      </Table.Row>
+                    </Table.Header>
+
+                    <Table.Body>
+                      {getHiddenPackages().map(template => {
+                        const priceData = cityPrices[template.id] || {};
+
+                        return (
+                          <Table.Row key={template.id} style={{ opacity: 0.6 }}>
+                            <Table.Cell>
+                              <Box>
+                                <Text weight="bold">{template.name}</Text>
+                                {template.description && (
+                                  <Text size="1" color="gray" style={{ display: 'block' }}>
+                                    {template.description.substring(0, 60)}...
+                                  </Text>
+                                )}
+                              </Box>
+                            </Table.Cell>
+
+                            <Table.Cell>
+                              <Badge
+                                color={
+                                  template.category === 'personal' ? 'indigo' :
+                                  template.category === 'brand' ? 'blue' :
+                                  template.category === 'business' ? 'green' :
+                                  template.category === 'addon' ? 'orange' : 'gray'
+                                }
+                                size="1"
+                              >
+                                {template.category === 'personal' ? 'Personal' :
+                                 template.category === 'brand' ? 'Brand' :
+                                 template.category === 'business' ? 'Business' :
+                                 template.category === 'addon' ? 'Add-on' :
+                                 template.category || 'Unknown'}
+                              </Badge>
+                            </Table.Cell>
+
+                            <Table.Cell>
+                              <TextField.Root
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={priceData.price || ''}
+                                onChange={(e) => handlePriceChange(template.id, 'price', e.target.value)}
+                                placeholder="0.00"
+                                size="2"
+                              />
+                            </Table.Cell>
+
+                            <Table.Cell>
+                              <Select.Root
+                                value={priceData.currency || 'USD'}
+                                onValueChange={(value) => handlePriceChange(template.id, 'currency', value)}
+                                size="2"
+                              >
+                                <Select.Trigger style={{ width: '100%' }} />
+                                <Select.Content>
+                                  <Select.Item value="USD">USD</Select.Item>
+                                  <Select.Item value="CAD">CAD</Select.Item>
+                                  <Select.Item value="EUR">EUR</Select.Item>
+                                  <Select.Item value="GBP">GBP</Select.Item>
+                                  <Select.Item value="AUD">AUD</Select.Item>
+                                  <Select.Item value="NZD">NZD</Select.Item>
+                                </Select.Content>
+                              </Select.Root>
+                            </Table.Cell>
+                          </Table.Row>
+                        );
+                      })}
+                    </Table.Body>
+                  </Table.Root>
+                </>
+              )}
+            </>
+          )}
 
           {hasChanges && (
             <Callout.Root color="orange" mt="3">
