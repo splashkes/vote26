@@ -363,92 +363,8 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                       </Text>
                     )}
                   </Flex>
-                  <Separator mb="3" />
-                  <Text size="2" weight="bold" mb="1" style={{ color: 'var(--gray-12)' }}>Sponsorship Package:</Text>
-                  <Heading size="5" mb="1">{selectedPackage.name}</Heading>
-                  {selectedAddons.length > 0 && (
-                    <Text size="2" style={{ color: 'var(--gray-11)' }}>
-                      + {selectedAddons.map(a => a.name).join(', ')}
-                    </Text>
-                  )}
                 </Box>
               </Flex>
-
-              {/* Toggle Benefits Button */}
-              <Button
-                variant="ghost"
-                size="1"
-                onClick={() => setShowBenefits(!showBenefits)}
-                style={{ padding: '0.25rem 0.5rem', justifyContent: 'flex-start' }}
-              >
-                <Flex align="center" gap="1">
-                  {showBenefits ? (
-                    <>
-                      <ChevronUpIcon width="14" height="14" />
-                      <Text size="1">Hide benefits</Text>
-                    </>
-                  ) : (
-                    <>
-                      <ChevronDownIcon width="14" height="14" />
-                      <Text size="1">{(selectedPackage.benefits?.length || 0) + selectedAddons.reduce((sum, addon) => sum + (addon.benefits?.length || 0), 0)} benefits</Text>
-                    </>
-                  )}
-                </Flex>
-              </Button>
-
-              {/* Expandable Benefits */}
-              {showBenefits && (
-                <Box
-                  p="3"
-                  style={{
-                    background: 'var(--gray-3)',
-                    borderRadius: '6px',
-                    border: '1px solid var(--gray-6)'
-                  }}
-                >
-                  <Flex direction="column" gap="3">
-                    {/* Package Benefits */}
-                    <Box>
-                      <Text size="2" weight="bold" mb="2" style={{ display: 'block' }}>
-                        {selectedPackage.name}
-                      </Text>
-                      <Flex direction="column" gap="1">
-                        {selectedPackage.benefits && selectedPackage.benefits.map((benefit, idx) => (
-                          <Flex key={idx} gap="2" align="start">
-                            <CheckIcon
-                              width="14"
-                              height="14"
-                              style={{ color: 'var(--green-9)', marginTop: '2px', flexShrink: 0 }}
-                            />
-                            <Text size="2">{benefit}</Text>
-                          </Flex>
-                        ))}
-                      </Flex>
-                    </Box>
-
-                    {/* Addon Benefits */}
-                    {selectedAddons.map((addon, addonIdx) => (
-                      <Box key={addonIdx}>
-                        <Text size="2" weight="bold" mb="2" style={{ display: 'block' }}>
-                          {addon.name}
-                        </Text>
-                        <Flex direction="column" gap="1">
-                          {addon.benefits && addon.benefits.map((benefit, idx) => (
-                            <Flex key={idx} gap="2" align="start">
-                              <CheckIcon
-                                width="14"
-                                height="14"
-                                style={{ color: 'var(--green-9)', marginTop: '2px', flexShrink: 0 }}
-                              />
-                              <Text size="2">{benefit}</Text>
-                            </Flex>
-                          ))}
-                        </Flex>
-                      </Box>
-                    ))}
-                  </Flex>
-                </Box>
-              )}
             </Flex>
           </Card>
 
@@ -664,6 +580,95 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                     ${formatCurrency(calculateDiscountedTotal())} {selectedPackage.currency || 'USD'}
                   </Heading>
                 </Flex>
+
+                {/* Sponsorship Package Details */}
+                <Box mt="3" mb="2">
+                  <Text size="2" weight="bold" mb="1" style={{ color: 'var(--gray-12)' }}>Sponsorship Package:</Text>
+                  <Heading size="4" mb="1">Art Battle {inviteData.event_city} {selectedPackage.name}</Heading>
+                  {selectedAddons.length > 0 && (
+                    <Text size="2" style={{ color: 'var(--gray-11)' }}>
+                      + {selectedAddons.map(a => a.name).join(', ')}
+                    </Text>
+                  )}
+
+                  {/* Toggle Benefits Button */}
+                  <Button
+                    variant="ghost"
+                    size="1"
+                    onClick={() => setShowBenefits(!showBenefits)}
+                    style={{ padding: '0.25rem 0.5rem', justifyContent: 'flex-start', marginTop: '0.5rem' }}
+                  >
+                    <Flex align="center" gap="1">
+                      {showBenefits ? (
+                        <>
+                          <ChevronUpIcon width="14" height="14" />
+                          <Text size="1">Hide benefits</Text>
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDownIcon width="14" height="14" />
+                          <Text size="1">{(selectedPackage.benefits?.length || 0) + selectedAddons.reduce((sum, addon) => sum + (addon.benefits?.length || 0), 0)} benefits</Text>
+                        </>
+                      )}
+                    </Flex>
+                  </Button>
+
+                  {/* Expandable Benefits */}
+                  {showBenefits && (
+                    <Box
+                      mt="2"
+                      p="3"
+                      style={{
+                        background: 'var(--gray-3)',
+                        borderRadius: '6px',
+                        border: '1px solid var(--gray-6)'
+                      }}
+                    >
+                      <Flex direction="column" gap="3">
+                        {/* Package Benefits */}
+                        <Box>
+                          <Text size="2" weight="bold" mb="2" style={{ display: 'block' }}>
+                            Art Battle {inviteData.event_city} {selectedPackage.name}
+                          </Text>
+                          <Flex direction="column" gap="1">
+                            {selectedPackage.benefits && selectedPackage.benefits.map((benefit, idx) => (
+                              <Flex key={idx} gap="2" align="start">
+                                <CheckIcon
+                                  width="14"
+                                  height="14"
+                                  style={{ color: 'var(--green-9)', marginTop: '2px', flexShrink: 0 }}
+                                />
+                                <Text size="2">{benefit}</Text>
+                              </Flex>
+                            ))}
+                          </Flex>
+                        </Box>
+
+                        {/* Addon Benefits */}
+                        {selectedAddons.map((addon, addonIdx) => (
+                          <Box key={addonIdx}>
+                            <Text size="2" weight="bold" mb="2" style={{ display: 'block' }}>
+                              {addon.name}
+                            </Text>
+                            <Flex direction="column" gap="1">
+                              {addon.benefits && addon.benefits.map((benefit, idx) => (
+                                <Flex key={idx} gap="2" align="start">
+                                  <CheckIcon
+                                    width="14"
+                                    height="14"
+                                    style={{ color: 'var(--green-9)', marginTop: '2px', flexShrink: 0 }}
+                                  />
+                                  <Text size="2">{benefit}</Text>
+                                </Flex>
+                              ))}
+                            </Flex>
+                          </Box>
+                        ))}
+                      </Flex>
+                    </Box>
+                  )}
+                </Box>
+
                 {totalEvents > 1 && (
                   <Flex justify="end">
                     <Text size="2" style={{ color: 'var(--green-11)', fontStyle: 'italic' }}>
