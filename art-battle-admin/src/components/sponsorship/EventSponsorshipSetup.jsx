@@ -29,6 +29,7 @@ import {
   getAllPackageTemplates,
   getAllCityPricing,
   setCityPricing,
+  deleteCityPricing,
   generateSponsorshipInvite,
   getEventSponsorshipSummary
 } from '../../lib/sponsorshipAPI';
@@ -131,13 +132,21 @@ const EventSponsorshipSetup = ({ event }) => {
 
       for (const [templateId, data] of Object.entries(cityPrices)) {
         if (data.price && parseFloat(data.price) > 0) {
+          // Save or update pricing
           savePromises.push(
             setCityPricing(templateId, event.cities.id, parseFloat(data.price), data.currency)
           );
+        } else if (data.pricingId && (!data.price || parseFloat(data.price) <= 0)) {
+          // Delete pricing if price was set to zero or cleared
+          savePromises.push(deleteCityPricing(data.pricingId));
         }
       }
 
       await Promise.all(savePromises);
+
+      // Reload pricing to reflect changes
+      await loadPricingData();
+
       setHasChanges(false);
       setCurrentStep(2);
     } catch (err) {
@@ -182,6 +191,28 @@ const EventSponsorshipSetup = ({ event }) => {
 
   const getPricedCount = () => {
     return Object.values(cityPrices).filter(p => p.price && parseFloat(p.price) > 0).length;
+  };
+
+  const handleHidePackage = (templateId) => {
+    handlePriceChange(templateId, 'price', '0');
+  };
+
+  const handleRestorePackage = (templateId) => {
+    handlePriceChange(templateId, 'price', '100');
+  };
+
+  const getActiveTemplates = () => {
+    return templates.filter(template => {
+      const priceData = cityPrices[template.id];
+      return priceData?.price && parseFloat(priceData.price) > 0;
+    });
+  };
+
+  const getHiddenTemplates = () => {
+    return templates.filter(template => {
+      const priceData = cityPrices[template.id];
+      return !priceData?.price || parseFloat(priceData.price) <= 0;
+    });
   };
 
   const isStep1Complete = () => {
@@ -300,28 +331,36 @@ const EventSponsorshipSetup = ({ event }) => {
                   <Heading size="4" mb="3">
                     Package Pricing for {event.cities.name}
                   </Heading>
-                  <Text size="2" color="gray" mb="4">
-                    Set prices for sponsorship packages in this city. These will be the default prices shown to prospects.
-                  </Text>
+                  <Callout.Root color="blue" size="1" mb="4">
+                    <Callout.Text>
+                      <strong>Note:</strong> These prices are shared across all sponsor prospects in {event.cities.name}. Set price to zero or click "Hide" to remove a package from sponsor invites.
+                    </Callout.Text>
+                  </Callout.Root>
 
+                  <Heading size="3" mb="2">Active Packages</Heading>
                   <Table.Root variant="surface" size="2">
                     <Table.Header>
                       <Table.Row>
                         <Table.ColumnHeaderCell>Package</Table.ColumnHeaderCell>
                         <Table.ColumnHeaderCell width="150px">Price</Table.ColumnHeaderCell>
                         <Table.ColumnHeaderCell width="120px">Currency</Table.ColumnHeaderCell>
-                        <Table.ColumnHeaderCell width="60px">Status</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell width="80px"></Table.ColumnHeaderCell>
                       </Table.Row>
                     </Table.Header>
 
                     <Table.Body>
-                      {/* Render helper function */}
+                      {/* Render active packages only */}
                       {[
                         { key: 'brand', title: 'BRAND TIER - Connect Art, Culture & Community', bgColor: 'var(--accent-2)', textColor: 'var(--accent-11)' },
                         { key: 'business', title: 'TACTICAL TIER - Buy Specific Impact Moments', bgColor: 'var(--accent-2)', textColor: 'var(--accent-11)' },
                         { key: 'personal', title: 'PERSONAL TIER - Art Battle Patrons Circle', bgColor: 'var(--accent-2)', textColor: 'var(--accent-11)' },
                         { key: 'addon', title: 'ADD-ONS - Enhance Any Package', bgColor: 'var(--orange-2)', textColor: 'var(--orange-11)' }
-                      ].map(tier => groupedTemplates[tier.key].length > 0 && (
+                      ].map(tier => {
+                        const activeInTier = groupedTemplates[tier.key].filter(t => {
+                          const priceData = cityPrices[t.id];
+                          return priceData?.price && parseFloat(priceData.price) > 0;
+                        });
+                        return activeInTier.length > 0 && (
                         <React.Fragment key={tier.key}>
                           <Table.Row style={{ background: tier.bgColor }}>
                             <Table.Cell colSpan={4}>
@@ -330,7 +369,7 @@ const EventSponsorshipSetup = ({ event }) => {
                               </Text>
                             </Table.Cell>
                           </Table.Row>
-                          {groupedTemplates[tier.key].map(template => {
+                          {activeInTier.map(template => {
                             const priceData = cityPrices[template.id] || {};
                             const hasPricing = priceData.price && parseFloat(priceData.price) > 0;
                             const isExpanded = expandedPackages[template.id];
@@ -386,11 +425,14 @@ const EventSponsorshipSetup = ({ event }) => {
                                   </Table.Cell>
 
                                   <Table.Cell>
-                                    {hasPricing ? (
-                                      <CheckIcon color="green" />
-                                    ) : (
-                                      <Cross2Icon color="gray" />
-                                    )}
+                                    <Button
+                                      size="1"
+                                      variant="soft"
+                                      color="red"
+                                      onClick={() => handleHidePackage(template.id)}
+                                    >
+                                      <Cross2Icon /> Hide
+                                    </Button>
                                   </Table.Cell>
                                 </Table.Row>
 
@@ -416,9 +458,115 @@ const EventSponsorshipSetup = ({ event }) => {
                             );
                           })}
                         </React.Fragment>
-                      ))}
+                        );
+                      })}
                     </Table.Body>
                   </Table.Root>
+
+                  {/* Hidden Packages Section */}
+                  {getHiddenTemplates().length > 0 && (
+                    <Box mt="6">
+                      <Separator size="4" mb="4" />
+                      <Heading size="3" mb="2">Hidden Packages</Heading>
+                      <Callout.Root color="gray" size="1" mb="3">
+                        <Callout.Text>
+                          These packages are hidden from sponsor invites. Set a price or click "Restore" to make them available.
+                        </Callout.Text>
+                      </Callout.Root>
+
+                      <Table.Root variant="surface" size="2">
+                        <Table.Header>
+                          <Table.Row>
+                            <Table.ColumnHeaderCell>Package</Table.ColumnHeaderCell>
+                            <Table.ColumnHeaderCell width="150px">Price</Table.ColumnHeaderCell>
+                            <Table.ColumnHeaderCell width="120px">Currency</Table.ColumnHeaderCell>
+                            <Table.ColumnHeaderCell width="80px"></Table.ColumnHeaderCell>
+                          </Table.Row>
+                        </Table.Header>
+
+                        <Table.Body>
+                          {[
+                            { key: 'brand', title: 'BRAND TIER', bgColor: 'var(--gray-2)', textColor: 'var(--gray-11)' },
+                            { key: 'business', title: 'TACTICAL TIER', bgColor: 'var(--gray-2)', textColor: 'var(--gray-11)' },
+                            { key: 'personal', title: 'PERSONAL TIER', bgColor: 'var(--gray-2)', textColor: 'var(--gray-11)' },
+                            { key: 'addon', title: 'ADD-ONS', bgColor: 'var(--gray-2)', textColor: 'var(--gray-11)' }
+                          ].map(tier => {
+                            const hiddenInTier = groupedTemplates[tier.key].filter(t => {
+                              const priceData = cityPrices[t.id];
+                              return !priceData?.price || parseFloat(priceData.price) <= 0;
+                            });
+                            return hiddenInTier.length > 0 && (
+                              <React.Fragment key={tier.key}>
+                                <Table.Row style={{ background: tier.bgColor }}>
+                                  <Table.Cell colSpan={4}>
+                                    <Text weight="bold" size="2" style={{ color: tier.textColor }}>
+                                      {tier.title}
+                                    </Text>
+                                  </Table.Cell>
+                                </Table.Row>
+                                {hiddenInTier.map(template => {
+                                  const priceData = cityPrices[template.id] || {};
+
+                                  return (
+                                    <Table.Row key={template.id} style={{ backgroundColor: 'var(--gray-2)', opacity: 0.8 }}>
+                                      <Table.Cell>
+                                        <Text weight="bold" color="gray">{template.name}</Text>
+                                        {template.description && (
+                                          <Text size="1" color="gray" style={{ display: 'block' }}>
+                                            {template.description}
+                                          </Text>
+                                        )}
+                                      </Table.Cell>
+
+                                      <Table.Cell>
+                                        <TextField.Root
+                                          type="number"
+                                          step="0.01"
+                                          min="0"
+                                          value={priceData.price || ''}
+                                          onChange={(e) => handlePriceChange(template.id, 'price', e.target.value)}
+                                          placeholder="Set price to restore"
+                                          size="2"
+                                        />
+                                      </Table.Cell>
+
+                                      <Table.Cell>
+                                        <Select.Root
+                                          value={priceData.currency || 'USD'}
+                                          onValueChange={(value) => handlePriceChange(template.id, 'currency', value)}
+                                          size="2"
+                                        >
+                                          <Select.Trigger style={{ width: '100%' }} />
+                                          <Select.Content>
+                                            <Select.Item value="USD">USD</Select.Item>
+                                            <Select.Item value="CAD">CAD</Select.Item>
+                                            <Select.Item value="EUR">EUR</Select.Item>
+                                            <Select.Item value="GBP">GBP</Select.Item>
+                                            <Select.Item value="AUD">AUD</Select.Item>
+                                          </Select.Content>
+                                        </Select.Root>
+                                      </Table.Cell>
+
+                                      <Table.Cell>
+                                        <Button
+                                          size="1"
+                                          variant="soft"
+                                          color="green"
+                                          onClick={() => handleRestorePackage(template.id)}
+                                        >
+                                          + Restore
+                                        </Button>
+                                      </Table.Cell>
+                                    </Table.Row>
+                                  );
+                                })}
+                              </React.Fragment>
+                            );
+                          })}
+                        </Table.Body>
+                      </Table.Root>
+                    </Box>
+                  )}
 
                   <Flex justify="between" align="center" mt="4">
                     <Text size="2" color="gray">
