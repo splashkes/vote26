@@ -581,16 +581,16 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                   </Heading>
                 </Flex>
 
-                {/* Sponsorship Package Details - Gold Glowing Box */}
+                {/* Sponsorship Package Details */}
                 <Box
                   mt="3"
                   mb="2"
                   p="4"
                   style={{
-                    background: 'linear-gradient(135deg, rgba(246, 211, 101, 0.15) 0%, rgba(253, 160, 133, 0.15) 100%)',
-                    border: '2px solid #f6d365',
-                    borderRadius: '12px',
-                    boxShadow: 'inset 0 0 20px rgba(246, 211, 101, 0.3), inset 0 0 40px rgba(246, 211, 101, 0.15)',
+                    background: 'white',
+                    borderLeft: '4px solid #f6d365',
+                    borderRadius: '8px',
+                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
                     textAlign: 'center',
                     maxWidth: '600px',
                     margin: '1rem auto'
@@ -632,9 +632,9 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                       mt="2"
                       p="3"
                       style={{
-                        background: 'rgba(255, 255, 255, 0.95)',
+                        background: 'var(--gray-2)',
                         borderRadius: '6px',
-                        border: '1px solid rgba(246, 211, 101, 0.6)',
+                        border: '1px solid var(--gray-6)',
                         maxWidth: '500px',
                         margin: '0.5rem auto 0 auto',
                         textAlign: 'left'
