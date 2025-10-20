@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Card,
@@ -18,6 +18,8 @@ import {
 } from '@radix-ui/themes';
 import {
   ChevronRightIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
   CheckIcon,
   Cross2Icon,
   CopyIcon,
@@ -42,6 +44,7 @@ const EventSponsorshipSetup = ({ event }) => {
   const [cityPrices, setCityPrices] = useState({});
   const [hasChanges, setHasChanges] = useState(false);
   const [summary, setSummary] = useState(null);
+  const [expandedPackages, setExpandedPackages] = useState({});
 
   // Invite form
   const [inviteForm, setInviteForm] = useState({
@@ -190,12 +193,20 @@ const EventSponsorshipSetup = ({ event }) => {
     return str.charAt(0).toUpperCase() + str.slice(1);
   };
 
-  // Group templates by category
+  // Group templates by category (ordered: Brand, Business, Personal, Add-ons)
   const groupedTemplates = {
-    personal: templates.filter(t => t.category === 'personal'),
     brand: templates.filter(t => t.category === 'brand'),
     business: templates.filter(t => t.category === 'business'),
+    personal: templates.filter(t => t.category === 'personal'),
     addon: templates.filter(t => t.category === 'addon')
+  };
+
+  // Toggle benefits expansion
+  const toggleBenefits = (templateId) => {
+    setExpandedPackages(prev => ({
+      ...prev,
+      [templateId]: !prev[templateId]
+    }));
   };
 
   if (!event.cities) {
@@ -304,261 +315,108 @@ const EventSponsorshipSetup = ({ event }) => {
                     </Table.Header>
 
                     <Table.Body>
-                      {/* Personal Tier */}
-                      {groupedTemplates.personal.length > 0 && (
-                        <>
-                          <Table.Row style={{ background: 'var(--accent-2)' }}>
+                      {/* Render helper function */}
+                      {[
+                        { key: 'brand', title: 'BRAND TIER - Connect Art, Culture & Community', bgColor: 'var(--accent-2)', textColor: 'var(--accent-11)' },
+                        { key: 'business', title: 'TACTICAL TIER - Buy Specific Impact Moments', bgColor: 'var(--accent-2)', textColor: 'var(--accent-11)' },
+                        { key: 'personal', title: 'PERSONAL TIER - Art Battle Patrons Circle', bgColor: 'var(--accent-2)', textColor: 'var(--accent-11)' },
+                        { key: 'addon', title: 'ADD-ONS - Enhance Any Package', bgColor: 'var(--orange-2)', textColor: 'var(--orange-11)' }
+                      ].map(tier => groupedTemplates[tier.key].length > 0 && (
+                        <React.Fragment key={tier.key}>
+                          <Table.Row style={{ background: tier.bgColor }}>
                             <Table.Cell colSpan={4}>
-                              <Text weight="bold" size="2" style={{ color: 'var(--accent-11)' }}>
-                                PERSONAL TIER - Art Battle Patrons Circle
+                              <Text weight="bold" size="2" style={{ color: tier.textColor }}>
+                                {tier.title}
                               </Text>
                             </Table.Cell>
                           </Table.Row>
-                          {groupedTemplates.personal.map(template => {
+                          {groupedTemplates[tier.key].map(template => {
                             const priceData = cityPrices[template.id] || {};
                             const hasPricing = priceData.price && parseFloat(priceData.price) > 0;
+                            const isExpanded = expandedPackages[template.id];
 
                             return (
-                              <Table.Row key={template.id}>
-                                <Table.Cell>
-                                  <Box>
-                                    <Text weight="bold">{template.name}</Text>
-                                  </Box>
-                                </Table.Cell>
+                              <React.Fragment key={template.id}>
+                                <Table.Row>
+                                  <Table.Cell>
+                                    <Flex direction="column" gap="2">
+                                      <Flex align="center" gap="2">
+                                        <Text weight="bold">{template.name}</Text>
+                                        <IconButton
+                                          size="1"
+                                          variant="ghost"
+                                          onClick={() => toggleBenefits(template.id)}
+                                        >
+                                          {isExpanded ? <ChevronUpIcon /> : <ChevronDownIcon />}
+                                        </IconButton>
+                                      </Flex>
+                                      {template.description && (
+                                        <Text size="1" color="gray">{template.description}</Text>
+                                      )}
+                                    </Flex>
+                                  </Table.Cell>
 
-                                <Table.Cell>
-                                  <TextField.Root
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    value={priceData.price || ''}
-                                    onChange={(e) => handlePriceChange(template.id, 'price', e.target.value)}
-                                    placeholder="0.00"
-                                    size="2"
-                                  />
-                                </Table.Cell>
+                                  <Table.Cell>
+                                    <TextField.Root
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      value={priceData.price || ''}
+                                      onChange={(e) => handlePriceChange(template.id, 'price', e.target.value)}
+                                      placeholder="0.00"
+                                      size="2"
+                                    />
+                                  </Table.Cell>
 
-                                <Table.Cell>
-                                  <Select.Root
-                                    value={priceData.currency || 'USD'}
-                                    onValueChange={(value) => handlePriceChange(template.id, 'currency', value)}
-                                    size="2"
-                                  >
-                                    <Select.Trigger style={{ width: '100%' }} />
-                                    <Select.Content>
-                                      <Select.Item value="USD">USD</Select.Item>
-                                      <Select.Item value="CAD">CAD</Select.Item>
-                                      <Select.Item value="EUR">EUR</Select.Item>
-                                      <Select.Item value="GBP">GBP</Select.Item>
-                                      <Select.Item value="AUD">AUD</Select.Item>
-                                    </Select.Content>
-                                  </Select.Root>
-                                </Table.Cell>
+                                  <Table.Cell>
+                                    <Select.Root
+                                      value={priceData.currency || 'USD'}
+                                      onValueChange={(value) => handlePriceChange(template.id, 'currency', value)}
+                                      size="2"
+                                    >
+                                      <Select.Trigger style={{ width: '100%' }} />
+                                      <Select.Content>
+                                        <Select.Item value="USD">USD</Select.Item>
+                                        <Select.Item value="CAD">CAD</Select.Item>
+                                        <Select.Item value="EUR">EUR</Select.Item>
+                                        <Select.Item value="GBP">GBP</Select.Item>
+                                        <Select.Item value="AUD">AUD</Select.Item>
+                                      </Select.Content>
+                                    </Select.Root>
+                                  </Table.Cell>
 
-                                <Table.Cell>
-                                  {hasPricing ? (
-                                    <CheckIcon color="green" />
-                                  ) : (
-                                    <Cross2Icon color="gray" />
-                                  )}
-                                </Table.Cell>
-                              </Table.Row>
+                                  <Table.Cell>
+                                    {hasPricing ? (
+                                      <CheckIcon color="green" />
+                                    ) : (
+                                      <Cross2Icon color="gray" />
+                                    )}
+                                  </Table.Cell>
+                                </Table.Row>
+
+                                {/* Benefits Dropdown Row */}
+                                {isExpanded && template.benefits && template.benefits.length > 0 && (
+                                  <Table.Row style={{ background: 'var(--gray-2)' }}>
+                                    <Table.Cell colSpan={4}>
+                                      <Box p="3">
+                                        <Text size="2" weight="bold" mb="2">Benefits:</Text>
+                                        <Flex direction="column" gap="1">
+                                          {template.benefits.map((benefit, idx) => (
+                                            <Flex key={idx} gap="2" align="start">
+                                              <Text size="2" style={{ color: 'var(--green-9)' }}>•</Text>
+                                              <Text size="2">{benefit}</Text>
+                                            </Flex>
+                                          ))}
+                                        </Flex>
+                                      </Box>
+                                    </Table.Cell>
+                                  </Table.Row>
+                                )}
+                              </React.Fragment>
                             );
                           })}
-                        </>
-                      )}
-
-                      {/* Brand Tier */}
-                      {groupedTemplates.brand.length > 0 && (
-                        <>
-                          <Table.Row style={{ background: 'var(--accent-2)' }}>
-                            <Table.Cell colSpan={4}>
-                              <Text weight="bold" size="2" style={{ color: 'var(--accent-11)' }}>
-                                BRAND TIER - Connect Art, Culture & Community
-                              </Text>
-                            </Table.Cell>
-                          </Table.Row>
-                          {groupedTemplates.brand.map(template => {
-                            const priceData = cityPrices[template.id] || {};
-                            const hasPricing = priceData.price && parseFloat(priceData.price) > 0;
-
-                            return (
-                              <Table.Row key={template.id}>
-                                <Table.Cell>
-                                  <Box>
-                                    <Text weight="bold">{template.name}</Text>
-                                  </Box>
-                                </Table.Cell>
-
-                                <Table.Cell>
-                                  <TextField.Root
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    value={priceData.price || ''}
-                                    onChange={(e) => handlePriceChange(template.id, 'price', e.target.value)}
-                                    placeholder="0.00"
-                                    size="2"
-                                  />
-                                </Table.Cell>
-
-                                <Table.Cell>
-                                  <Select.Root
-                                    value={priceData.currency || 'USD'}
-                                    onValueChange={(value) => handlePriceChange(template.id, 'currency', value)}
-                                    size="2"
-                                  >
-                                    <Select.Trigger style={{ width: '100%' }} />
-                                    <Select.Content>
-                                      <Select.Item value="USD">USD</Select.Item>
-                                      <Select.Item value="CAD">CAD</Select.Item>
-                                      <Select.Item value="EUR">EUR</Select.Item>
-                                      <Select.Item value="GBP">GBP</Select.Item>
-                                      <Select.Item value="AUD">AUD</Select.Item>
-                                    </Select.Content>
-                                  </Select.Root>
-                                </Table.Cell>
-
-                                <Table.Cell>
-                                  {hasPricing ? (
-                                    <CheckIcon color="green" />
-                                  ) : (
-                                    <Cross2Icon color="gray" />
-                                  )}
-                                </Table.Cell>
-                              </Table.Row>
-                            );
-                          })}
-                        </>
-                      )}
-
-                      {/* Tactical Tier */}
-                      {groupedTemplates.business.length > 0 && (
-                        <>
-                          <Table.Row style={{ background: 'var(--accent-2)' }}>
-                            <Table.Cell colSpan={4}>
-                              <Text weight="bold" size="2" style={{ color: 'var(--accent-11)' }}>
-                                TACTICAL TIER - Buy Specific Impact Moments
-                              </Text>
-                            </Table.Cell>
-                          </Table.Row>
-                          {groupedTemplates.business.map(template => {
-                            const priceData = cityPrices[template.id] || {};
-                            const hasPricing = priceData.price && parseFloat(priceData.price) > 0;
-
-                            return (
-                              <Table.Row key={template.id}>
-                                <Table.Cell>
-                                  <Box>
-                                    <Text weight="bold">{template.name}</Text>
-                                  </Box>
-                                </Table.Cell>
-
-                                <Table.Cell>
-                                  <TextField.Root
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    value={priceData.price || ''}
-                                    onChange={(e) => handlePriceChange(template.id, 'price', e.target.value)}
-                                    placeholder="0.00"
-                                    size="2"
-                                  />
-                                </Table.Cell>
-
-                                <Table.Cell>
-                                  <Select.Root
-                                    value={priceData.currency || 'USD'}
-                                    onValueChange={(value) => handlePriceChange(template.id, 'currency', value)}
-                                    size="2"
-                                  >
-                                    <Select.Trigger style={{ width: '100%' }} />
-                                    <Select.Content>
-                                      <Select.Item value="USD">USD</Select.Item>
-                                      <Select.Item value="CAD">CAD</Select.Item>
-                                      <Select.Item value="EUR">EUR</Select.Item>
-                                      <Select.Item value="GBP">GBP</Select.Item>
-                                      <Select.Item value="AUD">AUD</Select.Item>
-                                    </Select.Content>
-                                  </Select.Root>
-                                </Table.Cell>
-
-                                <Table.Cell>
-                                  {hasPricing ? (
-                                    <CheckIcon color="green" />
-                                  ) : (
-                                    <Cross2Icon color="gray" />
-                                  )}
-                                </Table.Cell>
-                              </Table.Row>
-                            );
-                          })}
-                        </>
-                      )}
-
-                      {/* Add-ons */}
-                      {groupedTemplates.addon.length > 0 && (
-                        <>
-                          <Table.Row style={{ background: 'var(--orange-2)' }}>
-                            <Table.Cell colSpan={4}>
-                              <Text weight="bold" size="2" style={{ color: 'var(--orange-11)' }}>
-                                ADD-ONS - Enhance Any Package
-                              </Text>
-                            </Table.Cell>
-                          </Table.Row>
-                          {groupedTemplates.addon.map(template => {
-                            const priceData = cityPrices[template.id] || {};
-                            const hasPricing = priceData.price && parseFloat(priceData.price) > 0;
-
-                            return (
-                              <Table.Row key={template.id}>
-                                <Table.Cell>
-                                  <Box>
-                                    <Text weight="bold">{template.name}</Text>
-                                  </Box>
-                                </Table.Cell>
-
-                                <Table.Cell>
-                                  <TextField.Root
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    value={priceData.price || ''}
-                                    onChange={(e) => handlePriceChange(template.id, 'price', e.target.value)}
-                                    placeholder="0.00"
-                                    size="2"
-                                  />
-                                </Table.Cell>
-
-                                <Table.Cell>
-                                  <Select.Root
-                                    value={priceData.currency || 'USD'}
-                                    onValueChange={(value) => handlePriceChange(template.id, 'currency', value)}
-                                    size="2"
-                                  >
-                                    <Select.Trigger style={{ width: '100%' }} />
-                                    <Select.Content>
-                                      <Select.Item value="USD">USD</Select.Item>
-                                      <Select.Item value="CAD">CAD</Select.Item>
-                                      <Select.Item value="EUR">EUR</Select.Item>
-                                      <Select.Item value="GBP">GBP</Select.Item>
-                                      <Select.Item value="AUD">AUD</Select.Item>
-                                    </Select.Content>
-                                  </Select.Root>
-                                </Table.Cell>
-
-                                <Table.Cell>
-                                  {hasPricing ? (
-                                    <CheckIcon color="green" />
-                                  ) : (
-                                    <Cross2Icon color="gray" />
-                                  )}
-                                </Table.Cell>
-                              </Table.Row>
-                            );
-                          })}
-                        </>
-                      )}
+                        </React.Fragment>
+                      ))}
                     </Table.Body>
                   </Table.Root>
 
