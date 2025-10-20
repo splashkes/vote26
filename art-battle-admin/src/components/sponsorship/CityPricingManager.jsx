@@ -40,8 +40,8 @@ const CityPricingManager = () => {
   const [cityPrices, setCityPrices] = useState({});
   const [hasChanges, setHasChanges] = useState(false);
 
-  // UI state
-  const [showHiddenPackages, setShowHiddenPackages] = useState(false);
+  // UI state - hidden packages section always visible by default
+  const [showHiddenPackages, setShowHiddenPackages] = useState(true);
 
   // Recently configured cities
   const [recentCities, setRecentCities] = useState([]);
@@ -173,6 +173,13 @@ const CityPricingManager = () => {
 
   const handleHidePackage = (templateId) => {
     handlePriceChange(templateId, 'price', '0');
+    // Auto-expand hidden section when hiding a package
+    setShowHiddenPackages(true);
+  };
+
+  const handleRestorePackage = (templateId, defaultPrice = '') => {
+    // Restore with a default price or empty so user can set it
+    handlePriceChange(templateId, 'price', defaultPrice);
   };
 
   const getActivePackages = () => {
@@ -380,15 +387,14 @@ const CityPricingManager = () => {
                         </Table.Cell>
 
                         <Table.Cell>
-                          <IconButton
+                          <Button
                             size="1"
-                            variant="ghost"
+                            variant="soft"
                             color="red"
                             onClick={() => handleHidePackage(template.id)}
-                            title="Hide package (set to zero)"
                           >
-                            <Cross2Icon />
-                          </IconButton>
+                            <Cross2Icon /> Hide
+                          </Button>
                         </Table.Cell>
                       </Table.Row>
                     );
@@ -400,8 +406,8 @@ const CityPricingManager = () => {
 
           {/* Hidden Packages */}
           {getHiddenPackages().length > 0 && (
-            <>
-              <Separator size="4" mb="3" />
+            <Box mt="6">
+              <Separator size="4" mb="4" />
               <Flex
                 align="center"
                 justify="between"
@@ -412,6 +418,7 @@ const CityPricingManager = () => {
                 <Flex align="center" gap="2">
                   <Heading size="3">Hidden Packages</Heading>
                   <Badge color="gray" size="1">{getHiddenPackages().length}</Badge>
+                  <Text size="1" color="gray">(Not visible to prospects)</Text>
                 </Flex>
                 <IconButton size="1" variant="ghost">
                   {showHiddenPackages ? <ChevronUpIcon /> : <ChevronDownIcon />}
@@ -420,9 +427,11 @@ const CityPricingManager = () => {
 
               {showHiddenPackages && (
                 <>
-                  <Text size="2" color="gray" mb="3" style={{ display: 'block' }}>
-                    These packages have no price set and will not appear in sponsor invites. Set a price to make them available.
-                  </Text>
+                  <Callout.Root color="gray" size="1" mb="3">
+                    <Callout.Text>
+                      These packages are hidden from sponsor invites. Set a price or click "Restore" to make them available again.
+                    </Callout.Text>
+                  </Callout.Root>
                   <Table.Root variant="surface">
                     <Table.Header>
                       <Table.Row>
@@ -430,6 +439,7 @@ const CityPricingManager = () => {
                         <Table.ColumnHeaderCell>Category</Table.ColumnHeaderCell>
                         <Table.ColumnHeaderCell width="150px">Price</Table.ColumnHeaderCell>
                         <Table.ColumnHeaderCell width="120px">Currency</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell width="80px"></Table.ColumnHeaderCell>
                       </Table.Row>
                     </Table.Header>
 
@@ -438,10 +448,10 @@ const CityPricingManager = () => {
                         const priceData = cityPrices[template.id] || {};
 
                         return (
-                          <Table.Row key={template.id} style={{ opacity: 0.6 }}>
+                          <Table.Row key={template.id} style={{ backgroundColor: 'var(--gray-2)' }}>
                             <Table.Cell>
                               <Box>
-                                <Text weight="bold">{template.name}</Text>
+                                <Text weight="bold" color="gray">{template.name}</Text>
                                 {template.description && (
                                   <Text size="1" color="gray" style={{ display: 'block' }}>
                                     {template.description.substring(0, 60)}...
@@ -459,6 +469,7 @@ const CityPricingManager = () => {
                                   template.category === 'addon' ? 'orange' : 'gray'
                                 }
                                 size="1"
+                                variant="soft"
                               >
                                 {template.category === 'personal' ? 'Personal' :
                                  template.category === 'brand' ? 'Brand' :
@@ -475,7 +486,7 @@ const CityPricingManager = () => {
                                 min="0"
                                 value={priceData.price || ''}
                                 onChange={(e) => handlePriceChange(template.id, 'price', e.target.value)}
-                                placeholder="0.00"
+                                placeholder="Set price to restore"
                                 size="2"
                               />
                             </Table.Cell>
@@ -497,6 +508,17 @@ const CityPricingManager = () => {
                                 </Select.Content>
                               </Select.Root>
                             </Table.Cell>
+
+                            <Table.Cell>
+                              <Button
+                                size="1"
+                                variant="soft"
+                                color="green"
+                                onClick={() => handleRestorePackage(template.id, '100')}
+                              >
+                                + Restore
+                              </Button>
+                            </Table.Cell>
                           </Table.Row>
                         );
                       })}
@@ -504,7 +526,7 @@ const CityPricingManager = () => {
                   </Table.Root>
                 </>
               )}
-            </>
+            </Box>
           )}
 
           {hasChanges && (
