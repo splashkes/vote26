@@ -1,0 +1,183 @@
+-- Fix get_enhanced_admin_artists_owed to match ledger calculation
+-- ISSUE: Same bugs as ready_to_pay - counts sold/closed art and cancelled payments
+--
+-- Current bugs:
+-- 1. art_sales CTE: WHERE a.status IN ('sold', 'paid', 'closed') - counts unpaid art
+-- 2. payment_debits CTE: No status filter - counts cancelled payments
+--
+-- Should match ledger:
+-- 1. Only count 'paid' art (ledgerAmount = art.status === 'paid' ? commission : 0)
+-- 2. Exclude 'cancelled' payments
+
+DROP FUNCTION IF EXISTS public.get_enhanced_admin_artists_owed();
+
+CREATE OR REPLACE FUNCTION public.get_enhanced_admin_artists_owed()
+RETURNS TABLE(
+    artist_id uuid,
+    artist_name text,
+    artist_email text,
+    artist_phone text,
+    artist_entry_id integer,
+    artist_country text,
+    estimated_balance numeric,
+    balance_currency text,
+    currency_symbol text,
+    has_mixed_currencies boolean,
+    payment_account_status text,
+    stripe_recipient_id text,
+    recent_city text,
+    recent_contests integer,
+    invitation_count integer,
+    latest_invitation_method text,
+    latest_invitation_date timestamp with time zone,
+    time_since_latest text,
+    onboarding_status text,
+    manual_payment_override boolean
+)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+  WITH art_sales_by_currency AS (
+    SELECT
+      ap.id as artist_id,
+      e.currency as sale_currency,
+      SUM(COALESCE(a.final_price, a.current_bid, 0) * e.artist_auction_portion) as sales_total
+    FROM art a
+    JOIN artist_profiles ap ON a.artist_id = ap.id
+    JOIN events e ON a.event_id = e.id
+    -- FIXED: Only count 'paid' to match ledger (line 188: ledgerAmount = status === 'paid' ? commission : 0)
+    -- Previous: WHERE a.status IN ('sold', 'paid', 'closed')
+    WHERE a.status = 'paid'
+      AND COALESCE(a.final_price, a.current_bid, 0) > 0
+    GROUP BY ap.id, e.currency
+  ),
+  artist_currency_summary AS (
+    SELECT
+      art_sales_by_currency.artist_id,
+      (ARRAY_AGG(sale_currency ORDER BY sales_total DESC))[1] as primary_currency,
+      MAX(sales_total) as primary_balance,
+      COUNT(DISTINCT sale_currency) > 1 as has_mixed_currencies,
+      SUM(sales_total) as total_all_currencies
+    FROM art_sales_by_currency
+    GROUP BY art_sales_by_currency.artist_id
+  ),
+  payment_debits AS (
+    SELECT
+      ap.artist_profile_id,
+      -- FIXED: Exclude cancelled payments to match ledger (line 300: if status === 'cancelled' continue)
+      -- Previous: No status filter - included ALL payments
+      SUM(ap.gross_amount) as debits_total
+    FROM artist_payments ap
+    WHERE ap.status != 'cancelled'
+    GROUP BY ap.artist_profile_id
+  ),
+  recent_event_info AS (
+    SELECT
+      rc.artist_id,
+      c.name as event_city,
+      COUNT(DISTINCT e.id) as contest_count,
+      ROW_NUMBER() OVER (PARTITION BY rc.artist_id ORDER BY MAX(e.event_start_datetime) DESC) as rn
+    FROM round_contestants rc
+    JOIN rounds r ON rc.round_id = r.id
+    JOIN events e ON r.event_id = e.id
+    LEFT JOIN cities c ON e.city_id = c.id
+    WHERE e.event_start_datetime >= NOW() - INTERVAL '90 days'
+    GROUP BY rc.artist_id, c.name
+  ),
+  latest_invitations AS (
+    SELECT
+      psi.artist_profile_id,
+      COUNT(*) as invitation_count,
+      MAX(psi.sent_at) as latest_invitation_date,
+      (
+        SELECT psi2.invitation_method
+        FROM payment_setup_invitations psi2
+        WHERE psi2.artist_profile_id = psi.artist_profile_id
+        ORDER BY psi2.sent_at DESC
+        LIMIT 1
+      ) as latest_invitation_method,
+      CASE
+        WHEN MAX(psi.sent_at) > NOW() - INTERVAL '1 hour' THEN
+          EXTRACT(EPOCH FROM (NOW() - MAX(psi.sent_at)))::int || 'm ago'
+        WHEN MAX(psi.sent_at) > NOW() - INTERVAL '1 day' THEN
+          EXTRACT(EPOCH FROM (NOW() - MAX(psi.sent_at)))::int / 3600 || 'h ago'
+        ELSE
+          EXTRACT(EPOCH FROM (NOW() - MAX(psi.sent_at)))::int / 86400 || 'd ago'
+      END as time_since_latest
+    FROM payment_setup_invitations psi
+    WHERE psi.sent_at >= NOW() - INTERVAL '30 days'
+    GROUP BY psi.artist_profile_id
+  )
+  SELECT
+    ap.id as artist_id,
+    ap.name as artist_name,
+    ap.email as artist_email,
+    ap.phone as artist_phone,
+    ap.entry_id as artist_entry_id,
+    ap.country as artist_country,
+    -- Balance calculation now matches ledger exactly
+    GREATEST(0, COALESCE(acs.total_all_currencies, 0) - COALESCE(pd.debits_total, 0)) as estimated_balance,
+    COALESCE(acs.primary_currency, 'USD') as balance_currency,
+    COALESCE(
+      CASE acs.primary_currency
+        WHEN 'USD' THEN '$'
+        WHEN 'CAD' THEN 'C$'
+        WHEN 'EUR' THEN '€'
+        WHEN 'GBP' THEN '£'
+        WHEN 'AUD' THEN 'A$'
+        WHEN 'NZD' THEN 'NZ$'
+        WHEN 'THB' THEN '฿'
+        WHEN 'JPY' THEN '¥'
+        ELSE '$'
+      END,
+      '$'
+    ) as currency_symbol,
+    COALESCE(acs.has_mixed_currencies, false) as has_mixed_currencies,
+    CASE
+      WHEN agp.status = 'ready' AND agp.stripe_recipient_id IS NOT NULL THEN 'ready'
+      WHEN agp.status IN ('pending_verification', 'restricted', 'blocked') THEN 'in_progress'
+      WHEN li.invitation_count > 0 THEN 'invited'
+      ELSE 'no_account'
+    END as payment_account_status,
+    agp.stripe_recipient_id,
+    COALESCE(rei.event_city, 'No recent events') as recent_city,
+    COALESCE(rei.contest_count, 0)::integer as recent_contests,
+    COALESCE(li.invitation_count, 0)::integer as invitation_count,
+    li.latest_invitation_method,
+    li.latest_invitation_date,
+    li.time_since_latest,
+    agp.status as onboarding_status,
+    COALESCE(ap.manual_payment_override, false) as manual_payment_override
+  FROM artist_profiles ap
+  LEFT JOIN artist_currency_summary acs ON ap.id = acs.artist_id
+  LEFT JOIN payment_debits pd ON ap.id = pd.artist_profile_id
+  LEFT JOIN recent_event_info rei ON ap.id = rei.artist_id AND rei.rn = 1
+  LEFT JOIN latest_invitations li ON ap.id = li.artist_profile_id
+  LEFT JOIN artist_global_payments agp ON ap.id = agp.artist_profile_id
+  WHERE GREATEST(0, COALESCE(acs.total_all_currencies, 0) - COALESCE(pd.debits_total, 0)) > 0.01
+  ORDER BY estimated_balance DESC;
+$function$;
+
+-- Grant permissions
+GRANT EXECUTE ON FUNCTION get_enhanced_admin_artists_owed() TO authenticated;
+
+-- Log migration completion
+INSERT INTO system_logs (service, operation, level, message, request_data)
+VALUES (
+    'migration',
+    'fix_artists_owed_match_ledger',
+    'info',
+    'Updated get_enhanced_admin_artists_owed function to match ledger calculation',
+    jsonb_build_object(
+        'migration_file', '20251019_fix_artists_owed_match_ledger.sql',
+        'applied_at', NOW()::text,
+        'fixes', jsonb_build_array(
+            'art_sales_by_currency: Changed from status IN (sold, paid, closed) to status = paid',
+            'payment_debits: Added WHERE status != cancelled'
+        ),
+        'reasoning', 'Must match ledger logic: only paid art counts as credits, cancelled payments excluded from debits',
+        'ledger_reference', 'artist-account-ledger/index.ts:188 and :300',
+        'impact', 'Artists with sold (unpaid) or closed art will no longer show inflated balances in Artists Owed Money tab'
+    )
+);

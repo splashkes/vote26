@@ -406,8 +406,8 @@ const InvitesAndDiscounts = () => {
                                 <Box style={{ flex: 1 }}>
                                   <Flex align="center" gap="2" mb="1">
                                     <Text weight="bold" size="3">{template.name}</Text>
-                                    <Badge size="1" color={template.category === 'main' ? 'blue' : 'orange'}>
-                                      {template.category === 'main' ? 'Package' : 'Add-on'}
+                                    <Badge size="1" color={template.category === 'addon' ? 'orange' : 'blue'}>
+                                      {template.category === 'addon' ? 'Add-on' : template.category.charAt(0).toUpperCase() + template.category.slice(1)}
                                     </Badge>
                                     {hasPricing && <CheckIcon color="green" />}
                                   </Flex>

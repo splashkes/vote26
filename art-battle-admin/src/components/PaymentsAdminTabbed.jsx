@@ -649,30 +649,83 @@ const PaymentsAdminTabbed = () => {
       setProcessingPayments(true);
       setError('Processing payments...');
 
-      console.log('📡 Calling process-pending-payments function with:', {
-        dry_run: false,
-        limit: paymentLimit
-      });
+      // Query for pending payments with status='processing' and payment_type='automated'
+      const { data: pendingPayments, error: queryError } = await supabase
+        .from('artist_payments')
+        .select('id, artist_profile_id, gross_amount, currency, artist_profiles!inner(name)')
+        .eq('status', 'processing')
+        .eq('payment_type', 'automated')
+        .not('metadata->stripe_account_id', 'is', null)
+        .order('created_at', { ascending: true })
+        .limit(paymentLimit);
 
-      const { data, error } = await supabase.functions.invoke('process-pending-payments', {
-        body: {
-          dry_run: false, // Always live mode now
-          limit: paymentLimit
+      if (queryError) {
+        throw new Error(`Failed to fetch pending payments: ${queryError.message}`);
+      }
+
+      if (!pendingPayments || pendingPayments.length === 0) {
+        setError('No pending payments found to process');
+        return;
+      }
+
+      console.log(`📊 Found ${pendingPayments.length} pending payments to process`);
+
+      // Process each payment individually using stripe-global-payments-payout
+      const results = [];
+      let successful_count = 0;
+      let failed_count = 0;
+
+      for (const payment of pendingPayments) {
+        try {
+          const { data, error } = await supabase.functions.invoke('stripe-global-payments-payout', {
+            body: {
+              artist_payment_id: payment.id
+            }
+          });
+
+          if (error) {
+            throw error;
+          }
+
+          successful_count++;
+          results.push({
+            payment_id: payment.id,
+            artist_name: payment.artist_profiles.name,
+            amount: data.payout?.target_amount,
+            currency: data.payout?.target_currency,
+            status: 'success',
+            stripe_transfer_id: data.payout?.stripe_transfer_id,
+            fx_used: data.payout?.fx_used
+          });
+        } catch (err) {
+          failed_count++;
+          results.push({
+            payment_id: payment.id,
+            artist_name: payment.artist_profiles.name,
+            amount: payment.gross_amount,
+            currency: payment.currency,
+            status: 'failed',
+            error: err.message
+          });
         }
-      });
+      }
 
-      console.log('📨 Function response:', { data, error });
+      const processedData = {
+        success: true,
+        processed_count: pendingPayments.length,
+        successful_count,
+        failed_count,
+        payments: results
+      };
 
-      if (error) throw error;
-
-      setPaymentProcessResults(data);
+      setPaymentProcessResults(processedData);
 
       // Create detailed debug output for UI display
       const debugOutput = `
-✅ Processing completed: ${data.processed_count} payments processed (${data.successful_count || 0} successful, ${data.failed_count || 0} failed)
+✅ Processing completed: ${processedData.processed_count} payments processed (${processedData.successful_count || 0} successful, ${processedData.failed_count || 0} failed)
 
 📊 FULL DEBUG OUTPUT:
-${JSON.stringify(data, null, 2)}
+${JSON.stringify(processedData, null, 2)}
       `.trim();
 
       setError(debugOutput);
@@ -738,32 +791,74 @@ ${JSON.stringify(parsed.debug, null, 2)}`;
         return;
       }
 
-      // Call the process-pending-payments function (it looks for 'processing' status)
-      const { data, error } = await supabase.functions.invoke('process-pending-payments', {
-        body: {
-          dry_run: false,
-          limit: Math.min(paymentLimit, processingArtists.length)
+      // Process each payment individually using stripe-global-payments-payout
+      const limit = Math.min(paymentLimit, processingArtists.length);
+      const results = [];
+      let successful_count = 0;
+      let failed_count = 0;
+
+      for (let i = 0; i < limit; i++) {
+        const artist = processingArtists[i];
+        const paymentId = artist.payment_id;
+
+        if (!paymentId) {
+          console.log(`⚠️ Skipping ${artist.artist_profiles.name}: No payment ID`);
+          failed_count++;
+          results.push({
+            payment_id: null,
+            artist_name: artist.artist_profiles.name,
+            status: 'failed',
+            error: 'No payment ID found'
+          });
+          continue;
         }
-      });
 
-      console.log('📨 Function response:', { data, error });
+        try {
+          const { data, error } = await supabase.functions.invoke('stripe-global-payments-payout', {
+            body: {
+              artist_payment_id: paymentId
+            }
+          });
 
-      if (error) {
-        throw error;
+          if (error) {
+            throw error;
+          }
+
+          successful_count++;
+          results.push({
+            payment_id: paymentId,
+            artist_name: artist.artist_profiles.name,
+            amount: data.payout?.target_amount,
+            currency: data.payout?.target_currency,
+            status: 'success',
+            stripe_transfer_id: data.payout?.stripe_transfer_id,
+            fx_used: data.payout?.fx_used
+          });
+        } catch (err) {
+          failed_count++;
+          results.push({
+            payment_id: paymentId,
+            artist_name: artist.artist_profiles.name,
+            status: 'failed',
+            error: err.message
+          });
+        }
       }
 
-      // Display detailed results with appropriate icon and direct API log links
-      const hasFailures = data.failed_count > 0;
+      // Display detailed results
+      const hasFailures = failed_count > 0;
       const statusIcon = hasFailures ? '❌' : '✅';
-      let resultMessage = `${statusIcon} Processing completed: ${data.processed_count} payments processed`;
-      if (data.successful_count !== undefined) {
-        resultMessage += ` (${data.successful_count} successful, ${data.failed_count || 0} failed)`;
-      }
-
-      // Keep message clean - API buttons will appear right below
+      let resultMessage = `${statusIcon} Processing completed: ${limit} payments processed`;
+      resultMessage += ` (${successful_count} successful, ${failed_count} failed)`;
 
       setError(resultMessage);
-      setPaymentProcessResults(data);
+      setPaymentProcessResults({
+        success: true,
+        processed_count: limit,
+        successful_count,
+        failed_count,
+        payments: results
+      });
 
       // Refresh data to show updated statuses - this is NEEDED for payment methods and button counts
       await fetchEnhancedData();
@@ -906,12 +1001,10 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
         throw new Error('No payment ID found for this artist');
       }
 
-      // Call the process-pending-payments function with specific payment ID
-      const { data, error } = await supabase.functions.invoke('process-pending-payments', {
+      // Call the stripe-global-payments-payout function with artist_payment_id
+      const { data, error } = await supabase.functions.invoke('stripe-global-payments-payout', {
         body: {
-          dry_run: false,
-          limit: 1,
-          payment_id: paymentId
+          artist_payment_id: paymentId
         }
       });
 
@@ -921,8 +1014,9 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
         throw error;
       }
 
-      // Show success message (use successful_count and failed_count from edge function response)
-      setError(`✅ Payment processed for ${artist.artist_profiles.name}: ${data.successful_count || data.success_count || 0} successful, ${data.failed_count || 0} failed`);
+      // Show success message with FX details if available
+      const fxUsed = data.payout?.fx_used ? ' (FX conversion used)' : '';
+      setError(`✅ Payment processed for ${artist.artist_profiles.name}: ${data.payout?.target_amount} ${data.payout?.target_currency}${fxUsed}`);
 
       // Refresh data to show updated status
       await fetchEnhancedData();
@@ -946,37 +1040,46 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
       setProcessingPayment(true);
       setError('');
 
-      const paymentId = artist.payment_id;
+      const artistProfileId = artist.artist_profiles.id;
 
-      if (!paymentId) {
-        throw new Error('No payment ID found for this artist');
+      if (!artistProfileId) {
+        throw new Error('No artist profile ID found');
       }
 
-      // Delete the payment record to reset their status
-      const { error: deleteError } = await supabase
-        .from('artist_payments')
-        .delete()
-        .eq('id', paymentId);
+      // Use edge function to reset payment status
+      const { data, error } = await supabase.functions.invoke('admin-reset-payment-status', {
+        body: {
+          artist_profile_id: artistProfileId,
+          artist_name: artist.artist_profiles.name
+        }
+      });
 
-      if (deleteError) {
-        throw deleteError;
+      // Check for edge function errors and parse debug info
+      if (error) {
+        if (error.context) {
+          try {
+            const responseText = await error.context.text();
+            console.error('Edge function error response:', responseText);
+            const parsed = JSON.parse(responseText);
+            if (parsed.debug) {
+              console.error('Edge function debug info:', parsed.debug);
+            }
+            throw new Error(parsed.error || error.message);
+          } catch (parseError) {
+            console.error('Could not parse error response:', parseError);
+          }
+        }
+        throw error;
       }
 
-      // Update artist profile to reset payment account status if it's in_progress
-      const { error: updateError } = await supabase
-        .from('artist_profiles')
-        .update({
-          stripe_recipient_id: null,
-          payment_account_status: null
-        })
-        .eq('id', artist.artist_profiles.id)
-        .eq('payment_account_status', 'in_progress');
-
-      if (updateError) {
-        console.error('Warning: Could not reset artist profile status:', updateError);
+      if (!data?.success) {
+        if (data?.debug) {
+          console.error('Edge function debug info:', data.debug);
+        }
+        throw new Error(data?.error || 'Failed to reset payment status');
       }
 
-      setError(`✅ Payment status reset for ${artist.artist_profiles.name}. They have been removed from In Progress.`);
+      setError(`✅ ${data.message}`);
 
       // Refresh data to show updated status
       await fetchEnhancedData();

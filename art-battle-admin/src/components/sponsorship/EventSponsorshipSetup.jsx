@@ -185,6 +185,19 @@ const EventSponsorshipSetup = ({ event }) => {
     return getPricedCount() > 0 && !hasChanges;
   };
 
+  // Helper to capitalize first letter
+  const capitalize = (str) => {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+  };
+
+  // Group templates by category
+  const groupedTemplates = {
+    personal: templates.filter(t => t.category === 'personal'),
+    brand: templates.filter(t => t.category === 'brand'),
+    business: templates.filter(t => t.category === 'business'),
+    addon: templates.filter(t => t.category === 'addon')
+  };
+
   if (!event.cities) {
     return (
       <Card>
@@ -291,60 +304,261 @@ const EventSponsorshipSetup = ({ event }) => {
                     </Table.Header>
 
                     <Table.Body>
-                      {templates.map(template => {
-                        const priceData = cityPrices[template.id] || {};
-                        const hasPricing = priceData.price && parseFloat(priceData.price) > 0;
-
-                        return (
-                          <Table.Row key={template.id}>
-                            <Table.Cell>
-                              <Box>
-                                <Text weight="bold">{template.name}</Text>
-                                <Badge size="1" color={template.category === 'main' ? 'blue' : 'orange'} ml="1">
-                                  {template.category === 'main' ? 'Package' : 'Add-on'}
-                                </Badge>
-                              </Box>
-                            </Table.Cell>
-
-                            <Table.Cell>
-                              <TextField.Root
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                value={priceData.price || ''}
-                                onChange={(e) => handlePriceChange(template.id, 'price', e.target.value)}
-                                placeholder="0.00"
-                                size="2"
-                              />
-                            </Table.Cell>
-
-                            <Table.Cell>
-                              <Select.Root
-                                value={priceData.currency || 'USD'}
-                                onValueChange={(value) => handlePriceChange(template.id, 'currency', value)}
-                                size="2"
-                              >
-                                <Select.Trigger style={{ width: '100%' }} />
-                                <Select.Content>
-                                  <Select.Item value="USD">USD</Select.Item>
-                                  <Select.Item value="CAD">CAD</Select.Item>
-                                  <Select.Item value="EUR">EUR</Select.Item>
-                                  <Select.Item value="GBP">GBP</Select.Item>
-                                  <Select.Item value="AUD">AUD</Select.Item>
-                                </Select.Content>
-                              </Select.Root>
-                            </Table.Cell>
-
-                            <Table.Cell>
-                              {hasPricing ? (
-                                <CheckIcon color="green" />
-                              ) : (
-                                <Cross2Icon color="gray" />
-                              )}
+                      {/* Personal Tier */}
+                      {groupedTemplates.personal.length > 0 && (
+                        <>
+                          <Table.Row style={{ background: 'var(--accent-2)' }}>
+                            <Table.Cell colSpan={4}>
+                              <Text weight="bold" size="2" style={{ color: 'var(--accent-11)' }}>
+                                PERSONAL TIER - Art Battle Patrons Circle
+                              </Text>
                             </Table.Cell>
                           </Table.Row>
-                        );
-                      })}
+                          {groupedTemplates.personal.map(template => {
+                            const priceData = cityPrices[template.id] || {};
+                            const hasPricing = priceData.price && parseFloat(priceData.price) > 0;
+
+                            return (
+                              <Table.Row key={template.id}>
+                                <Table.Cell>
+                                  <Box>
+                                    <Text weight="bold">{template.name}</Text>
+                                  </Box>
+                                </Table.Cell>
+
+                                <Table.Cell>
+                                  <TextField.Root
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={priceData.price || ''}
+                                    onChange={(e) => handlePriceChange(template.id, 'price', e.target.value)}
+                                    placeholder="0.00"
+                                    size="2"
+                                  />
+                                </Table.Cell>
+
+                                <Table.Cell>
+                                  <Select.Root
+                                    value={priceData.currency || 'USD'}
+                                    onValueChange={(value) => handlePriceChange(template.id, 'currency', value)}
+                                    size="2"
+                                  >
+                                    <Select.Trigger style={{ width: '100%' }} />
+                                    <Select.Content>
+                                      <Select.Item value="USD">USD</Select.Item>
+                                      <Select.Item value="CAD">CAD</Select.Item>
+                                      <Select.Item value="EUR">EUR</Select.Item>
+                                      <Select.Item value="GBP">GBP</Select.Item>
+                                      <Select.Item value="AUD">AUD</Select.Item>
+                                    </Select.Content>
+                                  </Select.Root>
+                                </Table.Cell>
+
+                                <Table.Cell>
+                                  {hasPricing ? (
+                                    <CheckIcon color="green" />
+                                  ) : (
+                                    <Cross2Icon color="gray" />
+                                  )}
+                                </Table.Cell>
+                              </Table.Row>
+                            );
+                          })}
+                        </>
+                      )}
+
+                      {/* Brand Tier */}
+                      {groupedTemplates.brand.length > 0 && (
+                        <>
+                          <Table.Row style={{ background: 'var(--accent-2)' }}>
+                            <Table.Cell colSpan={4}>
+                              <Text weight="bold" size="2" style={{ color: 'var(--accent-11)' }}>
+                                BRAND TIER - Connect Art, Culture & Community
+                              </Text>
+                            </Table.Cell>
+                          </Table.Row>
+                          {groupedTemplates.brand.map(template => {
+                            const priceData = cityPrices[template.id] || {};
+                            const hasPricing = priceData.price && parseFloat(priceData.price) > 0;
+
+                            return (
+                              <Table.Row key={template.id}>
+                                <Table.Cell>
+                                  <Box>
+                                    <Text weight="bold">{template.name}</Text>
+                                  </Box>
+                                </Table.Cell>
+
+                                <Table.Cell>
+                                  <TextField.Root
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={priceData.price || ''}
+                                    onChange={(e) => handlePriceChange(template.id, 'price', e.target.value)}
+                                    placeholder="0.00"
+                                    size="2"
+                                  />
+                                </Table.Cell>
+
+                                <Table.Cell>
+                                  <Select.Root
+                                    value={priceData.currency || 'USD'}
+                                    onValueChange={(value) => handlePriceChange(template.id, 'currency', value)}
+                                    size="2"
+                                  >
+                                    <Select.Trigger style={{ width: '100%' }} />
+                                    <Select.Content>
+                                      <Select.Item value="USD">USD</Select.Item>
+                                      <Select.Item value="CAD">CAD</Select.Item>
+                                      <Select.Item value="EUR">EUR</Select.Item>
+                                      <Select.Item value="GBP">GBP</Select.Item>
+                                      <Select.Item value="AUD">AUD</Select.Item>
+                                    </Select.Content>
+                                  </Select.Root>
+                                </Table.Cell>
+
+                                <Table.Cell>
+                                  {hasPricing ? (
+                                    <CheckIcon color="green" />
+                                  ) : (
+                                    <Cross2Icon color="gray" />
+                                  )}
+                                </Table.Cell>
+                              </Table.Row>
+                            );
+                          })}
+                        </>
+                      )}
+
+                      {/* Tactical Tier */}
+                      {groupedTemplates.business.length > 0 && (
+                        <>
+                          <Table.Row style={{ background: 'var(--accent-2)' }}>
+                            <Table.Cell colSpan={4}>
+                              <Text weight="bold" size="2" style={{ color: 'var(--accent-11)' }}>
+                                TACTICAL TIER - Buy Specific Impact Moments
+                              </Text>
+                            </Table.Cell>
+                          </Table.Row>
+                          {groupedTemplates.business.map(template => {
+                            const priceData = cityPrices[template.id] || {};
+                            const hasPricing = priceData.price && parseFloat(priceData.price) > 0;
+
+                            return (
+                              <Table.Row key={template.id}>
+                                <Table.Cell>
+                                  <Box>
+                                    <Text weight="bold">{template.name}</Text>
+                                  </Box>
+                                </Table.Cell>
+
+                                <Table.Cell>
+                                  <TextField.Root
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={priceData.price || ''}
+                                    onChange={(e) => handlePriceChange(template.id, 'price', e.target.value)}
+                                    placeholder="0.00"
+                                    size="2"
+                                  />
+                                </Table.Cell>
+
+                                <Table.Cell>
+                                  <Select.Root
+                                    value={priceData.currency || 'USD'}
+                                    onValueChange={(value) => handlePriceChange(template.id, 'currency', value)}
+                                    size="2"
+                                  >
+                                    <Select.Trigger style={{ width: '100%' }} />
+                                    <Select.Content>
+                                      <Select.Item value="USD">USD</Select.Item>
+                                      <Select.Item value="CAD">CAD</Select.Item>
+                                      <Select.Item value="EUR">EUR</Select.Item>
+                                      <Select.Item value="GBP">GBP</Select.Item>
+                                      <Select.Item value="AUD">AUD</Select.Item>
+                                    </Select.Content>
+                                  </Select.Root>
+                                </Table.Cell>
+
+                                <Table.Cell>
+                                  {hasPricing ? (
+                                    <CheckIcon color="green" />
+                                  ) : (
+                                    <Cross2Icon color="gray" />
+                                  )}
+                                </Table.Cell>
+                              </Table.Row>
+                            );
+                          })}
+                        </>
+                      )}
+
+                      {/* Add-ons */}
+                      {groupedTemplates.addon.length > 0 && (
+                        <>
+                          <Table.Row style={{ background: 'var(--orange-2)' }}>
+                            <Table.Cell colSpan={4}>
+                              <Text weight="bold" size="2" style={{ color: 'var(--orange-11)' }}>
+                                ADD-ONS - Enhance Any Package
+                              </Text>
+                            </Table.Cell>
+                          </Table.Row>
+                          {groupedTemplates.addon.map(template => {
+                            const priceData = cityPrices[template.id] || {};
+                            const hasPricing = priceData.price && parseFloat(priceData.price) > 0;
+
+                            return (
+                              <Table.Row key={template.id}>
+                                <Table.Cell>
+                                  <Box>
+                                    <Text weight="bold">{template.name}</Text>
+                                  </Box>
+                                </Table.Cell>
+
+                                <Table.Cell>
+                                  <TextField.Root
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={priceData.price || ''}
+                                    onChange={(e) => handlePriceChange(template.id, 'price', e.target.value)}
+                                    placeholder="0.00"
+                                    size="2"
+                                  />
+                                </Table.Cell>
+
+                                <Table.Cell>
+                                  <Select.Root
+                                    value={priceData.currency || 'USD'}
+                                    onValueChange={(value) => handlePriceChange(template.id, 'currency', value)}
+                                    size="2"
+                                  >
+                                    <Select.Trigger style={{ width: '100%' }} />
+                                    <Select.Content>
+                                      <Select.Item value="USD">USD</Select.Item>
+                                      <Select.Item value="CAD">CAD</Select.Item>
+                                      <Select.Item value="EUR">EUR</Select.Item>
+                                      <Select.Item value="GBP">GBP</Select.Item>
+                                      <Select.Item value="AUD">AUD</Select.Item>
+                                    </Select.Content>
+                                  </Select.Root>
+                                </Table.Cell>
+
+                                <Table.Cell>
+                                  {hasPricing ? (
+                                    <CheckIcon color="green" />
+                                  ) : (
+                                    <Cross2Icon color="gray" />
+                                  )}
+                                </Table.Cell>
+                              </Table.Row>
+                            );
+                          })}
+                        </>
+                      )}
                     </Table.Body>
                   </Table.Root>
 
@@ -359,6 +573,14 @@ const EventSponsorshipSetup = ({ event }) => {
                       >
                         <ExternalLinkIcon /> Edit Global Packages
                       </Button>
+                      {isStep1Complete() && (
+                        <Button
+                          variant="outline"
+                          onClick={() => setCurrentStep(2)}
+                        >
+                          Skip to Generate Invites
+                        </Button>
+                      )}
                       <Button
                         onClick={handleSavePricing}
                         disabled={getPricedCount() === 0 || loading}

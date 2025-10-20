@@ -175,8 +175,8 @@ const CityPricingMatrix = () => {
                 <Table.Cell>
                   <Box>
                     <Text weight="bold">{template.name}</Text>
-                    <Badge size="1" color={template.category === 'main' ? 'blue' : 'orange'}>
-                      {template.category}
+                    <Badge size="1" color={template.category === 'addon' ? 'orange' : 'blue'}>
+                      {template.category === 'addon' ? 'Add-on' : template.category.charAt(0).toUpperCase() + template.category.slice(1)}
                     </Badge>
                   </Box>
                 </Table.Cell>
