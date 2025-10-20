@@ -587,11 +587,13 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                   mb="2"
                   p="4"
                   style={{
-                    background: 'linear-gradient(135deg, rgba(246, 211, 101, 0.1) 0%, rgba(253, 160, 133, 0.1) 100%)',
+                    background: 'linear-gradient(135deg, rgba(246, 211, 101, 0.15) 0%, rgba(253, 160, 133, 0.15) 100%)',
                     border: '2px solid #f6d365',
                     borderRadius: '12px',
-                    boxShadow: '0 0 20px rgba(246, 211, 101, 0.4), 0 0 40px rgba(246, 211, 101, 0.2)',
-                    textAlign: 'center'
+                    boxShadow: 'inset 0 0 20px rgba(246, 211, 101, 0.3), inset 0 0 40px rgba(246, 211, 101, 0.15)',
+                    textAlign: 'center',
+                    maxWidth: '600px',
+                    margin: '1rem auto'
                   }}
                 >
                   <Text size="2" weight="bold" mb="1" style={{ color: 'var(--gray-12)' }}>{prospectDisplay}</Text>
@@ -630,7 +632,7 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                       mt="2"
                       p="3"
                       style={{
-                        background: 'rgba(255, 255, 255, 0.8)',
+                        background: 'rgba(255, 255, 255, 0.95)',
                         borderRadius: '6px',
                         border: '1px solid rgba(246, 211, 101, 0.6)',
                         maxWidth: '500px',
@@ -641,7 +643,7 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                       <Flex direction="column" gap="3">
                         {/* Package Benefits */}
                         <Box>
-                          <Text size="2" weight="bold" mb="2" style={{ display: 'block' }}>
+                          <Text size="2" weight="bold" mb="2" style={{ display: 'block', color: '#1a1a1a' }}>
                             Art Battle {inviteData.event_city} {selectedPackage.name}
                           </Text>
                           <Flex direction="column" gap="1">
@@ -652,7 +654,7 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                                   height="14"
                                   style={{ color: 'var(--green-9)', marginTop: '2px', flexShrink: 0 }}
                                 />
-                                <Text size="2">{benefit}</Text>
+                                <Text size="2" style={{ color: '#1a1a1a' }}>{benefit}</Text>
                               </Flex>
                             ))}
                           </Flex>
@@ -661,7 +663,7 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                         {/* Addon Benefits */}
                         {selectedAddons.map((addon, addonIdx) => (
                           <Box key={addonIdx}>
-                            <Text size="2" weight="bold" mb="2" style={{ display: 'block' }}>
+                            <Text size="2" weight="bold" mb="2" style={{ display: 'block', color: '#1a1a1a' }}>
                               {addon.name}
                             </Text>
                             <Flex direction="column" gap="1">
@@ -672,7 +674,7 @@ const MultiEventOffer = ({ inviteData, selectedPackage, selectedAddons, onConfir
                                     height="14"
                                     style={{ color: 'var(--green-9)', marginTop: '2px', flexShrink: 0 }}
                                   />
-                                  <Text size="2">{benefit}</Text>
+                                  <Text size="2" style={{ color: '#1a1a1a' }}>{benefit}</Text>
                                 </Flex>
                               ))}
                             </Flex>
