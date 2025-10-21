@@ -191,4 +191,8 @@
    cc43821c-280b-4445-8d78-35aadf6bf9c8 | test-canada-vs-international         | test-canada-vs-international         | ACTIVE | 2       | 2025-10-15 18:19:19 
    0396b400-c343-4de4-8bc7-865e969dbfc8 | admin-artist-search-broadcast        | admin-artist-search-broadcast        | ACTIVE | 2       | 2025-10-17 00:13:16 
    a86db211-2e10-448f-b52d-21b5cb1bc806 | process-pending-payments             | process-pending-payments             | ACTIVE | 3       | 2025-10-18 03:40:07 
+   05a21b9b-0770-444a-bc9e-4385be4cbed5 | admin-reset-payment-status           | admin-reset-payment-status           | ACTIVE | 3       | 2025-10-19 22:26:30 
+   c96e4c25-1184-45ef-9046-ddcf91fcdf1e | fetch-eventbrite-discounts           | fetch-eventbrite-discounts           | ACTIVE | 1       | 2025-10-19 21:14:19 
+   2003f08e-83c8-4bdb-b9d6-55bc41fb8e87 | admin-city-analytics                 | admin-city-analytics                 | ACTIVE | 9       | 2025-10-20 19:40:31 
+   1470bb9c-b547-40b5-be2b-11930e7a061c | admin-expire-invitation              | admin-expire-invitation              | ACTIVE | 1       | 2025-10-21 12:17:44 
 
