@@ -149,6 +149,7 @@ serve(async (req) => {
       })
 
       // Get all data needed for aggregation - grouped by event_id
+      // Use higher limits to ensure we get all data (not just default 1000)
       const [
         { data: registrations },
         { data: artPieces },
@@ -159,28 +160,33 @@ serve(async (req) => {
         supabase
           .from('event_registrations')
           .select('event_id')
-          .in('event_id', eventIds),
+          .in('event_id', eventIds)
+          .limit(50000),
 
         supabase
           .from('art')
           .select('final_price, current_bid, event_id')
-          .in('event_id', eventIds),
+          .in('event_id', eventIds)
+          .limit(10000),
 
         supabase
           .from('votes')
           .select('event_id')
-          .in('event_id', eventIds),
+          .in('event_id', eventIds)
+          .limit(100000),
 
         supabase
           .from('bids')
           .select('amount, art_id, art!inner(event_id)')
-          .in('art.event_id', eventIds),
+          .in('art.event_id', eventIds)
+          .limit(100000),
 
         supabase
           .from('people_qr_scans')
           .select('event_id')
           .in('event_id', eventIds)
           .eq('is_valid', true)
+          .limit(100000)
       ])
 
       // Aggregate by EVENT (not by month)
@@ -225,17 +231,23 @@ serve(async (req) => {
       })
 
       // Process votes by event
+      const votesByEvent: Record<string, number> = {}
       votes?.forEach(vote => {
+        votesByEvent[vote.event_id] = (votesByEvent[vote.event_id] || 0) + 1
         if (eventDataMap[vote.event_id]) {
           eventDataMap[vote.event_id].votes += 1
         }
       })
 
       // Process bids by event
+      const bidsByEvent: Record<string, number> = {}
       bids?.forEach(bid => {
         const eventId = bid.art?.event_id
-        if (eventId && eventDataMap[eventId]) {
-          eventDataMap[eventId].bids += 1
+        if (eventId) {
+          bidsByEvent[eventId] = (bidsByEvent[eventId] || 0) + 1
+          if (eventDataMap[eventId]) {
+            eventDataMap[eventId].bids += 1
+          }
         }
       })
 
@@ -284,7 +296,7 @@ serve(async (req) => {
       // Add debug info to help troubleshoot revenue data
       const eventsWithTicketRevenue = eventData.filter(e => e.ticketRevenue > 0).length
       const eventsWithAuctionRevenue = eventData.filter(e => e.auctionRevenue > 0).length
-      const sampleEvents = eventData.slice(0, 3).map(e => ({
+      const sampleEvents = eventData.slice(0, 5).map(e => ({
         eid: e.eid,
         ticketRevenue: e.ticketRevenue,
         auctionRevenue: e.auctionRevenue,
@@ -293,6 +305,13 @@ serve(async (req) => {
         registrations: e.registrations,
         qrScans: e.qrScans
       }))
+
+      // Find top events by vote count for verification
+      const topVoteEvents = eventData
+        .filter(e => e.votes > 0)
+        .sort((a, b) => b.votes - a.votes)
+        .slice(0, 5)
+        .map(e => ({ eid: e.eid, votes: e.votes }))
 
       return new Response(JSON.stringify({
         ...response,
@@ -307,9 +326,20 @@ serve(async (req) => {
           ticketRevenueEidsFound: Object.keys(ticketRevenueByEid).length,
           sampleTicketRevenue: Object.entries(ticketRevenueByEid).slice(0, 3),
           sampleEvents,
-          artPiecesFound: artPieces?.length || 0,
-          votesFound: votes?.length || 0,
-          bidsFound: bids?.length || 0
+          topVoteEvents,
+          rawDataCounts: {
+            artPiecesFound: artPieces?.length || 0,
+            votesFound: votes?.length || 0,
+            bidsFound: bids?.length || 0,
+            qrScansFound: qrScans?.length || 0,
+            registrationsFound: registrations?.length || 0
+          },
+          aggregatedCounts: {
+            totalVotesAggregated: Object.values(votesByEvent).reduce((sum, v) => sum + v, 0),
+            totalBidsAggregated: Object.values(bidsByEvent).reduce((sum, v) => sum + v, 0),
+            eventsWithVotes: Object.keys(votesByEvent).length,
+            eventsWithBids: Object.keys(bidsByEvent).length
+          }
         }
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }

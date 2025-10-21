@@ -113,27 +113,8 @@ const LocalRelevanceSection = ({ inviteData }) => {
 
               <Box style={{ width: '100%', height: '1px', background: 'var(--accent-6)', margin: '0.5rem 0' }} />
 
-              <Flex direction="column" gap="1">
-                <Text size="3" weight="bold">Audience</Text>
-                <Text size="2" style={{ color: 'var(--gray-11)' }}>
-                  {inviteData.event_capacity ? `${Math.round(inviteData.event_capacity + 50).toLocaleString()} at venue` : '400 at venue'}
-                </Text>
-                {inviteData.event_capacity && (
-                  <Text size="2" style={{ color: 'var(--gray-11)' }}>
-                    {Math.round(inviteData.event_capacity * 3).toLocaleString()} online
-                  </Text>
-                )}
-                {inviteData.city_audience_count && (
-                  <Text size="2" weight="bold" style={{ color: 'var(--gray-11)' }}>
-                    {inviteData.city_audience_count.toLocaleString()} total {inviteData.event_city} audience
-                  </Text>
-                )}
-              </Flex>
-
               {inviteData.artists && inviteData.artists.length > 0 && (
                 <>
-                  <Box style={{ width: '100%', height: '1px', background: 'var(--accent-6)', margin: '0.5rem 0' }} />
-
                   <Flex direction="column" gap="1">
                     <Text size="3" weight="bold">Featured Artists at this show</Text>
                     <Flex direction="column" gap="0">
@@ -158,8 +139,36 @@ const LocalRelevanceSection = ({ inviteData }) => {
                       ))}
                     </Flex>
                   </Flex>
+
+                  <Box style={{ width: '100%', height: '1px', background: 'var(--accent-6)', margin: '0.5rem 0' }} />
                 </>
               )}
+
+              <Flex direction="column" gap="1">
+                <Text size="3" weight="bold">Audience</Text>
+                <Text size="2" style={{ color: 'var(--gray-11)' }}>
+                  {inviteData.event_capacity ? `${Math.round(inviteData.event_capacity + 50).toLocaleString()} at venue` : '400 at venue'}
+                </Text>
+                {inviteData.event_capacity && (
+                  <Text size="2" style={{ color: 'var(--gray-11)' }}>
+                    {Math.round(inviteData.event_capacity * 3).toLocaleString()} online
+                  </Text>
+                )}
+                {inviteData.city_audience_count != null && inviteData.event_capacity && (
+                  <Flex direction="column" gap="0">
+                    <Text size="5" weight="bold" style={{ color: 'var(--gray-12)', lineHeight: '1.2' }}>
+                      {(
+                        Math.round(inviteData.event_capacity + 50) +
+                        Math.round(inviteData.event_capacity * 3) +
+                        inviteData.city_audience_count
+                      ).toLocaleString()} total
+                    </Text>
+                    <Text size="2" weight="bold" style={{ color: 'var(--gray-11)' }}>
+                      Art Battle {inviteData.event_city} audience
+                    </Text>
+                  </Flex>
+                )}
+              </Flex>
             </Flex>
           </Card>
 

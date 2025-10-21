@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Box, Heading, Tabs, Card, Spinner, Flex, Text } from '@radix-ui/themes';
 import PackageTemplateList from './PackageTemplateList';
-import CityPricingManager from './CityPricingManager';
 import SponsorshipMediaLibrary from './SponsorshipMediaLibrary';
 import InvitesAndDiscounts from './InvitesAndDiscounts';
 import InviteTracking from './InviteTracking';
@@ -37,7 +36,6 @@ const SponsorshipPackages = () => {
           <Tabs.Trigger value="tracking">Invite Tracking</Tabs.Trigger>
           <Tabs.Trigger value="invites">Create Invites</Tabs.Trigger>
           <Tabs.Trigger value="templates">Package Templates</Tabs.Trigger>
-          <Tabs.Trigger value="pricing">City Pricing</Tabs.Trigger>
           <Tabs.Trigger value="media">Media Library</Tabs.Trigger>
         </Tabs.List>
 
@@ -52,10 +50,6 @@ const SponsorshipPackages = () => {
 
           <Tabs.Content value="templates">
             <PackageTemplateList />
-          </Tabs.Content>
-
-          <Tabs.Content value="pricing">
-            <CityPricingManager />
           </Tabs.Content>
 
           <Tabs.Content value="media">

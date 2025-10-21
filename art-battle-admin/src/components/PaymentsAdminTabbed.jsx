@@ -2078,6 +2078,127 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                 </Table.Body>
               </Table.Root>
             )}
+
+            {/* Processing Results */}
+            {paymentProcessResults && (
+              <Card variant="ghost" mt="4">
+                <Flex direction="column" gap="4">
+                  <Heading size="2">Processing Results</Heading>
+
+                  {/* Summary */}
+                  <Flex gap="4" align="center">
+                    <Badge
+                      size="2"
+                      color={paymentProcessResults.success ? 'green' : 'red'}
+                      variant="solid"
+                    >
+                      {paymentProcessResults.success ? '✅ Success' : '❌ Failed'}
+                    </Badge>
+
+                    <Text size="2" color="gray">
+                      {new Date(paymentProcessResults.timestamp).toLocaleString()}
+                    </Text>
+                  </Flex>
+
+                  <Card>
+                    <Flex justify="between" align="center" mb="3">
+                      <Text size="3" weight="medium">{paymentProcessResults.message}</Text>
+                    </Flex>
+
+                    <Flex gap="6">
+                      <Box>
+                        <Text size="1" color="gray">Processed</Text>
+                        <Text size="4" weight="bold">{paymentProcessResults.processed_count}</Text>
+                      </Box>
+                      <Box>
+                        <Text size="1" color="gray">Successful</Text>
+                        <Text size="4" weight="bold" color="green">{paymentProcessResults.successful_count}</Text>
+                      </Box>
+                      <Box>
+                        <Text size="1" color="gray">Failed</Text>
+                        <Text size="4" weight="bold" color="red">{paymentProcessResults.failed_count}</Text>
+                      </Box>
+                      <Box>
+                        <Text size="1" color="gray">Total Amount</Text>
+                        <Text size="4" weight="bold" color="green">${paymentProcessResults.total_amount?.toFixed(2) || '0.00'}</Text>
+                      </Box>
+                    </Flex>
+                  </Card>
+
+                  {/* Payment Details */}
+                  {paymentProcessResults.payments && paymentProcessResults.payments.length > 0 && (
+                    <Box>
+                      <Text size="2" weight="medium" mb="3">Payment Details</Text>
+                      <Table.Root>
+                        <Table.Header>
+                          <Table.Row>
+                            <Table.ColumnHeaderCell>Artist</Table.ColumnHeaderCell>
+                            <Table.ColumnHeaderCell>Amount</Table.ColumnHeaderCell>
+                            <Table.ColumnHeaderCell>Status</Table.ColumnHeaderCell>
+                            <Table.ColumnHeaderCell>Stripe Transfer ID</Table.ColumnHeaderCell>
+                            <Table.ColumnHeaderCell>Error</Table.ColumnHeaderCell>
+                          </Table.Row>
+                        </Table.Header>
+                        <Table.Body>
+                          {paymentProcessResults.payments.map((payment, index) => (
+                            <Table.Row key={`${payment.payment_id}-${index}`}>
+                              <Table.Cell>
+                                <Text size="2" weight="medium">{payment.artist_name}</Text>
+                              </Table.Cell>
+                              <Table.Cell>
+                                <Text size="2" weight="bold">{payment.payment_currency} {payment.payment_amount?.toFixed(2)}</Text>
+                              </Table.Cell>
+                              <Table.Cell>
+                                <Badge color={payment.status === 'completed' ? 'green' : 'red'} variant="soft">
+                                  {payment.status === 'completed' ? '✅ Success' : '❌ Failed'}
+                                </Badge>
+                              </Table.Cell>
+                              <Table.Cell>
+                                <Text size="1" style={{ fontFamily: 'monospace', fontSize: '11px' }}>
+                                  {payment.stripe_transfer_id || '—'}
+                                </Text>
+                              </Table.Cell>
+                              <Table.Cell>
+                                <Text size="1" color="red" style={{ fontFamily: 'monospace', fontSize: '11px', maxWidth: '300px', wordBreak: 'break-word' }}>
+                                  {payment.error || '—'}
+                                </Text>
+                              </Table.Cell>
+                            </Table.Row>
+                          ))}
+                        </Table.Body>
+                      </Table.Root>
+                    </Box>
+                  )}
+
+                  {/* Blocked Payments */}
+                  {paymentProcessResults.blocked_payments && paymentProcessResults.blocked_payments.length > 0 && (
+                    <Box>
+                      <Text size="2" weight="medium" mb="3" color="orange">Blocked Payments (No Account Setup)</Text>
+                      <Table.Root>
+                        <Table.Header>
+                          <Table.Row>
+                            <Table.ColumnHeaderCell>Artist</Table.ColumnHeaderCell>
+                            <Table.ColumnHeaderCell>Amount</Table.ColumnHeaderCell>
+                          </Table.Row>
+                        </Table.Header>
+                        <Table.Body>
+                          {paymentProcessResults.blocked_payments.map((payment, index) => (
+                            <Table.Row key={`blocked-${payment.payment_id}-${index}`}>
+                              <Table.Cell>
+                                <Text size="2">{payment.artist_name}</Text>
+                              </Table.Cell>
+                              <Table.Cell>
+                                <Text size="2" weight="bold">{payment.payment_currency} {payment.payment_amount?.toFixed(2)}</Text>
+                              </Table.Cell>
+                            </Table.Row>
+                          ))}
+                        </Table.Body>
+                      </Table.Root>
+                    </Box>
+                  )}
+                </Flex>
+              </Card>
+            )}
           </Card>
         </Tabs.Content>
 

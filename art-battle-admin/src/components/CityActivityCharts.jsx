@@ -66,16 +66,28 @@ const CityActivityCharts = ({ cityId, cityName, events }) => {
         console.log('Total events returned:', data.debug.totalEventsReturned);
         console.log('Events with ticket revenue:', data.debug.eventsWithTicketRevenue);
         console.log('Events with auction revenue:', data.debug.eventsWithAuctionRevenue);
-        console.log('EIDs queried for ticket revenue:', data.debug.eidsQueried);
-        console.log('EIDs queried count:', data.debug.eidsQueriedCount);
-        console.log('Ticket query error:', data.debug.ticketQueryError);
-        console.log('Ticket sales data returned:', data.debug.ticketSalesDataReturned);
-        console.log('Ticket revenue EIDs found:', data.debug.ticketRevenueEidsFound);
-        console.log('Sample ticket revenue:', data.debug.sampleTicketRevenue);
-        console.log('Sample events:', data.debug.sampleEvents);
-        console.log('Art pieces found:', data.debug.artPiecesFound);
-        console.log('Votes found:', data.debug.votesFound);
-        console.log('Bids found:', data.debug.bidsFound);
+
+        if (data.debug.rawDataCounts) {
+          console.log('--- Raw Query Results ---');
+          console.log('Votes found in query:', data.debug.rawDataCounts.votesFound);
+          console.log('Bids found in query:', data.debug.rawDataCounts.bidsFound);
+          console.log('Art pieces found:', data.debug.rawDataCounts.artPiecesFound);
+          console.log('QR scans found:', data.debug.rawDataCounts.qrScansFound);
+          console.log('Registrations found:', data.debug.rawDataCounts.registrationsFound);
+        }
+
+        if (data.debug.aggregatedCounts) {
+          console.log('--- Aggregated Results ---');
+          console.log('Total votes aggregated:', data.debug.aggregatedCounts.totalVotesAggregated);
+          console.log('Total bids aggregated:', data.debug.aggregatedCounts.totalBidsAggregated);
+          console.log('Events with votes:', data.debug.aggregatedCounts.eventsWithVotes);
+          console.log('Events with bids:', data.debug.aggregatedCounts.eventsWithBids);
+        }
+
+        console.log('--- Top Vote Events ---');
+        console.log(data.debug.topVoteEvents);
+        console.log('--- Sample Events ---');
+        console.log(data.debug.sampleEvents);
       }
 
       setChartData(data.eventData);
@@ -118,35 +130,69 @@ const CityActivityCharts = ({ cityId, cityName, events }) => {
     );
   }
 
-  // Prepare data with date timestamps and trend calculation
-  const preparedData = chartData.map((event, index) => {
-    const showYear = index === 0 || chartData[index - 1]?.year !== event.year;
-    const prepared = {
-      ...event,
-      dateTimestamp: new Date(event.eventDate).getTime(),
-      trend: (event.votes || 0) + (event.bids || 0),
-      showYear,
-      // Ensure all numeric fields are numbers not undefined
-      ticketRevenue: event.ticketRevenue || 0,
-      auctionRevenue: event.auctionRevenue || 0,
-      registrations: event.registrations || 0,
-      votes: event.votes || 0,
-      bids: event.bids || 0,
-      qrScans: event.qrScans || 0
-    };
-    return prepared;
-  });
+  // Prepare data with proportional time-based spacing
+  // Create a sparse array with proper time-based positioning
+  const preparedData = [];
+
+  if (chartData.length > 0) {
+    const firstDate = new Date(chartData[0].eventDate).getTime();
+    const lastDate = new Date(chartData[chartData.length - 1].eventDate).getTime();
+    const totalTimeSpan = lastDate - firstDate;
+
+    // Target width: aim for about 40 pixels per event on average as base, then scale by time
+    const desiredTotalWidth = chartData.length * 40;
+
+    chartData.forEach((event, eventIdx) => {
+      const eventDate = new Date(event.eventDate).getTime();
+      const timeFromStart = eventDate - firstDate;
+
+      // Calculate position proportional to time
+      // If totalTimeSpan is 0 (all events same day), just space evenly
+      let position;
+      if (totalTimeSpan === 0) {
+        position = eventIdx;
+      } else {
+        // Scale position based on time ratio
+        position = Math.round((timeFromStart / totalTimeSpan) * (desiredTotalWidth / 40));
+      }
+
+      // Fill gaps with empty placeholder events if needed
+      while (preparedData.length < position) {
+        preparedData.push(null); // Placeholder for spacing
+      }
+
+      const showYear = eventIdx === 0 || chartData[eventIdx - 1]?.year !== event.year;
+
+      preparedData.push({
+        ...event,
+        dateTimestamp: eventDate,
+        index: preparedData.length,
+        trend: (event.votes || 0) + (event.bids || 0),
+        showYear,
+        isRealEvent: true,
+        // Ensure all numeric fields are numbers not undefined
+        ticketRevenue: event.ticketRevenue || 0,
+        auctionRevenue: event.auctionRevenue || 0,
+        registrations: event.registrations || 0,
+        votes: event.votes || 0,
+        bids: event.bids || 0,
+        qrScans: event.qrScans || 0
+      });
+    });
+  }
 
   // Debug: log first data point and check for all metrics
   if (preparedData.length > 0) {
+    const realEvents = preparedData.filter(e => e !== null && e.isRealEvent);
     console.log('=== CHART DATA DEBUG ===');
-    console.log('First event data:', preparedData[0]);
-    console.log('Total events in chart:', preparedData.length);
-    console.log('Events with votes > 0:', preparedData.filter(e => e.votes > 0).length);
-    console.log('Events with bids > 0:', preparedData.filter(e => e.bids > 0).length);
-    console.log('Events with auction revenue > 0:', preparedData.filter(e => e.auctionRevenue > 0).length);
-    console.log('Events with ticket revenue > 0:', preparedData.filter(e => e.ticketRevenue > 0).length);
-    console.log('Sample events with data:', preparedData.slice(0, 3).map(e => ({
+    console.log('Total data points (with spacing):', preparedData.length);
+    console.log('Real events:', realEvents.length);
+    console.log('First real event data:', realEvents[0]);
+    console.log('Events with votes > 0:', realEvents.filter(e => e.votes > 0).length);
+    console.log('Events with bids > 0:', realEvents.filter(e => e.bids > 0).length);
+    console.log('Events with auction revenue > 0:', realEvents.filter(e => e.auctionRevenue > 0).length);
+    console.log('Events with ticket revenue > 0:', realEvents.filter(e => e.ticketRevenue > 0).length);
+    console.log('Sample events with data:', realEvents.slice(0, 3).map(e => ({
       eid: e.eid,
       votes: e.votes,
       bids: e.bids,
@@ -158,9 +204,10 @@ const CityActivityCharts = ({ cityId, cityName, events }) => {
 
   // Custom X-axis tick that shows EID and year markers
   const CustomXAxisTick = ({ x, y, payload }) => {
-    // Find the data point by timestamp
-    const dataPoint = preparedData.find(d => d.dateTimestamp === payload.value);
-    if (!dataPoint) return null;
+    // For categorical axis, payload.value is the index
+    const dataPoint = preparedData[payload.value];
+    // Only show ticks for real events, not placeholder spacing
+    if (!dataPoint || !dataPoint.isRealEvent) return null;
 
     return (
       <g transform={`translate(${x},${y})`}>
@@ -197,6 +244,8 @@ const CityActivityCharts = ({ cityId, cityName, events }) => {
   const CustomTooltip = ({ active, payload }) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
+      // Skip tooltips for placeholder spacing entries
+      if (!data || !data.isRealEvent) return null;
       // Find the matching event to get the name
       const matchingEvent = events.find(e => e.id === data.eventId);
       return (
@@ -269,10 +318,8 @@ const CityActivityCharts = ({ cityId, cityName, events }) => {
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#333" />
               <XAxis
-                dataKey="dateTimestamp"
-                type="number"
-                domain={['dataMin', 'dataMax']}
-                scale="time"
+                dataKey="index"
+                type="category"
                 tick={<CustomXAxisTick />}
                 height={60}
               />
@@ -287,27 +334,19 @@ const CityActivityCharts = ({ cityId, cityName, events }) => {
                 stroke="#888"
               />
               <Tooltip content={<CustomTooltip />} />
-              <Legend
-                wrapperStyle={{ paddingTop: '20px' }}
-                iconType="square"
-              />
 
-              {/* Revenue Bars - with fixed width for time axis */}
+              {/* Revenue Bars */}
               <Bar
                 yAxisId="left"
                 dataKey="ticketRevenue"
                 fill="#ffd93d"
                 name="Ticket Revenue"
-                barSize={80}
-                minPointSize={5}
               />
               <Bar
                 yAxisId="left"
                 dataKey="auctionRevenue"
                 fill="#4ecdc4"
                 name="Auction Revenue"
-                barSize={80}
-                minPointSize={5}
               />
 
               {/* Audience Metrics Bars (on right axis) */}
@@ -316,32 +355,24 @@ const CityActivityCharts = ({ cityId, cityName, events }) => {
                 dataKey="registrations"
                 fill="#9b59b6"
                 name="Registrations"
-                barSize={80}
-                minPointSize={5}
               />
               <Bar
                 yAxisId="right"
                 dataKey="votes"
                 fill="#e74c3c"
                 name="Votes"
-                barSize={80}
-                minPointSize={5}
               />
               <Bar
                 yAxisId="right"
                 dataKey="bids"
                 fill="#f39c12"
                 name="Bids"
-                barSize={80}
-                minPointSize={5}
               />
               <Bar
                 yAxisId="right"
                 dataKey="qrScans"
                 fill="#3498db"
                 name="QR Scans"
-                barSize={80}
-                minPointSize={5}
               />
 
               {/* Trend Line - Votes + Bids */}
@@ -353,6 +384,7 @@ const CityActivityCharts = ({ cityId, cityName, events }) => {
                 strokeWidth={3}
                 dot={{ fill: '#fff', r: 4 }}
                 name="Trend (Votes+Bids)"
+                connectNulls={true}
               />
             </ComposedChart>
           </ResponsiveContainer>

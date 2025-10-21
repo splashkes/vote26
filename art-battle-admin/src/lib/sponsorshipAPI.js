@@ -475,6 +475,32 @@ export async function getEventSponsorshipSummary(eventId) {
 }
 
 /**
+ * Get sponsorship invites for an event
+ */
+export async function getEventInvites(eventId) {
+  try {
+    const { data, error } = await supabase
+      .from('sponsorship_invites')
+      .select('*')
+      .eq('event_id', eventId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    // Add full_url to each invite
+    const invitesWithUrl = (data || []).map(invite => ({
+      ...invite,
+      full_url: `https://artb.art/sponsor/${invite.hash}`
+    }));
+
+    return { data: invitesWithUrl, error: null };
+  } catch (err) {
+    console.error('Error fetching event invites:', err);
+    return { data: null, error: err.message };
+  }
+}
+
+/**
  * Get cities for events in last 90 days + all future events
  */
 export async function getRecentAndUpcomingCities() {

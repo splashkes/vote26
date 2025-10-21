@@ -14,7 +14,8 @@ import {
   Table,
   Select,
   Spinner,
-  IconButton
+  IconButton,
+  Checkbox
 } from '@radix-ui/themes';
 import {
   ChevronRightIcon,
@@ -23,7 +24,8 @@ import {
   CheckIcon,
   Cross2Icon,
   CopyIcon,
-  ExternalLinkIcon
+  ExternalLinkIcon,
+  MagnifyingGlassIcon
 } from '@radix-ui/react-icons';
 import {
   getAllPackageTemplates,
@@ -31,7 +33,8 @@ import {
   setCityPricing,
   deleteCityPricing,
   generateSponsorshipInvite,
-  getEventSponsorshipSummary
+  getEventSponsorshipSummary,
+  getEventInvites
 } from '../../lib/sponsorshipAPI';
 
 const EventSponsorshipSetup = ({ event }) => {
@@ -42,10 +45,15 @@ const EventSponsorshipSetup = ({ event }) => {
 
   // Data
   const [templates, setTemplates] = useState([]);
+  const [selectedPackages, setSelectedPackages] = useState({}); // Track checkbox state
   const [cityPrices, setCityPrices] = useState({});
   const [hasChanges, setHasChanges] = useState(false);
   const [summary, setSummary] = useState(null);
+  const [invites, setInvites] = useState([]);
+  const [activePackages, setActivePackages] = useState([]);
   const [expandedPackages, setExpandedPackages] = useState({});
+  const [showActivePackages, setShowActivePackages] = useState(false);
+  const [searchFilter, setSearchFilter] = useState('');
 
   // Invite form
   const [inviteForm, setInviteForm] = useState({
@@ -59,6 +67,49 @@ const EventSponsorshipSetup = ({ event }) => {
   const [generatingInvite, setGeneratingInvite] = useState(false);
   const [generatedLink, setGeneratedLink] = useState(null);
 
+  // Load card data on mount and when dependencies change
+  useEffect(() => {
+    const loadCardData = async () => {
+      try {
+        const [summaryResult, invitesResult, pricingResult, templatesResult] = await Promise.all([
+          getEventSponsorshipSummary(event.id),
+          getEventInvites(event.id),
+          getAllCityPricing(),
+          getAllPackageTemplates()
+        ]);
+
+        setSummary(summaryResult.data || {});
+        setInvites(invitesResult.data || []);
+
+        if (event.cities && pricingResult.data && templatesResult.data) {
+          const activePkgs = [];
+          const cityId = event.cities.id || event.city_id;
+          console.log('Loading active packages for city:', cityId);
+          console.log('Available pricing:', pricingResult.data);
+
+          templatesResult.data.forEach(template => {
+            const existingPrice = pricingResult.data.find(
+              p => p.city_id === cityId && p.package_template_id === template.id
+            );
+            if (existingPrice) {
+              activePkgs.push({
+                ...template,
+                price: existingPrice.price,
+                currency: existingPrice.currency
+              });
+            }
+          });
+          console.log('Active packages found:', activePkgs.length);
+          setActivePackages(activePkgs);
+        }
+      } catch (err) {
+        console.error('Error loading card data:', err);
+      }
+    };
+    loadCardData();
+  }, [event.id, event.cities]);
+
+  // Load full data when modal opens
   useEffect(() => {
     if (modalOpen) {
       loadData();
@@ -68,10 +119,11 @@ const EventSponsorshipSetup = ({ event }) => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [templatesResult, pricingResult, summaryResult] = await Promise.all([
+      const [templatesResult, pricingResult, summaryResult, invitesResult] = await Promise.all([
         getAllPackageTemplates(),
         getAllCityPricing(),
-        getEventSponsorshipSummary(event.id)
+        getEventSponsorshipSummary(event.id),
+        getEventInvites(event.id)
       ]);
 
       if (templatesResult.error) throw new Error(templatesResult.error);
@@ -79,35 +131,61 @@ const EventSponsorshipSetup = ({ event }) => {
 
       setTemplates(templatesResult.data.filter(t => t.active));
       setSummary(summaryResult.data || {});
+      setInvites(invitesResult.data || []);
 
       // Load existing pricing for this city
       if (event.cities) {
         const cityPricingData = {};
+        const selectedState = {};
+        const activePkgs = [];
+        const cityId = event.cities.id || event.city_id;
+
         templatesResult.data.forEach(template => {
           const existingPrice = pricingResult.data.find(
-            p => p.city_id === event.cities.id && p.package_template_id === template.id
+            p => p.city_id === cityId && p.package_template_id === template.id
           );
           if (existingPrice) {
+            // Package has pricing - mark as selected and priced
             cityPricingData[template.id] = {
               price: existingPrice.price,
               currency: existingPrice.currency,
               pricingId: existingPrice.id
             };
+            selectedState[template.id] = true; // Mark as selected
+
+            // Add to active packages list
+            activePkgs.push({
+              ...template,
+              price: existingPrice.price,
+              currency: existingPrice.currency
+            });
           } else {
+            // Package not priced - not selected by default
             cityPricingData[template.id] = {
               price: '',
               currency: event.cities.countries?.currency_code || 'USD',
               pricingId: null
             };
+            selectedState[template.id] = false; // Not selected
           }
         });
         setCityPrices(cityPricingData);
+        setSelectedPackages(selectedState);
+        setActivePackages(activePkgs);
       }
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePackageToggle = (templateId) => {
+    setSelectedPackages(prev => ({
+      ...prev,
+      [templateId]: !prev[templateId]
+    }));
+    setHasChanges(true);
   };
 
   const handlePriceChange = (templateId, field, value) => {
@@ -131,13 +209,16 @@ const EventSponsorshipSetup = ({ event }) => {
       const savePromises = [];
 
       for (const [templateId, data] of Object.entries(cityPrices)) {
-        if (data.price && parseFloat(data.price) > 0) {
-          // Save or update pricing
+        const isSelected = selectedPackages[templateId];
+        const hasPrice = data.price && parseFloat(data.price) > 0;
+
+        if (isSelected && hasPrice) {
+          // Package is selected AND has price - save/update
           savePromises.push(
             setCityPricing(templateId, event.cities.id, parseFloat(data.price), data.currency)
           );
-        } else if (data.pricingId && (!data.price || parseFloat(data.price) <= 0)) {
-          // Delete pricing if price was set to zero or cleared
+        } else if (data.pricingId) {
+          // Package is NOT selected OR has no price - delete if exists in DB
           savePromises.push(deleteCityPricing(data.pricingId));
         }
       }
@@ -145,7 +226,7 @@ const EventSponsorshipSetup = ({ event }) => {
       await Promise.all(savePromises);
 
       // Reload pricing to reflect changes
-      await loadPricingData();
+      await loadData();
 
       setHasChanges(false);
       setCurrentStep(2);
@@ -175,9 +256,13 @@ const EventSponsorshipSetup = ({ event }) => {
 
       setGeneratedLink(data.full_url);
 
-      // Reload summary
-      const summaryResult = await getEventSponsorshipSummary(event.id);
+      // Reload summary and invites
+      const [summaryResult, invitesResult] = await Promise.all([
+        getEventSponsorshipSummary(event.id),
+        getEventInvites(event.id)
+      ]);
       setSummary(summaryResult.data || {});
+      setInvites(invitesResult.data || []);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -189,30 +274,37 @@ const EventSponsorshipSetup = ({ event }) => {
     navigator.clipboard.writeText(text);
   };
 
+  const getFilteredTemplates = () => {
+    if (!searchFilter) return templates;
+    const search = searchFilter.toLowerCase();
+    return templates.filter(t =>
+      t.name.toLowerCase().includes(search) ||
+      t.description?.toLowerCase().includes(search) ||
+      t.category?.toLowerCase().includes(search)
+    );
+  };
+
+  const getPackageState = (templateId) => {
+    const isSelected = selectedPackages[templateId];
+    const priceData = cityPrices[templateId];
+    const hasPrice = priceData?.price && parseFloat(priceData.price) > 0;
+
+    if (!isSelected) return 'not_selected';
+    if (isSelected && !hasPrice) return 'selected_no_price';
+    return 'selected_priced';
+  };
+
+  const getSelectedCount = () => {
+    return Object.values(selectedPackages).filter(Boolean).length;
+  };
+
   const getPricedCount = () => {
-    return Object.values(cityPrices).filter(p => p.price && parseFloat(p.price) > 0).length;
-  };
-
-  const handleHidePackage = (templateId) => {
-    handlePriceChange(templateId, 'price', '0');
-  };
-
-  const handleRestorePackage = (templateId) => {
-    handlePriceChange(templateId, 'price', '100');
-  };
-
-  const getActiveTemplates = () => {
-    return templates.filter(template => {
-      const priceData = cityPrices[template.id];
-      return priceData?.price && parseFloat(priceData.price) > 0;
-    });
-  };
-
-  const getHiddenTemplates = () => {
-    return templates.filter(template => {
-      const priceData = cityPrices[template.id];
-      return !priceData?.price || parseFloat(priceData.price) <= 0;
-    });
+    return templates.filter(t => {
+      const isSelected = selectedPackages[t.id];
+      const priceData = cityPrices[t.id];
+      const hasPrice = priceData?.price && parseFloat(priceData.price) > 0;
+      return isSelected && hasPrice;
+    }).length;
   };
 
   const isStep1Complete = () => {
@@ -252,6 +344,11 @@ const EventSponsorshipSetup = ({ event }) => {
     );
   }
 
+  const openCreateInvite = () => {
+    setCurrentStep(2);
+    setModalOpen(true);
+  };
+
   return (
     <>
       <Card>
@@ -262,9 +359,16 @@ const EventSponsorshipSetup = ({ event }) => {
               Configure pricing and generate invite links for sponsors
             </Text>
           </Box>
-          <Button onClick={() => setModalOpen(true)}>
-            Setup Sponsorship
-          </Button>
+          <Flex gap="2">
+            {activePackages.length > 0 && (
+              <Button onClick={openCreateInvite} variant="soft">
+                Create Invite
+              </Button>
+            )}
+            <Button onClick={() => { setCurrentStep(1); setModalOpen(true); }}>
+              Setup Sponsorship
+            </Button>
+          </Flex>
         </Flex>
 
         {summary && (
@@ -289,6 +393,117 @@ const EventSponsorshipSetup = ({ event }) => {
                 </Text>
               </Box>
             </Flex>
+          </Box>
+        )}
+
+        {/* Active Packages Collapsible */}
+        {activePackages.length > 0 && (
+          <Box mt="4">
+            <Flex
+              align="center"
+              gap="2"
+              style={{ cursor: 'pointer' }}
+              onClick={() => setShowActivePackages(!showActivePackages)}
+            >
+              <IconButton size="1" variant="ghost">
+                {showActivePackages ? <ChevronUpIcon /> : <ChevronDownIcon />}
+              </IconButton>
+              <Text size="2" weight="bold">
+                {activePackages.length} sponsor package{activePackages.length !== 1 ? 's' : ''} active
+              </Text>
+            </Flex>
+
+            {showActivePackages && (
+              <Box mt="2" ml="4">
+                <Table.Root variant="surface" size="1">
+                  <Table.Header>
+                    <Table.Row>
+                      <Table.ColumnHeaderCell>Package</Table.ColumnHeaderCell>
+                      <Table.ColumnHeaderCell>Price</Table.ColumnHeaderCell>
+                    </Table.Row>
+                  </Table.Header>
+                  <Table.Body>
+                    {activePackages.map(pkg => (
+                      <Table.Row key={pkg.id}>
+                        <Table.Cell>
+                          <Text size="2">{pkg.name}</Text>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <Text size="2">{pkg.currency} ${pkg.price.toLocaleString()}</Text>
+                        </Table.Cell>
+                      </Table.Row>
+                    ))}
+                  </Table.Body>
+                </Table.Root>
+              </Box>
+            )}
+          </Box>
+        )}
+
+        {/* Invites List */}
+        {invites.length > 0 && (
+          <Box mt="4">
+            <Heading size="3" mb="2">Invites Sent</Heading>
+            <Table.Root variant="surface" size="2">
+              <Table.Header>
+                <Table.Row>
+                  <Table.ColumnHeaderCell>Prospect</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell>Company</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell>Discount</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell>Views</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell>Created</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell>Link</Table.ColumnHeaderCell>
+                </Table.Row>
+              </Table.Header>
+              <Table.Body>
+                {invites.map(invite => (
+                  <Table.Row key={invite.id}>
+                    <Table.Cell>
+                      <Text size="2">{invite.prospect_name}</Text>
+                      {invite.prospect_email && (
+                        <Text size="1" color="gray" style={{ display: 'block' }}>
+                          {invite.prospect_email}
+                        </Text>
+                      )}
+                    </Table.Cell>
+                    <Table.Cell>
+                      <Text size="2">{invite.prospect_company || '—'}</Text>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <Text size="2">{invite.discount_percent ? `${invite.discount_percent}%` : '0%'}</Text>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <Text size="2">{invite.view_count || 0}</Text>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <Text size="2">
+                        {new Date(invite.created_at).toLocaleDateString()}
+                      </Text>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <Flex gap="2">
+                        <IconButton
+                          size="1"
+                          variant="soft"
+                          onClick={() => copyToClipboard(invite.full_url)}
+                          title="Copy link"
+                        >
+                          <CopyIcon />
+                        </IconButton>
+                        <IconButton
+                          size="1"
+                          variant="soft"
+                          onClick={() => window.open(invite.full_url, '_blank')}
+                          title="Open link"
+                        >
+                          <ExternalLinkIcon />
+                        </IconButton>
+                      </Flex>
+                    </Table.Cell>
+                  </Table.Row>
+                ))}
+              </Table.Body>
+            </Table.Root>
           </Box>
         )}
       </Card>
@@ -329,47 +544,66 @@ const EventSponsorshipSetup = ({ event }) => {
               {currentStep === 1 && (
                 <Box>
                   <Heading size="4" mb="3">
-                    Package Pricing for {event.cities.name}
+                    Package Selection & Pricing for {event.cities.name}
                   </Heading>
                   <Callout.Root color="blue" size="1" mb="4">
                     <Callout.Text>
-                      <strong>Note:</strong> These prices are shared across all sponsor prospects in {event.cities.name}. Set price to zero or click "Hide" to remove a package from sponsor invites.
+                      <strong>Note:</strong> These prices are shared across all sponsor prospects in {event.cities.name}. Only checked packages with prices will be available to prospects.
                     </Callout.Text>
                   </Callout.Root>
 
-                  <Heading size="3" mb="2">Active Packages</Heading>
+                  {/* Search Bar */}
+                  <TextField.Root
+                    placeholder="Search packages by name, description, or category..."
+                    value={searchFilter}
+                    onChange={(e) => setSearchFilter(e.target.value)}
+                    size="2"
+                    mb="3"
+                  >
+                    <TextField.Slot>
+                      <MagnifyingGlassIcon height="16" width="16" />
+                    </TextField.Slot>
+                  </TextField.Root>
+
+                  <Flex justify="between" align="center" mb="3">
+                    <Text size="2" color="gray">
+                      {getSelectedCount()} selected | {getPricedCount()} priced | {templates.length} total
+                    </Text>
+                  </Flex>
                   <Table.Root variant="surface" size="2">
                     <Table.Header>
                       <Table.Row>
+                        <Table.ColumnHeaderCell width="40px"></Table.ColumnHeaderCell>
                         <Table.ColumnHeaderCell>Package</Table.ColumnHeaderCell>
                         <Table.ColumnHeaderCell width="150px">Price</Table.ColumnHeaderCell>
                         <Table.ColumnHeaderCell width="120px">Currency</Table.ColumnHeaderCell>
-                        <Table.ColumnHeaderCell width="80px"></Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell width="80px">State</Table.ColumnHeaderCell>
                       </Table.Row>
                     </Table.Header>
 
                     <Table.Body>
-                      {/* Render active packages only */}
+                      {/* Render ALL packages grouped by tier */}
                       {[
                         { key: 'brand', title: 'BRAND TIER - Connect Art, Culture & Community', bgColor: 'var(--accent-2)', textColor: 'var(--accent-11)' },
                         { key: 'business', title: 'TACTICAL TIER - Buy Specific Impact Moments', bgColor: 'var(--accent-2)', textColor: 'var(--accent-11)' },
                         { key: 'personal', title: 'PERSONAL TIER - Art Battle Patrons Circle', bgColor: 'var(--accent-2)', textColor: 'var(--accent-11)' },
                         { key: 'addon', title: 'ADD-ONS - Enhance Any Package', bgColor: 'var(--orange-2)', textColor: 'var(--orange-11)' }
                       ].map(tier => {
-                        const activeInTier = groupedTemplates[tier.key].filter(t => {
-                          const priceData = cityPrices[t.id];
-                          return priceData?.price && parseFloat(priceData.price) > 0;
-                        });
-                        return activeInTier.length > 0 && (
+                        const templatesInTier = groupedTemplates[tier.key].filter(t =>
+                          !searchFilter ||
+                          t.name.toLowerCase().includes(searchFilter.toLowerCase()) ||
+                          t.description?.toLowerCase().includes(searchFilter.toLowerCase())
+                        );
+                        return templatesInTier.length > 0 && (
                         <React.Fragment key={tier.key}>
                           <Table.Row style={{ background: tier.bgColor }}>
-                            <Table.Cell colSpan={4}>
+                            <Table.Cell colSpan={5}>
                               <Text weight="bold" size="2" style={{ color: tier.textColor }}>
                                 {tier.title}
                               </Text>
                             </Table.Cell>
                           </Table.Row>
-                          {activeInTier.map(template => {
+                          {templatesInTier.map(template => {
                             const priceData = cityPrices[template.id] || {};
                             const hasPricing = priceData.price && parseFloat(priceData.price) > 0;
                             const isExpanded = expandedPackages[template.id];
@@ -377,6 +611,15 @@ const EventSponsorshipSetup = ({ event }) => {
                             return (
                               <React.Fragment key={template.id}>
                                 <Table.Row>
+                                  {/* Checkbox Column */}
+                                  <Table.Cell>
+                                    <Checkbox
+                                      checked={selectedPackages[template.id] || false}
+                                      onCheckedChange={() => handlePackageToggle(template.id)}
+                                    />
+                                  </Table.Cell>
+
+                                  {/* Package Info Column */}
                                   <Table.Cell>
                                     <Flex direction="column" gap="2">
                                       <Flex align="center" gap="2">
@@ -395,6 +638,7 @@ const EventSponsorshipSetup = ({ event }) => {
                                     </Flex>
                                   </Table.Cell>
 
+                                  {/* Price Column */}
                                   <Table.Cell>
                                     <TextField.Root
                                       type="number"
@@ -404,14 +648,17 @@ const EventSponsorshipSetup = ({ event }) => {
                                       onChange={(e) => handlePriceChange(template.id, 'price', e.target.value)}
                                       placeholder="0.00"
                                       size="2"
+                                      disabled={!selectedPackages[template.id]}
                                     />
                                   </Table.Cell>
 
+                                  {/* Currency Column */}
                                   <Table.Cell>
                                     <Select.Root
                                       value={priceData.currency || 'USD'}
                                       onValueChange={(value) => handlePriceChange(template.id, 'currency', value)}
                                       size="2"
+                                      disabled={!selectedPackages[template.id]}
                                     >
                                       <Select.Trigger style={{ width: '100%' }} />
                                       <Select.Content>
@@ -424,23 +671,25 @@ const EventSponsorshipSetup = ({ event }) => {
                                     </Select.Root>
                                   </Table.Cell>
 
+                                  {/* State Badge Column */}
                                   <Table.Cell>
-                                    <IconButton
-                                      size="1"
-                                      variant="soft"
-                                      color="red"
-                                      onClick={() => handleHidePackage(template.id)}
-                                      title="Hide package"
-                                    >
-                                      <Cross2Icon />
-                                    </IconButton>
+                                    {(() => {
+                                      const state = getPackageState(template.id);
+                                      if (state === 'not_selected') {
+                                        return <Badge color="gray" size="1">Not Selected</Badge>;
+                                      } else if (state === 'selected_no_price') {
+                                        return <Badge color="orange" size="1">Needs Price</Badge>;
+                                      } else {
+                                        return <Badge color="green" size="1">Ready</Badge>;
+                                      }
+                                    })()}
                                   </Table.Cell>
                                 </Table.Row>
 
                                 {/* Benefits Dropdown Row */}
                                 {isExpanded && template.benefits && template.benefits.length > 0 && (
                                   <Table.Row style={{ background: 'var(--gray-2)' }}>
-                                    <Table.Cell colSpan={4}>
+                                    <Table.Cell colSpan={5}>
                                       <Box p="3">
                                         <Text size="2" weight="bold" mb="2">Benefits:</Text>
                                         <Flex direction="column" gap="1">
@@ -463,112 +712,6 @@ const EventSponsorshipSetup = ({ event }) => {
                       })}
                     </Table.Body>
                   </Table.Root>
-
-                  {/* Hidden Packages Section */}
-                  {getHiddenTemplates().length > 0 && (
-                    <Box mt="6">
-                      <Separator size="4" mb="4" />
-                      <Heading size="3" mb="2">Hidden Packages</Heading>
-                      <Callout.Root color="gray" size="1" mb="3">
-                        <Callout.Text>
-                          These packages are hidden from sponsor invites. Set a price or click "Restore" to make them available.
-                        </Callout.Text>
-                      </Callout.Root>
-
-                      <Table.Root variant="surface" size="2">
-                        <Table.Header>
-                          <Table.Row>
-                            <Table.ColumnHeaderCell>Package</Table.ColumnHeaderCell>
-                            <Table.ColumnHeaderCell width="150px">Price</Table.ColumnHeaderCell>
-                            <Table.ColumnHeaderCell width="120px">Currency</Table.ColumnHeaderCell>
-                            <Table.ColumnHeaderCell width="80px"></Table.ColumnHeaderCell>
-                          </Table.Row>
-                        </Table.Header>
-
-                        <Table.Body>
-                          {[
-                            { key: 'brand', title: 'BRAND TIER', bgColor: 'var(--gray-2)', textColor: 'var(--gray-11)' },
-                            { key: 'business', title: 'TACTICAL TIER', bgColor: 'var(--gray-2)', textColor: 'var(--gray-11)' },
-                            { key: 'personal', title: 'PERSONAL TIER', bgColor: 'var(--gray-2)', textColor: 'var(--gray-11)' },
-                            { key: 'addon', title: 'ADD-ONS', bgColor: 'var(--gray-2)', textColor: 'var(--gray-11)' }
-                          ].map(tier => {
-                            const hiddenInTier = groupedTemplates[tier.key].filter(t => {
-                              const priceData = cityPrices[t.id];
-                              return !priceData?.price || parseFloat(priceData.price) <= 0;
-                            });
-                            return hiddenInTier.length > 0 && (
-                              <React.Fragment key={tier.key}>
-                                <Table.Row style={{ background: tier.bgColor }}>
-                                  <Table.Cell colSpan={4}>
-                                    <Text weight="bold" size="2" style={{ color: tier.textColor }}>
-                                      {tier.title}
-                                    </Text>
-                                  </Table.Cell>
-                                </Table.Row>
-                                {hiddenInTier.map(template => {
-                                  const priceData = cityPrices[template.id] || {};
-
-                                  return (
-                                    <Table.Row key={template.id} style={{ backgroundColor: 'var(--gray-2)', opacity: 0.8 }}>
-                                      <Table.Cell>
-                                        <Text weight="bold" color="gray">{template.name}</Text>
-                                        {template.description && (
-                                          <Text size="1" color="gray" style={{ display: 'block' }}>
-                                            {template.description}
-                                          </Text>
-                                        )}
-                                      </Table.Cell>
-
-                                      <Table.Cell>
-                                        <TextField.Root
-                                          type="number"
-                                          step="0.01"
-                                          min="0"
-                                          value={priceData.price || ''}
-                                          onChange={(e) => handlePriceChange(template.id, 'price', e.target.value)}
-                                          placeholder="Set price to restore"
-                                          size="2"
-                                        />
-                                      </Table.Cell>
-
-                                      <Table.Cell>
-                                        <Select.Root
-                                          value={priceData.currency || 'USD'}
-                                          onValueChange={(value) => handlePriceChange(template.id, 'currency', value)}
-                                          size="2"
-                                        >
-                                          <Select.Trigger style={{ width: '100%' }} />
-                                          <Select.Content>
-                                            <Select.Item value="USD">USD</Select.Item>
-                                            <Select.Item value="CAD">CAD</Select.Item>
-                                            <Select.Item value="EUR">EUR</Select.Item>
-                                            <Select.Item value="GBP">GBP</Select.Item>
-                                            <Select.Item value="AUD">AUD</Select.Item>
-                                          </Select.Content>
-                                        </Select.Root>
-                                      </Table.Cell>
-
-                                      <Table.Cell>
-                                        <IconButton
-                                          size="1"
-                                          variant="soft"
-                                          color="green"
-                                          onClick={() => handleRestorePackage(template.id)}
-                                          title="Restore package"
-                                        >
-                                          <CheckIcon />
-                                        </IconButton>
-                                      </Table.Cell>
-                                    </Table.Row>
-                                  );
-                                })}
-                              </React.Fragment>
-                            );
-                          })}
-                        </Table.Body>
-                      </Table.Root>
-                    </Box>
-                  )}
 
                   <Flex justify="between" align="center" mt="4">
                     <Text size="2" color="gray">

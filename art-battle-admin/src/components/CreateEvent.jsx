@@ -28,7 +28,7 @@ const CreateEvent = () => {
   const [cities, setCities] = useState([]);
   const [countries, setCountries] = useState([]);
   const [venues, setVenues] = useState([]);
-  const [loadingLocations, setLoadingLocations] = useState(true);
+  const [loadingLocations, setLoadingLocations] = useState(false);
   const [nextEid, setNextEid] = useState('');
   const [loadingEid, setLoadingEid] = useState(true);
   const [error, setError] = useState(null);
@@ -746,15 +746,27 @@ const CreateEvent = () => {
                             // Reset city when country changes
                             handleInputChange('city_id', 'none');
                           }}
+                          onOpenChange={(open) => {
+                            // Load locations when dropdown opens if not already loaded
+                            if (open && countries.length === 0) {
+                              fetchLocations();
+                            }
+                          }}
                         >
-                          <Select.Trigger placeholder="Select a country" />
+                          <Select.Trigger
+                            placeholder={countries.length === 0 ? "Click to load countries..." : "Select a country"}
+                          />
                           <Select.Content>
                             <Select.Item value="none">No country</Select.Item>
-                            {countries.map((country) => (
-                              <Select.Item key={country.id} value={country.id}>
-                                {country.name}
-                              </Select.Item>
-                            ))}
+                            {countries.length === 0 ? (
+                              <Select.Item value="loading" disabled>Loading countries...</Select.Item>
+                            ) : (
+                              countries.map((country) => (
+                                <Select.Item key={country.id} value={country.id}>
+                                  {country.name}
+                                </Select.Item>
+                              ))
+                            )}
                           </Select.Content>
                         </Select.Root>
                       </Box>
@@ -767,20 +779,32 @@ const CreateEvent = () => {
                           value={formData.city_id}
                           onValueChange={(value) => handleInputChange('city_id', value)}
                           disabled={!formData.country_id || formData.country_id === 'none'}
+                          onOpenChange={(open) => {
+                            // Load locations when dropdown opens if not already loaded
+                            if (open && cities.length === 0) {
+                              fetchLocations();
+                            }
+                          }}
                         >
-                          <Select.Trigger 
+                          <Select.Trigger
                             placeholder={
-                              formData.country_id && formData.country_id !== 'none' ? "Select a city" : "Select a country first"
-                            } 
+                              formData.country_id && formData.country_id !== 'none'
+                                ? (cities.length === 0 ? "Click to load cities..." : "Select a city")
+                                : "Select a country first"
+                            }
                           />
                           <Select.Content>
                             <Select.Item value="none">No city</Select.Item>
-                            {getFilteredCities().map((city) => (
-                              <Select.Item key={city.id} value={city.id}>
-                                {city.name}
-                                {city.countries?.name && ` (${city.countries.name})`}
-                              </Select.Item>
-                            ))}
+                            {cities.length === 0 ? (
+                              <Select.Item value="loading" disabled>Loading cities...</Select.Item>
+                            ) : (
+                              getFilteredCities().map((city) => (
+                                <Select.Item key={city.id} value={city.id}>
+                                  {city.name}
+                                  {city.countries?.name && ` (${city.countries.name})`}
+                                </Select.Item>
+                              ))
+                            )}
                           </Select.Content>
                         </Select.Root>
                       </Box>

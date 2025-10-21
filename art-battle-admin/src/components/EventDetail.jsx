@@ -2317,27 +2317,43 @@ The Art Battle Team`);
     const invitationId = artist.artist_invitations[0].id;
 
     try {
-      const { error } = await supabase
-        .from('artist_invitations')
-        .update({
-          status: 'expired',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', invitationId);
+      console.log('Expiring invitation:', invitationId);
+
+      // Use edge function with service role permissions instead of direct client update
+      const { data, error } = await supabase.functions.invoke('admin-expire-invitation', {
+        body: { invitation_id: invitationId }
+      });
 
       if (error) {
         console.error('Error expiring invitation:', error);
-        showAdminMessage('error', 'Failed to expire invitation');
-      } else {
-        showAdminMessage('success', 'Invitation expired successfully - artist will no longer see this invitation');
-        // Refresh the applications to update the UI
-        await fetchEventApplications();
-        // Close the modal
-        setSelectedArtist(null);
+        console.error('Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
+        showAdminMessage('error', `Failed to expire invitation: ${error.message || 'Unknown error'}`);
+        return;
       }
+
+      if (!data.success) {
+        console.error('Edge function returned error:', data);
+        showAdminMessage('error', `Failed to expire invitation: ${data.error || 'Unknown error'}`);
+        return;
+      }
+
+      console.log('Invitation expired successfully:', data);
+      showAdminMessage('success', 'Invitation expired successfully - artist will no longer see this invitation');
+
+      // Refresh the applications to update the UI
+      await fetchEventApplications();
+
+      // Close the modal
+      setSelectedArtist(null);
+
     } catch (err) {
       console.error('Error expiring invitation:', err);
-      showAdminMessage('error', 'Failed to expire invitation');
+      showAdminMessage('error', `Failed to expire invitation: ${err.message || 'Unknown error'}`);
     }
   };
 
