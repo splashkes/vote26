@@ -8,6 +8,7 @@ import TestCloudflare from './components/TestCloudflare';
 import EidResolver from './components/EidResolver';
 import UpgradeHandler from './components/UpgradeHandler';
 import { AuthProvider } from './contexts/AuthContext';
+import { AuctionWinnerProvider } from './contexts/AuctionWinnerContext';
 import './App.css';
 
 function App() {
@@ -21,9 +22,10 @@ function App() {
       radius="medium"
     >
       <AuthProvider>
-        <Router basename="/">
-          <div className="app">
-            <Routes>
+        <AuctionWinnerProvider>
+          <Router basename="/">
+            <div className="app">
+              <Routes>
               <Route path="/" element={<EventList />} />
               <Route path="/event/:eventId" element={<EventDetails />} />
               <Route path="/event/:eventId/art/:artworkId" element={<EventDetails />} />
@@ -37,6 +39,7 @@ function App() {
             </Routes>
           </div>
         </Router>
+        </AuctionWinnerProvider>
       </AuthProvider>
     </Theme>
   );
