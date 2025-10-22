@@ -280,9 +280,9 @@ const UpgradeHandler = () => {
               {/* Action Buttons */}
               <Flex gap="3" justify="center">
                 {event && (
-                  <Button 
-                    size="3" 
-                    onClick={() => navigate(`/event/${event.id}`)}
+                  <Button
+                    size="3"
+                    onClick={() => navigate(`/event/${event.eid}`)}
                   >
                     Go to Event <ArrowRightIcon />
                   </Button>

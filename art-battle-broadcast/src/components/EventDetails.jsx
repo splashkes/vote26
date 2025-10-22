@@ -58,6 +58,8 @@ import { isBuyerInfoMissing, getBuyerInfoStatus, extractUserPhone } from '../uti
 import ArtistsList from './ArtistsList';
 // Import PaymentButton for Stripe payments
 import PaymentButton from './PaymentButton';
+// Import RulesTab for competition specifics
+import RulesTab from './RulesTab';
 
 const EventDetails = () => {
   const { eventId, tab } = useParams();
@@ -68,7 +70,15 @@ const EventDetails = () => {
 
   // GLOBAL STATE: Single source of truth for all event data
   const [globalState, setGlobalState] = useState(null);
-  const [eventEid, setEventEid] = useState(null); // EID for broadcast subscription
+  // Initialize eventEid immediately if eventId is already an EID (not UUID)
+  const [eventEid, setEventEid] = useState(() => {
+    // If eventId is an EID (short, no dashes), use it immediately for broadcast
+    if (eventId && eventId.length < 36 && !eventId.includes('-')) {
+      console.log('🚀 [QR-FIX] Detected EID in URL, setting immediately for broadcast:', eventId);
+      return eventId;
+    }
+    return null;
+  });
 
   // Extract values from global state (with defaults for migration)
   const event = globalState?.event || null;
@@ -482,33 +492,39 @@ const EventDetails = () => {
 
         // CRITICAL FIX: Even if we skip the full fetch, we need eventEid for broadcast subscription
         if (!eventEid && eventId) {
-          console.log('🔧 [BROADCAST-FIX] EventEid not set, getting EID for broadcast subscription');
-          console.log('🔍 [ID-DEBUG] Fetching EID from eventId:', eventId);
-          const getEventEid = async () => {
-            try {
-              const response = await fetch(`https://artb.art/live/event/${eventId}`);
-              if (response.ok) {
-                const data = await response.json();
-                console.log('🔍 [ID-DEBUG] Event data response:', {
-                  hasEvent: !!data.event,
-                  eventEid: data.event?.eid,
-                  eventId: data.event?.id
-                });
-                if (data.event?.eid) {
-                  console.log('🔧 [BROADCAST-FIX] Got EID for broadcast:', data.event.eid);
-                  console.log('🔍 [ID-DEBUG] Setting eventEid state:', data.event.eid);
-                  setEventEid(data.event.eid);
+          // Check if eventId is already an EID
+          if (eventId.length < 36 && !eventId.includes('-')) {
+            console.log('🔧 [QR-FIX] EventId is already an EID, setting directly:', eventId);
+            setEventEid(eventId);
+          } else {
+            console.log('🔧 [BROADCAST-FIX] EventEid not set, getting EID for broadcast subscription');
+            console.log('🔍 [ID-DEBUG] Fetching EID from UUID:', eventId);
+            const getEventEid = async () => {
+              try {
+                const response = await fetch(`https://artb.art/live/event/${eventId}`);
+                if (response.ok) {
+                  const data = await response.json();
+                  console.log('🔍 [ID-DEBUG] Event data response:', {
+                    hasEvent: !!data.event,
+                    eventEid: data.event?.eid,
+                    eventId: data.event?.id
+                  });
+                  if (data.event?.eid) {
+                    console.log('🔧 [BROADCAST-FIX] Got EID for broadcast:', data.event.eid);
+                    console.log('🔍 [ID-DEBUG] Setting eventEid state:', data.event.eid);
+                    setEventEid(data.event.eid);
+                  } else {
+                    console.warn('🔧 [BROADCAST-FIX] No EID in event data');
+                  }
                 } else {
-                  console.warn('🔧 [BROADCAST-FIX] No EID in event data');
+                  console.warn('🔧 [BROADCAST-FIX] Failed to fetch event for EID:', response.status);
                 }
-              } else {
-                console.warn('🔧 [BROADCAST-FIX] Failed to fetch event for EID:', response.status);
+              } catch (error) {
+                console.warn('🔧 [BROADCAST-FIX] Error fetching EID:', error);
               }
-            } catch (error) {
-              console.warn('🔧 [BROADCAST-FIX] Error fetching EID:', error);
-            }
-          };
-          getEventEid();
+            };
+            getEventEid();
+          }
         } else if (eventEid) {
           console.log('🔍 [ID-DEBUG] EventEid already set:', eventEid);
         }
@@ -693,13 +709,13 @@ const EventDetails = () => {
   }, [artworks]);
 
   // Check for auto payment modal when all dependencies are ready
+  // ALSO check when roundWinners changes (from broadcast) to catch real-time wins
   useEffect(() => {
-    if (person && artworks.length > 0 && currentBids && Object.keys(currentBids).length > 0 && !paymentModalChecked) {
+    if (person && artworks.length > 0 && currentBids && Object.keys(currentBids).length > 0) {
       // Auto payment modal check (production-ready) - uses event-level data now
       checkForAutoPaymentModal();
-      setPaymentModalChecked(true);
     }
-  }, [person, artworks, currentBids, paymentModalChecked]);
+  }, [person, artworks, currentBids, roundWinners]); // Added roundWinners to catch real-time updates
 
   // Global offer notification handler for all artworks in the event
   useEffect(() => {
@@ -790,8 +806,13 @@ const EventDetails = () => {
         if (cachedData?.event) {
           // GLOBAL STATE: Set event data and EID
           publicDataManager.updateEventState(eventId, { event: cachedData.event, loading: false });
-          setEventEid(cachedData.event.eid); // Store EID for broadcast subscription
-          console.log('🌐 [V2-BROADCAST] Event EID from cache:', cachedData.event.eid);
+          // Only update eventEid if we don't already have it (QR users will have it from URL)
+          if (!eventEid) {
+            setEventEid(cachedData.event.eid); // Store EID for broadcast subscription
+            console.log('🌐 [V2-BROADCAST] Event EID from cache:', cachedData.event.eid);
+          } else {
+            console.log('🔔 [QR-FIX] Using pre-set EID for broadcast:', eventEid);
+          }
         }
         
         if (cachedData?.artworks && cachedData.artworks.length > 0) {
@@ -1900,6 +1921,7 @@ const EventDetails = () => {
           <Tabs.Trigger value="info">Info</Tabs.Trigger>
           <Tabs.Trigger value="vote">Vote</Tabs.Trigger>
           <Tabs.Trigger value="auction">Auction</Tabs.Trigger>
+          <Tabs.Trigger value="rules">Rules</Tabs.Trigger>
           {isAdmin && (
             <Tabs.Trigger value="admin" style={{ color: 'var(--blue-11)' }}>Admin</Tabs.Trigger>
           )}
@@ -2430,7 +2452,11 @@ const EventDetails = () => {
             </Box>
           </Tabs.Content>
 
-<Tabs.Content value="admin">
+          <Tabs.Content value="rules">
+            <RulesTab eventId={eventId} eventEid={event?.eid} />
+          </Tabs.Content>
+
+          <Tabs.Content value="admin">
             {isAdmin && adminTabLoaded && (
               <AdminPanel 
                 eventId={eventId}
