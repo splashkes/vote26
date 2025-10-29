@@ -10,24 +10,25 @@ import {
   ScrollArea
 } from '@radix-ui/themes';
 import {
-  DashboardIcon,
+  CalendarIcon,
   PersonIcon,
   ImageIcon,
   GearIcon,
   ExitIcon,
-  HeartFilledIcon,
-  BarChartIcon,
+  ActivityLogIcon,
+  TableIcon,
   LockClosedIcon,
   HamburgerMenuIcon,
   ChevronRightIcon,
   EnvelopeClosedIcon,
   PaperPlaneIcon,
-  ChatBubbleIcon,
-  FileTextIcon,
+  MobileIcon,
   CardStackIcon,
   CheckCircledIcon,
-  HomeIcon,
-  CardStackIcon as SponsorshipIcon
+  Component1Icon,
+  CopyIcon,
+  ReaderIcon,
+  StarIcon
 } from '@radix-ui/react-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -73,122 +74,183 @@ const AdminSidebar = ({ collapsed = false, onToggleCollapse, hideToggleAndSignOu
     navigate(`/events/${eventId}`);
   };
 
-  const baseNavItems = [
+  // Section 1: Events & Operations
+  const eventsSection = [
     {
       to: '/events',
-      icon: DashboardIcon,
-      label: 'Events',
-      description: 'Event dashboard and management'
-    },
-    {
-      to: '/artists',
-      icon: PersonIcon,
-      label: 'Artists',
-      description: 'Manage profiles, applications, invitations'
-    },
-    {
-      to: '/artists/bulk-management',
-      icon: BarChartIcon,
-      label: 'Bulk Artist View',
-      description: 'Bulk management of artist bios and promo images',
-      color: 'purple'
-    },
-    {
-      to: '/content',
-      icon: FileTextIcon,
-      label: 'Content',
-      description: 'Manage curated feed content and analytics',
-      color: 'purple'
-    },
-    {
-      to: '/people',
-      icon: PersonIcon,
-      label: 'People',
-      description: 'Customer loyalty and management'
-    },
-    {
-      to: '/health',
-      icon: HeartFilledIcon,
-      label: 'Health',
-      description: 'AI recommendations across all events',
-      color: 'crimson'
+      icon: CalendarIcon,
+      label: 'Events Dashboard',
+      description: 'Browse and manage all events',
+      section: 'events'
     },
     {
       to: '/event-linter',
       icon: CheckCircledIcon,
-      label: 'Event Linter',
-      description: 'Automated event health checks and warnings',
-      color: 'violet'
+      label: 'Event Validator',
+      description: 'Automated event health checks and issue detection',
+      color: 'violet',
+      section: 'events'
     },
+    {
+      to: '/venues',
+      icon: Component1Icon,
+      label: 'Venues',
+      description: 'Manage event venues and locations',
+      color: 'cyan',
+      section: 'events'
+    }
+  ];
+
+  // Section 2: Artists
+  const artistsSection = [
+    {
+      to: '/artists',
+      icon: PersonIcon,
+      label: 'Artist Profiles',
+      description: 'Manage profiles, applications, and invitations',
+      section: 'artists'
+    },
+    {
+      to: '/artists/bulk-management',
+      icon: TableIcon,
+      label: 'Bulk Artist Editor',
+      description: 'Batch edit bios, images, and profile data',
+      color: 'purple',
+      section: 'artists'
+    }
+  ];
+
+  // Section 3: Content & Marketing
+  const contentSection = [
+    {
+      to: '/content',
+      icon: ImageIcon,
+      label: 'Content Library',
+      description: 'Curated feed content and performance analytics',
+      color: 'purple',
+      section: 'content'
+    },
+    {
+      to: '/sms-marketing',
+      icon: MobileIcon,
+      label: 'SMS Campaigns',
+      description: 'Create and send promotional text messages',
+      color: 'green',
+      section: 'content'
+    }
+  ];
+
+  // Section 4: Customers
+  const customersSection = [
+    {
+      to: '/people',
+      icon: ReaderIcon,
+      label: 'Customer Hub',
+      description: 'Customer loyalty, profiles, and engagement',
+      section: 'customers'
+    }
+  ];
+
+  // Section 7: Configuration (always visible)
+  const configSection = [
     {
       to: '/settings',
       icon: GearIcon,
       label: 'Settings',
-      description: 'System configuration'
+      description: 'System configuration and preferences',
+      section: 'config'
     }
   ];
 
-  // Add Admin Users, Invitations, and Email Queue for super admins only
-  const navItems = userLevel === 'super' 
+  const baseNavItems = [
+    ...eventsSection,
+    ...artistsSection,
+    ...contentSection,
+    ...customersSection,
+    ...configSection
+  ];
+
+  // Super admin sections
+  const superAdminEventsSectionExtra = [
+    {
+      to: '/sponsorship-packages',
+      icon: StarIcon,
+      label: 'Sponsorship Tiers',
+      description: 'Global sponsorship templates and pricing',
+      color: 'teal',
+      section: 'events'
+    }
+  ];
+
+  const superAdminArtistsExtra = [
+    {
+      to: '/duplicate-profiles',
+      icon: CopyIcon,
+      label: 'Duplicate Resolver',
+      description: 'Find and merge duplicate artist profiles',
+      color: 'orange',
+      section: 'artists'
+    }
+  ];
+
+  const financeSection = [
+    {
+      to: '/payments',
+      icon: CardStackIcon,
+      label: 'Artist Payments',
+      description: 'Payment status, invites, and Stripe management',
+      color: 'green',
+      section: 'finance'
+    }
+  ];
+
+  const systemAdminSection = [
+    {
+      to: '/health',
+      icon: ActivityLogIcon,
+      label: 'System Health',
+      description: 'AI recommendations and system monitoring',
+      color: 'crimson',
+      section: 'system'
+    },
+    {
+      to: '/admin-users',
+      icon: LockClosedIcon,
+      label: 'Admin Users',
+      description: 'Manage administrator accounts and permissions',
+      color: 'orange',
+      section: 'system'
+    },
+    {
+      to: '/invitations',
+      icon: EnvelopeClosedIcon,
+      label: 'Admin Invitations',
+      description: 'Create and manage admin account invites',
+      color: 'blue',
+      section: 'system'
+    },
+    {
+      to: '/email-queue',
+      icon: PaperPlaneIcon,
+      label: 'Email Queue',
+      description: 'Monitor artist payment email notifications',
+      color: 'purple',
+      section: 'system'
+    }
+  ];
+
+  // Build nav items based on user level
+  const navItems = userLevel === 'super'
     ? [
-        ...baseNavItems.slice(0, -1), // All items except Settings
-        {
-          to: '/admin-users',
-          icon: LockClosedIcon,
-          label: 'Admin Users',
-          description: 'Manage administrator accounts',
-          color: 'orange'
-        },
-        {
-          to: '/invitations',
-          icon: EnvelopeClosedIcon,
-          label: 'Invitations',
-          description: 'Manage admin invitations',
-          color: 'blue'
-        },
-        {
-          to: '/email-queue',
-          icon: PaperPlaneIcon,
-          label: 'Email Queue',
-          description: 'Manage artist payment email notifications',
-          color: 'purple'
-        },
-        {
-          to: '/payments',
-          icon: CardStackIcon,
-          label: 'Payments',
-          description: 'Artist payment administration and Stripe management',
-          color: 'green'
-        },
-        {
-          to: '/duplicate-profiles',
-          icon: PersonIcon,
-          label: 'Duplicate Profiles',
-          description: 'Search and merge duplicate artist profiles',
-          color: 'orange'
-        },
-        {
-          to: '/sms-marketing',
-          icon: ChatBubbleIcon,
-          label: 'SMS Marketing',
-          description: 'Create and send promotional SMS campaigns',
-          color: 'green'
-        },
-        {
-          to: '/venues',
-          icon: HomeIcon,
-          label: 'Venues',
-          description: 'Manage event venues and locations',
-          color: 'cyan'
-        },
-        {
-          to: '/sponsorship-packages',
-          icon: SponsorshipIcon,
-          label: 'Sponsorship Packages',
-          description: 'Manage global sponsorship templates and pricing',
-          color: 'teal'
-        },
-        baseNavItems[baseNavItems.length - 1] // Settings at the end
+        ...eventsSection,
+        ...superAdminEventsSectionExtra,
+        ...artistsSection,
+        ...superAdminArtistsExtra,
+        ...contentSection,
+        ...customersSection,
+        ...financeSection,
+        ...systemAdminSection,
+        ...configSection
       ]
     : baseNavItems;
 

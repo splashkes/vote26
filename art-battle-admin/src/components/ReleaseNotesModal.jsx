@@ -195,13 +195,14 @@ const ReleaseNotesModal = ({ isOpen, onClose }) => {
 export const useReleaseNotes = () => {
   const [showReleaseNotes, setShowReleaseNotes] = useState(false);
 
-  useEffect(() => {
-    // Show modal after a short delay for better UX on every login
-    const timer = setTimeout(() => {
-      setShowReleaseNotes(true);
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, []);
+  // Disabled auto-popup for now
+  // useEffect(() => {
+  //   // Show modal after a short delay for better UX on every login
+  //   const timer = setTimeout(() => {
+  //     setShowReleaseNotes(true);
+  //   }, 1000);
+  //   return () => clearTimeout(timer);
+  // }, []);
 
   const closeReleaseNotes = () => {
     setShowReleaseNotes(false);
