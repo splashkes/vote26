@@ -3119,7 +3119,16 @@ const AdminPanel = ({
       
       {/* Artist Selection Dialog */}
       <Dialog.Root open={!!selectedEasel} onOpenChange={() => setSelectedEasel(null)}>
-        <Dialog.Content style={{ maxWidth: '90vw', width: 450 }}>
+        <Dialog.Content style={{
+          maxWidth: '90vw',
+          width: 450,
+          position: 'fixed',
+          top: '10vh',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          maxHeight: '80vh',
+          overflow: 'auto'
+        }}>
           <Dialog.Title>
             {selectedEasel?.artist ? 'Edit Easel Assignment' : 'Select Artist'}
           </Dialog.Title>
@@ -3407,7 +3416,14 @@ const AdminPanel = ({
                   }
                 }}>
                   <Select.Trigger placeholder="Choose an artist..." />
-                  <Select.Content>
+                  <Select.Content
+                    position="popper"
+                    sideOffset={5}
+                    style={{
+                      maxHeight: '300px',
+                      overflowY: 'auto'
+                    }}
+                  >
                     {eventArtists.filter(artist => {
                       // Show artists not assigned to THIS specific round
                       if (!selectedEasel) return false;
