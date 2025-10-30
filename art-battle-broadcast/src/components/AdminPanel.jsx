@@ -3119,16 +3119,19 @@ const AdminPanel = ({
       
       {/* Artist Selection Dialog */}
       <Dialog.Root open={!!selectedEasel} onOpenChange={() => setSelectedEasel(null)}>
-        <Dialog.Content style={{
-          maxWidth: '90vw',
-          width: 450,
-          position: 'fixed',
-          top: '10vh',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          maxHeight: '80vh',
-          overflow: 'auto'
-        }}>
+        <Dialog.Content
+          style={{
+            position: 'fixed',
+            top: '20px',
+            left: '20px',
+            maxWidth: '500px',
+            width: 'calc(100vw - 40px)',
+            maxHeight: 'calc(100vh - 40px)',
+            overflow: 'auto',
+            transform: 'none',
+            margin: '0'
+          }}
+        >
           <Dialog.Title>
             {selectedEasel?.artist ? 'Edit Easel Assignment' : 'Select Artist'}
           </Dialog.Title>
