@@ -11,37 +11,43 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Verify request is authorized with service role key
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    // Verify request is authorized with X-Cron-Secret header
+    const cronSecret = req.headers.get('X-Cron-Secret');
+
+    if (!cronSecret) {
       return new Response(
-        JSON.stringify({ error: 'Missing or invalid authorization header' }),
+        JSON.stringify({ error: 'Missing X-Cron-Secret header' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const token = authHeader.replace('Bearer ', '');
+    // Create Supabase client to verify the secret
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-
-    // Check if the token is the service role key (for cron job calls)
-    if (token !== serviceRoleKey) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized - invalid service role key' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       serviceRoleKey
     );
 
-    // Query events from 2 days ago to 33 days in the future
+    // Verify the cron secret
+    const { data: secretData, error: secretError } = await supabase
+      .from('cron_secrets')
+      .select('secret_value')
+      .eq('name', 'meta_ads_cron')
+      .single();
+
+    if (secretError || !secretData || cronSecret !== secretData.secret_value) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid X-Cron-Secret' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Query events from 2 days ago to 60 days in the future
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - 2);
 
     const endDate = new Date();
-    endDate.setDate(endDate.getDate() + 33);
+    endDate.setDate(endDate.getDate() + 60);
 
     console.log(`Fetching events from ${startDate.toISOString()} to ${endDate.toISOString()}`);
 

@@ -63,21 +63,22 @@ const CityActivityCharts = ({ cityId, cityName, events }) => {
       // Log debug info to troubleshoot revenue data
       if (data.debug) {
         console.log('=== Edge Function Debug Info ===');
+        console.log('Mode:', data.debug.note || 'Standard query');
         console.log('Total events returned:', data.debug.totalEventsReturned);
         console.log('Events with ticket revenue:', data.debug.eventsWithTicketRevenue);
         console.log('Events with auction revenue:', data.debug.eventsWithAuctionRevenue);
 
-        if (data.debug.rawDataCounts) {
-          console.log('--- Raw Query Results ---');
-          console.log('Votes found in query:', data.debug.rawDataCounts.votesFound);
-          console.log('Bids found in query:', data.debug.rawDataCounts.bidsFound);
-          console.log('Art pieces found:', data.debug.rawDataCounts.artPiecesFound);
-          console.log('QR scans found:', data.debug.rawDataCounts.qrScansFound);
-          console.log('Registrations found:', data.debug.rawDataCounts.registrationsFound);
+        if (data.debug.aggregatedDataCounts) {
+          console.log('--- SQL Aggregation Query Results (No Limits!) ---');
+          console.log('Art pieces found:', data.debug.aggregatedDataCounts.artPiecesFound);
+          console.log('Vote count records (events with votes):', data.debug.aggregatedDataCounts.voteCountRecords);
+          console.log('Bid count records (events with bids):', data.debug.aggregatedDataCounts.bidCountRecords);
+          console.log('QR scan count records:', data.debug.aggregatedDataCounts.qrScanCountRecords);
+          console.log('Registration count records:', data.debug.aggregatedDataCounts.registrationCountRecords);
         }
 
         if (data.debug.aggregatedCounts) {
-          console.log('--- Aggregated Results ---');
+          console.log('--- Final Aggregated Totals ---');
           console.log('Total votes aggregated:', data.debug.aggregatedCounts.totalVotesAggregated);
           console.log('Total bids aggregated:', data.debug.aggregatedCounts.totalBidsAggregated);
           console.log('Events with votes:', data.debug.aggregatedCounts.eventsWithVotes);

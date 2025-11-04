@@ -55,6 +55,7 @@ serve(async (req) => {
       campaign_name,
       message,
       person_ids = [],
+      event_id = null,
       targeting_criteria = {},
       estimated_segments = 1,
       test_mode = false
@@ -119,6 +120,7 @@ serve(async (req) => {
       .insert({
         name: campaign_name,
         message_template: message,
+        event_id: event_id,
         targeting_criteria: targeting_criteria,
         messages_sent: validRecipients.length,
         messages_blocked: blockedCount,

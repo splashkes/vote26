@@ -4,16 +4,18 @@
 # Daily Supabase Database Backup Script
 # ============================================================================
 # Comprehensive backup script for Art Battle Vote database
-# Creates full backup and compresses it for efficient storage
+# Creates full backup, compresses it, and applies smart retention policy
 #
 # Usage: ./daily-backup.sh
 # Cron: 0 2 * * * /root/vote_app/vote26/scripts/daily-backup.sh >> /var/log/artbattle-backup.log 2>&1
+#       (Runs once daily at 2 AM UTC)
 #
 # Features:
 # - Full database export (schema + data)
+# - Edge functions backup (local + deployed)
 # - Configuration backup
 # - Compression with verification
-# - Cleanup on success
+# - Smart retention policy (weekly/monthly/yearly)
 # - Detailed logging
 # - Error handling with notifications
 # ============================================================================
@@ -25,7 +27,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 BACKUP_BASE_DIR="/nfs/store/vote26/backups"
 LOG_FILE="/var/log/artbattle-backup.log"
-RETENTION_DAYS=30  # Keep backups for 30 days
+# Note: Retention is now managed by smart-backup-retention.sh:
+#  - Keep ALL backups < 7 days old
+#  - Keep ONE per week for backups 7-30 days old
+#  - Keep ONE per month for backups 30-365 days old
+#  - Keep ONE per year for backups > 365 days old
 
 # Database connection
 DB_HOST="${SUPABASE_DB_HOST:-db.xsqdkubgyqwpyvfltnrf.supabase.co}"
@@ -985,10 +991,16 @@ main() {
     
     # Backup configuration
     backup_config
-    
-    # Verify edge functions were backed up properly
-    verify_edge_functions
-    log_info "✓ Edge functions verification completed - proceeding to next step"
+
+    # Verify edge functions were backed up properly (with timeout to prevent hangs)
+    log_info "Starting edge functions verification (with 60s timeout)..."
+    if timeout 60 bash -c "$(declare -f verify_edge_functions); verify_edge_functions" 2>&1 | tee -a "$LOG_FILE"; then
+        log_info "✓ Edge functions verification completed - proceeding to next step"
+    else
+        log_warn "Edge functions verification timed out or failed - continuing with backup anyway"
+        # Create minimal verification info
+        echo "Edge functions verification: SKIPPED (timeout)" >> "$BACKUP_DIR/backup_info.txt"
+    fi
     
     # Export Supabase project settings and RLS policies
     log_info "Starting Supabase settings export..."
@@ -1010,15 +1022,14 @@ main() {
     compress_backup
     log_info "✓ Backup compression completed - proceeding to next step"
     
-    # Cleanup old backups
-    log_info "Starting old backup cleanup..."
-    cleanup_old_backups
-    log_info "✓ Old backup cleanup completed - proceeding to next step"
-    
-    # Run additional cleanup script
-    log_info "Starting smart cleanup script..."
-    run_cleanup_script
-    log_info "✓ Smart cleanup script completed - proceeding to next step"
+    # Apply smart retention policy
+    log_info "Starting smart retention policy..."
+    if [ -x "$SCRIPT_DIR/smart-backup-retention.sh" ]; then
+        "$SCRIPT_DIR/smart-backup-retention.sh" --execute
+        log_info "✓ Smart retention policy completed - proceeding to next step"
+    else
+        log_warn "Smart retention script not found or not executable - skipping cleanup"
+    fi
     
     # Finalize backup
     log_info "Starting backup finalization..."

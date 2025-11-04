@@ -314,7 +314,8 @@ serve(async (req)=>{
                 subject: emailContent.subject,
                 html: emailContent.html,
                 text: emailContent.text,
-                from: 'hello@artbattle.com'
+                from: 'hello@artbattle.com',
+                cc: emailEntry.metadata?.cc || null
               })
             });
             const emailResult = await emailResponse.json();

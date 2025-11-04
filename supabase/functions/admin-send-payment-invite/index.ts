@@ -57,11 +57,49 @@ serve(async (req) => {
 
     console.log('Invite result:', inviteResult);
 
-    // If successful, also get invitation history
+    // If successful, send the email immediately
     let invitationHistory = [];
-    if (inviteResult.success) {
+    if (inviteResult.success && invite_type === 'email' && inviteResult.artist_email) {
+      try {
+        // Send email via send-custom-email edge function
+        const emailResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-custom-email`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            to: inviteResult.artist_email,
+            subject: inviteResult.email_subject,
+            text: inviteResult.email_content,
+            from: 'Art Battle Payments <payments@artbattle.com>',
+            cc: 'payments@artbattle.com'
+          })
+        });
+
+        const emailResult = await emailResponse.json();
+        console.log('Email send result:', emailResult);
+
+        if (!emailResult.success) {
+          console.error('Failed to send email:', emailResult);
+        }
+      } catch (emailError) {
+        console.error('Error sending email:', emailError);
+      }
+
+      // Get invitation history
       const { data: historyData, error: historyError } = await serviceClient
-        .rpc('get_artist_invitation_history', { artist_id });
+        .rpc('get_artist_invitation_history', { p_artist_profile_id: artist_id });
+
+      if (historyError) {
+        console.error('Error fetching invitation history:', historyError);
+      } else {
+        invitationHistory = historyData || [];
+      }
+    } else if (inviteResult.success) {
+      // For SMS or if no email, just get history
+      const { data: historyData, error: historyError } = await serviceClient
+        .rpc('get_artist_invitation_history', { p_artist_profile_id: artist_id });
 
       if (historyError) {
         console.error('Error fetching invitation history:', historyError);

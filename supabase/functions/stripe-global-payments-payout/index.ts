@@ -193,11 +193,17 @@ serve(async (req) => {
       throw new Error('No Stripe recipient ID found for artist');
     }
 
-    // Get Stripe secret key
-    const stripeSecretKey = Deno.env.get('stripe_intl_secret_key');
+    // Determine which Stripe key to use based on payment currency
+    const isCanadian = (paymentCurrency.toUpperCase() === 'CAD');
+    const stripeSecretKey = isCanadian
+      ? Deno.env.get('stripe_canada_secret_key')
+      : Deno.env.get('stripe_intl_secret_key');
+
     if (!stripeSecretKey) {
-      throw new Error('Stripe secret key not configured');
+      throw new Error(`Stripe secret key not configured for ${isCanadian ? 'Canada' : 'International'}`);
     }
+
+    console.log(`Using ${isCanadian ? 'Canadian' : 'International'} Stripe account for ${paymentCurrency} payment`);
 
     // Initialize Stripe
     const stripe = new Stripe(stripeSecretKey, {
@@ -223,13 +229,27 @@ serve(async (req) => {
     const isUSCA = (artistCountry === 'US' || artistCountry === 'CA');
     const targetAmount = paymentAmount; // Amount in debt currency
 
-    let usdAmountToSend = paymentAmount;
+    // Determine platform currency based on which Stripe account we're using
+    const platformCurrency = isCanadian ? 'CAD' : 'USD';
+
+    let platformAmountToSend = paymentAmount;
     let fxQuoteId = null;
     let exchangeRate = null;
     let fxMetadata: any = {};
 
-    // For international artists, use FX Quotes API to calculate USD amount
-    if (!isUSCA && targetCurrency !== 'USD') {
+    // For Canadian payments: CAD → CAD (no FX)
+    // For US payments: USD → USD (no FX)
+    // For International payments: USD → target currency (FX needed if not USD)
+    if (isCanadian && targetCurrency === 'CAD') {
+      // Canadian platform sending CAD to Canadian artist - direct transfer
+      console.log(`🍁 Canadian domestic payment: ${targetAmount} CAD → CAD`);
+      platformAmountToSend = targetAmount;
+      fxMetadata = {
+        payment_type: 'canadian_domestic',
+        note: 'Direct CAD to CAD transfer, no FX conversion needed'
+      };
+    } else if (!isCanadian && !isUSCA && targetCurrency !== 'USD') {
+      // International platform sending USD with FX conversion
       console.log(`🌍 International payment: ${targetAmount} ${targetCurrency}`);
 
       try {
@@ -259,35 +279,37 @@ serve(async (req) => {
         exchangeRate = fxQuote.rates.usd.exchange_rate;
 
         // Calculate USD amount needed for target local currency amount
-        usdAmountToSend = targetAmount / exchangeRate;
+        platformAmountToSend = targetAmount / exchangeRate;
 
         fxMetadata = {
           fx_quote_id: fxQuoteId,
           exchange_rate: exchangeRate,
           target_currency: targetCurrency,
           target_amount: targetAmount,
-          usd_amount_calculated: usdAmountToSend,
+          usd_amount_calculated: platformAmountToSend,
           fx_rate_details: fxQuote.rates.usd.rate_details,
           fx_quote_expires_at: new Date(fxQuote.lock_expires_at * 1000).toISOString()
         };
 
         console.log(`💱 FX Quote: ${fxQuoteId}, rate: ${exchangeRate}`);
-        console.log(`💵 Sending ${usdAmountToSend.toFixed(2)} USD → ${targetAmount} ${targetCurrency}`);
+        console.log(`💵 Sending ${platformAmountToSend.toFixed(2)} USD → ${targetAmount} ${targetCurrency}`);
 
       } catch (fxError: any) {
         console.error('FX Quote API error:', fxError);
         throw new Error(`Failed to get FX rate: ${fxError.message}`);
       }
     } else {
-      console.log(`🏠 Domestic payment: ${targetAmount} USD`);
+      // US domestic or other direct transfers
+      console.log(`🏠 Domestic payment: ${targetAmount} ${platformCurrency}`);
+      platformAmountToSend = targetAmount;
       fxMetadata = {
         payment_type: 'domestic',
-        note: 'No FX conversion needed for US/CA accounts'
+        note: `No FX conversion needed for ${platformCurrency} payment`
       };
     }
 
-    // Convert USD amount to cents
-    const amountMinorUSD = Math.ceil(usdAmountToSend * 100);
+    // Convert to cents in platform currency
+    const amountMinor = Math.ceil(platformAmountToSend * 100);
 
     // Generate idempotency key
     const idempotencyKey = crypto.randomUUID();
@@ -303,8 +325,8 @@ serve(async (req) => {
           api_endpoint: 'https://api.stripe.com/v1/transfers',
           request_method: 'POST',
           request_body: {
-            amount: amountMinorUSD,
-            currency: 'usd',
+            amount: amountMinor,
+            currency: platformCurrency.toLowerCase(),
             destination: globalPaymentAccount.stripe_recipient_id,
             description: paymentDescription,
             metadata: {
@@ -313,7 +335,8 @@ serve(async (req) => {
               target_currency: targetCurrency,
               target_amount: targetAmount.toString(),
               fx_quote_id: fxQuoteId || 'none',
-              reference_id: referenceId
+              reference_id: referenceId,
+              platform_currency: platformCurrency
             }
           },
           response_status: status,
@@ -325,11 +348,11 @@ serve(async (req) => {
 
     try {
       // Create the Stripe transfer
-      console.log(`🚀 Creating transfer: ${amountMinorUSD} cents USD to ${globalPaymentAccount.stripe_recipient_id}`);
+      console.log(`🚀 Creating transfer: ${amountMinor} cents ${platformCurrency} to ${globalPaymentAccount.stripe_recipient_id}`);
 
       const transfer = await stripe.transfers.create({
-        amount: amountMinorUSD,
-        currency: 'usd', // Platform always sends USD
+        amount: amountMinor,
+        currency: platformCurrency.toLowerCase(), // Use platform currency (CAD for Canadian, USD for International)
         destination: globalPaymentAccount.stripe_recipient_id,
         description: paymentDescription,
         metadata: {
@@ -340,7 +363,8 @@ serve(async (req) => {
           fx_quote_id: fxQuoteId || 'none',
           exchange_rate: exchangeRate?.toString() || 'none',
           reference_id: referenceId,
-          payment_type: artist_payment_id ? 'artist_payment' : 'art_payment'
+          payment_type: artist_payment_id ? 'artist_payment' : 'art_payment',
+          platform_currency: platformCurrency
         }
       }, {
         idempotencyKey: idempotencyKey
@@ -362,8 +386,9 @@ serve(async (req) => {
             paid_at: new Date().toISOString(),
             metadata: {
               stripe_transfer_id: transfer.id,
-              usd_amount_sent: usdAmountToSend.toFixed(2),
-              usd_amount_sent_minor: amountMinorUSD,
+              platform_amount_sent: platformAmountToSend.toFixed(2),
+              platform_amount_sent_minor: amountMinor,
+              platform_currency: platformCurrency,
               processed_by: 'stripe-global-payments-payout',
               processed_at: new Date().toISOString(),
               ...fxMetadata
@@ -396,8 +421,9 @@ serve(async (req) => {
               created_via: 'stripe-global-payments-payout-v3',
               original_amount: targetAmount,
               original_currency: targetCurrency,
-              usd_amount_sent: usdAmountToSend.toFixed(2),
-              usd_amount_sent_minor: amountMinorUSD,
+              platform_amount_sent: platformAmountToSend.toFixed(2),
+              platform_amount_sent_minor: amountMinor,
+              platform_currency: platformCurrency,
               stripe_transfer_id: transfer.id,
               ...fxMetadata
             }
@@ -417,7 +443,8 @@ serve(async (req) => {
           artist_name: artistName,
           target_amount: targetAmount,
           target_currency: targetCurrency,
-          usd_amount_sent: usdAmountToSend.toFixed(2),
+          platform_amount_sent: platformAmountToSend.toFixed(2),
+          platform_currency: platformCurrency,
           recipient_id: globalPaymentAccount.stripe_recipient_id,
           status: 'sent',
           fx_used: !isUSCA && targetCurrency !== 'USD',

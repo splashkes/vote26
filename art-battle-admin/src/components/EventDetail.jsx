@@ -67,6 +67,8 @@ import EventDeleteModal from './EventDeleteModal';
 import EventPaymentWrapper from './EventPaymentWrapper';
 import EventLinterEmbed from './EventLinterEmbed';
 import EventSponsorshipSetup from './sponsorship/EventSponsorshipSetup';
+import EventCompetitionSpecificsManager from './EventCompetitionSpecificsManager';
+import MarkdownRenderer from './MarkdownRenderer';
 import { useAdmin } from '../contexts/AdminContext';
 import { checkEventAdminPermission } from '../lib/adminHelpers';
 import { formatDateForDisplay, sortByNewestFirst, getRecentActivityColor } from '../lib/dateUtils';
@@ -166,6 +168,9 @@ const EventDetail = () => {
   const [linterCollapsed, setLinterCollapsed] = useState(false);
   const [artistPaymentsCollapsed, setArtistPaymentsCollapsed] = useState(false);
   const [artistPaymentsData, setArtistPaymentsData] = useState([]);
+  const [eventSpecifics, setEventSpecifics] = useState([]);
+  const [specificsLoading, setSpecificsLoading] = useState(false);
+  const [showSpecificsPreview, setShowSpecificsPreview] = useState(false);
   const [artistPaymentsLoading, setArtistPaymentsLoading] = useState(false);
   const [postEventData, setPostEventData] = useState(null);
   const [postEventLoading, setPostEventLoading] = useState(false);
@@ -286,7 +291,8 @@ const EventDetail = () => {
             fetchHealthData(),
             fetchArtistData(0, eventData),
             fetchEventPeople(),
-            fetchEventAdmins()
+            fetchEventAdmins(),
+            fetchEventSpecifics()
           ]);
         } catch (err) {
           console.error('Error preloading event data:', err);
@@ -364,6 +370,30 @@ const EventDetail = () => {
       setAdvertisingCollapsed(false);
     }
   }, [event?.event_end_datetime, postEventData, metaAdsData]);
+
+  const fetchEventSpecifics = async () => {
+    try {
+      setSpecificsLoading(true);
+      const { data: sessionData } = await supabase.auth.getSession();
+
+      const { data, error } = await supabase.functions.invoke('get-event-competition-specifics', {
+        body: { event_id: eventId },
+        headers: sessionData?.session?.access_token
+          ? { Authorization: `Bearer ${sessionData.session.access_token}` }
+          : {}
+      });
+
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+
+      setEventSpecifics(data.specifics || []);
+    } catch (err) {
+      console.error('Error loading event specifics:', err);
+      setEventSpecifics([]);
+    } finally {
+      setSpecificsLoading(false);
+    }
+  };
 
   const fetchEventDetail = async () => {
     try {
@@ -1448,36 +1478,46 @@ const EventDetail = () => {
   };
 
   const getInvitationStatus = (invite) => {
+    // Check if invitation is expired first
+    if (invite.status === 'expired') {
+      return {
+        status: 'expired',
+        color: 'red',
+        text: 'Expired',
+        icon: <Cross2Icon size={14} />
+      };
+    }
+
     if (!invite.first_viewed_at) {
-      return { 
-        status: 'not-viewed', 
-        color: 'gray', 
+      return {
+        status: 'not-viewed',
+        color: 'gray',
         text: 'Not viewed',
         icon: <EyeNoneIcon size={14} />
       };
     }
-    
+
     if (invite.view_count === 1) {
-      return { 
-        status: 'viewed-once', 
-        color: 'blue', 
+      return {
+        status: 'viewed-once',
+        color: 'blue',
         text: `Viewed ${formatTimeSince(invite.last_viewed_at)}`,
         icon: <ViewedIcon size={14} />
       };
     }
-    
+
     if (invite.view_count > 1) {
-      return { 
-        status: 'engaged', 
-        color: 'green', 
+      return {
+        status: 'engaged',
+        color: 'green',
         text: `Viewed ${invite.view_count}x, last: ${formatTimeSince(invite.last_viewed_at)}`,
         icon: <ViewedIcon size={14} />
       };
     }
-    
-    return { 
-      status: 'unknown', 
-      color: 'gray', 
+
+    return {
+      status: 'unknown',
+      color: 'gray',
       text: 'Unknown',
       icon: <DotFilledIcon size={14} />
     };
@@ -2309,15 +2349,29 @@ The Art Battle Team`);
   };
 
   const handleExpireInvitation = async (artist) => {
-    if (!artist?.artist_invitations?.[0]?.id) {
+    console.log('🔴 handleExpireInvitation CALLED!', artist);
+
+    // The artist parameter can be either:
+    // 1. An invitation object directly (has id and status at top level)
+    // 2. An artist object with nested artist_invitations array
+    let invitationId;
+
+    if (artist?.id && artist?.status && artist?.event_eid) {
+      // This is an invitation object directly
+      invitationId = artist.id;
+      console.log('✅ Found invitation ID directly on object:', invitationId);
+    } else if (artist?.artist_invitations?.[0]?.id) {
+      // This is an artist object with nested invitations
+      invitationId = artist.artist_invitations[0].id;
+      console.log('✅ Found invitation ID in nested array:', invitationId);
+    } else {
+      console.error('❌ No invitation found in artist object:', artist);
       showAdminMessage('error', 'No invitation found to expire');
       return;
     }
 
-    const invitationId = artist.artist_invitations[0].id;
-
     try {
-      console.log('Expiring invitation:', invitationId);
+      console.log('🔵 Expiring invitation ID:', invitationId);
 
       // Use edge function with service role permissions instead of direct client update
       const { data, error } = await supabase.functions.invoke('admin-expire-invitation', {
@@ -2345,11 +2399,12 @@ The Art Battle Team`);
       console.log('Invitation expired successfully:', data);
       showAdminMessage('success', 'Invitation expired successfully - artist will no longer see this invitation');
 
-      // Refresh the applications to update the UI
-      await fetchEventApplications();
+      // Refresh the artist data to update the UI
+      await fetchArtistData();
 
       // Close the modal
       setSelectedArtist(null);
+      setDialogOpen(false);
 
     } catch (err) {
       console.error('Error expiring invitation:', err);
@@ -3075,6 +3130,15 @@ The Art Battle Team`);
                         )}
                       </>
                     )}
+                    {event.min_bid_increment && (
+                      <>
+                        <Text size="2">•</Text>
+                        <Text size="2">min bid increment:</Text>
+                        <Text size="2" weight="bold">
+                          {event.cities?.countries?.currency_symbol || '$'}{event.min_bid_increment?.toFixed(2) || '5.00'}
+                        </Text>
+                      </>
+                    )}
                     {event.artist_auction_portion && (
                       <Text size="2" color="gray">({Math.round(event.artist_auction_portion * 100)}% to artists)</Text>
                     )}
@@ -3121,6 +3185,50 @@ The Art Battle Team`);
                       Open Drive Folder
                     </a>
                   </Flex>
+                )}
+              </Flex>
+
+              <Separator size="4" />
+
+              {/* Competition Specifics Summary */}
+              <Flex direction="column" gap="2">
+                <Flex gap="2" align="center">
+                  <Text size="2" weight="bold" style={{ color: 'var(--gray-11)' }}>
+                    Competition Specifics
+                  </Text>
+                  {eventSpecifics.length > 0 && (
+                    <Button
+                      size="1"
+                      variant="soft"
+                      onClick={() => setShowSpecificsPreview(true)}
+                    >
+                      <EyeOpenIcon width="14" height="14" />
+                      Preview
+                    </Button>
+                  )}
+                </Flex>
+                {specificsLoading ? (
+                  <Text size="1" color="gray">Loading specifics...</Text>
+                ) : eventSpecifics.length > 0 ? (
+                  <Flex direction="column" gap="1">
+                    {eventSpecifics.map((specific, index) => (
+                      <Flex key={specific.id} gap="2" align="center">
+                        <Text size="1" color="gray" style={{ minWidth: '20px' }}>
+                          {index + 1}.
+                        </Text>
+                        <Text size="2">
+                          {specific.name}
+                        </Text>
+                        <Badge size="1" color={specific.visibility === 'public' ? 'blue' : 'gray'}>
+                          {specific.visibility === 'public' ? '🌐 Public' : '👤 Artists Only'}
+                        </Badge>
+                      </Flex>
+                    ))}
+                  </Flex>
+                ) : (
+                  <Text size="1" color="gray" style={{ fontStyle: 'italic' }}>
+                    No competition specifics configured
+                  </Text>
                 )}
               </Flex>
 
@@ -4206,6 +4314,9 @@ The Art Battle Team`);
               <Tabs.Trigger value="admins">
                 Admins ({eventAdmins.length})
               </Tabs.Trigger>
+              <Tabs.Trigger value="competition-specifics">
+                Competition Specifics
+              </Tabs.Trigger>
             </Tabs.List>
 
             <Box p="3">
@@ -4677,6 +4788,10 @@ The Art Battle Team`);
                     </Card>
                   </Flex>
                 )}
+              </Tabs.Content>
+
+              <Tabs.Content value="competition-specifics">
+                <EventCompetitionSpecificsManager eventId={event?.id} />
               </Tabs.Content>
 
             </Box>
@@ -5823,7 +5938,10 @@ The Art Battle Team`);
                             size="3"
                             variant="outline"
                             color="red"
-                            onClick={() => handleExpireInvitation(selectedArtist)}
+                            onClick={() => {
+                              console.log('🟡 Expire button clicked! selectedArtist:', selectedArtist);
+                              handleExpireInvitation(selectedArtist);
+                            }}
                           >
                             Expire Invite
                           </Button>
@@ -7207,6 +7325,56 @@ The Art Battle Team`);
               </Flex>
             </Flex>
           )}
+        </Dialog.Content>
+      </Dialog.Root>
+
+      {/* Competition Specifics Preview Modal */}
+      <Dialog.Root open={showSpecificsPreview} onOpenChange={setShowSpecificsPreview}>
+        <Dialog.Content maxWidth="700px" style={{ maxHeight: '85vh', overflowY: 'auto' }}>
+          <Dialog.Title>
+            Competition Specifics Preview
+          </Dialog.Title>
+
+          <Dialog.Description size="2" mb="3">
+            This is exactly how artists will see the competition specifics for this event.
+          </Dialog.Description>
+
+          {eventSpecifics.length === 0 ? (
+            <Callout.Root color="gray" mt="3">
+              <Callout.Icon><InfoCircledIcon /></Callout.Icon>
+              <Callout.Text>No specifics to preview</Callout.Text>
+            </Callout.Root>
+          ) : (
+            <Flex direction="column" gap="4" mt="4">
+              {eventSpecifics.map((specific, index) => (
+                <Box key={specific.id}>
+                  {index > 0 && <Separator size="4" my="3" />}
+                  <Card size="2" style={{ backgroundColor: 'var(--gray-2)' }}>
+                    <Flex direction="column" gap="3">
+                      <Flex align="center" gap="2">
+                        <Text size="4" weight="bold">{specific.name}</Text>
+                        <Badge size="1" color={specific.visibility === 'public' ? 'blue' : 'gray'}>
+                          {specific.visibility === 'public' ? '🌐 Public' : '👤 Artists Only'}
+                        </Badge>
+                      </Flex>
+                      <MarkdownRenderer content={specific.content} />
+                      {specific.updated_at && (
+                        <Text size="1" color="gray">
+                          Version {specific.version} • Last updated: {new Date(specific.updated_at).toLocaleDateString()}
+                        </Text>
+                      )}
+                    </Flex>
+                  </Card>
+                </Box>
+              ))}
+            </Flex>
+          )}
+
+          <Flex gap="3" mt="4" justify="end">
+            <Dialog.Close>
+              <Button variant="soft">Close</Button>
+            </Dialog.Close>
+          </Flex>
         </Dialog.Content>
       </Dialog.Root>
     </Box>

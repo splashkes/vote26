@@ -83,13 +83,14 @@ serve(async (req) => {
     }
 
     // Parse request body
-    let city_ids = [], event_ids = [], rfm_filters = null, recent_message_hours = 72;
+    let city_ids = [], event_ids = [], rfm_filters = null, recent_message_hours = 72, ids_only = false;
     try {
       const body = await req.json();
       city_ids = body.city_ids || [];
       event_ids = body.event_ids || [];
       rfm_filters = body.rfm_filters || null;
       recent_message_hours = body.recent_message_hours || 72;
+      ids_only = body.ids_only || false; // For campaign creation - return all IDs without details
     } catch (parseError) {
       return new Response(JSON.stringify({
         success: false,
@@ -106,25 +107,53 @@ serve(async (req) => {
       });
     }
 
-    // Use smart pagination: get total count + limited sample for UI display
-    // For RFM processing, we'll get full dataset in chunks only when needed
-    const sampleSize = 10000; // Show up to 10k people in UI for performance
-    
-    const { data: pageData, error: queryError } = await serviceClient
-      .rpc('get_sms_audience_paginated', {
-        p_city_ids: city_ids.length > 0 ? city_ids : null,
-        p_event_ids: event_ids.length > 0 ? event_ids : null,
-        p_recent_message_hours: recent_message_hours,
-        p_offset: 0,
-        p_limit: sampleSize
-      });
+    // Use pagination to fetch all results (Supabase JS client has internal limits)
+    // Fetch in chunks of 5000 until we have all data
+    const chunkSize = 5000;
+    const maxRecords = ids_only ? 100000 : 10000; // For IDs only, allow up to 100k; for UI display cap at 10k
+    let allPeople = [];
+    let offset = 0;
+    let totalCount = 0;
 
-    if (queryError) {
-      throw new Error(`Database query failed: ${queryError.message}`);
+    while (allPeople.length < maxRecords) {
+      const { data: pageData, error: queryError } = await serviceClient
+        .rpc('get_sms_audience_paginated', {
+          p_city_ids: city_ids.length > 0 ? city_ids : null,
+          p_event_ids: event_ids.length > 0 ? event_ids : null,
+          p_recent_message_hours: recent_message_hours,
+          p_offset: offset,
+          p_limit: chunkSize
+        });
+
+      if (queryError) {
+        throw new Error(`Database query failed: ${queryError.message}`);
+      }
+
+      if (!pageData || pageData.length === 0) {
+        break; // No more data
+      }
+
+      // Get total count from first record
+      if (totalCount === 0 && pageData.length > 0) {
+        totalCount = pageData[0].total_count;
+      }
+
+      allPeople = allPeople.concat(pageData);
+      offset += chunkSize;
+
+      // Stop if we got fewer records than requested (means we're done)
+      if (pageData.length < chunkSize) {
+        break;
+      }
+
+      // Stop if we've reached our max
+      if (allPeople.length >= maxRecords) {
+        allPeople = allPeople.slice(0, maxRecords);
+        break;
+      }
     }
-    
-    const people = pageData || [];
-    const totalCount = people.length > 0 ? people[0].total_count : 0;
+
+    const people = allPeople;
 
     if (!people || people.length === 0) {
       return new Response(JSON.stringify({
@@ -159,33 +188,63 @@ serve(async (req) => {
 
     // Check RFM readiness if filters specified
     let rfmReadyCount = 0;
-    let filteredPeople = people.filter(p => p.message_blocked === 0); // Start with available people
+    const availablePeople = people.filter(p => p.message_blocked === 0);
+    let filteredPeople = availablePeople; // For count, only available people
+    let estimatedFilteredCount = availableCount; // Start with all available people
 
     if (rfm_filters) {
-      const { 
+      const {
         recency_min = 1, recency_max = 5,
-        frequency_min = 1, frequency_max = 5, 
-        monetary_min = 1, monetary_max = 5 
+        frequency_min = 1, frequency_max = 5,
+        monetary_min = 1, monetary_max = 5
       } = rfm_filters;
 
       // Count people with current RFM scores (available people only)
-      rfmReadyCount = filteredPeople.filter(p => {
-        return p.has_rfm && 
+      rfmReadyCount = availablePeople.filter(p => {
+        return p.has_rfm &&
                p.rfm_recency_score >= recency_min && p.rfm_recency_score <= recency_max &&
                p.rfm_frequency_score >= frequency_min && p.rfm_frequency_score <= frequency_max &&
                p.rfm_monetary_score >= monetary_min && p.rfm_monetary_score <= monetary_max;
       }).length;
 
-      // Filter people based on RFM criteria
-      filteredPeople = filteredPeople.filter(p => {
+      // Filter people based on RFM criteria (available only)
+      filteredPeople = availablePeople.filter(p => {
         if (!p.has_rfm) return false;
-        
+
         return p.rfm_recency_score >= recency_min && p.rfm_recency_score <= recency_max &&
                p.rfm_frequency_score >= frequency_min && p.rfm_frequency_score <= frequency_max &&
                p.rfm_monetary_score >= monetary_min && p.rfm_monetary_score <= monetary_max;
       });
+
+      // Estimate actual filtered count from sample proportion
+      if (availableCountInSample > 0) {
+        const rfmFilteredProportion = filteredPeople.length / availableCountInSample;
+        estimatedFilteredCount = Math.round(availableCount * rfmFilteredProportion);
+      } else {
+        estimatedFilteredCount = 0;
+      }
     }
 
+    // Return ALL people (both blocked and available) for display in modal
+    // But filtered_count only includes available people who match criteria
+
+    // If ids_only=true, return minimal data for campaign creation (all records, just IDs)
+    if (ids_only) {
+      return new Response(JSON.stringify({
+        success: true,
+        total_count: totalCount,
+        filtered_count: estimatedFilteredCount,
+        people: people.map(p => ({
+          id: p.id,
+          blocked: p.message_blocked > 0
+        }))
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Full response for UI display
     return new Response(JSON.stringify({
       success: true,
       total_count: totalCount,
@@ -194,9 +253,9 @@ serve(async (req) => {
       recent_message_hours: recent_message_hours,
       available_count: availableCount,
       rfm_ready_count: rfmReadyCount,
-      filtered_count: filteredPeople.length,
+      filtered_count: estimatedFilteredCount,
       needs_rfm_generation: rfm_filters && (rfmReadyCount < availableCount),
-      people: filteredPeople.map(p => ({
+      people: people.map(p => ({  // Return ALL people, not just filtered
         id: p.id,
         name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Unknown',
         phone: p.phone,

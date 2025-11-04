@@ -593,6 +593,12 @@ async function runLinterWithStreaming(
       if (!rule.conditions || rule.conditions.length === 0) {
         continue;
       }
+
+      // Skip live-event-stats rules - these are handled separately with special data fetching
+      if (rule.category === 'live-event-stats') {
+        continue;
+      }
+
       const finding = evaluateRule(rule, event, {}, supabaseClient);
       if (finding) {
         // Special handling for ad budget escalation
@@ -819,6 +825,140 @@ async function runLinterWithStreaming(
 
   allFindings.push(...cityFindings);
   streamWriter.sendFindings(cityFindings, 'city_checks');
+
+  streamWriter.sendProgress('live_event_stats', 'Checking live event statistics...');
+
+  // Run live event statistics check (QR scans, votes, photos) - STREAMING MODE
+  const liveEventStatsFindings: any[] = [];
+  const liveEventStatsRules = rules.filter((r: any) => r.category === 'live-event-stats');
+  if (liveEventStatsRules.length > 0 && eventsToLint.length > 0) {
+    try {
+      const now = new Date();
+      const activeEvents = eventsToLint.filter(e => {
+        if (!e.event_start_datetime || !e.event_end_datetime) return false;
+        const eventStart = new Date(e.event_start_datetime);
+        const eventEnd = new Date(e.event_end_datetime);
+        const minutesSinceStart = (now.getTime() - eventStart.getTime()) / 1000 / 60;
+        const hoursUntilEnd = (eventEnd.getTime() - now.getTime()) / 1000 / 60 / 60;
+        return minutesSinceStart >= 30 && hoursUntilEnd > 0 && hoursUntilEnd <= 12;
+      });
+
+      if (activeEvents.length > 0) {
+        const eventIds = activeEvents.map(e => e.id);
+
+        // Fetch QR scan counts
+        const { data: qrData } = await supabaseClient
+          .from('people_qr_scans')
+          .select('event_id, id')
+          .in('event_id', eventIds);
+
+        const qrCountMap = new Map();
+        qrData?.forEach((scan: any) => {
+          qrCountMap.set(scan.event_id, (qrCountMap.get(scan.event_id) || 0) + 1);
+        });
+
+        // Fetch vote counts
+        const { data: voteData } = await supabaseClient
+          .from('votes')
+          .select('event_id, id')
+          .in('event_id', eventIds);
+
+        const voteCountMap = new Map();
+        voteData?.forEach((vote: any) => {
+          voteCountMap.set(vote.event_id, (voteCountMap.get(vote.event_id) || 0) + 1);
+        });
+
+        // Fetch photo counts by round
+        const { data: photoData } = await supabaseClient
+          .from('art')
+          .select('event_id, round, art_media!inner(id)')
+          .in('event_id', eventIds);
+
+        const photosByEventMap = new Map();
+        photoData?.forEach((art: any) => {
+          if (!photosByEventMap.has(art.event_id)) {
+            photosByEventMap.set(art.event_id, { 1: 0, 2: 0, 3: 0 });
+          }
+          const rounds = photosByEventMap.get(art.event_id);
+          rounds[art.round] = (rounds[art.round] || 0) + 1;
+        });
+
+        // Generate findings for each active event
+        for (const event of activeEvents) {
+          const qrScanRule = liveEventStatsRules.find((r: any) => r.id === 'live_event_qr_scans_info');
+          if (qrScanRule) {
+            const qrCount = qrCountMap.get(event.id) || 0;
+            incrementRuleHit(supabaseClient, 'live_event_qr_scans_info');
+
+            liveEventStatsFindings.push({
+              ruleId: 'live_event_qr_scans_info',
+              ruleName: qrScanRule.name,
+              severity: 'info',
+              category: qrScanRule.category,
+              context: qrScanRule.context,
+              emoji: '📊',
+              message: qrScanRule.message.replace('{qr_scan_count}', qrCount.toString()),
+              eventId: event.id,
+              eventEid: event.eid,
+              eventName: event.name,
+              qrScanCount: qrCount,
+              timestamp: new Date().toISOString()
+            });
+          }
+
+          const voteRule = liveEventStatsRules.find((r: any) => r.id === 'live_event_votes_info');
+          if (voteRule) {
+            const voteCount = voteCountMap.get(event.id) || 0;
+            incrementRuleHit(supabaseClient, 'live_event_votes_info');
+
+            liveEventStatsFindings.push({
+              ruleId: 'live_event_votes_info',
+              ruleName: voteRule.name,
+              severity: 'info',
+              category: voteRule.category,
+              context: voteRule.context,
+              emoji: '📊',
+              message: voteRule.message.replace('{vote_count}', voteCount.toString()),
+              eventId: event.id,
+              eventEid: event.eid,
+              eventName: event.name,
+              voteCount: voteCount,
+              timestamp: new Date().toISOString()
+            });
+          }
+
+          const photoRule = liveEventStatsRules.find((r: any) => r.id === 'live_event_photos_info');
+          if (photoRule) {
+            const photosByRound = photosByEventMap.get(event.id) || { 1: 0, 2: 0, 3: 0 };
+            const photosText = `R1: ${photosByRound[1]}, R2: ${photosByRound[2]}, R3: ${photosByRound[3]}`;
+            incrementRuleHit(supabaseClient, 'live_event_photos_info');
+
+            liveEventStatsFindings.push({
+              ruleId: 'live_event_photos_info',
+              ruleName: photoRule.name,
+              severity: 'info',
+              category: photoRule.category,
+              context: photoRule.context,
+              emoji: '📊',
+              message: photoRule.message.replace('{photos_by_round}', photosText),
+              eventId: event.id,
+              eventEid: event.eid,
+              eventName: event.name,
+              photosByRound: photosByRound,
+              timestamp: new Date().toISOString()
+            });
+          }
+        }
+
+        debugInfo.live_event_stats_checked = activeEvents.length;
+      }
+    } catch (statsError: any) {
+      debugInfo.live_event_stats_error = statsError.message;
+    }
+  }
+
+  allFindings.push(...liveEventStatsFindings);
+  streamWriter.sendFindings(liveEventStatsFindings, 'live_event_stats');
 
   streamWriter.sendProgress('suppressions', 'Filtering suppressed findings...');
 
@@ -1381,6 +1521,12 @@ serve(async (req) => {
         if (!rule.conditions || rule.conditions.length === 0) {
           continue;
         }
+
+        // Skip live-event-stats rules - these are handled separately with special data fetching
+        if (rule.category === 'live-event-stats') {
+          continue;
+        }
+
         const finding = evaluateRule(rule, event, {}, supabaseClient);
         if (finding) {
           // Special handling: advertising_budget_not_set_info - escalate severity based on days until event

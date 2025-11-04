@@ -148,45 +148,32 @@ serve(async (req) => {
         }
       })
 
-      // Get all data needed for aggregation - grouped by event_id
-      // Use higher limits to ensure we get all data (not just default 1000)
+      // Use SQL aggregation functions to get counts directly - NO LIMITS!
+      // These PostgreSQL functions use COUNT() GROUP BY at the database level
       const [
-        { data: registrations },
+        { data: registrationCounts },
         { data: artPieces },
-        { data: votes },
-        { data: bids },
-        { data: qrScans }
+        { data: voteCounts },
+        { data: bidCounts },
+        { data: qrScanCounts }
       ] = await Promise.all([
-        supabase
-          .from('event_registrations')
-          .select('event_id')
-          .in('event_id', eventIds)
-          .limit(50000),
+        // Count registrations by event_id using PostgreSQL function
+        supabase.rpc('count_registrations_by_event', { event_ids: eventIds }),
 
+        // Get art pieces for revenue calculation (limited set, not a counting issue)
         supabase
           .from('art')
           .select('final_price, current_bid, event_id')
-          .in('event_id', eventIds)
-          .limit(10000),
+          .in('event_id', eventIds),
 
-        supabase
-          .from('votes')
-          .select('event_id')
-          .in('event_id', eventIds)
-          .limit(100000),
+        // Count votes by event_id using PostgreSQL function
+        supabase.rpc('count_votes_by_event', { event_ids: eventIds }),
 
-        supabase
-          .from('bids')
-          .select('amount, art_id, art!inner(event_id)')
-          .in('art.event_id', eventIds)
-          .limit(100000),
+        // Count bids by event_id using PostgreSQL function
+        supabase.rpc('count_bids_by_event', { event_ids: eventIds }),
 
-        supabase
-          .from('people_qr_scans')
-          .select('event_id')
-          .in('event_id', eventIds)
-          .eq('is_valid', true)
-          .limit(100000)
+        // Count QR scans by event_id using PostgreSQL function
+        supabase.rpc('count_qr_scans_by_event', { event_ids: eventIds })
       ])
 
       // Aggregate by EVENT (not by month)
@@ -215,14 +202,14 @@ serve(async (req) => {
         }
       })
 
-      // Process registrations by event
-      registrations?.forEach(reg => {
-        if (eventDataMap[reg.event_id]) {
-          eventDataMap[reg.event_id].registrations += 1
+      // Process aggregated registration counts by event
+      registrationCounts?.forEach((item: { event_id: string; count: number }) => {
+        if (eventDataMap[item.event_id]) {
+          eventDataMap[item.event_id].registrations = Number(item.count)
         }
       })
 
-      // Process art/auction revenue by event
+      // Process art/auction revenue by event (still need individual records for revenue calculation)
       artPieces?.forEach(art => {
         if (eventDataMap[art.event_id]) {
           const revenue = parseFloat(art.final_price || art.current_bid || '0')
@@ -230,31 +217,30 @@ serve(async (req) => {
         }
       })
 
-      // Process votes by event
+      // Process aggregated vote counts by event
       const votesByEvent: Record<string, number> = {}
-      votes?.forEach(vote => {
-        votesByEvent[vote.event_id] = (votesByEvent[vote.event_id] || 0) + 1
-        if (eventDataMap[vote.event_id]) {
-          eventDataMap[vote.event_id].votes += 1
+      voteCounts?.forEach((item: { event_id: string; count: number }) => {
+        const count = Number(item.count)
+        votesByEvent[item.event_id] = count
+        if (eventDataMap[item.event_id]) {
+          eventDataMap[item.event_id].votes = count
         }
       })
 
-      // Process bids by event
+      // Process aggregated bid counts by event
       const bidsByEvent: Record<string, number> = {}
-      bids?.forEach(bid => {
-        const eventId = bid.art?.event_id
-        if (eventId) {
-          bidsByEvent[eventId] = (bidsByEvent[eventId] || 0) + 1
-          if (eventDataMap[eventId]) {
-            eventDataMap[eventId].bids += 1
-          }
+      bidCounts?.forEach((item: { event_id: string; count: number }) => {
+        const count = Number(item.count)
+        bidsByEvent[item.event_id] = count
+        if (eventDataMap[item.event_id]) {
+          eventDataMap[item.event_id].bids = count
         }
       })
 
-      // Process QR scans by event
-      qrScans?.forEach(scan => {
-        if (eventDataMap[scan.event_id]) {
-          eventDataMap[scan.event_id].qrScans += 1
+      // Process aggregated QR scan counts by event
+      qrScanCounts?.forEach((item: { event_id: string; count: number }) => {
+        if (eventDataMap[item.event_id]) {
+          eventDataMap[item.event_id].qrScans = Number(item.count)
         }
       })
 
@@ -327,19 +313,20 @@ serve(async (req) => {
           sampleTicketRevenue: Object.entries(ticketRevenueByEid).slice(0, 3),
           sampleEvents,
           topVoteEvents,
-          rawDataCounts: {
+          aggregatedDataCounts: {
             artPiecesFound: artPieces?.length || 0,
-            votesFound: votes?.length || 0,
-            bidsFound: bids?.length || 0,
-            qrScansFound: qrScans?.length || 0,
-            registrationsFound: registrations?.length || 0
+            registrationCountRecords: registrationCounts?.length || 0,
+            voteCountRecords: voteCounts?.length || 0,
+            bidCountRecords: bidCounts?.length || 0,
+            qrScanCountRecords: qrScanCounts?.length || 0
           },
           aggregatedCounts: {
             totalVotesAggregated: Object.values(votesByEvent).reduce((sum, v) => sum + v, 0),
             totalBidsAggregated: Object.values(bidsByEvent).reduce((sum, v) => sum + v, 0),
             eventsWithVotes: Object.keys(votesByEvent).length,
             eventsWithBids: Object.keys(bidsByEvent).length
-          }
+          },
+          note: 'Using SQL aggregation functions - no query limits!'
         }
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }

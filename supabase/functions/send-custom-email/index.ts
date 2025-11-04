@@ -20,12 +20,13 @@ serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false }
     });
 
-    const { 
-      to, 
+    const {
+      to,
       subject = "Art Battle Notification",
       html,
       text,
-      from = 'hello@artbattle.com' 
+      from = 'Art Battle Payments <payments@artbattle.com>',
+      cc
     } = await req.json();
 
     if (!to || !subject || (!html && !text)) {
@@ -117,7 +118,7 @@ serve(async (req) => {
 
     // Prepare email content
     const emailContent = html || `<html><body><p>${text}</p></body></html>`;
-    
+
     // Create SES SendEmail request
     const params = new URLSearchParams({
       'Action': 'SendEmail',
@@ -128,6 +129,14 @@ serve(async (req) => {
       'Message.Body.Text.Data': text || subject,
       'Version': '2010-12-01'
     });
+
+    // Add CC addresses if provided
+    if (cc) {
+      const ccAddresses = Array.isArray(cc) ? cc : [cc];
+      ccAddresses.forEach((ccEmail, index) => {
+        params.set(`Destination.CcAddresses.member.${index + 1}`, ccEmail);
+      });
+    }
 
     const body = params.toString();
     const headers: Record<string, string> = {

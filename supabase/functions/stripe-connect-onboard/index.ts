@@ -77,9 +77,6 @@ serve(async (req)=>{
         country: 'US',
         email: artistProfile.email || person.email,
         capabilities: {
-          card_payments: {
-            requested: true
-          },
           transfers: {
             requested: true
           }

@@ -29,6 +29,7 @@ import PaymentStatusBanner from './PaymentStatusBanner';
 import ServerNotes from './ServerNotes';
 import FeedbackInfoBox from './FeedbackInfoBox';
 import ProfileSwitchWarning from './ProfileSwitchWarning';
+import CompetitionSpecificsModal from './CompetitionSpecificsModal';
 
 
 const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
@@ -51,6 +52,8 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
   const [accepting, setAccepting] = useState({});
   const [showInvitationModal, setShowInvitationModal] = useState(false);
   const [selectedInvitation, setSelectedInvitation] = useState(null);
+  const [showCompetitionSpecifics, setShowCompetitionSpecifics] = useState(false);
+  const [selectedEventForSpecifics, setSelectedEventForSpecifics] = useState(null);
 
   useEffect(() => {
     if (!authLoading && user) {
@@ -534,6 +537,10 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
     }
   };
 
+  const handleViewCompetitionSpecifics = (event) => {
+    setSelectedEventForSpecifics(event);
+    setShowCompetitionSpecifics(true);
+  };
 
   if (authLoading || loading) {
     return (
@@ -929,11 +936,18 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
                         </Callout.Text>
                       </Callout.Root>
                       
-                      {/* Cancel Confirmation Button */}
-                      <Flex justify="end" style={{ marginTop: '12px' }}>
-                        <Button 
-                          variant="ghost" 
-                          color="red" 
+                      {/* Action Buttons */}
+                      <Flex justify="between" style={{ marginTop: '12px' }}>
+                        <Button
+                          variant="soft"
+                          size="1"
+                          onClick={() => handleViewCompetitionSpecifics(confirmation.event)}
+                        >
+                          View Competition Specifics
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          color="red"
                           size="1"
                           onClick={() => handleCancelConfirmation(confirmation)}
                         >
@@ -1229,6 +1243,15 @@ const Home = ({ onNavigateToTab, onProfilePickerChange }) => {
           </Dialog.Content>
         </Dialog.Root>
       )}
+
+      {/* Competition Specifics Modal */}
+      <CompetitionSpecificsModal
+        open={showCompetitionSpecifics}
+        onOpenChange={setShowCompetitionSpecifics}
+        eventId={selectedEventForSpecifics?.id}
+        eventEid={selectedEventForSpecifics?.eid}
+        eventName={selectedEventForSpecifics?.name}
+      />
     </Flex>
   );
 };

@@ -17,11 +17,13 @@ import {
   RadioGroup,
   Grid,
 } from '@radix-ui/themes';
-import { 
+import {
   CheckCircledIcon,
   InfoCircledIcon,
   UploadIcon,
+  FileTextIcon,
 } from '@radix-ui/react-icons';
+import CompetitionSpecificsModal from './CompetitionSpecificsModal';
 
 const InvitationAcceptanceModal = ({ 
   open, 
@@ -55,6 +57,7 @@ const InvitationAcceptanceModal = ({
   const [errors, setErrors] = useState({});
   const [step, setStep] = useState(1);
   const totalSteps = 2;
+  const [showCompetitionSpecifics, setShowCompetitionSpecifics] = useState(false);
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
@@ -426,6 +429,7 @@ const InvitationAcceptanceModal = ({
   if (!event || !invitation || !artistProfile) return null;
 
   return (
+    <>
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Content style={{ maxWidth: 600, maxHeight: '90vh', overflow: 'auto' }}>
         <Dialog.Title>Accept Event Invitation</Dialog.Title>
@@ -451,6 +455,19 @@ const InvitationAcceptanceModal = ({
             </Text>
           </Flex>
         </Card>
+
+        {/* View Competition Specifics Button */}
+        <Box mb="4">
+          <Button
+            variant="soft"
+            size="2"
+            onClick={() => setShowCompetitionSpecifics(true)}
+            style={{ width: '100%' }}
+          >
+            <FileTextIcon width="16" height="16" />
+            View Competition Specifics
+          </Button>
+        </Box>
 
         {/* Producer Message */}
         {invitation.message_from_producer && (
@@ -536,6 +553,16 @@ const InvitationAcceptanceModal = ({
         </Flex>
       </Dialog.Content>
     </Dialog.Root>
+
+    {/* Competition Specifics Modal */}
+    <CompetitionSpecificsModal
+      open={showCompetitionSpecifics}
+      onOpenChange={setShowCompetitionSpecifics}
+      eventId={event?.id}
+      eventEid={event?.eid}
+      eventName={event?.name}
+    />
+  </>
   );
 };
 

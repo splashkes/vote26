@@ -59,6 +59,9 @@ const CreateEvent = () => {
     wildcard_expected: true,
     expected_number_of_rounds: 3,
     artist_auction_portion: 0.5,
+    enable_auction: true,
+    auction_start_bid: 50,
+    min_bid_increment: 5,
     winner_prize: '',
     winner_prize_currency: '',
     other_prizes: '',
@@ -75,7 +78,14 @@ const CreateEvent = () => {
   // Load existing event data when in edit mode
   useEffect(() => {
     if (isEditMode && editEventId) {
-      loadEventForEdit(editEventId);
+      // Load locations first if not already loaded, then load event
+      if (countries.length === 0 || cities.length === 0) {
+        fetchLocations().then(() => {
+          loadEventForEdit(editEventId);
+        });
+      } else {
+        loadEventForEdit(editEventId);
+      }
     }
   }, [isEditMode, editEventId]);
 
@@ -231,6 +241,9 @@ const CreateEvent = () => {
           wildcard_expected: eventData.wildcard_expected || false,
           expected_number_of_rounds: eventData.expected_number_of_rounds || '',
           artist_auction_portion: eventData.artist_auction_portion || 0.5,
+          enable_auction: eventData.enable_auction !== null ? eventData.enable_auction : true,
+          auction_start_bid: eventData.auction_start_bid !== null && eventData.auction_start_bid !== undefined ? Number(eventData.auction_start_bid) : 50,
+          min_bid_increment: eventData.min_bid_increment !== null && eventData.min_bid_increment !== undefined ? Number(eventData.min_bid_increment) : 5,
           winner_prize: eventData.winner_prize || '',
           winner_prize_currency: eventData.winner_prize_currency || '',
           other_prizes: eventData.other_prizes || '',
@@ -721,6 +734,42 @@ const CreateEvent = () => {
                         Percentage of auction proceeds that artists receive. 0% = charity event, 50% = standard, 100% = artist keeps all proceeds.
                       </Text>
                     </Box>
+
+                    <Box>
+                      <Text as="label" size="2" weight="medium" mb="1" style={{ display: 'block' }}>
+                        Auction Starting Bid ($) *
+                      </Text>
+                      <TextField.Root
+                        type="number"
+                        min="0"
+                        step="5"
+                        placeholder="50"
+                        value={formData.auction_start_bid}
+                        onChange={(e) => handleInputChange('auction_start_bid', parseFloat(e.target.value) || 0)}
+                        required
+                      />
+                      <Text size="2" color="gray" mt="1" style={{ display: 'block' }}>
+                        Starting bid price for all artwork in auction. Standard is $50.
+                      </Text>
+                    </Box>
+
+                    <Box>
+                      <Text as="label" size="2" weight="medium" mb="1" style={{ display: 'block' }}>
+                        Minimum Bid Increment ($) *
+                      </Text>
+                      <TextField.Root
+                        type="number"
+                        min="1"
+                        step="1"
+                        placeholder="5"
+                        value={formData.min_bid_increment}
+                        onChange={(e) => handleInputChange('min_bid_increment', parseFloat(e.target.value) || 1)}
+                        required
+                      />
+                      <Text size="2" color="gray" mt="1" style={{ display: 'block' }}>
+                        Minimum amount each bid must increase. Standard is $5.
+                      </Text>
+                    </Box>
                   </Flex>
                 </Box>
 
@@ -1002,6 +1051,14 @@ const CreateEvent = () => {
                           onCheckedChange={(checked) => handleInputChange('show_in_app', checked)}
                         />
                         <Text size="2">Show in App (visible to public)</Text>
+                      </Flex>
+
+                      <Flex align="center" gap="2">
+                        <Switch
+                          checked={formData.enable_auction}
+                          onCheckedChange={(checked) => handleInputChange('enable_auction', checked)}
+                        />
+                        <Text size="2">Enable Auction (allows bidding on artwork)</Text>
                       </Flex>
                     </Flex>
                   </Flex>

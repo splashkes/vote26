@@ -28,6 +28,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import AuthModal from './AuthModal';
 import InvitationAcceptanceModal from './InvitationAcceptanceModal';
+import CompetitionSpecificsModal from './CompetitionSpecificsModal';
 
 const EventApplications = () => {
   const [events, setEvents] = useState([]);
@@ -48,6 +49,8 @@ const EventApplications = () => {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [selectedInvitation, setSelectedInvitation] = useState(null);
   const [applicationMessage, setApplicationMessage] = useState('');
+  const [showCompetitionSpecifics, setShowCompetitionSpecifics] = useState(false);
+  const [selectedEventForSpecifics, setSelectedEventForSpecifics] = useState(null);
   
   const { user, person, loading: authLoading } = useAuth();
 
@@ -179,6 +182,11 @@ const EventApplications = () => {
     setSelectedEvent(event);
     setApplicationMessage('');
     setShowApplicationModal(true);
+  };
+
+  const handleViewCompetitionSpecifics = (event) => {
+    setSelectedEventForSpecifics(event);
+    setShowCompetitionSpecifics(true);
   };
 
   const submitApplication = async () => {
@@ -723,6 +731,16 @@ const EventApplications = () => {
                           </Badge>
                         </Flex>
                       )}
+
+                      {/* View Competition Specifics Button - Below prize info, left aligned */}
+                      <Button
+                        size="2"
+                        variant="soft"
+                        onClick={() => handleViewCompetitionSpecifics(event)}
+                        style={{ marginTop: '12px' }}
+                      >
+                        📋 View Specifics
+                      </Button>
                     </Box>
 
                     <Flex gap="2" align="center">
@@ -870,8 +888,47 @@ const EventApplications = () => {
                       {selectedEvent.city?.name && ` • ${selectedEvent.city.name}`}
                     </Text>
                   )}
+
+                  {/* Prize Information */}
+                  {(selectedEvent.winner_prize || selectedEvent.other_prizes) && (
+                    <>
+                      <Separator size="4" my="2" />
+                      <Flex direction="column" gap="1">
+                        {selectedEvent.winner_prize && (
+                          <Text size="2">
+                            🏆 <Text weight="bold">Winner Prize:</Text> {selectedEvent.winner_prize}
+                          </Text>
+                        )}
+                        {selectedEvent.other_prizes && (
+                          <Text size="2">
+                            🎁 <Text weight="bold">Other Prizes:</Text> {selectedEvent.other_prizes}
+                          </Text>
+                        )}
+                      </Flex>
+                    </>
+                  )}
+
+                  {/* Advancement Information */}
+                  {selectedEvent.advances_to_event_eid && (
+                    <>
+                      <Separator size="4" my="2" />
+                      <Badge color="purple" variant="soft" size="2">
+                        ⭐ Winner advances to: {selectedEvent.advances_to_event_eid}
+                      </Badge>
+                    </>
+                  )}
                 </Flex>
               </Card>
+
+              {/* View Competition Specifics Button */}
+              <Button
+                size="2"
+                variant="soft"
+                onClick={() => handleViewCompetitionSpecifics(selectedEvent)}
+                style={{ width: '100%', marginTop: '12px' }}
+              >
+                📋 View Specifics
+              </Button>
             </Box>
           )}
 
@@ -917,6 +974,15 @@ const EventApplications = () => {
         artistProfile={artistProfile}
         onAccept={acceptInvitation}
         loading={applying[selectedEvent?.id]}
+      />
+
+      {/* Competition Specifics Modal */}
+      <CompetitionSpecificsModal
+        open={showCompetitionSpecifics}
+        onOpenChange={setShowCompetitionSpecifics}
+        eventId={selectedEventForSpecifics?.id}
+        eventEid={selectedEventForSpecifics?.eid}
+        eventName={selectedEventForSpecifics?.name}
       />
     </Box>
   );

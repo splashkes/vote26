@@ -240,6 +240,9 @@ Deno.serve(async (req) => {
       slack_channel: eventData.slack_channel || null,
       ticket_link: eventData.ticket_link || null,
       artist_auction_portion: eventData.artist_auction_portion ?? 0.5,
+      enable_auction: eventData.enable_auction ?? true,
+      auction_start_bid: eventData.auction_start_bid ?? 50,
+      min_bid_increment: eventData.min_bid_increment ?? 5,
       currency: 'USD' // Default currency
     };
 

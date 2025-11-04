@@ -275,9 +275,13 @@ Deno.serve(async (req)=>{
       wildcard_expected: eventData.wildcard_expected ?? false,
       expected_number_of_rounds: eventData.expected_number_of_rounds || null,
       artist_auction_portion: eventData.artist_auction_portion ?? 0.5,
+      enable_auction: eventData.enable_auction ?? true,
+      auction_start_bid: eventData.auction_start_bid || null,
+      min_bid_increment: eventData.min_bid_increment || null,
       winner_prize: eventData.winner_prize || null,
       winner_prize_currency: eventData.winner_prize_currency || null,
       other_prizes: eventData.other_prizes || null,
+      advances_to_event_eid: eventData.advances_to_event_eid || null,
       updated_at: new Date().toISOString()
     };
 

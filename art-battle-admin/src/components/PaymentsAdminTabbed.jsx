@@ -75,6 +75,7 @@ const PaymentsAdminTabbed = () => {
   const [apiConversations, setApiConversations] = useState([]);
   const [loadingApiConversations, setLoadingApiConversations] = useState(false);
   const [selectedPaymentForApi, setSelectedPaymentForApi] = useState(null);
+  const [activeTab, setActiveTab] = useState('artists-owed');
 
   useEffect(() => {
     fetchEnhancedData();
@@ -545,7 +546,6 @@ const PaymentsAdminTabbed = () => {
       setShowReminderDialog(false);
       setAdminNote('');
       setError('');
-      alert(`Payment invitation sent successfully to ${selectedArtist.artist_profiles.name}!`);
     } catch (err) {
       setError(`Failed to send ${reminderType} reminder: ` + err.message);
       alert(`Error: ${err.message}`);
@@ -859,6 +859,9 @@ ${JSON.stringify(parsed.debug, null, 2)}`;
         failed_count,
         payments: results
       });
+
+      // Switch to payment-attempts tab to show results
+      setActiveTab('payment-attempts');
 
       // Refresh data to show updated statuses - this is NEEDED for payment methods and button counts
       await fetchEnhancedData();
@@ -1303,7 +1306,7 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
       )}
 
       {/* Tabbed Interface */}
-      <Tabs.Root defaultValue="artists-owed">
+      <Tabs.Root value={activeTab} onValueChange={setActiveTab}>
         <Tabs.List>
           <Tabs.Trigger value="artists-owed">
             Artists Owed Money ({filteredArtistsOwed.length})
@@ -1351,6 +1354,142 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                 }
               </Flex>
             )}
+
+            {/* Bulk Email Actions */}
+            <Flex gap="3" mb="4">
+              <Button
+                size="2"
+                variant="soft"
+                color="orange"
+                onClick={async () => {
+                  const artistsWithNoInvite = filteredArtistsOwed.filter(a =>
+                    a.payment_account_status !== 'ready' &&
+                    (!a.invitation_info || !a.invitation_info.time_since_latest)
+                  );
+
+                  if (artistsWithNoInvite.length === 0) {
+                    alert('No artists found with no invitation history');
+                    return;
+                  }
+
+                  if (!confirm(`Send payment setup invitations to ${artistsWithNoInvite.length} artists with no previous invite?`)) {
+                    return;
+                  }
+
+                  let sent = 0;
+                  let failed = 0;
+
+                  for (const artist of artistsWithNoInvite) {
+                    if (!artist.artist_profiles.email) {
+                      failed++;
+                      continue;
+                    }
+
+                    try {
+                      const session = await supabase.auth.getSession();
+                      const response = await fetch('https://db.artb.art/functions/v1/admin-send-payment-invite', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Authorization': `Bearer ${session.data.session?.access_token}`,
+                          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcWRrdWJneXF3cHl2Zmx0bnJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjI1NDI0ODQsImV4cCI6MjAzODExODQ4NH0.x6JzxElYCf9lpkpc3RYX2XOQQ-v8QLPQOHWOzLj0a3M'
+                        },
+                        body: JSON.stringify({
+                          artist_id: artist.artist_profiles.id,
+                          invite_type: 'email'
+                        })
+                      });
+
+                      const result = await response.json();
+                      if (result.success) {
+                        sent++;
+                      } else {
+                        failed++;
+                      }
+                    } catch (err) {
+                      console.error('Failed to send invite:', err);
+                      failed++;
+                    }
+                  }
+
+                  alert(`Bulk invite completed!\nSent: ${sent}\nFailed: ${failed}`);
+                  fetchEnhancedData(); // Refresh data
+                }}
+              >
+                📧 Send to Artists with No Invite ({filteredArtistsOwed.filter(a =>
+                  a.payment_account_status !== 'ready' &&
+                  (!a.invitation_info || !a.invitation_info.time_since_latest)
+                ).length})
+              </Button>
+
+              <Button
+                size="2"
+                variant="soft"
+                color="blue"
+                onClick={async () => {
+                  const artistsWithPastInvite = filteredArtistsOwed.filter(a =>
+                    a.payment_account_status !== 'ready' &&
+                    a.invitation_info &&
+                    a.invitation_info.time_since_latest
+                  );
+
+                  if (artistsWithPastInvite.length === 0) {
+                    alert('No artists found with past invitations');
+                    return;
+                  }
+
+                  if (!confirm(`Re-send payment setup invitations to ${artistsWithPastInvite.length} artists with past invites?`)) {
+                    return;
+                  }
+
+                  let sent = 0;
+                  let failed = 0;
+
+                  for (const artist of artistsWithPastInvite) {
+                    if (!artist.artist_profiles.email) {
+                      failed++;
+                      continue;
+                    }
+
+                    try {
+                      const session = await supabase.auth.getSession();
+                      const response = await fetch('https://db.artb.art/functions/v1/admin-send-payment-invite', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Authorization': `Bearer ${session.data.session?.access_token}`,
+                          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcWRrdWJneXF3cHl2Zmx0bnJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjI1NDI0ODQsImV4cCI6MjAzODExODQ4NH0.x6JzxElYCf9lpkpc3RYX2XOQQ-v8QLPQOHWOzLj0a3M'
+                        },
+                        body: JSON.stringify({
+                          artist_id: artist.artist_profiles.id,
+                          invite_type: 'email',
+                          admin_note: 'Follow-up reminder'
+                        })
+                      });
+
+                      const result = await response.json();
+                      if (result.success) {
+                        sent++;
+                      } else {
+                        failed++;
+                      }
+                    } catch (err) {
+                      console.error('Failed to send invite:', err);
+                      failed++;
+                    }
+                  }
+
+                  alert(`Bulk invite completed!\nSent: ${sent}\nFailed: ${failed}`);
+                  fetchEnhancedData(); // Refresh data
+                }}
+              >
+                📨 Send to Artists with Past Invite ({filteredArtistsOwed.filter(a =>
+                  a.payment_account_status !== 'ready' &&
+                  a.invitation_info &&
+                  a.invitation_info.time_since_latest
+                ).length})
+              </Button>
+            </Flex>
 
             {filteredArtistsOwed.length === 0 ? (
               <Text color="gray" style={{ textAlign: 'center', padding: '2rem' }}>
@@ -1416,7 +1555,13 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                             style={{ padding: '2px', height: 'auto' }}
                           >
                             <Flex direction="column" gap="1" align="start">
-                              <Text size="1" color="gray">{artist.invitation_info.time_since_latest}</Text>
+                              <Text
+                                size="1"
+                                color={artist.invitation_info.time_since_latest === 'just now' ? 'green' : 'gray'}
+                                weight={artist.invitation_info.time_since_latest === 'just now' ? 'bold' : 'regular'}
+                              >
+                                {artist.invitation_info.time_since_latest}
+                              </Text>
                               <Badge
                                 size="1"
                                 variant="soft"
@@ -1625,157 +1770,6 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
                   ))}
                 </Table.Body>
               </Table.Root>
-            )}
-
-            {/* Processing Results */}
-            {paymentProcessResults && (
-              <Card variant="ghost" mt="4">
-                <Flex direction="column" gap="4">
-                  <Heading size="2">Processing Results</Heading>
-
-                  {/* Summary */}
-                  <Flex gap="4" align="center">
-                    <Badge
-                      size="2"
-                      color={paymentProcessResults.success ? 'green' : 'red'}
-                      variant="solid"
-                    >
-                      {paymentProcessResults.success ? '✅ Success' : '❌ Failed'}
-                    </Badge>
-
-                    <Text size="2" color="gray">
-                      {new Date(paymentProcessResults.timestamp).toLocaleString()}
-                    </Text>
-                  </Flex>
-
-                  <Card>
-                    <Flex justify="between" align="center" mb="3">
-                      <Text size="3" weight="medium">{paymentProcessResults.message}</Text>
-                    </Flex>
-
-                    <Flex gap="6">
-                      <Box>
-                        <Text size="1" color="gray">Processed</Text>
-                        <Text size="4" weight="bold">{paymentProcessResults.processed_count}</Text>
-                      </Box>
-                      <Box>
-                        <Text size="1" color="gray">Successful</Text>
-                        <Text size="4" weight="bold" color="green">{paymentProcessResults.successful_count}</Text>
-                      </Box>
-                      <Box>
-                        <Text size="1" color="gray">Failed</Text>
-                        <Text size="4" weight="bold" color="red">{paymentProcessResults.failed_count}</Text>
-                      </Box>
-                      <Box>
-                        <Text size="1" color="gray">Total Amount</Text>
-                        <Text size="4" weight="bold" color="green">${paymentProcessResults.total_amount?.toFixed(2) || '0.00'}</Text>
-                      </Box>
-                    </Flex>
-                  </Card>
-
-                  {/* Payment Details */}
-                  {paymentProcessResults.payments && paymentProcessResults.payments.length > 0 && (
-                    <Box>
-                      <Text size="2" weight="medium" mb="3">Payment Details</Text>
-                      <Table.Root>
-                        <Table.Header>
-                          <Table.Row>
-                            <Table.ColumnHeaderCell>Artist</Table.ColumnHeaderCell>
-                            <Table.ColumnHeaderCell>Amount</Table.ColumnHeaderCell>
-                            <Table.ColumnHeaderCell>Status</Table.ColumnHeaderCell>
-                            <Table.ColumnHeaderCell>Stripe Transfer ID</Table.ColumnHeaderCell>
-                            <Table.ColumnHeaderCell>Error</Table.ColumnHeaderCell>
-                          </Table.Row>
-                        </Table.Header>
-                        <Table.Body>
-                          {paymentProcessResults.payments.map((payment, index) => (
-                            <Table.Row key={`${payment.payment_id}-${index}`}>
-                              <Table.Cell>
-                                <Text size="2" weight="medium">{payment.artist_name}</Text>
-                              </Table.Cell>
-                              <Table.Cell>
-                                <Text size="2" weight="medium" color="green">
-                                  {payment.currency} {payment.amount}
-                                </Text>
-                              </Table.Cell>
-                              <Table.Cell>
-                                {payment.status === 'success' ? (
-                                  <Badge color="green" variant="soft">
-                                    ✅ Success
-                                  </Badge>
-                                ) : (
-                                  <Badge
-                                    color="red"
-                                    variant="soft"
-                                    style={{ cursor: 'pointer' }}
-                                    onClick={() => handleViewApiConversations(payment.payment_id)}
-                                    title="Click to view API error details"
-                                  >
-                                    ❌ Failed - View Details
-                                  </Badge>
-                                )}
-                              </Table.Cell>
-                              <Table.Cell>
-                                {payment.stripe_transfer_id ? (
-                                  <Text size="1" color="gray" style={{ fontFamily: 'monospace' }}>
-                                    {payment.stripe_transfer_id}
-                                  </Text>
-                                ) : (
-                                  <Text size="1" color="gray">—</Text>
-                                )}
-                              </Table.Cell>
-                              <Table.Cell>
-                                {payment.error ? (
-                                  <Text size="1" color="red" style={{ maxWidth: '200px', wordBreak: 'break-word' }}>
-                                    {payment.error}
-                                  </Text>
-                                ) : (
-                                  <Text size="1" color="gray">—</Text>
-                                )}
-                              </Table.Cell>
-                            </Table.Row>
-                          ))}
-                        </Table.Body>
-                      </Table.Root>
-                    </Box>
-                  )}
-
-                  {/* Blocked Payments */}
-                  {paymentProcessResults.blocked_payments && paymentProcessResults.blocked_payments.length > 0 && (
-                    <Box>
-                      <Text size="2" weight="medium" mb="3" color="orange">Blocked Payments (No Account Setup)</Text>
-                      <Table.Root>
-                        <Table.Header>
-                          <Table.Row>
-                            <Table.ColumnHeaderCell>Artist</Table.ColumnHeaderCell>
-                            <Table.ColumnHeaderCell>Amount</Table.ColumnHeaderCell>
-                            <Table.ColumnHeaderCell>Issue</Table.ColumnHeaderCell>
-                          </Table.Row>
-                        </Table.Header>
-                        <Table.Body>
-                          {paymentProcessResults.blocked_payments.map((payment, index) => (
-                            <Table.Row key={`blocked-${payment.payment_id}-${index}`}>
-                              <Table.Cell>
-                                <Text size="2">{payment.artist_name}</Text>
-                              </Table.Cell>
-                              <Table.Cell>
-                                <Text size="2" color="orange">
-                                  {payment.currency} {payment.amount}
-                                </Text>
-                              </Table.Cell>
-                              <Table.Cell>
-                                <Badge color="orange" variant="soft">
-                                  {payment.issue}
-                                </Badge>
-                              </Table.Cell>
-                            </Table.Row>
-                          ))}
-                        </Table.Body>
-                      </Table.Root>
-                    </Box>
-                  )}
-                </Flex>
-              </Card>
             )}
           </Card>
         </Tabs.Content>
