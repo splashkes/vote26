@@ -56,10 +56,12 @@ const ArtistWorkflow = ({ eventIds = [], eventEids = [], title = "Artist Managem
       if (invError) throw invError;
 
       // Fetch confirmations for all events (uses event_eid text)
+      // Filter out withdrawn confirmations
       const { data: confirmations, error: confError} = await supabase
         .from('artist_confirmations')
-        .select('id, artist_number, event_eid, created_at')
+        .select('id, artist_number, event_eid, created_at, confirmation_status, withdrawn_at')
         .in('event_eid', eventEids)
+        .eq('confirmation_status', 'confirmed')
         .order('created_at', { ascending: false});
 
       if (confError) throw confError;

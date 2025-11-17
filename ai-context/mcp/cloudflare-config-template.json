@@ -1,0 +1,83 @@
+{
+  "mcpServers": {
+    "cloudflare-observability": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://observability.mcp.cloudflare.com/mcp"
+      ],
+      "env": {
+        "CLOUDFLARE_API_TOKEN": "cf_YOUR_TOKEN_HERE",
+        "CLOUDFLARE_ACCOUNT_ID": "YOUR_ACCOUNT_ID_HERE"
+      }
+    },
+    "cloudflare-workers": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://workers-bindings.mcp.cloudflare.com/mcp"
+      ],
+      "env": {
+        "CLOUDFLARE_API_TOKEN": "cf_YOUR_TOKEN_HERE",
+        "CLOUDFLARE_ACCOUNT_ID": "YOUR_ACCOUNT_ID_HERE"
+      }
+    },
+    "cloudflare-dns": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://dns.mcp.cloudflare.com/mcp"
+      ],
+      "env": {
+        "CLOUDFLARE_API_TOKEN": "cf_YOUR_TOKEN_HERE"
+      }
+    },
+    "cloudflare-ai-gateway": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://ai-gateway.mcp.cloudflare.com/mcp"
+      ],
+      "env": {
+        "CLOUDFLARE_API_TOKEN": "cf_YOUR_TOKEN_HERE",
+        "CLOUDFLARE_ACCOUNT_ID": "YOUR_ACCOUNT_ID_HERE"
+      }
+    },
+    "cloudflare-documentation": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://documentation.mcp.cloudflare.com/mcp"
+      ]
+    },
+    "cloudflare-radar": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://radar.mcp.cloudflare.com/mcp"
+      ]
+    },
+    "cloudflare-audit-logs": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://audit-logs.mcp.cloudflare.com/mcp"
+      ],
+      "env": {
+        "CLOUDFLARE_API_TOKEN": "cf_YOUR_TOKEN_HERE",
+        "CLOUDFLARE_ACCOUNT_ID": "YOUR_ACCOUNT_ID_HERE"
+      }
+    },
+    "cloudflare-browser-rendering": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://browser-rendering.mcp.cloudflare.com/mcp"
+      ],
+      "env": {
+        "CLOUDFLARE_API_TOKEN": "cf_YOUR_TOKEN_HERE",
+        "CLOUDFLARE_ACCOUNT_ID": "YOUR_ACCOUNT_ID_HERE"
+      }
+    }
+  }
+}

@@ -28,6 +28,8 @@ import EventLinter from './components/EventLinter';
 import VenuesManagement from './components/VenuesManagement';
 import SponsorshipPackages from './components/sponsorship/SponsorshipPackages';
 import EventRelationshipBackfill from './components/EventRelationshipBackfill';
+import SMSConversations from './components/SMSConversations';
+import OffersManagement from './components/OffersManagement';
 import Welcome from './components/Welcome';
 import './App.css';
 
@@ -73,6 +75,8 @@ function App() {
                 <Route path="sponsorship-packages" element={<SponsorshipPackages />} />
                 <Route path="event-relationships" element={<EventRelationshipBackfill />} />
                 <Route path="sms-marketing" element={<PromotionSystem />} />
+                <Route path="sms-conversations" element={<SMSConversations />} />
+                <Route path="offers" element={<OffersManagement />} />
                 <Route path="artist/:entryId" element={<ArtistsManagement />} />
                 <Route path="*" element={<Navigate to="/events" replace />} />
               </Route>

@@ -217,6 +217,11 @@ const EventDetail = () => {
   const [sendingInvitation, setSendingInvitation] = useState(false);
   const [sendingReminder, setSendingReminder] = useState(false);
   const [reminderSent, setReminderSent] = useState(false);
+
+  // Withdrawal states
+  const [withdrawalDialogOpen, setWithdrawalDialogOpen] = useState(false);
+  const [withdrawalReason, setWithdrawalReason] = useState('');
+  const [withdrawing, setWithdrawing] = useState(false);
   const [reminderPhoneUsed, setReminderPhoneUsed] = useState(null);
   const [showAllArtists, setShowAllArtists] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -1709,6 +1714,46 @@ const EventDetail = () => {
   const cancelBioEdit = () => {
     setBioText(selectedArtist?.artist_profiles?.abhq_bio || '');
     setEditingBio(false);
+  };
+
+  const handleWithdrawConfirmation = async () => {
+    if (!selectedArtist?.id) {
+      alert('No confirmation record found');
+      return;
+    }
+
+    setWithdrawing(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const withdrawnBy = `${user?.email || 'unknown'} (admin)`;
+
+      const { error } = await supabase
+        .from('artist_confirmations')
+        .update({
+          confirmation_status: 'withdrawn',
+          withdrawn_at: new Date().toISOString(),
+          withdrawal_reason: `Withdrawn by admin: ${withdrawnBy}. ${withdrawalReason ? `Reason: ${withdrawalReason}` : 'No reason provided.'}`
+        })
+        .eq('id', selectedArtist.id);
+
+      if (error) throw error;
+
+      alert('Artist confirmation withdrawn successfully');
+      setWithdrawalDialogOpen(false);
+      setWithdrawalReason('');
+
+      // Close the artist modal
+      setArtistModalOpen(false);
+      setSelectedArtist(null);
+
+      // Refresh the artist data to remove from confirmed list
+      fetchArtistData();
+    } catch (error) {
+      console.error('Error withdrawing confirmation:', error);
+      alert(`Error withdrawing confirmation: ${error.message}`);
+    } finally {
+      setWithdrawing(false);
+    }
   };
 
   const fetchSampleWorks = async (artistNumber) => {
@@ -6047,14 +6092,53 @@ The Art Battle Team`);
                         </Box>
                         
                         <Separator />
-                        
-                        <Flex gap="3">
+
+                        <Flex gap="3" wrap="wrap">
                           <Button size="3" style={{ flex: 1 }}>
                             Assign to Round
                           </Button>
                           <Button size="3" variant="outline" color="gray">
                             View Full Details
                           </Button>
+
+                          {/* Super Admin Remove Button */}
+                          {(() => {
+                            console.log('🔴 Withdrawal button check:', {
+                              isSuperAdmin,
+                              selectedArtist,
+                              confirmation_status: selectedArtist?.confirmation_status,
+                              artistModalType,
+                              shouldShow: isSuperAdmin && artistModalType === 'confirmation' && (!selectedArtist?.confirmation_status || selectedArtist?.confirmation_status === 'confirmed')
+                            });
+
+                            // For confirmations, if no status field exists, they are confirmed by default
+                            const isConfirmed = artistModalType === 'confirmation' &&
+                              (!selectedArtist?.confirmation_status || selectedArtist?.confirmation_status === 'confirmed');
+
+                            if (isSuperAdmin && isConfirmed) {
+                              return (
+                                <Button
+                                  size="3"
+                                  variant="solid"
+                                  color="red"
+                                  style={{ flex: 1 }}
+                                  onClick={() => {
+                                    setWithdrawalDialogOpen(true);
+                                  }}
+                                >
+                                  🚨 SUPER ADMIN REMOVE
+                                </Button>
+                              );
+                            }
+                            return null;
+                          })()}
+
+                          {/* Show withdrawn status */}
+                          {selectedArtist?.confirmation_status === 'withdrawn' && (
+                            <Badge color="red" size="2">
+                              WITHDRAWN: {selectedArtist.withdrawn_at ? new Date(selectedArtist.withdrawn_at).toLocaleDateString() : 'Unknown date'}
+                            </Badge>
+                          )}
                         </Flex>
                       </Flex>
                     </Box>
@@ -7377,6 +7461,51 @@ The Art Battle Team`);
           </Flex>
         </Dialog.Content>
       </Dialog.Root>
+
+      {/* Withdrawal Confirmation Dialog */}
+      <AlertDialog.Root open={withdrawalDialogOpen} onOpenChange={setWithdrawalDialogOpen}>
+        <AlertDialog.Content style={{ maxWidth: 500 }}>
+          <AlertDialog.Title>Remove Confirmed Artist</AlertDialog.Title>
+          <AlertDialog.Description size="2">
+            <Flex direction="column" gap="3">
+              <Text>
+                Are you sure you want to withdraw <strong>{selectedArtist?.artist_profiles?.name}</strong> from this event?
+              </Text>
+              <Text size="1" color="gray">
+                This will mark their confirmation as withdrawn and remove them from the event roster.
+              </Text>
+
+              <Box>
+                <Text size="2" weight="bold" mb="2">Reason (optional):</Text>
+                <TextArea
+                  value={withdrawalReason}
+                  onChange={(e) => setWithdrawalReason(e.target.value)}
+                  placeholder="Enter reason for withdrawal..."
+                  rows={3}
+                />
+              </Box>
+            </Flex>
+          </AlertDialog.Description>
+
+          <Flex gap="3" mt="4" justify="end">
+            <AlertDialog.Cancel>
+              <Button variant="soft" color="gray">
+                Cancel
+              </Button>
+            </AlertDialog.Cancel>
+            <AlertDialog.Action>
+              <Button
+                variant="solid"
+                color="red"
+                onClick={handleWithdrawConfirmation}
+                disabled={withdrawing}
+              >
+                {withdrawing ? 'Removing...' : 'Remove Artist'}
+              </Button>
+            </AlertDialog.Action>
+          </Flex>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
     </Box>
   );
 };

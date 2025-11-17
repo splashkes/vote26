@@ -2183,8 +2183,8 @@ const AdminPanel = ({
                     {searchResults.map(artist => {
                       const isInEvent = eventArtists.some(ea => ea.id === artist.id);
                       return (
-                        <Flex key={artist.id} justify="between" align="center" p="2" style={{ 
-                          background: 'var(--gray-2)', 
+                        <Flex key={artist.id} justify="between" align="center" p="2" style={{
+                          background: 'var(--gray-2)',
                           borderRadius: '4px',
                           border: '1px solid var(--gray-4)'
                         }}>
@@ -2197,12 +2197,17 @@ const AdminPanel = ({
                               <Text size="1" color="gray">{artist.city_text}</Text>
                               {artist.entry_id && <Text size="1" color="gray">• ID: {artist.entry_id}</Text>}
                             </Flex>
+                            <Text size="1" color="gray">
+                              {artist.lastLogin
+                                ? `Last login: ${artist.daysAgo === 0 ? 'today' : artist.daysAgo === 1 ? 'yesterday' : `${artist.daysAgo} days ago`}`
+                                : 'Never logged in'}
+                            </Text>
                           </Box>
                           {isInEvent ? (
                             <Badge size="1" color="green">Already Added</Badge>
                           ) : (
-                            <Button 
-                              size="1" 
+                            <Button
+                              size="1"
                               variant="soft"
                               onClick={() => addArtistToEvent(artist.id)}
                             >

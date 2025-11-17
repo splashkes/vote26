@@ -11,35 +11,81 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  // Initialize Supabase client - using service key for webhook (no user auth required)
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+  const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+      detectSessionInUrl: false
+    },
+    global: {
+      headers: {
+        Authorization: `Bearer ${supabaseServiceKey}`
+      }
+    }
+  });
+
+  // Capture ALL request details for debugging
+  const method = req.method;
+  const headers: Record<string, string> = {};
+  req.headers.forEach((value, key) => {
+    headers[key] = value;
+  });
+
+  let bodyRaw = '';
+  let bodyParsed: any = null;
+  let processingResult = '';
+  let errorMessage = '';
+
+  try {
+    // Read body as text first for logging
+    bodyRaw = await req.text();
+
+    // Log EVERYTHING to debug table immediately
+    try {
+      bodyParsed = bodyRaw ? JSON.parse(bodyRaw) : null;
+    } catch (parseError) {
+      errorMessage = `JSON parse error: ${parseError.message}`;
+    }
+
+    await supabase.from('sms_webhook_debug').insert({
+      method: method,
+      headers: headers,
+      body_raw: bodyRaw,
+      body_parsed: bodyParsed,
+      processing_result: 'received',
+      error_message: errorMessage || null
+    });
+
+    console.log('=== WEBHOOK DEBUG ===');
+    console.log('Method:', method);
+    console.log('Headers:', JSON.stringify(headers, null, 2));
+    console.log('Body Raw:', bodyRaw);
+    console.log('Body Parsed:', JSON.stringify(bodyParsed, null, 2));
+
+  } catch (debugError) {
+    console.error('Error in debug logging:', debugError);
+  }
+
+  if (method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    // Initialize Supabase client - using service key for webhook (no user auth required)
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { 
-        autoRefreshToken: false, 
-        persistSession: false,
-        detectSessionInUrl: false 
-      },
-      global: {
-        headers: { 
-          Authorization: `Bearer ${supabaseServiceKey}` 
-        }
-      }
-    });
-
     // Get webhook signature for validation (optional but recommended)
     const telnyxSignature = req.headers.get('x-telnyx-signature');
     const webhookSecret = Deno.env.get('TELNYX_WEBHOOK_SECRET');
 
-    // Parse webhook payload
-    const payload = await req.json();
-    console.log('Received Telnyx webhook:', JSON.stringify(payload, null, 2));
+    // Use parsed payload
+    const payload = bodyParsed;
+    if (!payload) {
+      throw new Error('No payload or invalid JSON');
+    }
+
+    console.log('Processing Telnyx webhook:', JSON.stringify(payload, null, 2));
 
     // Validate webhook signature if secret is configured
     if (webhookSecret && telnyxSignature) {
@@ -50,15 +96,45 @@ serve(async (req) => {
 
     // Extract webhook data
     const eventType = payload.event_type || payload.data?.event_type;
+    const recordType = payload.record_type;
     const webhookData = payload.data || payload;
 
+    // Handle Telnyx inbound message format with record_type: "message"
+    if (recordType === 'message' && payload.direction === 'inbound') {
+      console.log('Processing inbound SMS with record_type: message');
+      await handleInboundMessage(supabase, payload);
+      return new Response(JSON.stringify({
+        received: true,
+        event_type: 'inbound_message',
+        processed: true
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
     // Handle Telnyx inbound SMS format (doesn't have event_type, uses direction field)
+    // Also handle MDR (Message Detail Record) format which uses 'direction' and 'record_type'
     if (!eventType && payload.direction === 'inbound') {
       console.log('Processing inbound SMS in simple format');
       await handleInboundMessage(supabase, payload);
       return new Response(JSON.stringify({
         received: true,
         event_type: 'inbound_sms',
+        processed: true
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Handle MDR format (Message Detail Record) with cli/cld fields
+    if (payload.record_type === 'message_detail_record' && payload.direction === 'inbound') {
+      console.log('Processing inbound SMS in MDR format');
+      await handleInboundMessage(supabase, payload);
+      return new Response(JSON.stringify({
+        received: true,
+        event_type: 'inbound_mdr',
         processed: true
       }), {
         status: 200,
@@ -79,7 +155,9 @@ serve(async (req) => {
     // Handle different webhook event types
     switch (eventType) {
       case 'message.received':
-        await handleInboundMessage(supabase, webhookData);
+        // Telnyx wraps the actual message in data.payload
+        const messageData = webhookData.payload || webhookData;
+        await handleInboundMessage(supabase, messageData);
         break;
       
       case 'message.sent':
@@ -109,10 +187,20 @@ serve(async (req) => {
         break;
     }
 
-    return new Response(JSON.stringify({ 
-      received: true, 
+    // Log successful processing
+    await supabase.from('sms_webhook_debug').insert({
+      method: method,
+      headers: headers,
+      body_raw: bodyRaw,
+      body_parsed: bodyParsed,
+      processing_result: `success - ${eventType || recordType}`,
+      error_message: null
+    });
+
+    return new Response(JSON.stringify({
+      received: true,
       event_type: eventType,
-      processed: true 
+      processed: true
     }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -120,7 +208,17 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error in sms-marketing-webhook function:', error);
-    
+
+    // Log error
+    await supabase.from('sms_webhook_debug').insert({
+      method: method,
+      headers: headers,
+      body_raw: bodyRaw,
+      body_parsed: bodyParsed,
+      processing_result: 'error',
+      error_message: error.message
+    });
+
     return new Response(JSON.stringify({
       received: true, // Still acknowledge receipt to Telnyx
       error: error.message,
@@ -135,13 +233,14 @@ serve(async (req) => {
 // Handle inbound SMS messages
 async function handleInboundMessage(supabase: any, data: any) {
   try {
-    // Handle both Telnyx formats:
+    // Handle multiple Telnyx formats:
     // 1. Event format: data.id, data.from.phone_number, data.to[0].phone_number, data.text
     // 2. Simple format: data.sms_id, data.from, data.to, data.body
+    // 3. MDR format: data.id, data.cli (from), data.cld (to), data.body or data.text
     const messageId = data.id || data.sms_id;
-    const fromPhone = data.from?.phone_number || data.from;
-    const toPhone = data.to?.[0]?.phone_number || data.to;
-    const messageBody = data.text || data.body || '';
+    const fromPhone = data.from?.phone_number || data.from || data.cli;
+    const toPhone = data.to?.[0]?.phone_number || data.to || data.cld;
+    const messageBody = data.text || data.body || data.message || '';
 
     console.log(`Inbound SMS: ${fromPhone} -> ${toPhone}: "${messageBody}"`);
 

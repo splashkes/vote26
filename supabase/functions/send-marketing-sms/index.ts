@@ -86,8 +86,31 @@ serve(async (req) => {
       });
     }
 
-    // Calculate message stats
-    const characterCount = message.length;
+    // Look up person data for variable substitution
+    const { data: personData } = await supabase
+      .from('people')
+      .select('id, first_name, last_name, name, hash, phone, phone_number')
+      .or(`phone.eq.${toFormatted},phone_number.eq.${toFormatted}`)
+      .single();
+
+    // Apply variable substitution to message
+    let processedMessage = message;
+    if (personData) {
+      // Build full name from first_name and last_name, fallback to name field
+      const fullName = personData.first_name && personData.last_name
+        ? `${personData.first_name} ${personData.last_name}`.trim()
+        : (personData.name || '');
+
+      // Replace variables (case-insensitive)
+      processedMessage = processedMessage
+        .replace(/%%HASH%%/gi, personData.hash || '')
+        .replace(/%%NAME%%/gi, fullName)
+        .replace(/%%FIRST_NAME%%/gi, personData.first_name || '')
+        .replace(/%%LAST_NAME%%/gi, personData.last_name || '');
+    }
+
+    // Calculate message stats (using processed message)
+    const characterCount = processedMessage.length;
     const messageParts = Math.ceil(characterCount / 160); // GSM-7 single part limit
 
     // Validate message length (max 10 parts per Telnyx)
@@ -111,7 +134,7 @@ serve(async (req) => {
         template_id: template_id || null,
         to_phone: toFormatted,
         from_phone: fromFormatted,
-        message_body: message,
+        message_body: processedMessage, // Use processed message with variables substituted
         character_count: characterCount,
         message_parts: messageParts,
         status: 'pending',
@@ -136,7 +159,7 @@ serve(async (req) => {
       body: JSON.stringify({
         from: fromFormatted,
         to: toFormatted,
-        text: message
+        text: processedMessage // Use processed message with variables substituted
       })
     });
 
@@ -161,7 +184,7 @@ serve(async (req) => {
           p_phone_number: toFormatted,
           p_action: 'failed',
           p_status: 'failed',
-          p_message: message,
+          p_message: processedMessage,
           p_error_details: telnyxData.errors?.[0]?.detail || 'Unknown error'
         });
       }
@@ -190,7 +213,7 @@ serve(async (req) => {
         p_phone_number: toFormatted,
         p_action: 'sent',
         p_status: 'sent',
-        p_message: message,
+        p_message: processedMessage,
         p_metadata: { telnyx_message_id: telnyxMessageId }
       });
     }

@@ -16,7 +16,8 @@ import {
   Callout,
   Dialog,
   Checkbox,
-  ScrollArea
+  ScrollArea,
+  Spinner
 } from '@radix-ui/themes';
 import {
   InfoCircledIcon,
@@ -25,7 +26,8 @@ import {
   CrossCircledIcon,
   PaperPlaneIcon,
   PersonIcon,
-  Cross2Icon
+  Cross2Icon,
+  CalendarIcon
 } from '@radix-ui/react-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -81,6 +83,16 @@ const PromotionSystem = () => {
   // Error state
   const [audienceError, setAudienceError] = useState(null);
 
+  // Scheduling state
+  const [scheduledAt, setScheduledAt] = useState('');
+  const [scheduleTimezone, setScheduleTimezone] = useState('America/Toronto'); // Default to Toronto
+  const [dryRunMode, setDryRunMode] = useState(false);
+
+  // Scheduled campaigns
+  const [scheduledCampaigns, setScheduledCampaigns] = useState([]);
+  const [loadingScheduled, setLoadingScheduled] = useState(false);
+  const [editingCampaign, setEditingCampaign] = useState(null);
+
   // Modal state
   const [showAudienceModal, setShowAudienceModal] = useState(false);
   const [audiencePeople, setAudiencePeople] = useState([]);
@@ -88,15 +100,21 @@ const PromotionSystem = () => {
 
   // Temporary event selection state
   const [tempSelectedEvents, setTempSelectedEvents] = useState([]);
+  const [eventSearchFilter, setEventSearchFilter] = useState('');
 
   // Event association state (for tracking which event this campaign is for)
   const [associatedEventId, setAssociatedEventId] = useState('');
   const [futureEvents, setFutureEvents] = useState([]);
 
+  // Campaign details modal state
+  const [showCampaignDetails, setShowCampaignDetails] = useState(false);
+  const [selectedCampaignForDetails, setSelectedCampaignForDetails] = useState(null);
+
   // Load initial data
   useEffect(() => {
     loadCitiesAndEvents();
     loadFutureEvents();
+    loadScheduledCampaigns();
   }, []);
 
   // Reload events when city changes
@@ -104,8 +122,10 @@ const PromotionSystem = () => {
     if (selectedCity) {
       loadEventsForCity(selectedCity);
       setTempSelectedEvents([]); // Clear temp selection when city changes
+      setEventSearchFilter(''); // Clear search filter when city changes
     } else {
       setEvents([]);
+      setEventSearchFilter(''); // Clear search filter when no city
     }
   }, [selectedCity]);
 
@@ -133,6 +153,44 @@ const PromotionSystem = () => {
   useEffect(() => {
     calculateMessageSegments();
   }, [message]);
+
+  // Subscribe to realtime campaign progress updates for active campaigns
+  useEffect(() => {
+    const activeCampaigns = scheduledCampaigns.filter(c =>
+      c.status === 'in_progress' || c.status === 'queued'
+    );
+
+    if (activeCampaigns.length === 0) return;
+
+    const channel = supabase
+      .channel('active-campaigns')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'sms_marketing_campaigns'
+        },
+        (payload) => {
+          const updated = payload.new;
+
+          // Update the campaign in the list
+          setScheduledCampaigns(prev =>
+            prev.map(campaign =>
+              campaign.id === updated.id
+                ? { ...campaign, ...updated }
+                : campaign
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscription on unmount
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [scheduledCampaigns.length > 0]);
 
   const loadCitiesAndEvents = async () => {
     try {
@@ -170,8 +228,6 @@ const PromotionSystem = () => {
         : citiesWithEvents;
 
       setCities(allCities);
-      console.log('Cities loaded:', allCities.length, 'No city events:', noCityCount);
-
     } catch (error) {
       console.error('Error loading cities:', error);
     }
@@ -235,6 +291,44 @@ const PromotionSystem = () => {
     } catch (error) {
       console.error('Error loading future events:', error);
       setFutureEvents([]);
+    }
+  };
+
+  const loadScheduledCampaigns = async () => {
+    setLoadingScheduled(true);
+    try {
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      console.log('Loading scheduled campaigns, cutoff time:', twentyFourHoursAgo);
+
+      // Fetch scheduled/draft campaigns (all of them)
+      const { data: scheduledData, error: scheduledError } = await supabase
+        .from('sms_marketing_campaigns')
+        .select('*, events(name, event_start_datetime)')
+        .in('status', ['draft', 'scheduled', 'queued', 'in_progress'])
+        .order('created_at', { ascending: false });
+
+      if (scheduledError) throw scheduledError;
+
+      // Fetch recently completed campaigns (last 24 hours)
+      const { data: completedData, error: completedError } = await supabase
+        .from('sms_marketing_campaigns')
+        .select('*, events(name, event_start_datetime)')
+        .eq('status', 'completed')
+        .gte('completed_at', twentyFourHoursAgo)
+        .order('completed_at', { ascending: false });
+
+      if (completedError) throw completedError;
+
+      // Combine and sort by created_at
+      const combined = [...(scheduledData || []), ...(completedData || [])]
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+      setScheduledCampaigns(combined);
+    } catch (error) {
+      console.error('Error loading scheduled campaigns:', error);
+      setScheduledCampaigns([]);
+    } finally {
+      setLoadingScheduled(false);
     }
   };
 
@@ -314,7 +408,6 @@ const PromotionSystem = () => {
     if (rfmProcessing) return;
 
     setRfmProcessing(true);
-    setRfmProgress({ processed: 0, total: 0, progress_percent: 0 }); // Will be updated with actual total
 
     try {
       // Get ALL person IDs efficiently for RFM processing (not limited to UI sample)
@@ -336,20 +429,19 @@ const PromotionSystem = () => {
       }
 
       const personIds = idsResponse.data.person_ids;
-      
-      // Update progress with actual total from person IDs response
-      setRfmProgress({ processed: 0, total: personIds.length, progress_percent: 0 });
-      
+
       if (personIds.length === 0) {
         throw new Error('No people found in audience to process RFM scores');
       }
-      
+
+      // Initial progress - total people to check
       console.log(`Starting RFM processing for ${personIds.length} people`);
-      console.log(`Person IDs response details:`, {
-        total_from_api: idsResponse.data.total_count,
-        person_ids_length: personIds.length,
-        selected_events: selectedEvents,
-        first_few_ids: personIds.slice(0, 5)
+      setRfmProgress({
+        processed: 0,
+        total: personIds.length,
+        progress_percent: 0,
+        status: 'Checking existing RFM scores...',
+        totalPeople: personIds.length
       });
       
       // Setup streaming RFM processing
@@ -414,22 +506,24 @@ const PromotionSystem = () => {
                 const data = JSON.parse(jsonStr);
                 
                 if (data.type === 'progress') {
-                  setRfmProgress({
+                  setRfmProgress(prev => ({
                     processed: data.processed,
-                    total: data.needed_updates,
+                    total: data.needed_updates || prev.total,
                     progress_percent: data.progress_percent,
                     errors: data.errors,
-                    status: data.status
-                  });
+                    status: data.status,
+                    totalPeople: prev.totalPeople // Preserve original total
+                  }));
                 } else if (data.type === 'complete') {
-                  setRfmProgress({
+                  setRfmProgress(prev => ({
                     processed: data.processed,
-                    total: data.needed_updates,
+                    total: data.needed_updates || prev.total,
                     completion_rate: data.completion_rate,
                     progress_percent: 100,
                     errors: data.errors,
-                    status: 'completed'
-                  });
+                    status: 'completed',
+                    totalPeople: prev.totalPeople // Preserve original total
+                  }));
                   
                   // Refresh audience calculation with RFM filters after completion
                   await calculateAudience();
@@ -447,9 +541,23 @@ const PromotionSystem = () => {
 
     } catch (error) {
       console.error('Error processing RFM batch:', error);
-      setRfmProgress({ error: error.message });
+      // Preserve progress info if we have it
+      setRfmProgress(prev => {
+        if (prev && prev.processed > 0) {
+          return {
+            ...prev,
+            error: `Processing stopped: ${error.message}`,
+            status: 'stopped'
+          };
+        }
+        return { error: error.message };
+      });
     } finally {
       setRfmProcessing(false);
+      // After processing stops, refresh audience to update the counts
+      if (rfmProgress && rfmProgress.processed > 0) {
+        await calculateAudience();
+      }
     }
   };
 
@@ -494,6 +602,7 @@ const PromotionSystem = () => {
           city_ids: [],
           event_ids: selectedEvents,
           ids_only: true, // Critical: fetch all IDs for campaign, not just sample
+          recent_message_hours: recentMessageHours, // Add this to match the normal audience call
           rfm_filters: rfmFilters.enabled ? {
             recency_min: rfmFilters.recency[0],
             recency_max: rfmFilters.recency[1],
@@ -511,43 +620,242 @@ const PromotionSystem = () => {
 
       const finalAudience = audienceResponse.data.people.filter(p => !p.blocked);
 
+      // Convert scheduled datetime from local timezone to UTC if provided
+      let scheduledAtUTC = null;
+      if (scheduledAt) {
+        // Parse the input: "2024-11-14T22:55"
+        const [year, month, day, hour, minute] = scheduledAt.split(/[T:-]/).map(Number);
+
+        // Strategy: Find the UTC timestamp that, when displayed in the target timezone,
+        // shows our desired local time. We'll use a binary search.
+
+        // Create initial guess - treat input as UTC
+        const initialGuess = Date.UTC(year, month - 1, day, hour, minute, 0);
+
+        // Binary search range: +/- 15 hours from initial guess (covers all timezones)
+        let low = initialGuess - 15 * 60 * 60 * 1000;
+        let high = initialGuess + 15 * 60 * 60 * 1000;
+
+        const formatter = new Intl.DateTimeFormat('en-US', {
+          timeZone: scheduleTimezone,
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        });
+
+        // Binary search for the correct UTC time
+        while (high - low > 60000) { // Stop when we're within 1 minute
+          const mid = Math.floor((low + high) / 2);
+          const midDate = new Date(mid);
+          const formatted = formatter.format(midDate);
+
+          // Parse formatted string: "MM/DD/YYYY, HH:MM"
+          const [datePart, timePart] = formatted.split(', ');
+          const [fMonth, fDay, fYear] = datePart.split('/').map(Number);
+          const [fHour, fMinute] = timePart.split(':').map(Number);
+
+          // Compare with our target
+          if (fYear < year ||
+              (fYear === year && fMonth < month) ||
+              (fYear === year && fMonth === month && fDay < day) ||
+              (fYear === year && fMonth === month && fDay === day && fHour < hour) ||
+              (fYear === year && fMonth === month && fDay === day && fHour === hour && fMinute < minute)) {
+            low = mid;
+          } else {
+            high = mid;
+          }
+        }
+
+        // Use the midpoint of our final range
+        const finalUTC = Math.floor((low + high) / 2);
+        scheduledAtUTC = new Date(finalUTC).toISOString();
+
+        // Verify our conversion
+        const verification = formatter.format(new Date(finalUTC));
+
+        console.log('Timezone conversion:', {
+          input: scheduledAt,
+          timezone: scheduleTimezone,
+          utc_result: scheduledAtUTC,
+          verification: `Should show as ${month}/${day}/${year}, ${hour}:${minute.toString().padStart(2, '0')} -> Got: ${verification}`
+        });
+      }
+
       console.log('Campaign creation:', {
         total_from_api: audienceResponse.data.total_count,
         people_returned: audienceResponse.data.people.length,
-        final_audience_size: finalAudience.length
+        final_audience_size: finalAudience.length,
+        final_audience_ids: finalAudience.slice(0, 5).map(p => p.id),
+        dry_run: dryRunMode,
+        scheduled_at_local: scheduledAt || 'immediate',
+        scheduled_at_utc: scheduledAtUTC || 'immediate',
+        timezone: scheduleTimezone
       });
-      
-      // Create campaign
-      const { data, error } = await supabase.functions.invoke('admin-sms-create-campaign', {
-        body: {
+
+      // Check if we have valid recipients
+      if (finalAudience.length === 0) {
+        throw new Error('No valid recipients found after filtering blocked users');
+      }
+
+      // Get auth session
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log('Session check:', { hasSession: !!session, token: session?.access_token ? 'present' : 'missing' });
+
+      if (!session) {
+        throw new Error('Not authenticated - no session found');
+      }
+
+      console.log('Calling edge function with token:', session.access_token.substring(0, 30) + '...');
+
+      // Extract person IDs
+      const personIds = finalAudience.map(p => p.id).filter(id => id != null);
+
+      console.log('Person IDs extraction:', {
+        final_audience_length: finalAudience.length,
+        person_ids_length: personIds.length,
+        sample_ids: personIds.slice(0, 5)
+      });
+
+      if (personIds.length === 0) {
+        throw new Error('Failed to extract person IDs from audience data');
+      }
+
+      // Call edge function directly for better error handling
+      const response = await fetch('https://xsqdkubgyqwpyvfltnrf.supabase.co/functions/v1/admin-sms-create-campaign', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
           campaign_name: campaignName,
           message: message,
-          person_ids: finalAudience.map(p => p.id),
+          person_ids: personIds,
           event_id: associatedEventId || null,
           targeting_criteria: {
             cities: [],
             events: selectedEvents,
             rfm_filters: rfmFilters.enabled ? rfmFilters : null
           },
-          estimated_segments: messageSegments
-        }
+          estimated_segments: messageSegments,
+          scheduled_at: scheduledAtUTC,
+          scheduled_timezone: scheduleTimezone,
+          scheduled_local_time: scheduledAt,
+          dry_run_mode: dryRunMode,
+          dry_run_phone: dryRunMode ? '+14163025959' : null
+        })
       });
 
-      if (error) throw error;
+      const data = await response.json();
+      console.log('Edge function response:', data);
+
+      if (!response.ok) {
+        console.log('Edge function error response:', data);
+        if (data.headers_received) {
+          console.log('Headers received by edge function:', data.headers_received);
+        }
+        if (data.auth_error) {
+          console.log('Authentication error:', data.auth_error);
+        }
+        if (data.details) {
+          console.log('Error details:', data.details);
+        }
+        if (data.person_ids_count !== undefined) {
+          console.log('Person IDs count:', data.person_ids_count);
+          console.log('Person IDs sample:', data.person_ids_sample);
+        }
+        throw new Error(data.error || 'Failed to create campaign');
+      }
+
       if (!data.success) throw new Error(data.error);
 
       setCampaignResult(data);
+
+      // Reload campaigns list to show the new campaign
+      loadScheduledCampaigns();
 
       // Reset form
       setCampaignName('');
       setMessage('');
       setAssociatedEventId('');
-      
+      setScheduledAt('');
+      setDryRunMode(false);
+
+      // Reload scheduled campaigns if this was scheduled
+      if (scheduledAt) {
+        loadScheduledCampaigns();
+      }
+
     } catch (error) {
       console.error('Error creating campaign:', error);
-      setCampaignResult({ error: error.message });
+
+      // Try to extract debug info from edge function response
+      if (error.context) {
+        try {
+          const responseText = await error.context.text();
+          console.log('Raw edge function response:', responseText);
+          const parsed = JSON.parse(responseText);
+
+          if (parsed.debug) {
+            console.log('Edge function debug info:', parsed.debug);
+          }
+
+          setCampaignResult({ error: parsed.error || error.message, debug: parsed.debug });
+        } catch (e) {
+          console.log('Could not parse error response:', e);
+          setCampaignResult({ error: error.message });
+        }
+      } else {
+        setCampaignResult({ error: error.message });
+      }
     } finally {
       setSending(false);
+    }
+  };
+
+  const loadCampaignForEdit = (campaign) => {
+    setEditingCampaign(campaign);
+    setCampaignName(campaign.name);
+    setMessage(campaign.metadata?.message_template || '');
+    setAssociatedEventId(campaign.event_id || '');
+    setScheduledAt(campaign.scheduled_at ? new Date(campaign.scheduled_at).toISOString().slice(0, 16) : '');
+
+    // Load targeting criteria if available
+    if (campaign.targeting_criteria?.events) {
+      setSelectedEvents(campaign.targeting_criteria.events);
+    }
+    if (campaign.targeting_criteria?.rfm_filters) {
+      setRfmFilters({
+        enabled: true,
+        ...campaign.targeting_criteria.rfm_filters
+      });
+    }
+
+    // Scroll to form
+    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+  };
+
+  const deleteCampaign = async (campaignId) => {
+    if (!confirm('Are you sure you want to delete this scheduled campaign?')) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('sms_marketing_campaigns')
+        .delete()
+        .eq('id', campaignId);
+
+      if (error) throw error;
+
+      loadScheduledCampaigns();
+      setCampaignResult({ success: true, message: 'Campaign deleted successfully' });
+    } catch (error) {
+      console.error('Error deleting campaign:', error);
+      setCampaignResult({ error: error.message });
     }
   };
 
@@ -561,6 +869,158 @@ const PromotionSystem = () => {
     <>
       <Flex direction="column" gap="6" p="6">
         <Heading size="8">SMS Marketing</Heading>
+
+      {/* Scheduled Campaigns Section */}
+      <Card>
+        <Flex direction="column" gap="4">
+          <Flex justify="between" align="center">
+            <Box>
+              <Heading size="6">Scheduled & Recent Campaigns</Heading>
+              <Text size="1" color="gray">Upcoming scheduled, completed, and failed in last 24 hours</Text>
+            </Box>
+            <Button size="1" variant="soft" onClick={loadScheduledCampaigns} disabled={loadingScheduled}>
+              <ReloadIcon />
+              Refresh
+            </Button>
+          </Flex>
+
+          {loadingScheduled ? (
+            <Flex justify="center" p="4">
+              <Spinner />
+            </Flex>
+          ) : scheduledCampaigns.length === 0 ? (
+            <Text size="2" color="gray">No scheduled or recent campaigns</Text>
+          ) : (
+            <Flex direction="column" gap="2">
+              {scheduledCampaigns.map(campaign => (
+                <Card key={campaign.id} variant="surface" style={{ padding: '8px 12px' }}>
+                  <Flex direction="column" gap="1">
+                    <Flex align="center" gap="2">
+                      <Badge color={
+                        campaign.status === 'scheduled' ? 'orange' :
+                        campaign.status === 'queued' ? 'blue' :
+                        campaign.status === 'in_progress' ? 'blue' :
+                        campaign.status === 'failed' ? 'red' :
+                        campaign.status === 'completed' ? 'green' : 'gray'
+                      } size="1">
+                        {campaign.status}
+                      </Badge>
+                      <Text size="2" weight="bold">
+                        {campaign.name}
+                        {campaign.events && <Text color="gray"> for {campaign.events.name}</Text>}
+                      </Text>
+                      {(campaign.status === 'in_progress' || campaign.status === 'queued') && (
+                        <ReloadIcon className="animate-spin" style={{ color: 'var(--blue-9)' }} />
+                      )}
+                    </Flex>
+
+                    <Text size="1" color="gray" style={{ fontStyle: 'italic', lineHeight: '1.3' }}>
+                      {campaign.metadata?.message_template || 'No message'}
+                    </Text>
+
+                    {campaign.status === 'in_progress' && campaign.total_recipients > 0 && (
+                      <Box mt="2" mb="2">
+                        <Progress
+                          value={(campaign.messages_sent / campaign.total_recipients) * 100}
+                          max={100}
+                          size="1"
+                        />
+                        <Text size="1" color="gray" mt="1">
+                          {Math.round((campaign.messages_sent / campaign.total_recipients) * 100)}% complete
+                        </Text>
+                      </Box>
+                    )}
+
+                    <Flex align="center" gap="3" wrap="wrap">
+                      <Text size="1" color="gray">
+                        {campaign.status === 'in_progress' || campaign.status === 'completed'
+                          ? `${formatNumber(campaign.messages_sent || 0)} / ${formatNumber(campaign.total_recipients || 0)} sent${campaign.messages_failed > 0 ? `, ${formatNumber(campaign.messages_failed)} failed` : ''}`
+                          : `${formatNumber(campaign.total_recipients || 0)} recipients`
+                        }
+                      </Text>
+                      {campaign.scheduled_at && (() => {
+                        const scheduledTime = new Date(campaign.scheduled_at);
+                        const now = new Date();
+                        const diffMs = scheduledTime - now;
+                        const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                        const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+                        // Get display time in the original timezone if available
+                        const timezone = campaign.metadata?.scheduled_timezone || 'UTC';
+                        const localTime = campaign.metadata?.scheduled_local_time;
+
+                        let timeDisplay;
+                        if (localTime) {
+                          // Parse and format the local time nicely: MM/DD HH:MM AM/PM TZ
+                          const [date, time] = localTime.split('T');
+                          const [year, month, day] = date.split('-');
+                          const [hour, min] = time.split(':');
+                          const ampm = parseInt(hour) >= 12 ? 'PM' : 'AM';
+                          const hour12 = parseInt(hour) % 12 || 12;
+                          const tzShort = timezone.split('/')[1] || timezone;
+                          timeDisplay = `${month}/${day} ${hour12}:${min} ${ampm} ${tzShort}`;
+                        } else {
+                          // Fallback: format as MM/DD HH:MM AM/PM
+                          const date = scheduledTime.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' });
+                          const time = scheduledTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+                          timeDisplay = `${date} ${time}`;
+                        }
+
+                        const countdown = diffMs > 0
+                          ? `in ${diffHours}h ${diffMinutes}m`
+                          : diffMs > -3600000
+                          ? 'processing'
+                          : 'past';
+
+                        return (
+                          <Text size="1" color="gray">
+                            {timeDisplay} ({countdown})
+                          </Text>
+                        );
+                      })()}
+                      {campaign.total_cost_cents > 0 && (
+                        <Text size="1" color="gray">
+                          {formatCurrency(campaign.total_cost_cents)}
+                        </Text>
+                      )}
+                    </Flex>
+
+                    <Flex gap="2" justify="end">
+                      <Button
+                        size="1"
+                        variant="soft"
+                        onClick={() => {
+                          setSelectedCampaignForDetails(campaign);
+                          setShowCampaignDetails(true);
+                        }}
+                      >
+                        <InfoCircledIcon />
+                        Details
+                      </Button>
+                      <Button
+                        size="1"
+                        variant="soft"
+                        onClick={() => loadCampaignForEdit(campaign)}
+                      >
+                        Edit & Resubmit
+                      </Button>
+                      <Button
+                        size="1"
+                        variant="soft"
+                        color="red"
+                        onClick={() => deleteCampaign(campaign.id)}
+                      >
+                        <Cross2Icon />
+                        Delete
+                      </Button>
+                    </Flex>
+                  </Flex>
+                </Card>
+              ))}
+            </Flex>
+          )}
+        </Flex>
+      </Card>
       
       {/* Audience Targeting Section */}
       <Card>
@@ -597,9 +1057,16 @@ const PromotionSystem = () => {
                   <Button
                     size="1"
                     variant="soft"
-                    onClick={() => setTempSelectedEvents(events.map(e => e.value))}
+                    onClick={() => {
+                      const filteredEvents = events.filter(event => {
+                        if (!eventSearchFilter) return true;
+                        const search = eventSearchFilter.toLowerCase();
+                        return event.label.toLowerCase().includes(search);
+                      });
+                      setTempSelectedEvents(filteredEvents.map(e => e.value));
+                    }}
                   >
-                    Select All
+                    Select All{eventSearchFilter ? ' Visible' : ''}
                   </Button>
                   <Button
                     size="1"
@@ -611,32 +1078,53 @@ const PromotionSystem = () => {
                   </Button>
                 </Flex>
               </Flex>
+
+              {/* Search Filter for Events */}
+              <Box mb="2">
+                <TextField.Root
+                  placeholder="Type to filter events..."
+                  value={eventSearchFilter}
+                  onChange={(e) => setEventSearchFilter(e.target.value)}
+                />
+                {eventSearchFilter && (
+                  <Text size="1" color="gray" mt="1" style={{ display: 'block' }}>
+                    Showing {events.filter(e => e.label.toLowerCase().includes(eventSearchFilter.toLowerCase())).length} of {events.length} events
+                  </Text>
+                )}
+              </Box>
+
               <Card variant="surface">
                 <ScrollArea style={{ maxHeight: '300px' }}>
                   <Flex direction="column" gap="2" p="2">
-                    {events.map(event => (
-                      <Flex key={event.value} align="center" gap="2" style={{ padding: '4px' }}>
-                        <Checkbox
-                          checked={tempSelectedEvents.includes(event.value)}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              setTempSelectedEvents([...tempSelectedEvents, event.value]);
-                            } else {
+                    {events
+                      .filter(event => {
+                        if (!eventSearchFilter) return true;
+                        const search = eventSearchFilter.toLowerCase();
+                        return event.label.toLowerCase().includes(search);
+                      })
+                      .map(event => (
+                        <Flex key={event.value} align="center" gap="2" style={{ padding: '4px' }}>
+                          <Checkbox
+                            checked={tempSelectedEvents.includes(event.value)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setTempSelectedEvents([...tempSelectedEvents, event.value]);
+                              } else {
+                                setTempSelectedEvents(tempSelectedEvents.filter(id => id !== event.value));
+                              }
+                            }}
+                          />
+                          <Text size="2" style={{ cursor: 'pointer' }} onClick={() => {
+                            if (tempSelectedEvents.includes(event.value)) {
                               setTempSelectedEvents(tempSelectedEvents.filter(id => id !== event.value));
+                            } else {
+                              setTempSelectedEvents([...tempSelectedEvents, event.value]);
                             }
-                          }}
-                        />
-                        <Text size="2" style={{ cursor: 'pointer' }} onClick={() => {
-                          if (tempSelectedEvents.includes(event.value)) {
-                            setTempSelectedEvents(tempSelectedEvents.filter(id => id !== event.value));
-                          } else {
-                            setTempSelectedEvents([...tempSelectedEvents, event.value]);
-                          }
-                        }}>
-                          {event.label}
-                        </Text>
-                      </Flex>
-                    ))}
+                          }}>
+                            {event.label}
+                          </Text>
+                        </Flex>
+                      ))}
                   </Flex>
                 </ScrollArea>
               </Card>
@@ -647,6 +1135,7 @@ const PromotionSystem = () => {
                     const newEvents = tempSelectedEvents.filter(id => !selectedEvents.includes(id));
                     setSelectedEvents([...selectedEvents, ...newEvents]);
                     setTempSelectedEvents([]);
+                    setEventSearchFilter(''); // Clear search filter
                     setSelectedCity(''); // Clear city selection
                   }}
                   disabled={tempSelectedEvents.length === 0}
@@ -701,16 +1190,23 @@ const PromotionSystem = () => {
             <Text size="3" weight="bold" mb="2">Anti-Spam Filter</Text>
             <Flex align="center" gap="3">
               <Text size="2">Exclude people who received messages in the last</Text>
-              <TextField.Root 
+              <TextField.Root
                 type="number"
-                value={recentMessageHours}
-                onChange={(e) => setRecentMessageHours(Number(e.target.value))}
-                style={{ width: '80px' }}
-                min="1"
+                value={recentMessageHours || ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setRecentMessageHours(val === '' ? 0 : Number(val));
+                }}
+                placeholder="0 = disabled"
+                style={{ width: '100px' }}
+                min="0"
                 max="720"
               />
-              <Text size="2">hours (default: 72h / 3 days)</Text>
+              <Text size="2">hours (0 = disabled, default: 72h)</Text>
             </Flex>
+            <Text size="1" color="gray" mt="1">
+              Set to 0 to disable anti-spam filtering and allow sending to same people repeatedly
+            </Text>
           </Box>
 
           {/* Audience Summary */}
@@ -842,22 +1338,38 @@ const PromotionSystem = () => {
                       <Box>
                         <Text size="2" weight="bold" mb="2">RFM Generation Progress:</Text>
                         {rfmProgress.error ? (
-                          <Text size="2" color="red">{rfmProgress.error}</Text>
+                          <>
+                            <Text size="2" color="red">{rfmProgress.error}</Text>
+                            <Text size="1" color="gray" mt="1" style={{ display: 'block' }}>
+                              Click "Generate RFM" again to retry. Already processed scores are cached.
+                            </Text>
+                          </>
                         ) : (
                           <>
                             <Box mb="2">
                               <Flex justify="between" mb="1">
                                 <Text size="2">
-                                  Processed: {rfmProgress.processed} / {rfmProgress.total}
+                                  {rfmProgress.totalPeople ? (
+                                    <>
+                                      Updating: {rfmProgress.processed} / {rfmProgress.total}
+                                      {rfmProgress.total < rfmProgress.totalPeople && (
+                                        <Text size="1" color="gray">
+                                          {' '}({rfmProgress.totalPeople - rfmProgress.total} already cached)
+                                        </Text>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <>Processed: {rfmProgress.processed} / {rfmProgress.total}</>
+                                  )}
                                 </Text>
                                 <Text size="2" color="blue">
                                   {rfmProgress.progress_percent || 0}%
                                 </Text>
                               </Flex>
                               {/* Progress Bar */}
-                              <Box style={{ 
-                                height: '8px', 
-                                backgroundColor: '#e0e0e0', 
+                              <Box style={{
+                                height: '8px',
+                                backgroundColor: '#e0e0e0',
                                 borderRadius: '4px',
                                 overflow: 'hidden'
                               }}>
@@ -869,21 +1381,27 @@ const PromotionSystem = () => {
                                 }} />
                               </Box>
                             </Box>
-                            
+
                             {rfmProgress.status && (
                               <Text size="2" color="blue" mb="1">
                                 Status: {rfmProgress.status}
                               </Text>
                             )}
-                            
+
                             {rfmProgress.completion_rate && (
                               <Text size="2" color="green" mb="1">
                                 Completion Rate: {rfmProgress.completion_rate}%
                               </Text>
                             )}
-                            
+
                             {rfmProgress.errors > 0 && (
                               <Text size="2" color="orange">Errors: {rfmProgress.errors}</Text>
+                            )}
+
+                            {rfmProgress.processed > 0 && rfmProgress.processed < rfmProgress.total && !rfmProcessing && (
+                              <Text size="1" color="gray" mt="1" style={{ display: 'block' }}>
+                                Processing stopped. Click "Generate RFM" to continue from where it left off.
+                              </Text>
                             )}
                           </>
                         )}
@@ -990,16 +1508,105 @@ const PromotionSystem = () => {
       <Card>
         <Flex direction="column" gap="4">
           <Heading size="6">Send Campaign</Heading>
-          
-          <Button 
+
+          {/* Schedule Date/Time */}
+          <Box>
+            <Text size="3" weight="bold" mb="2">Schedule (optional)</Text>
+
+            {/* Timezone Selector */}
+            <Box mb="2">
+              <Text size="2" weight="medium" mb="1">Timezone</Text>
+              <Select.Root value={scheduleTimezone} onValueChange={setScheduleTimezone}>
+                <Select.Trigger style={{ width: '100%' }} />
+                <Select.Content>
+                  <Select.Item value="America/Toronto">Eastern (Toronto)</Select.Item>
+                  <Select.Item value="America/New_York">Eastern (New York)</Select.Item>
+                  <Select.Item value="America/Chicago">Central (Chicago)</Select.Item>
+                  <Select.Item value="America/Denver">Mountain (Denver)</Select.Item>
+                  <Select.Item value="America/Los_Angeles">Pacific (Los Angeles)</Select.Item>
+                  <Select.Item value="America/Vancouver">Pacific (Vancouver)</Select.Item>
+                  <Select.Item value="America/Edmonton">Mountain (Edmonton)</Select.Item>
+                  <Select.Item value="America/Winnipeg">Central (Winnipeg)</Select.Item>
+                  <Select.Item value="America/Halifax">Atlantic (Halifax)</Select.Item>
+                  <Select.Item value="America/Mexico_City">Central (Mexico City)</Select.Item>
+                  <Select.Item value="Europe/London">London (GMT)</Select.Item>
+                  <Select.Item value="Europe/Amsterdam">Amsterdam (CET)</Select.Item>
+                  <Select.Item value="Europe/Podgorica">Podgorica (CET)</Select.Item>
+                  <Select.Item value="Asia/Bangkok">Bangkok (ICT)</Select.Item>
+                  <Select.Item value="Australia/Sydney">Sydney (AEDT)</Select.Item>
+                  <Select.Item value="Pacific/Auckland">Auckland (NZDT)</Select.Item>
+                </Select.Content>
+              </Select.Root>
+            </Box>
+
+            {/* Date/Time Input */}
+            <Box>
+              <Text size="2" weight="medium" mb="1">Date & Time</Text>
+              <TextField.Root
+                type="datetime-local"
+                value={scheduledAt}
+                onChange={(e) => setScheduledAt(e.target.value)}
+                placeholder="Leave empty to send immediately"
+              />
+            </Box>
+
+            <Text size="1" color="gray" mt="1">
+              Leave empty to send immediately. Selected time will be in {scheduleTimezone.split('/')[1].replace('_', ' ')} timezone.
+            </Text>
+          </Box>
+
+          {/* Dry Run Mode */}
+          <Card variant="surface">
+            <Flex align="center" gap="3">
+              <Checkbox
+                checked={dryRunMode}
+                onCheckedChange={setDryRunMode}
+              />
+              <Box>
+                <Text size="2" weight="bold">Dry Run Mode (Test)</Text>
+                <Text size="2" color="gray" style={{ display: 'block' }}>
+                  Send only to +14163025959 for testing (ignores actual recipients)
+                </Text>
+              </Box>
+            </Flex>
+          </Card>
+
+          {editingCampaign && (
+            <Callout.Root color="blue">
+              <Callout.Icon>
+                <InfoCircledIcon />
+              </Callout.Icon>
+              <Callout.Text>
+                Editing campaign: {editingCampaign.name}. Submitting will create a new campaign.
+                <Button
+                  size="1"
+                  variant="soft"
+                  ml="2"
+                  onClick={() => {
+                    setEditingCampaign(null);
+                    setCampaignName('');
+                    setMessage('');
+                    setScheduledAt('');
+                    setDryRunMode(false);
+                  }}
+                >
+                  Cancel Edit
+                </Button>
+              </Callout.Text>
+            </Callout.Root>
+          )}
+
+          <Button
             size="3"
             onClick={createCampaign}
             disabled={!campaignName || !message || audienceData.filtered_count === 0 || sending}
           >
             {sending ? (
               <><ReloadIcon className="animate-spin" /> Creating Campaign...</>
+            ) : scheduledAt ? (
+              <><CalendarIcon /> Schedule for {formatNumber(dryRunMode ? 1 : audienceData.filtered_count)} {dryRunMode ? 'test recipient' : 'people'}</>
             ) : (
-              <><PaperPlaneIcon /> Send to {formatNumber(audienceData.filtered_count)} people</>
+              <><PaperPlaneIcon /> Send {dryRunMode ? 'test' : `to ${formatNumber(audienceData.filtered_count)} people`}</>
             )}
           </Button>
 
@@ -1013,13 +1620,14 @@ const PromotionSystem = () => {
                 {campaignResult.error ? (
                   `Error: ${campaignResult.error}`
                 ) : (
-                  `Campaign "${campaignResult.campaign_name}" created successfully! 
-                   ${formatNumber(campaignResult.messages_queued)} messages queued. 
+                  `Campaign "${campaignResult.campaign_name}" created successfully!
+                   ${formatNumber(campaignResult.messages_queued)} messages queued.
                    Estimated cost: ${formatCurrency(campaignResult.estimated_cost_cents)}`
                 )}
               </Callout.Text>
             </Callout.Root>
           )}
+
         </Flex>
       </Card>
     </Flex>
@@ -1125,6 +1733,124 @@ const PromotionSystem = () => {
           <Separator mt="3" mb="3" />
 
           <Flex justify="end">
+            <Dialog.Close>
+              <Button>Close</Button>
+            </Dialog.Close>
+          </Flex>
+        </Flex>
+      </Dialog.Content>
+    </Dialog.Root>
+
+    {/* Campaign Details Modal */}
+    <Dialog.Root open={showCampaignDetails} onOpenChange={setShowCampaignDetails}>
+      <Dialog.Content style={{ maxWidth: 700 }}>
+        <Flex direction="column" gap="3">
+          <Dialog.Title>Campaign Details</Dialog.Title>
+
+          {selectedCampaignForDetails && (
+            <>
+              <Card>
+                <Flex direction="column" gap="2">
+                  <Flex align="center" gap="2">
+                    <Text weight="bold" size="3">{selectedCampaignForDetails.name}</Text>
+                    <Badge color={
+                      selectedCampaignForDetails.status === 'completed' ? 'green' :
+                      selectedCampaignForDetails.status === 'in_progress' ? 'blue' :
+                      selectedCampaignForDetails.status === 'failed' ? 'red' : 'orange'
+                    }>
+                      {selectedCampaignForDetails.status}
+                    </Badge>
+                  </Flex>
+
+                  {selectedCampaignForDetails.events && (
+                    <Text size="2" color="gray">Event: {selectedCampaignForDetails.events.name}</Text>
+                  )}
+
+                  <Text size="2" style={{ fontStyle: 'italic', padding: '8px', backgroundColor: 'var(--gray-a2)', borderRadius: '4px' }}>
+                    {selectedCampaignForDetails.metadata?.message_template || 'No message'}
+                  </Text>
+
+                  <Separator />
+
+                  <Flex direction="column" gap="1">
+                    <Flex justify="between">
+                      <Text size="2" color="gray">Total Recipients:</Text>
+                      <Text size="2" weight="bold">{formatNumber(selectedCampaignForDetails.total_recipients || 0)}</Text>
+                    </Flex>
+                    <Flex justify="between">
+                      <Text size="2" color="gray">Successfully Sent:</Text>
+                      <Text size="2" weight="bold" color="green">{formatNumber(selectedCampaignForDetails.messages_sent || 0)}</Text>
+                    </Flex>
+                    <Flex justify="between">
+                      <Text size="2" color="gray">Failed:</Text>
+                      <Text size="2" weight="bold" color="red">{formatNumber(selectedCampaignForDetails.messages_failed || 0)}</Text>
+                    </Flex>
+                    {selectedCampaignForDetails.total_cost_cents > 0 && (
+                      <Flex justify="between">
+                        <Text size="2" color="gray">Total Cost:</Text>
+                        <Text size="2" weight="bold">{formatCurrency(selectedCampaignForDetails.total_cost_cents)}</Text>
+                      </Flex>
+                    )}
+                    {selectedCampaignForDetails.scheduled_at && (
+                      <Flex justify="between">
+                        <Text size="2" color="gray">Scheduled:</Text>
+                        <Text size="2">{new Date(selectedCampaignForDetails.scheduled_at).toLocaleString()}</Text>
+                      </Flex>
+                    )}
+                    {selectedCampaignForDetails.completed_at && (
+                      <Flex justify="between">
+                        <Text size="2" color="gray">Completed:</Text>
+                        <Text size="2">{new Date(selectedCampaignForDetails.completed_at).toLocaleString()}</Text>
+                      </Flex>
+                    )}
+                  </Flex>
+                </Flex>
+              </Card>
+
+              {/* Failed Recipients Section */}
+              {selectedCampaignForDetails.metadata?.failure_details && selectedCampaignForDetails.metadata.failure_details.length > 0 && (
+                <Card>
+                  <Flex direction="column" gap="3">
+                    <Heading size="4">Failed Messages ({selectedCampaignForDetails.metadata.failure_details.length})</Heading>
+                    <ScrollArea style={{ maxHeight: '400px' }}>
+                      <Flex direction="column" gap="2">
+                        {selectedCampaignForDetails.metadata.failure_details.map((failure, idx) => (
+                          <Card key={idx} variant="surface" style={{ padding: '8px' }}>
+                            <Flex direction="column" gap="1">
+                              <Flex justify="between" align="center">
+                                <Text size="2" weight="bold">
+                                  {failure.name || 'Unknown'} - {failure.phone}
+                                </Text>
+                                <Text size="1" color="gray">
+                                  {new Date(failure.timestamp).toLocaleString()}
+                                </Text>
+                              </Flex>
+                              <Text size="1" color="red" style={{ fontFamily: 'monospace', backgroundColor: 'var(--red-a2)', padding: '4px', borderRadius: '4px' }}>
+                                {failure.error}
+                              </Text>
+                            </Flex>
+                          </Card>
+                        ))}
+                      </Flex>
+                    </ScrollArea>
+                  </Flex>
+                </Card>
+              )}
+
+              {selectedCampaignForDetails.messages_failed === 0 && (
+                <Callout.Root color="green">
+                  <Callout.Icon>
+                    <CheckCircledIcon />
+                  </Callout.Icon>
+                  <Callout.Text>
+                    All messages sent successfully - no failures to report!
+                  </Callout.Text>
+                </Callout.Root>
+              )}
+            </>
+          )}
+
+          <Flex justify="end" gap="2" mt="2">
             <Dialog.Close>
               <Button>Close</Button>
             </Dialog.Close>

@@ -108,50 +108,65 @@ serve(async (req) => {
     }
 
     // Use pagination to fetch all results (Supabase JS client has internal limits)
-    // Fetch in chunks of 5000 until we have all data
-    const chunkSize = 5000;
+    // Fetch in chunks of 1000 to avoid timeouts
+    const chunkSize = 1000;
     const maxRecords = ids_only ? 100000 : 10000; // For IDs only, allow up to 100k; for UI display cap at 10k
     let allPeople = [];
     let offset = 0;
     let totalCount = 0;
+    let hasMoreData = true;
 
-    while (allPeople.length < maxRecords) {
+    console.log(`Fetching audience with ids_only=${ids_only}, maxRecords=${maxRecords}`);
+
+    while (hasMoreData && allPeople.length < maxRecords) {
       const { data: pageData, error: queryError } = await serviceClient
         .rpc('get_sms_audience_paginated', {
           p_city_ids: city_ids.length > 0 ? city_ids : null,
           p_event_ids: event_ids.length > 0 ? event_ids : null,
           p_recent_message_hours: recent_message_hours,
           p_offset: offset,
-          p_limit: chunkSize
+          p_limit: Math.min(chunkSize, maxRecords - allPeople.length) // Don't fetch more than needed
         });
 
       if (queryError) {
+        console.error(`Database query failed at offset ${offset}:`, queryError);
         throw new Error(`Database query failed: ${queryError.message}`);
       }
 
       if (!pageData || pageData.length === 0) {
-        break; // No more data
+        console.log(`No more data at offset ${offset}`);
+        hasMoreData = false;
+        break;
       }
 
-      // Get total count from first record
-      if (totalCount === 0 && pageData.length > 0) {
+      // Get total count from first record (all records have this) - for display only
+      if (totalCount === 0 && pageData.length > 0 && pageData[0].total_count) {
         totalCount = pageData[0].total_count;
+        console.log(`Total count from DB: ${totalCount}`);
       }
 
       allPeople = allPeople.concat(pageData);
-      offset += chunkSize;
+      console.log(`Fetched ${pageData.length} records, total so far: ${allPeople.length}`);
 
-      // Stop if we got fewer records than requested (means we're done)
+      // Update offset for next iteration
+      offset += pageData.length;
+
+      // Check if we should continue - ONLY stop if we got less than requested
+      // Do NOT rely on total_count as it may be incorrect with complex filters
       if (pageData.length < chunkSize) {
-        break;
+        console.log(`Got less than chunk size (${pageData.length} < ${chunkSize}), assuming no more data`);
+        hasMoreData = false;
       }
 
       // Stop if we've reached our max
       if (allPeople.length >= maxRecords) {
+        console.log(`Reached max records limit of ${maxRecords}`);
         allPeople = allPeople.slice(0, maxRecords);
-        break;
+        hasMoreData = false;
       }
     }
+
+    console.log(`Final fetch complete: ${allPeople.length} records retrieved`);
 
     const people = allPeople;
 
@@ -180,11 +195,27 @@ serve(async (req) => {
     
     // Estimate proportions from sample, but use actual total count
     const blockedCount = sampleCount > 0 ? Math.round((blockedCountInSample / sampleCount) * totalCount) : 0;
+
+    // Calculate how many people were excluded due to recent messages
+    // Query again WITHOUT the recent message filter to get the difference
+    let recentMessageCount = 0;
+    if (recent_message_hours > 0) {
+      const { data: withoutRecent, error: withoutRecentError } = await serviceClient
+        .rpc('get_sms_audience_paginated', {
+          p_city_ids: city_ids.length > 0 ? city_ids : null,
+          p_event_ids: event_ids.length > 0 ? event_ids : null,
+          p_recent_message_hours: 0, // Disable the recent message filter
+          p_offset: 0,
+          p_limit: 1
+        });
+
+      if (!withoutRecentError && withoutRecent && withoutRecent.length > 0) {
+        const totalWithoutFilter = withoutRecent[0].total_count;
+        recentMessageCount = Math.max(0, totalWithoutFilter - totalCount);
+      }
+    }
+
     const availableCount = totalCount - blockedCount;
-    
-    // Note: recent_message_count is not directly available since the DB function already filtered them out
-    // We'll estimate it as the difference between what we would have gotten vs what we got
-    const recentMessageCount = 0; // DB function already excluded these
 
     // Check RFM readiness if filters specified
     let rfmReadyCount = 0;
@@ -228,13 +259,14 @@ serve(async (req) => {
     // Return ALL people (both blocked and available) for display in modal
     // But filtered_count only includes available people who match criteria
 
-    // If ids_only=true, return minimal data for campaign creation (all records, just IDs)
+    // If ids_only=true, return ONLY filtered people (not all people!)
+    // This is for campaign creation - should match the filtered_count
     if (ids_only) {
       return new Response(JSON.stringify({
         success: true,
         total_count: totalCount,
-        filtered_count: estimatedFilteredCount,
-        people: people.map(p => ({
+        filtered_count: filteredPeople.length, // Use actual filtered count, not estimated
+        people: filteredPeople.map(p => ({
           id: p.id,
           blocked: p.message_blocked > 0
         }))

@@ -12,13 +12,16 @@ import {
   Spinner,
   Badge,
   TextArea,
-  Select
+  Select,
+  AlertDialog
 } from '@radix-ui/themes';
 import {
   PersonIcon,
   Cross2Icon
 } from '@radix-ui/react-icons';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
+import { useAdmin } from '../contexts/AdminContext';
 
 const ArtistDetailModal = ({
   isOpen,
@@ -28,6 +31,9 @@ const ArtistDetailModal = ({
   upcomingEvents = [],
   onInviteSent
 }) => {
+  const { user } = useAuth();
+  const { userLevel } = useAdmin();
+
   const [sampleWorks, setSampleWorks] = useState([]);
   const [sampleWorksLoading, setSampleWorksLoading] = useState(false);
   const [artistEventHistory, setArtistEventHistory] = useState([]);
@@ -45,15 +51,54 @@ const ArtistDetailModal = ({
   const [inviteMessage, setInviteMessage] = useState('');
   const [inviteLoading, setInviteLoading] = useState(false);
 
+  // Withdrawal states
+  const [withdrawalDialogOpen, setWithdrawalDialogOpen] = useState(false);
+  const [withdrawalReason, setWithdrawalReason] = useState('');
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [confirmationRecord, setConfirmationRecord] = useState(null);
+
   // Load sample works, event history, and full profile when modal opens
   useEffect(() => {
+    console.log('🎭 Modal opened with artist data:', artist);
+    console.log('🎭 Modal isOpen:', isOpen);
+
     if (isOpen && artist?.artist_profile_id) {
       loadFullArtistProfile();
       loadSampleWorks();
       loadArtistEventHistory();
       loadAllEvents();
+      loadConfirmationRecord();
     }
   }, [isOpen, artist?.artist_profile_id]);
+
+  const loadConfirmationRecord = async () => {
+    if (!artist?.event_eid || !artist?.artist_number) {
+      console.log('🔍 Cannot load confirmation - missing data:', { event_eid: artist?.event_eid, artist_number: artist?.artist_number });
+      return;
+    }
+
+    console.log('🔍 Loading confirmation record for:', { event_eid: artist.event_eid, artist_number: artist.artist_number });
+
+    try {
+      const { data, error } = await supabase
+        .from('artist_confirmations')
+        .select('*')
+        .eq('event_eid', artist.event_eid)
+        .eq('artist_number', artist.artist_number)
+        .maybeSingle();
+
+      if (error) {
+        console.error('❌ Error loading confirmation record:', error);
+        return;
+      }
+
+      console.log('✅ Confirmation record loaded:', data);
+      console.log('🔐 User level:', userLevel);
+      setConfirmationRecord(data);
+    } catch (err) {
+      console.error('❌ Error loading confirmation:', err);
+    }
+  };
 
   const loadFullArtistProfile = async () => {
     try {
@@ -324,6 +369,49 @@ Art Battle Team`);
     }
   };
 
+  const handleWithdrawConfirmation = async () => {
+    if (!confirmationRecord) {
+      alert('No confirmation record found');
+      return;
+    }
+
+    setWithdrawing(true);
+    try {
+      const withdrawnBy = `${user?.email || 'unknown'} (admin)`;
+
+      const { error } = await supabase
+        .from('artist_confirmations')
+        .update({
+          confirmation_status: 'withdrawn',
+          withdrawn_at: new Date().toISOString(),
+          withdrawal_reason: `Withdrawn by admin: ${withdrawnBy}. ${withdrawalReason ? `Reason: ${withdrawalReason}` : 'No reason provided.'}`
+        })
+        .eq('id', confirmationRecord.id);
+
+      if (error) throw error;
+
+      alert('Artist confirmation withdrawn successfully');
+      setWithdrawalDialogOpen(false);
+      setWithdrawalReason('');
+
+      // Reload confirmation record to show withdrawn status
+      await loadConfirmationRecord();
+
+      // Trigger refresh in parent component
+      if (onInviteSent) onInviteSent();
+
+      // Close modal after brief delay
+      setTimeout(() => {
+        onClose();
+      }, 500);
+    } catch (error) {
+      console.error('Error withdrawing confirmation:', error);
+      alert(`Error withdrawing confirmation: ${error.message}`);
+    } finally {
+      setWithdrawing(false);
+    }
+  };
+
   if (!artist) return null;
 
   // Use fullArtistProfile if available, otherwise fallback to limited data
@@ -508,7 +596,7 @@ Art Battle Team`);
 
                       {/* Action Buttons */}
                       <Box mt="4" pt="3" style={{ borderTop: '1px solid var(--gray-6)' }}>
-                        <Flex gap="2">
+                        <Flex gap="2" wrap="wrap">
                           {artistProfile?.email && (
                             <Button
                               variant="solid"
@@ -523,6 +611,34 @@ Art Battle Team`);
                             <Text size="2" color="gray">
                               No email address available for invitations
                             </Text>
+                          )}
+
+                          {/* Super Admin Remove Button */}
+                          {(() => {
+                            const shouldShow = userLevel === 'super' && confirmationRecord && confirmationRecord.confirmation_status === 'confirmed';
+                            console.log('🔘 Remove button check:', {
+                              userLevel,
+                              hasConfirmation: !!confirmationRecord,
+                              status: confirmationRecord?.confirmation_status,
+                              shouldShow
+                            });
+                            return shouldShow ? (
+                              <Button
+                                variant="solid"
+                                color="red"
+                                size="2"
+                                onClick={() => setWithdrawalDialogOpen(true)}
+                              >
+                                🚨 SUPER ADMIN REMOVE
+                              </Button>
+                            ) : null;
+                          })()}
+
+                          {/* Show withdrawn status */}
+                          {confirmationRecord && confirmationRecord.confirmation_status === 'withdrawn' && (
+                            <Badge color="red" size="2">
+                              WITHDRAWN: {confirmationRecord.withdrawn_at ? new Date(confirmationRecord.withdrawn_at).toLocaleDateString() : 'Unknown date'}
+                            </Badge>
                           )}
                         </Flex>
                       </Box>
@@ -834,6 +950,57 @@ Art Battle Team`);
           </Box>
         </Dialog.Content>
       </Dialog.Root>
+
+      {/* Withdrawal Confirmation Dialog */}
+      <AlertDialog.Root open={withdrawalDialogOpen} onOpenChange={setWithdrawalDialogOpen}>
+        <AlertDialog.Content style={{ maxWidth: 500 }}>
+          <AlertDialog.Title>Remove Confirmed Artist</AlertDialog.Title>
+          <AlertDialog.Description size="2">
+            <Flex direction="column" gap="3">
+              <Text>
+                Are you sure you want to withdraw <strong>{artistProfile?.name}</strong> from this event?
+              </Text>
+              <Text size="1" color="gray">
+                This will mark their confirmation as withdrawn and remove them from the event roster.
+              </Text>
+
+              <Box>
+                <Text size="2" weight="bold" mb="2">Reason (optional):</Text>
+                <TextArea
+                  value={withdrawalReason}
+                  onChange={(e) => setWithdrawalReason(e.target.value)}
+                  placeholder="Enter reason for withdrawal..."
+                  rows={3}
+                />
+              </Box>
+
+              {user?.email && (
+                <Text size="1" color="gray">
+                  Withdrawn by: {user.email}
+                </Text>
+              )}
+            </Flex>
+          </AlertDialog.Description>
+
+          <Flex gap="3" mt="4" justify="end">
+            <AlertDialog.Cancel>
+              <Button variant="soft" color="gray">
+                Cancel
+              </Button>
+            </AlertDialog.Cancel>
+            <AlertDialog.Action>
+              <Button
+                variant="solid"
+                color="red"
+                onClick={handleWithdrawConfirmation}
+                disabled={withdrawing}
+              >
+                {withdrawing ? 'Removing...' : 'Remove Artist'}
+              </Button>
+            </AlertDialog.Action>
+          </Flex>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
     </Dialog.Root>
   );
 };

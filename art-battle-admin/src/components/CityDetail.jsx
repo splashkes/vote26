@@ -9,12 +9,14 @@ import {
   Badge,
   Grid,
   Button,
-  Spinner
+  Spinner,
+  SegmentedControl
 } from '@radix-ui/themes';
-import { ArrowLeftIcon, CalendarIcon } from '@radix-ui/react-icons';
+import { ArrowLeftIcon, CalendarIcon, StarFilledIcon } from '@radix-ui/react-icons';
 import { supabase } from '../lib/supabase';
 import ArtistWorkflow from './ArtistWorkflow';
 import CityActivityCharts from './CityActivityCharts';
+import ArtistDetailModal from './ArtistDetailModal';
 import { getCountryFlag } from '../lib/countryFlags';
 
 const CityDetail = () => {
@@ -25,12 +27,29 @@ const CityDetail = () => {
   const [events, setEvents] = useState([]);
   const [upcomingEvents, setUpcomingEvents] = useState([]);
   const [pastEvents, setPastEvents] = useState([]);
+  const [eventWinners, setEventWinners] = useState({});
+  const [viewMode, setViewMode] = useState(() => {
+    return localStorage.getItem('cityDetailViewMode') || 'normal';
+  });
+  const [selectedArtist, setSelectedArtist] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     if (cityId) {
       fetchCityData();
     }
   }, [cityId]);
+
+  useEffect(() => {
+    localStorage.setItem('cityDetailViewMode', viewMode);
+  }, [viewMode]);
+
+  useEffect(() => {
+    // Fetch winners when switching to normal/extended from minimal
+    if (viewMode !== 'minimal' && cityId && Object.keys(eventWinners).length === 0 && pastEvents.length > 0) {
+      fetchEventWinners();
+    }
+  }, [viewMode, cityId, eventWinners, pastEvents.length]);
 
   const fetchCityData = async () => {
     try {
@@ -77,10 +96,39 @@ const CityDetail = () => {
 
       setUpcomingEvents(upcoming);
       setPastEvents(past);
+
+      // Fetch winners data for past events (for normal/extended views)
+      if (viewMode !== 'minimal') {
+        fetchEventWinners();
+      }
     } catch (err) {
       console.error('Error fetching city data:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchEventWinners = async () => {
+    try {
+      const { data, error } = await supabase
+        .rpc('get_city_event_winners', { p_city_id: cityId });
+
+      if (error) throw error;
+
+      // Convert array to map for easy lookup by event_id
+      const winnersMap = {};
+      (data || []).forEach(item => {
+        winnersMap[item.event_id] = {
+          champion_name: item.champion_name,
+          champion_id: item.champion_id,
+          champion_entry_id: item.champion_entry_id,
+          rounds: item.rounds_data || []
+        };
+      });
+
+      setEventWinners(winnersMap);
+    } catch (err) {
+      console.error('Error fetching event winners:', err);
     }
   };
 
@@ -106,6 +154,205 @@ const CityDetail = () => {
 
     const config = statusConfig[status] || statusConfig.disabled;
     return <Badge color={config.color}>{config.label}</Badge>;
+  };
+
+  const renderArtistLink = (artistName, artistId, entryId) => {
+    return (
+      <Flex align="center" gap="1">
+        <Text size="2">{artistName}</Text>
+        {entryId && (
+          <Badge
+            color="blue"
+            size="1"
+            style={{ cursor: 'pointer' }}
+            onClick={(e) => {
+              e.stopPropagation();
+              // Open artist detail modal
+              setSelectedArtist({
+                artist_profile_id: artistId,
+                artist_name: artistName,
+                entry_id: entryId
+              });
+              setIsModalOpen(true);
+            }}
+          >
+            #{entryId}
+          </Badge>
+        )}
+      </Flex>
+    );
+  };
+
+  const renderEventCard = (event, winners, mode) => {
+    const status = getEventStatus(event);
+    const startDate = event.event_start_datetime
+      ? new Date(event.event_start_datetime).toLocaleDateString()
+      : null;
+    const fullDate = event.event_start_datetime
+      ? new Date(event.event_start_datetime).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        })
+      : null;
+
+    // Minimal View
+    if (mode === 'minimal') {
+      return (
+        <Card
+          key={event.id}
+          style={{ cursor: 'pointer' }}
+          onClick={() => navigate(`/events/${event.id}`)}
+        >
+          <Box p="4">
+            <Text size="3" weight="bold" mb="1" style={{ display: 'block' }}>
+              {event.eid}
+            </Text>
+            <Text size="2" color="gray" mb="2" style={{ display: 'block' }}>
+              {event.name || 'Unnamed Event'}
+            </Text>
+            <Flex align="center" gap="2">
+              <CalendarIcon size={14} />
+              <Text size="2">{startDate}</Text>
+            </Flex>
+          </Box>
+        </Card>
+      );
+    }
+
+    // Normal View
+    if (mode === 'normal') {
+      return (
+        <Card
+          key={event.id}
+          style={{ cursor: 'pointer' }}
+          onClick={() => navigate(`/events/${event.id}`)}
+        >
+          <Box p="4">
+            <Flex direction="column" gap="3">
+              <Flex justify="between" align="start">
+                <Box>
+                  <Text size="3" weight="bold" mb="1" style={{ display: 'block' }}>
+                    {event.eid}
+                  </Text>
+                  <Text size="2" color="gray">
+                    {event.name || 'Unnamed Event'}
+                  </Text>
+                </Box>
+                {getStatusBadge(status)}
+              </Flex>
+
+              <Flex direction="column" gap="2">
+                <Flex align="center" gap="2">
+                  <CalendarIcon size={14} />
+                  <Text size="2">{startDate}</Text>
+                </Flex>
+
+                {winners?.champion_name && (
+                  <Flex align="center" gap="2">
+                    <StarFilledIcon color="gold" size={14} />
+                    {renderArtistLink(winners.champion_name, winners.champion_id, winners.champion_entry_id)}
+                  </Flex>
+                )}
+
+                {event.venue && (
+                  <Text size="2" color="gray">
+                    {event.venue}
+                  </Text>
+                )}
+              </Flex>
+
+              <Flex align="center" gap="2" mt="1">
+                <Badge
+                  color={event.eventbrite_id && event.eventbrite_id.trim() !== '' ? 'green' : 'red'}
+                  size="1"
+                >
+                  EB
+                </Badge>
+              </Flex>
+            </Flex>
+          </Box>
+        </Card>
+      );
+    }
+
+    // Extended View
+    if (mode === 'extended') {
+      return (
+        <Card
+          key={event.id}
+          style={{ cursor: 'pointer' }}
+          onClick={() => navigate(`/events/${event.id}`)}
+        >
+          <Box p="4">
+            <Flex direction="column" gap="3">
+              <Flex justify="between" align="start">
+                <Box>
+                  <Text size="3" weight="bold" mb="1" style={{ display: 'block' }}>
+                    {event.eid}
+                  </Text>
+                  <Text size="2" color="gray">
+                    {event.name || 'Unnamed Event'}
+                  </Text>
+                </Box>
+                {getStatusBadge(status)}
+              </Flex>
+
+              <Flex align="center" gap="2">
+                <CalendarIcon size={14} />
+                <Text size="2">{fullDate}</Text>
+              </Flex>
+
+              {winners?.champion_name && (
+                <Box>
+                  <Flex align="center" gap="2" mb="3">
+                    <StarFilledIcon color="gold" size={16} />
+                    <Text size="3" weight="bold">Champion: </Text>
+                    {renderArtistLink(winners.champion_name, winners.champion_id, winners.champion_entry_id)}
+                  </Flex>
+
+                  {winners.rounds && winners.rounds.length > 0 && (
+                    <Flex direction="column" gap="2">
+                      {winners.rounds.slice().reverse().map((round) => (
+                        <Box key={round.round_number}>
+                          <Text size="2" weight="medium" mb="1" style={{ display: 'block' }}>
+                            Round {round.round_number}{round.round_number === Math.max(...winners.rounds.map(r => r.round_number)) ? ' (Finals)' : ''}:
+                          </Text>
+                          <Box pl="3">
+                            {round.winners && round.winners.map((winner, idx) => (
+                              <Flex key={idx} align="center" gap="1" mb="1">
+                                <Text size="2" color="gray">•</Text>
+                                {renderArtistLink(winner.name, winner.id, winner.entry_id)}
+                              </Flex>
+                            ))}
+                          </Box>
+                        </Box>
+                      ))}
+                    </Flex>
+                  )}
+                </Box>
+              )}
+
+              <Flex direction="column" gap="2" mt="2">
+                {event.venue && (
+                  <Text size="2" color="gray">
+                    📍 {event.venue}
+                  </Text>
+                )}
+                <Flex align="center" gap="2">
+                  <Badge
+                    color={event.eventbrite_id && event.eventbrite_id.trim() !== '' ? 'green' : 'red'}
+                    size="1"
+                  >
+                    EB
+                  </Badge>
+                </Flex>
+              </Flex>
+            </Flex>
+          </Box>
+        </Card>
+      );
+    }
   };
 
   if (loading) {
@@ -237,61 +484,20 @@ const CityDetail = () => {
         {/* Past Events */}
         {pastEvents.length > 0 && (
           <Box>
-            <Heading size="4" mb="3">
-              Past Events (Since 2018)
-            </Heading>
+            <Flex justify="between" align="center" mb="3">
+              <Heading size="4">
+                Past Events (Since 2018)
+              </Heading>
+              <SegmentedControl.Root value={viewMode} onValueChange={setViewMode}>
+                <SegmentedControl.Item value="minimal">Minimal</SegmentedControl.Item>
+                <SegmentedControl.Item value="normal">Normal</SegmentedControl.Item>
+                <SegmentedControl.Item value="extended">Extended</SegmentedControl.Item>
+              </SegmentedControl.Root>
+            </Flex>
             <Grid columns={{ initial: '1', sm: '2', lg: '3' }} gap="4">
               {pastEvents.map((event) => {
-                const status = getEventStatus(event);
-                const startDate = event.event_start_datetime
-                  ? new Date(event.event_start_datetime).toLocaleDateString()
-                  : null;
-
-                return (
-                  <Card
-                    key={event.id}
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => navigate(`/events/${event.id}`)}
-                  >
-                    <Box p="4">
-                      <Flex direction="column" gap="3">
-                        <Flex justify="between" align="start">
-                          <Box>
-                            <Text size="3" weight="bold" mb="1" style={{ display: 'block' }}>
-                              {event.eid}
-                            </Text>
-                            <Text size="2" color="gray">
-                              {event.name || 'Unnamed Event'}
-                            </Text>
-                          </Box>
-                          {getStatusBadge(status)}
-                        </Flex>
-
-                        <Flex direction="column" gap="2">
-                          <Flex align="center" gap="2">
-                            <CalendarIcon size={14} />
-                            <Text size="2">{startDate}</Text>
-                          </Flex>
-
-                          {event.venue && (
-                            <Text size="2" color="gray">
-                              {event.venue}
-                            </Text>
-                          )}
-                        </Flex>
-
-                        <Flex align="center" gap="2" mt="1">
-                          <Badge
-                            color={event.eventbrite_id && event.eventbrite_id.trim() !== '' ? 'green' : 'red'}
-                            size="1"
-                          >
-                            EB
-                          </Badge>
-                        </Flex>
-                      </Flex>
-                    </Box>
-                  </Card>
-                );
+                const winners = eventWinners[event.id];
+                return renderEventCard(event, winners, viewMode);
               })}
             </Grid>
           </Box>
@@ -319,6 +525,18 @@ const CityDetail = () => {
           </Card>
         )}
       </Flex>
+
+      {/* Artist Detail Modal */}
+      <ArtistDetailModal
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setSelectedArtist(null);
+        }}
+        artist={selectedArtist}
+        showApplicationSpecifics={false}
+        upcomingEvents={upcomingEvents}
+      />
     </Box>
   );
 };

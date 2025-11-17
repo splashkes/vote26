@@ -28,7 +28,8 @@ import {
   Component1Icon,
   CopyIcon,
   ReaderIcon,
-  StarIcon
+  StarIcon,
+  MixIcon
 } from '@radix-ui/react-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -136,6 +137,22 @@ const AdminSidebar = ({ collapsed = false, onToggleCollapse, hideToggleAndSignOu
       label: 'SMS Campaigns',
       description: 'Create and send promotional text messages',
       color: 'green',
+      section: 'content'
+    },
+    {
+      to: '/sms-conversations',
+      icon: EnvelopeClosedIcon,
+      label: 'SMS Conversations',
+      description: 'View and reply to SMS conversations',
+      color: 'blue',
+      section: 'content'
+    },
+    {
+      to: '/offers',
+      icon: MixIcon,
+      label: 'Promo Offers',
+      description: 'Manage promotional offers and rewards',
+      color: 'orange',
       section: 'content'
     }
   ];

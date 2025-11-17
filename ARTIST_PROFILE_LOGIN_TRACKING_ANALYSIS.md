@@ -105,34 +105,69 @@ ORDER BY
 ### Example: Ellen Weiner
 ```
 Person: 05ce2b33-c175-4774-9c94-ce240d650a2f
+  Linked Phone: 13025457808 (auth)
   Last Login: 2025-10-29 08:03:04 (6 days ago)
 
   Profile #256465 (Entry ID):
     - Status: ACTIVE ✓
+    - Profile Phone: +13025457808
     - set_primary_profile_at: NULL
 
   Profile #310545 (Entry ID):
     - Status: SUPERSEDED
+    - Profile Phone: 13025457808
     - set_primary_profile_at: 2025-09-28 18:58:39
     - superseded_by: dbd1487a-8a3d-4ca7-9153-c9064760a5dd (Profile #256465)
 ```
 
 **Interpretation:**
-- Ellen last logged in 6 days ago
+- Ellen logs in with phone: 13025457808
+- She last logged in 6 days ago
 - She currently uses Profile #256465 (ACTIVE)
 - Profile #310545 was previously primary but has been superseded
+
+### Phone Number Sources
+
+**Three places store phone numbers:**
+
+1. **`auth.users.phone`** - The authoritative auth phone (what user logs in with)
+   - Updated by Supabase Auth system
+   - Used for SMS verification
+   - Usually stored without `+` prefix
+
+2. **`people.phone`** or `people.auth_phone`** - Person's phone
+   - Links person to auth user
+   - Usually has `+` prefix
+   - May differ from profile phone
+
+3. **`artist_profiles.phone`** - Profile-specific phone
+   - Can be different from auth phone
+   - Artist might have multiple profiles with different phones
+   - Display purposes only
+
+**Best Practice for Display:**
+```sql
+COALESCE(au.phone, p.auth_phone, p.phone) AS linked_phone
+```
+This prioritizes the auth phone (actual login phone) over other sources.
 
 ---
 
 ## SQL Queries for UI Display
 
-### 1. Get Login Info for Current Profile
+### 1. Get Login Info for Current Profile (with Phone)
 ```sql
 SELECT
   ap.id AS profile_id,
   ap.entry_id,
   ap.name AS profile_name,
   ap.superseded_by IS NULL AS is_active,
+
+  -- Phone Numbers
+  COALESCE(au.phone, p.auth_phone, p.phone) AS linked_phone,  -- Auth phone (what they log in with)
+  ap.phone AS profile_phone,  -- Phone on profile
+
+  -- Login Info
   p.auth_user_id,
   au.last_sign_in_at,
   EXTRACT(DAY FROM (NOW() - au.last_sign_in_at))::INTEGER AS days_since_login,
@@ -142,6 +177,12 @@ LEFT JOIN people p ON ap.person_id = p.id
 LEFT JOIN auth.users au ON p.auth_user_id = au.id
 WHERE ap.id = $1;  -- Current profile ID
 ```
+
+**Returns:**
+- `linked_phone`: The phone number used for authentication (from `auth.users`)
+- `profile_phone`: Phone stored on the artist profile
+- `last_sign_in_at`: Timestamp of last login
+- `days_since_login`: How many days ago
 
 ### 2. Get All Profiles for a Person with Login Stats
 ```sql
@@ -168,18 +209,28 @@ ORDER BY
   ap.set_primary_profile_at DESC NULLS LAST;
 ```
 
-### 3. Admin View: All Profiles with Login Stats
+### 3. Admin View: All Profiles with Login Stats and Phone
 ```sql
 SELECT
   ap.entry_id,
   ap.name AS profile_name,
+  COALESCE(au.phone, p.auth_phone, p.phone) AS linked_phone,
   ap.email,
   au.last_sign_in_at,
   EXTRACT(DAY FROM (NOW() - au.last_sign_in_at))::INTEGER AS days_since_login,
   CASE
+    WHEN au.last_sign_in_at IS NOT NULL AND au.last_sign_in_at > NOW() - INTERVAL '7 days'
+    THEN '🟢 Recent'
+    WHEN au.last_sign_in_at IS NOT NULL AND au.last_sign_in_at > NOW() - INTERVAL '30 days'
+    THEN '🟡 Active'
+    WHEN au.last_sign_in_at IS NOT NULL
+    THEN '🔴 Inactive'
+    ELSE '⚫ Never'
+  END AS activity_status,
+  CASE
     WHEN ap.superseded_by IS NULL THEN 'ACTIVE ✓'
     ELSE 'SUPERSEDED'
-  END AS status,
+  END AS profile_status,
   (SELECT COUNT(*) FROM artist_profiles ap2 WHERE ap2.person_id = ap.person_id) AS total_profiles
 FROM artist_profiles ap
 LEFT JOIN people p ON ap.person_id = p.id
@@ -217,6 +268,7 @@ PGPASSWORD='6kEtvU9n0KhTVr5' psql \
 ```
 ┌─────────────────────────────────┐
 │ Welcome back, Ellen Weiner!     │
+│ 📱 Phone: +1 (302) 545-7808     │
 │ Last login: 6 days ago          │
 │ Profile: Active ✓               │
 └─────────────────────────────────┘
@@ -226,6 +278,7 @@ PGPASSWORD='6kEtvU9n0KhTVr5' psql \
 ```
 ┌─────────────────────────────────────────────┐
 │ Profile: Ellen Weiner (#256465)             │
+│ 📱 Phone: +1 (302) 545-7808                 │
 │ Status: Active ✓                            │
 │ Last Login: Oct 29, 2025 (6 days ago)      │
 │                                             │
@@ -240,6 +293,7 @@ PGPASSWORD='6kEtvU9n0KhTVr5' psql \
 │ Your Profiles                               │
 ├─────────────────────────────────────────────┤
 │ ✓ Ellen Weiner (#256465) - ACTIVE          │
+│   📱 +1 (302) 545-7808                      │
 │   Last login: 6 days ago                    │
 │   $500 owed, 15 artworks                    │
 │                                             │
@@ -252,11 +306,11 @@ PGPASSWORD='6kEtvU9n0KhTVr5' psql \
 
 #### Profile Management View
 ```
-Entry ID | Name          | Email             | Status      | Last Login  | Days | Profiles
----------|---------------|-------------------|-------------|-------------|------|----------
-256465   | Ellen Weiner  | ellen@art.com     | ACTIVE ✓    | Oct 29      | 6    | 2
-310545   | Ellen Weiner  | ellen@art.com     | SUPERSEDED  | Oct 29      | 6    | 2
-310859   | Notoxy        | notoxy@gmail.com  | ACTIVE ✓    | Nov 4       | 0    | 1
+Entry ID | Name          | Phone              | Email             | Status      | Last Login  | Days | Profiles
+---------|---------------|--------------------|-------------------|-------------|-------------|------|----------
+256465   | Ellen Weiner  | +1 (302) 545-7808  | ellen@art.com     | ACTIVE ✓    | Oct 29      | 6    | 2
+310545   | Ellen Weiner  | +1 (302) 545-7808  | ellen@art.com     | SUPERSEDED  | Oct 29      | 6    | 2
+310859   | Notoxy        | +1 (514) 809-6153  | notoxy@gmail.com  | ACTIVE ✓    | Nov 4       | 0    | 1
 ```
 
 ---

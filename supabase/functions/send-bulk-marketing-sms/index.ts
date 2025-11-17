@@ -206,88 +206,65 @@ serve(async (req) => {
       const recipient = processedRecipients[i];
       
       try {
-        // Create outbound log entry
-        const { data: outboundLog, error: logError } = await supabase
-          .from('sms_outbound')
-          .insert({
-            campaign_id: campaign_id || null,
-            template_id: template_id || null,
-            to_phone: recipient.phone,
-            from_phone: fromFormatted,
-            message_body: recipient.message,
-            character_count: recipient.characterCount,
-            message_parts: recipient.messageParts,
-            status: test_mode ? 'test' : 'pending',
-            metadata: { ...metadata, variables: recipient.variables, batch_index: i }
-          })
-          .select('id')
-          .single();
-
-        if (logError) {
-          console.error('Error creating outbound log:', logError);
-        }
-
-        const outboundId = outboundLog?.id;
+        let outboundId = null;
         let telnyxMessageId = null;
+        let sendSuccess = false;
 
         if (!test_mode) {
-          // Send via Telnyx API
-          const telnyxResponse = await fetch('https://api.telnyx.com/v2/messages', {
+          // Call send-marketing-sms function for consistent variable substitution and sending
+          const sendResponse = await fetch(`${supabaseUrl}/functions/v1/send-marketing-sms`, {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${TELNYX_API_KEY}`,
+              'Authorization': `Bearer ${supabaseServiceKey}`,
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-              from: fromFormatted,
               to: recipient.phone,
-              text: recipient.message
+              from: fromFormatted,
+              message: recipient.message,
+              campaign_id: campaign_id,
+              template_id: template_id,
+              metadata: { ...metadata, variables: recipient.variables, batch_index: i }
             })
           });
 
-          const telnyxData = await telnyxResponse.json();
+          const sendData = await sendResponse.json();
 
-          if (telnyxResponse.ok) {
-            telnyxMessageId = telnyxData.data?.id;
-            
-            // Update outbound log with success
-            if (outboundId) {
-              await supabase
-                .from('sms_outbound')
-                .update({
-                  telnyx_message_id: telnyxMessageId,
-                  status: 'sent',
-                  telnyx_status: 'queued',
-                  sent_at: new Date().toISOString()
-                })
-                .eq('id', outboundId);
-            }
-
+          if (sendResponse.ok && sendData.success) {
+            outboundId = sendData.details?.outbound_id;
+            telnyxMessageId = sendData.details?.telnyx_message_id;
+            sendSuccess = true;
             results.sent++;
           } else {
-            // Update outbound log with failure
-            const errorDetail = telnyxData.errors?.[0]?.detail || 'Unknown error';
-            if (outboundId) {
-              await supabase
-                .from('sms_outbound')
-                .update({
-                  status: 'failed',
-                  error_message: errorDetail,
-                  failed_at: new Date().toISOString()
-                })
-                .eq('id', outboundId);
-            }
-
+            // Failed to send
+            console.error(`Failed to send to ${recipient.phone}:`, sendData.error);
             results.failed++;
           }
         } else {
-          // Test mode - just log
+          // Test mode - create log but don't send
+          const { data: outboundLog } = await supabase
+            .from('sms_outbound')
+            .insert({
+              campaign_id: campaign_id || null,
+              template_id: template_id || null,
+              to_phone: recipient.phone,
+              from_phone: fromFormatted,
+              message_body: recipient.message,
+              character_count: recipient.characterCount,
+              message_parts: recipient.messageParts,
+              status: 'test',
+              metadata: { ...metadata, variables: recipient.variables, batch_index: i }
+            })
+            .select('id')
+            .single();
+
+          outboundId = outboundLog?.id;
           results.sent++;
         }
 
         results.messages.push({
           phone: recipient.phone,
-          status: test_mode ? 'test' : (telnyxMessageId ? 'sent' : 'failed'),
+          status: test_mode ? 'test' : (sendSuccess ? 'sent' : 'failed'),
           outbound_id: outboundId,
           telnyx_message_id: telnyxMessageId,
           character_count: recipient.characterCount,

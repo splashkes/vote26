@@ -1,0 +1,18 @@
+# Environment files with secrets
+.env
+*.env
+!.env.example
+
+# Slack MCP Server cache files
+.users_cache.json
+.channels_cache_v2.json
+
+# MCP server binaries
+slack-mcp-server/
+*/slack-mcp-server
+
+# Node modules if installing anything locally
+node_modules/
+
+# Logs
+*.log

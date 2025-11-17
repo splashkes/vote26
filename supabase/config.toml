@@ -22,5 +22,8 @@ verify_jwt = false
 [functions.auth-monitor-cron]
 verify_jwt = false
 
+[functions.sms-scheduled-campaigns-cron]
+verify_jwt = false
+
 [functions.auth-metrics]
 verify_jwt = false

@@ -16,39 +16,61 @@ serve(async (req) => {
   }
 
   try {
-    // Initialize Supabase client with service role
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
-    });
+    // Initialize service role client first
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    );
 
-    // Check if user is super admin
+    // Get auth header and verify user
     const authHeader = req.headers.get('Authorization');
+
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Authorization required' }), {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Authorization required'
+      }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
+    // Extract token and verify with service role client
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
     if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Invalid authorization' }), {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Invalid authorization'
+      }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    // Check super admin status
-    const { data: adminCheck, error: adminError } = await supabase.rpc('is_super_admin');
-    if (adminError || !adminCheck) {
-      return new Response(JSON.stringify({ error: 'Super admin access required' }), {
+    // Check admin status using service role client
+    const { data: adminCheck } = await supabase
+      .from('abhq_admin_users')
+      .select('email, level')
+      .eq('email', user.email)
+      .eq('active', true)
+      .single();
+
+    if (!adminCheck) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Admin access required'
+      }), {
         status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
+
+    console.log(`SMS Campaign creation by ${user.email} (level: ${adminCheck.level})`);
+
+    // Now supabase client is ready with service role for operations
 
     // Parse request body
     const {
@@ -58,7 +80,12 @@ serve(async (req) => {
       event_id = null,
       targeting_criteria = {},
       estimated_segments = 1,
-      test_mode = false
+      test_mode = false,
+      scheduled_at = null,
+      scheduled_timezone = null,
+      scheduled_local_time = null,
+      dry_run_mode = false,
+      dry_run_phone = null
     } = await req.json();
 
     // Validate required fields
@@ -80,52 +107,133 @@ serve(async (req) => {
       });
     }
 
-    // Get people details and filter out blocked users
-    const { data: people, error: peopleError } = await supabase
-      .from('people')
-      .select('id, phone, first_name, last_name, blocked')
-      .in('id', person_ids);
+    // If dry run mode, replace all recipients with the test phone
+    let validRecipients;
+    let blockedCount = 0;
 
-    if (peopleError) {
-      console.error('Error fetching people:', peopleError);
-      return new Response(JSON.stringify({
-        error: 'Failed to fetch audience data'
-      }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    if (dry_run_mode && dry_run_phone) {
+      // Look up actual person data for dry run phone to get hash and name
+      const { data: dryRunPerson } = await supabase
+        .from('people')
+        .select('id, phone, phone_number, first_name, last_name, hash, message_blocked')
+        .or(`phone.eq.${dry_run_phone},phone_number.eq.${dry_run_phone}`)
+        .single();
+
+      validRecipients = [{
+        id: dryRunPerson?.id || 'dry-run-test',
+        phone: dry_run_phone,
+        first_name: dryRunPerson?.first_name || 'Dry',
+        last_name: dryRunPerson?.last_name || 'Run Test',
+        hash: dryRunPerson?.hash || 'test-hash',
+        blocked: false
+      }];
+      console.log('DRY RUN MODE: Sending only to', dry_run_phone, 'with data:', validRecipients[0]);
+    } else {
+      // Get people details and filter out blocked users using RPC
+      // Need to fetch in chunks because Supabase client limits RPC results to 1000
+      const chunkSize = 5000; // Process IDs in chunks
+      let allPeople = [];
+
+      console.log(`Fetching ${person_ids.length} people in chunks of ${chunkSize}`);
+
+      for (let i = 0; i < person_ids.length; i += chunkSize) {
+        const chunk = person_ids.slice(i, i + chunkSize);
+        console.log(`Fetching chunk ${Math.floor(i/chunkSize) + 1}: IDs ${i} to ${i + chunk.length}`);
+
+        const { data: chunkPeople, error: peopleError } = await supabase
+          .rpc('get_people_for_campaign', { person_ids: chunk });
+
+        if (peopleError) {
+          console.error('Error fetching people chunk:', peopleError);
+          const errorMsg = `Failed to fetch audience data: ${peopleError.message}. Person IDs count: ${person_ids.length}`;
+          return new Response(JSON.stringify({
+            error: errorMsg,
+            details: peopleError.message,
+            hint: peopleError.hint || 'Check if person_ids are valid',
+            person_ids_count: person_ids.length,
+            person_ids_sample: person_ids.slice(0, 5)
+          }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        if (chunkPeople && chunkPeople.length > 0) {
+          allPeople = allPeople.concat(chunkPeople);
+          console.log(`Got ${chunkPeople.length} people in this chunk, total so far: ${allPeople.length}`);
+        }
+      }
+
+      const people = allPeople;
+      console.log(`Final total: ${people.length} people fetched from ${person_ids.length} IDs`);
+
+      // Filter out blocked users and users without phone numbers
+      validRecipients = people.filter(person => {
+        const phoneNum = person.phone || person.phone_number;
+        return person.message_blocked !== 1 &&
+               phoneNum &&
+               phoneNum.trim().length > 0;
       });
+
+      if (validRecipients.length === 0) {
+        return new Response(JSON.stringify({
+          error: 'No valid recipients found (all blocked or missing phone numbers)'
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      blockedCount = people.length - validRecipients.length;
     }
 
-    // Filter out blocked users and users without phone numbers
-    const validRecipients = people.filter(person => 
-      !person.blocked && 
-      person.phone && 
-      person.phone.trim().length > 0
-    );
-
-    if (validRecipients.length === 0) {
-      return new Response(JSON.stringify({
-        error: 'No valid recipients found (all blocked or missing phone numbers)'
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+    // Determine campaign status
+    // ALL campaigns are queued for background processing to avoid timeouts
+    let campaignStatus;
+    if (test_mode) {
+      campaignStatus = 'test';
+    } else if (dry_run_mode) {
+      campaignStatus = 'queued'; // Process via cron
+    } else if (scheduled_at) {
+      campaignStatus = 'scheduled';
+    } else {
+      // Immediate sends are queued and processed by cron within seconds
+      campaignStatus = 'queued';
     }
 
-    const blockedCount = people.length - validRecipients.length;
+    // Prepare recipient data for storage
+    const recipientData = validRecipients.map(person => ({
+      id: person.id,
+      phone: person.phone || person.phone_number,
+      first_name: person.first_name || '',
+      last_name: person.last_name || '',
+      hash: person.hash || ''
+    }));
 
-    // Create campaign record
+    // Create campaign record with all data needed for background processing
     const { data: campaign, error: campaignError } = await supabase
       .from('sms_marketing_campaigns')
       .insert({
         name: campaign_name,
-        message_template: message,
+        description: `Campaign: ${campaign_name}`,
         event_id: event_id,
         targeting_criteria: targeting_criteria,
-        messages_sent: validRecipients.length,
-        messages_blocked: blockedCount,
-        status: test_mode ? 'test' : 'queued',
-        created_by: user.id
+        total_recipients: validRecipients.length,
+        messages_sent: 0, // Will be updated as cron processes
+        status: campaignStatus,
+        scheduled_at: scheduled_at || (campaignStatus === 'queued' ? new Date().toISOString() : null),
+        created_by: user.id,
+        metadata: {
+          message_template: message,
+          dry_run_mode: dry_run_mode,
+          dry_run_phone: dry_run_mode ? dry_run_phone : null,
+          blocked_count: blockedCount,
+          valid_recipients: validRecipients.length,
+          scheduled_timezone: scheduled_timezone,
+          scheduled_local_time: scheduled_local_time,
+          recipient_data: recipientData, // Store recipient data for background processing
+          estimated_segments: estimated_segments
+        }
       })
       .select('id')
       .single();
@@ -133,7 +241,10 @@ serve(async (req) => {
     if (campaignError) {
       console.error('Error creating campaign:', campaignError);
       return new Response(JSON.stringify({
-        error: 'Failed to create campaign record'
+        error: 'Failed to create campaign record',
+        details: campaignError.message,
+        hint: campaignError.hint,
+        code: campaignError.code
       }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -142,121 +253,55 @@ serve(async (req) => {
 
     const campaignId = campaign.id;
 
-    // Prepare recipients for bulk SMS function
-    const recipients = validRecipients.map(person => ({
-      phone: person.phone,
-      variables: {
-        first_name: person.first_name || '',
-        last_name: person.last_name || '',
-        full_name: `${person.first_name || ''} ${person.last_name || ''}`.trim() || 'Friend'
-      }
-    }));
+    // Calculate estimated cost
+    const estimatedCostCents = validRecipients.length * estimated_segments * 1;
 
-    try {
-      // Call existing send-bulk-marketing-sms function
-      const bulkSmsResponse = await fetch(`${supabaseUrl}/functions/v1/send-bulk-marketing-sms`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${supabaseServiceKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          campaign_id: campaignId,
-          recipients: recipients,
-          message: message,
-          rate_limit: 500, // Toll-free number rate limit
-          test_mode: test_mode,
-          metadata: {
-            campaign_name: campaign_name,
-            targeting_criteria: targeting_criteria,
-            created_by: user.id
-          }
-        })
-      });
+    // Update campaign with cost estimate
+    await supabase
+      .from('sms_marketing_campaigns')
+      .update({
+        total_cost_cents: estimatedCostCents
+      })
+      .eq('id', campaignId);
 
-      const bulkSmsResult = await bulkSmsResponse.json();
+    // Return immediately - cron will process the campaign
+    const statusMessage = scheduled_at
+      ? `Campaign scheduled for ${new Date(scheduled_at).toLocaleString()}`
+      : test_mode
+      ? 'Campaign created in test mode'
+      : dry_run_mode
+      ? `Dry run campaign queued - will send to ${dry_run_phone}`
+      : 'Campaign queued for immediate processing';
 
-      if (!bulkSmsResponse.ok || !bulkSmsResult.success) {
-        // Update campaign status to failed
-        await supabase
-          .from('sms_marketing_campaigns')
-          .update({ 
-            status: 'failed',
-            failure_reason: bulkSmsResult.error || 'Bulk SMS processing failed'
-          })
-          .eq('id', campaignId);
-
-        return new Response(JSON.stringify({
-          error: `Failed to queue messages: ${bulkSmsResult.error || 'Unknown error'}`,
-          campaign_id: campaignId
-        }), {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
-      }
-
-      // Calculate estimated cost
-      const estimatedCostCents = validRecipients.length * estimated_segments * 1; // Assume 1 cent per segment
-
-      // Update campaign with processing details
-      await supabase
-        .from('sms_marketing_campaigns')
-        .update({
-          status: test_mode ? 'test_completed' : 'processing',
-          total_cost_cents: estimatedCostCents,
-          messages_queued: bulkSmsResult.queued_count || validRecipients.length,
-          started_at: new Date().toISOString()
-        })
-        .eq('id', campaignId);
-
-      return new Response(JSON.stringify({
-        success: true,
-        campaign_id: campaignId,
-        campaign_name: campaign_name,
-        recipients_targeted: person_ids.length,
-        recipients_valid: validRecipients.length,
-        recipients_blocked: blockedCount,
-        messages_queued: bulkSmsResult.queued_count || validRecipients.length,
-        estimated_cost_cents: estimatedCostCents,
-        estimated_segments: estimated_segments,
-        test_mode: test_mode,
-        rate_limit: '500 messages/minute (toll-free)',
-        message: test_mode ? 'Campaign created in test mode - no messages sent' : 'Campaign created and messages queued for sending'
-      }), {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-
-    } catch (bulkSmsError) {
-      console.error('Error calling bulk SMS function:', bulkSmsError);
-      
-      // Update campaign status to failed
-      await supabase
-        .from('sms_marketing_campaigns')
-        .update({ 
-          status: 'failed',
-          failure_reason: `Bulk SMS service error: ${bulkSmsError.message}`
-        })
-        .eq('id', campaignId);
-
-      return new Response(JSON.stringify({
-        error: 'Failed to process bulk SMS request',
-        campaign_id: campaignId,
-        details: bulkSmsError.message
-      }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
+    return new Response(JSON.stringify({
+      success: true,
+      campaign_id: campaignId,
+      campaign_name: campaign_name,
+      recipients_targeted: person_ids.length,
+      recipients_valid: validRecipients.length,
+      recipients_blocked: blockedCount,
+      messages_queued: validRecipients.length,
+      estimated_cost_cents: estimatedCostCents,
+      estimated_segments: estimated_segments,
+      test_mode: test_mode,
+      dry_run_mode: dry_run_mode,
+      status: campaignStatus,
+      message: statusMessage,
+      processing_info: 'Campaign will be processed by background worker within 30-60 seconds'
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
 
   } catch (error) {
     console.error('Error in admin-sms-create-campaign:', error);
-    
+
     return new Response(JSON.stringify({
       success: false,
-      error: error.message || 'Internal server error'
+      error: error.message
     }), {
-      status: 500,
+      status: error.message === 'Not authenticated' ? 401 :
+             error.message === 'Unauthorized: Admin access required' ? 403 : 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }

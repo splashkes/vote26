@@ -81,12 +81,12 @@ Deno.serve(async (req) => {
 
       try {
         // Call the meta-ads-report function to cache data
-        const metaAdsUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/meta-ads-report?event_eid=${event.eid}`;
+        const metaAdsUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/meta-ads-report/${event.eid}`;
 
         const response = await fetch(metaAdsUrl, {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+            'X-Cron-Secret': Deno.env.get('CRON_SECRET_META_ADS') || '',
             'Content-Type': 'application/json'
           }
         });
@@ -153,6 +153,35 @@ Deno.serve(async (req) => {
     }
 
     console.log('Cache cron job completed:', results);
+
+    // Log to meta_ads_cache_cron_log table
+    const executionStart = new Date(startDate);
+    const executionEnd = new Date();
+    const durationMs = executionEnd.getTime() - executionStart.getTime();
+
+    try {
+      await supabase
+        .from('meta_ads_cache_cron_log')
+        .insert({
+          executed_at: executionStart.toISOString(),
+          status: results.failed > 0 ? 'completed_with_errors' : 'success',
+          total_events: results.total_events,
+          successful: results.successful,
+          failed: results.failed,
+          skipped: results.skipped,
+          duration_ms: durationMs,
+          errors: results.errors.length > 0 ? results.errors : null,
+          response: {
+            date_range: {
+              start: startDate.toISOString(),
+              end: endDate.toISOString()
+            },
+            events_processed: results.events_processed
+          }
+        });
+    } catch (logError) {
+      console.error('Failed to log to meta_ads_cache_cron_log:', logError);
+    }
 
     return new Response(
       JSON.stringify({
