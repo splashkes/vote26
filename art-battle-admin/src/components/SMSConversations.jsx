@@ -656,7 +656,7 @@ const SMSConversations = () => {
           </Box>
 
           {/* Contacts List */}
-          <ScrollArea style={{ flex: 1 }}>
+          <ScrollArea style={{ flex: 1 }} ref={contactsListRef} onScroll={handleContactsScroll}>
             {loadingContacts ? (
               <Flex justify="center" align="center" p="4">
                 <Spinner />
@@ -667,63 +667,88 @@ const SMSConversations = () => {
               </Text>
             ) : (
               <Box>
-                {filteredContacts.map(contact => (
-                  <Box
-                    key={contact.phone}
-                    p="3"
-                    style={{
-                      cursor: 'pointer',
-                      backgroundColor: selectedContact?.phone === contact.phone ? 'var(--accent-3)' : 'transparent',
-                      borderBottom: '1px solid var(--gray-3)',
-                      transition: 'background-color 0.2s'
-                    }}
-                    onClick={() => {
-                      setSelectedContact(contact);
-                      loadConversation(contact);
-                    }}
-                  >
-                    <Flex justify="between" align="start" gap="3">
-                      <Avatar
-                        size="3"
-                        fallback={getAvatarText(contact)}
-                        color={getAvatarColor(contact)}
-                      />
+                {groupedContacts.map(([groupName, groupContacts]) => (
+                  <Box key={groupName}>
+                    {/* Group Header */}
+                    <Box px="3" py="2" style={{ backgroundColor: 'var(--gray-2)', position: 'sticky', top: 0, zIndex: 1 }}>
+                      <Text size="1" weight="bold" color="gray">
+                        {groupName}
+                      </Text>
+                    </Box>
 
-                      <Box style={{ flex: 1 }}>
-                        <Flex justify="between" align="center">
-                          <Text size="2" weight="bold">
-                            {contact.name || 'Unknown'}
-                            {contact.blocked && (
-                              <Badge color="red" size="1" ml="2">Blocked</Badge>
-                            )}
-                          </Text>
-                          <Text size="1" color="gray">
-                            {formatTime(contact.last_message_at)}
-                          </Text>
+                    {/* Contacts in this group */}
+                    {groupContacts.map(contact => (
+                      <Box
+                        key={contact.phone}
+                        p="3"
+                        style={{
+                          cursor: 'pointer',
+                          backgroundColor: selectedContact?.phone === contact.phone ? 'var(--accent-3)' : 'transparent',
+                          borderBottom: '1px solid var(--gray-3)',
+                          transition: 'background-color 0.2s'
+                        }}
+                        onClick={() => {
+                          setSelectedContact(contact);
+                          loadConversation(contact);
+                        }}
+                      >
+                        <Flex justify="between" align="start" gap="3">
+                          <Avatar
+                            size="3"
+                            fallback={getAvatarText(contact)}
+                            color={getAvatarColor(contact)}
+                          />
+
+                          <Box style={{ flex: 1 }}>
+                            <Flex justify="between" align="center">
+                              <Text size="2" weight="bold">
+                                {contact.name || 'Unknown'}
+                                {contact.blocked && (
+                                  <Badge color="red" size="1" ml="2">Blocked</Badge>
+                                )}
+                              </Text>
+                              <Text size="1" color="gray">
+                                {formatTime(contact.last_message_at)}
+                              </Text>
+                            </Flex>
+
+                            <Text
+                              size="1"
+                              color="gray"
+                              style={{
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                marginTop: '4px'
+                              }}
+                            >
+                              {contact.last_message}
+                            </Text>
+                          </Box>
+
+                          {contact.unread_count > 0 && (
+                            <Badge color="red" size="2" variant="solid">
+                              {contact.unread_count}
+                            </Badge>
+                          )}
                         </Flex>
-
-                        <Text
-                          size="1"
-                          color="gray"
-                          style={{
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            marginTop: '4px'
-                          }}
-                        >
-                          {contact.last_message}
-                        </Text>
                       </Box>
-
-                      {contact.unread_count > 0 && (
-                        <Badge color="red" size="2" variant="solid">
-                          {contact.unread_count}
-                        </Badge>
-                      )}
-                    </Flex>
+                    ))}
                   </Box>
                 ))}
+
+                {/* Loading more indicator */}
+                {loadingMoreContacts && (
+                  <Flex justify="center" p="3">
+                    <Spinner size="2" />
+                  </Flex>
+                )}
+
+                {!hasMoreContacts && filteredContacts.length > 10 && (
+                  <Text size="1" color="gray" style={{ padding: '1rem', textAlign: 'center' }}>
+                    No more conversations
+                  </Text>
+                )}
               </Box>
             )}
           </ScrollArea>
