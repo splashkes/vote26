@@ -85,6 +85,14 @@ const AdminSidebar = ({ collapsed = false, onToggleCollapse, hideToggleAndSignOu
       section: 'events'
     },
     {
+      to: '/events/spreadsheet',
+      icon: TableIcon,
+      label: 'Events Spreadsheet',
+      description: 'Edit events in spreadsheet view',
+      color: 'blue',
+      section: 'events'
+    },
+    {
       to: '/event-linter',
       icon: CheckCircledIcon,
       label: 'Event Validator',
@@ -249,8 +257,8 @@ const AdminSidebar = ({ collapsed = false, onToggleCollapse, hideToggleAndSignOu
     {
       to: '/email-queue',
       icon: PaperPlaneIcon,
-      label: 'Email Queue',
-      description: 'Monitor artist payment email notifications',
+      label: 'Email History',
+      description: 'View recent emails sent by the system',
       color: 'purple',
       section: 'system'
     }

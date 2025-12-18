@@ -31,6 +31,8 @@ import EventRelationshipBackfill from './components/EventRelationshipBackfill';
 import SMSConversations from './components/SMSConversations';
 import OffersManagement from './components/OffersManagement';
 import Welcome from './components/Welcome';
+import Settings from './components/Settings';
+import EventsSpreadsheet from './components/EventsSpreadsheet';
 import './App.css';
 
 function App() {
@@ -52,6 +54,7 @@ function App() {
               <Route path="/" element={<AdminLayout />}>
                 <Route index element={<Navigate to="/events" replace />} />
                 <Route path="events" element={<EventDashboard />} />
+                <Route path="events/spreadsheet" element={<EventsSpreadsheet />} />
                 <Route path="events/create" element={<CreateEvent />} />
                 <Route path="events/:eventId" element={<EventDetail />} />
                 <Route path="events/:eventId/artists" element={<ArtistManagement />} />
@@ -77,6 +80,7 @@ function App() {
                 <Route path="sms-marketing" element={<PromotionSystem />} />
                 <Route path="sms-conversations" element={<SMSConversations />} />
                 <Route path="offers" element={<OffersManagement />} />
+                <Route path="settings" element={<Settings />} />
                 <Route path="artist/:entryId" element={<ArtistsManagement />} />
                 <Route path="*" element={<Navigate to="/events" replace />} />
               </Route>
