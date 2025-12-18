@@ -132,6 +132,18 @@ const EventDetail = () => {
 
   const [approvingEventInfo, setApprovingEventInfo] = useState(false);
 
+  // Producer event details editing states
+  const [editingProducerDetails, setEditingProducerDetails] = useState(false);
+  const [producerDetailsForm, setProducerDetailsForm] = useState({
+    event_level: 'REGULAR',
+    flyer_details: '',
+    door_time: '',
+    paint_time: '',
+    showtime: '',
+    description: ''
+  });
+  const [updatingProducerDetails, setUpdatingProducerDetails] = useState(false);
+
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [personHistory, setPersonHistory] = useState(null);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -709,6 +721,59 @@ const EventDetail = () => {
       showAdminMessage('error', 'Failed to update Art Battle link');
     } finally {
       setUpdatingArtBattleLink(false);
+    }
+  };
+
+  // Open producer details edit modal with current values
+  const openProducerDetailsEdit = () => {
+    setProducerDetailsForm({
+      event_level: event.event_level || 'REGULAR',
+      flyer_details: event.flyer_details || '',
+      door_time: event.door_time || '',
+      paint_time: event.paint_time || '',
+      showtime: event.showtime || '',
+      description: event.description || ''
+    });
+    setEditingProducerDetails(true);
+  };
+
+  const updateProducerDetails = async () => {
+    try {
+      setUpdatingProducerDetails(true);
+
+      const { error } = await supabase
+        .from('events')
+        .update({
+          event_level: producerDetailsForm.event_level || null,
+          flyer_details: producerDetailsForm.flyer_details.trim() || null,
+          door_time: producerDetailsForm.door_time || null,
+          paint_time: producerDetailsForm.paint_time || null,
+          showtime: producerDetailsForm.showtime || null,
+          description: producerDetailsForm.description.trim() || null
+        })
+        .eq('id', eventId);
+
+      if (error) throw error;
+
+      setEvent(prev => ({
+        ...prev,
+        event_level: producerDetailsForm.event_level,
+        flyer_details: producerDetailsForm.flyer_details.trim(),
+        door_time: producerDetailsForm.door_time,
+        paint_time: producerDetailsForm.paint_time,
+        showtime: producerDetailsForm.showtime,
+        description: producerDetailsForm.description.trim()
+      }));
+
+      setEditingProducerDetails(false);
+      showAdminMessage('success', 'Event details updated successfully');
+
+    } catch (err) {
+      console.error('Error updating producer details:', err);
+      setError('Failed to update event details: ' + err.message);
+      showAdminMessage('error', 'Failed to update event details');
+    } finally {
+      setUpdatingProducerDetails(false);
     }
   };
 
@@ -2940,6 +3005,60 @@ The Art Battle Team`);
                 </Flex>
               )}
 
+              {/* Event Level & Times - Producer Details */}
+              <Flex gap="2" wrap="wrap" align="center">
+                {event.event_level && event.event_level !== 'REGULAR' && (
+                  <Badge
+                    color={
+                      event.event_level === 'CHAMPION_NATIONAL' ? 'gold' :
+                      event.event_level === 'CHAMPION_CITY' ? 'orange' :
+                      event.event_level === 'PRIVATE' ? 'purple' :
+                      event.event_level === 'SPECIAL' ? 'cyan' : 'gray'
+                    }
+                    size="2"
+                  >
+                    {event.event_level.replace(/_/g, ' ')}
+                  </Badge>
+                )}
+                {(event.door_time || event.paint_time || event.showtime) && (
+                  <>
+                    {event.door_time && (
+                      <Flex gap="1" align="center">
+                        <Text size="2" color="gray">Doors:</Text>
+                        <Text size="2" weight="medium">{event.door_time.slice(0, 5)}</Text>
+                      </Flex>
+                    )}
+                    {event.paint_time && (
+                      <Flex gap="1" align="center">
+                        <Text size="2" color="gray">Paint:</Text>
+                        <Text size="2" weight="medium">{event.paint_time.slice(0, 5)}</Text>
+                      </Flex>
+                    )}
+                    {event.showtime && (
+                      <Flex gap="1" align="center">
+                        <Text size="2" color="gray">Show:</Text>
+                        <Text size="2" weight="medium">{event.showtime.slice(0, 5)}</Text>
+                      </Flex>
+                    )}
+                  </>
+                )}
+                <IconButton
+                  size="1"
+                  variant="ghost"
+                  onClick={openProducerDetailsEdit}
+                  title="Edit event details"
+                >
+                  <Pencil1Icon width="12" height="12" />
+                </IconButton>
+              </Flex>
+
+              {/* Flyer Details */}
+              {event.flyer_details && (
+                <Box style={{ background: 'var(--gray-a2)', padding: '8px 12px', borderRadius: '6px' }}>
+                  <Text size="2" color="gray" style={{ fontStyle: 'italic' }}>{event.flyer_details}</Text>
+                </Box>
+              )}
+
               {/* Description */}
               {event.description && (
                 <Box>
@@ -3423,6 +3542,11 @@ The Art Battle Team`);
                                   {postEventData.ticket_sales.currency_symbol || postEventData.auction_summary?.currency_symbol || '$'}
                                   {postEventData.ticket_sales.net_deposit?.toFixed(2) || '0.00'}
                                 </Text>
+                                {postEventData.ticket_sales.taxes_collected > 0 && (
+                                  <Text size="1" color="orange">
+                                    Tax: {postEventData.ticket_sales.currency_symbol}{postEventData.ticket_sales.taxes_collected.toFixed(2)}
+                                  </Text>
+                                )}
                                 {postEventData.ticket_sales.average_net_per_ticket && (
                                   <Text size="1" color="gray">
                                     Avg: {postEventData.ticket_sales.currency_symbol}{postEventData.ticket_sales.average_net_per_ticket}/ticket
@@ -4172,10 +4296,7 @@ The Art Battle Team`);
                       <Table.Row>
                         <Table.ColumnHeaderCell>Artist</Table.ColumnHeaderCell>
                         <Table.ColumnHeaderCell>Artworks</Table.ColumnHeaderCell>
-                        <Table.ColumnHeaderCell>Invitation</Table.ColumnHeaderCell>
-                        <Table.ColumnHeaderCell>Account Status</Table.ColumnHeaderCell>
-                        <Table.ColumnHeaderCell>Earned</Table.ColumnHeaderCell>
-                        <Table.ColumnHeaderCell>Paid Out</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell>Artist Status</Table.ColumnHeaderCell>
                         <Table.ColumnHeaderCell>Owed</Table.ColumnHeaderCell>
                       </Table.Row>
                     </Table.Header>
@@ -4183,29 +4304,26 @@ The Art Battle Team`);
                       {artistPaymentsData.map((artist) => (
                         <Table.Row key={artist.artist_id}>
                           <Table.Cell>
-                            <Flex direction="column" gap="0">
-                              <Text
-                                size="2"
-                                weight="bold"
-                                style={{ cursor: 'pointer', color: 'var(--accent-9)' }}
-                                onClick={() => openArtistPaymentDetail(artist)}
-                              >
-                                {artist.artist_name}
-                              </Text>
-                              <Text size="1" color="gray">#{artist.artist_number}</Text>
-                            </Flex>
+                            <Text
+                              size="2"
+                              weight="bold"
+                              style={{ cursor: 'pointer', color: 'var(--accent-9)' }}
+                              onClick={() => openArtistPaymentDetail(artist)}
+                            >
+                              {artist.artist_name} <Text as="span" size="1" color="gray">#{artist.artist_number}</Text>
+                            </Text>
                           </Table.Cell>
                           <Table.Cell>
                             <Flex direction="column" gap="1">
                               {artist.artworks_paid.length > 0 && artist.artworks_paid.map(artwork => (
                                 <Badge
                                   key={artwork.art_id}
-                                  color="green"
+                                  color={artwork.payment_in?.source === 'stripe' ? 'green' : 'lime'}
                                   size="1"
                                   style={{ cursor: 'pointer' }}
                                   onClick={() => handleOpenArtworkDetail(artwork)}
                                 >
-                                  {artwork.art_code} - ${artwork.sale_price?.toFixed(2)}
+                                  {artwork.art_code} - ${artwork.sale_price?.toFixed(2)} - {artwork.payment_in?.source === 'stripe' ? 'Buyer Paid Stripe' : 'Buyer Paid Other'}
                                 </Badge>
                               ))}
                               {artist.artworks_unpaid.length > 0 && artist.artworks_unpaid.map(artwork => (
@@ -4216,7 +4334,7 @@ The Art Battle Team`);
                                   style={{ cursor: 'pointer' }}
                                   onClick={() => handleOpenArtworkDetail(artwork)}
                                 >
-                                  {artwork.art_code} - ${artwork.winning_bid?.toFixed(2)}
+                                  {artwork.art_code} - ${artwork.winning_bid?.toFixed(2)} - Buyer Unpaid
                                 </Badge>
                               ))}
                               {artist.artworks_no_bid?.length > 0 && artist.artworks_no_bid.map(artwork => (
@@ -4233,34 +4351,37 @@ The Art Battle Team`);
                             </Flex>
                           </Table.Cell>
                           <Table.Cell>
-                            {artist.payment_invitation ? (
-                              <Flex direction="column" gap="0">
-                                <Badge size="1" color={artist.payment_invitation.status === 'completed' ? 'green' : 'blue'}>
-                                  {artist.payment_invitation.invite_type.toUpperCase()}
-                                </Badge>
-                                <Text size="1" color="gray">
-                                  {new Date(artist.payment_invitation.sent_at).toLocaleDateString()}
-                                </Text>
-                              </Flex>
-                            ) : (
-                              <Button
-                                size="1"
-                                variant="soft"
-                                onClick={() => {
-                                  setSelectedArtistForInvite(artist);
-                                  setShowPaymentInviteModal(true);
-                                }}
-                              >
-                                Send Invite
-                              </Button>
-                            )}
-                          </Table.Cell>
-                          <Table.Cell>
                             <Flex gap="1" wrap="wrap">
-                              {/* If artist has earnings and has been fully paid, show PAID badge only */}
-                              {artist.totals.total_earned > 0 && artist.totals.amount_owed <= 0.01 ? (
+                              {/* Only show PAID if they earned something at THIS event and global balance is zero */}
+                              {artist.totals.total_earned_this_event > 0 && artist.totals.amount_owed <= 0.01 ? (
                                 <Badge color="green" size="1">
-                                  PAID
+                                  {(() => {
+                                    const payments = artist.payments_out || [];
+                                    const successPayments = payments.filter(p => p.status === 'paid' || p.status === 'verified');
+                                    if (successPayments.length === 0) return 'PAID';
+
+                                    // Check for automated/stripe payments first
+                                    const hasStripe = successPayments.some(p => p.payment_type === 'automated');
+                                    const hasManual = successPayments.some(p => p.payment_type === 'manual');
+
+                                    if (hasStripe && hasManual) return 'Paid - Mixed';
+                                    if (hasStripe) return 'Paid - Stripe';
+
+                                    // For manual, get the method
+                                    const manualPayment = successPayments.find(p => p.payment_type === 'manual');
+                                    const method = manualPayment?.payment_method || '';
+                                    switch (method) {
+                                      case 'bank_transfer': return 'Paid - Bank';
+                                      case 'interac': return 'Paid - Interac';
+                                      case 'paypal': return 'Paid - PayPal';
+                                      case 'cash': return 'Paid - Cash';
+                                      case 'zelle': return 'Paid - Zelle';
+                                      case 'wise_other': return 'Paid - Wise';
+                                      case 'Balance Adjustment': return 'Paid - Adj';
+                                      case 'other': return 'Paid - Other';
+                                      default: return 'Paid - Manual';
+                                    }
+                                  })()}
                                 </Badge>
                               ) : (
                                 <>
@@ -4268,7 +4389,7 @@ The Art Battle Team`);
                                   {artist.stripe_recipient_id && (
                                     <Badge
                                       color={
-                                        artist.payment_account_status === 'ready' ? 'green' :
+                                        artist.payment_account_status === 'ready' ? 'blue' :
                                         artist.payment_account_status === 'pending' ? 'orange' :
                                         'gray'
                                       }
@@ -4276,7 +4397,7 @@ The Art Battle Team`);
                                       style={{ cursor: 'pointer' }}
                                       onClick={() => openArtistPaymentDetail(artist)}
                                     >
-                                      {artist.payment_account_status === 'ready' ? 'Ready' :
+                                      {artist.payment_account_status === 'ready' ? 'Bank Linked' :
                                        artist.payment_account_status === 'pending' ? 'Pending' :
                                        'Not Set Up'}
                                     </Badge>
@@ -4303,34 +4424,15 @@ The Art Battle Team`);
                             </Flex>
                           </Table.Cell>
                           <Table.Cell>
-                            <Text size="2" weight="bold" color="green">
-                              ${artist.totals.total_earned.toFixed(2)}
-                            </Text>
-                          </Table.Cell>
-                          <Table.Cell>
-                            <Flex direction="column" gap="0">
-                              <Text size="1">
-                                ${artist.totals.total_paid.toFixed(2)}
-                              </Text>
-                              {artist.totals.total_paid > 0 && (
-                                <Text size="1" color="gray">
-                                  {artist.totals.total_paid_stripe > 0 && `S: $${artist.totals.total_paid_stripe.toFixed(2)}`}
-                                  {artist.totals.total_paid_manual > 0 && ` M: $${artist.totals.total_paid_manual.toFixed(2)}`}
-                                </Text>
-                              )}
-                            </Flex>
-                          </Table.Cell>
-                          <Table.Cell>
                             <Text
                               size="2"
                               weight="bold"
                               color={
                                 artist.totals.amount_owed > 0 ? 'orange' :
-                                artist.totals.total_earned > 0 ? 'green' :
                                 'gray'
                               }
                             >
-                              ${artist.totals.amount_owed.toFixed(2)}
+                              {artist.totals.amount_owed > 0 ? `$${artist.totals.amount_owed.toFixed(2)}` : '—'}
                             </Text>
                           </Table.Cell>
                         </Table.Row>
@@ -6428,6 +6530,44 @@ The Art Battle Team`);
                   </Flex>
                 </Card>
 
+                {/* Payment Invitation */}
+                <Card>
+                  <Heading size="3" mb="3">Payment Invitation</Heading>
+                  <Flex justify="between" align="center">
+                    <Flex direction="column" gap="1">
+                      {selectedArtistForPayment.payment_invitation ? (
+                        <>
+                          <Flex gap="2" align="center">
+                            <Badge size="2" color={selectedArtistForPayment.payment_invitation.status === 'completed' ? 'green' : 'blue'}>
+                              {selectedArtistForPayment.payment_invitation.invite_type.toUpperCase()}
+                            </Badge>
+                            <Text size="2" color="gray">
+                              Sent {new Date(selectedArtistForPayment.payment_invitation.sent_at).toLocaleDateString()}
+                            </Text>
+                          </Flex>
+                          {selectedArtistForPayment.payment_invitation.status === 'completed' && (
+                            <Text size="1" color="green">
+                              Completed {selectedArtistForPayment.payment_invitation.completed_at ? new Date(selectedArtistForPayment.payment_invitation.completed_at).toLocaleDateString() : ''}
+                            </Text>
+                          )}
+                        </>
+                      ) : (
+                        <Text size="2" color="gray">No invitation sent yet</Text>
+                      )}
+                    </Flex>
+                    <Button
+                      size="2"
+                      variant="soft"
+                      onClick={() => {
+                        setSelectedArtistForInvite(selectedArtistForPayment);
+                        setShowPaymentInviteModal(true);
+                      }}
+                    >
+                      {selectedArtistForPayment.payment_invitation ? 'Resend Invite' : 'Send Invite'}
+                    </Button>
+                  </Flex>
+                </Card>
+
                 {/* Stripe Account Details */}
                 {selectedArtistForPayment.stripe_recipient_id && (
                   <Card>
@@ -6728,7 +6868,14 @@ The Art Battle Team`);
                   <Button
                     variant="solid"
                     color="blue"
-                    onClick={() => setShowManualPayment(true)}
+                    onClick={() => {
+                      // Set default currency from artist's ledger or event
+                      const defaultCurrency = accountLedger?.summary?.primary_currency || eventDetails?.currency_code || 'USD';
+                      setManualPaymentCurrency(defaultCurrency);
+                      setManualPaymentAmount('');
+                      setManualPaymentNotes('');
+                      setShowManualPayment(true);
+                    }}
                   >
                     <PlusIcon width="16" height="16" />
                     Record Manual Payment
@@ -6755,16 +6902,37 @@ The Art Battle Team`);
           </Dialog.Description>
 
           <Flex direction="column" gap="3" mt="4">
-            <label>
-              <Text size="2" weight="medium" mb="1">Amount</Text>
-              <TextField.Root
-                value={manualPaymentAmount}
-                onChange={(e) => setManualPaymentAmount(e.target.value)}
-                placeholder="0.00"
-                type="number"
-                step="0.01"
-              />
-            </label>
+            <Flex gap="3">
+              <Box style={{ flex: 1 }}>
+                <label>
+                  <Text size="2" weight="medium" mb="1">Amount</Text>
+                  <TextField.Root
+                    value={manualPaymentAmount}
+                    onChange={(e) => setManualPaymentAmount(e.target.value)}
+                    placeholder="0.00"
+                    type="number"
+                    step="0.01"
+                  />
+                </label>
+              </Box>
+              <Box style={{ width: '120px' }}>
+                <label>
+                  <Text size="2" weight="medium" mb="1">Currency</Text>
+                  <Select.Root value={manualPaymentCurrency} onValueChange={setManualPaymentCurrency}>
+                    <Select.Trigger style={{ width: '100%' }} />
+                    <Select.Content>
+                      <Select.Item value="USD">USD</Select.Item>
+                      <Select.Item value="CAD">CAD</Select.Item>
+                      <Select.Item value="THB">THB</Select.Item>
+                      <Select.Item value="EUR">EUR</Select.Item>
+                      <Select.Item value="GBP">GBP</Select.Item>
+                      <Select.Item value="AUD">AUD</Select.Item>
+                      <Select.Item value="MXN">MXN</Select.Item>
+                    </Select.Content>
+                  </Select.Root>
+                </label>
+              </Box>
+            </Flex>
 
             <label>
               <Text size="2" weight="medium" mb="1">Payment Method</Text>
@@ -7458,6 +7626,98 @@ The Art Battle Team`);
             <Dialog.Close>
               <Button variant="soft">Close</Button>
             </Dialog.Close>
+          </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
+
+      {/* Producer Details Edit Dialog */}
+      <Dialog.Root open={editingProducerDetails} onOpenChange={setEditingProducerDetails}>
+        <Dialog.Content style={{ maxWidth: 550 }}>
+          <Dialog.Title>Edit Event Details</Dialog.Title>
+          <Dialog.Description size="2" color="gray">
+            Update event level, times, and additional details for flyers
+          </Dialog.Description>
+
+          <Flex direction="column" gap="4" mt="4">
+            {/* Event Level */}
+            <Box>
+              <Text size="2" weight="bold" mb="2">Event Level</Text>
+              <Select.Root
+                value={producerDetailsForm.event_level}
+                onValueChange={(value) => setProducerDetailsForm(prev => ({ ...prev, event_level: value }))}
+              >
+                <Select.Trigger style={{ width: '100%' }} />
+                <Select.Content>
+                  <Select.Item value="REGULAR">Regular</Select.Item>
+                  <Select.Item value="CHAMPION_CITY">Champion - City</Select.Item>
+                  <Select.Item value="CHAMPION_NATIONAL">Champion - National</Select.Item>
+                  <Select.Item value="PRIVATE">Private</Select.Item>
+                  <Select.Item value="SPECIAL">Special</Select.Item>
+                </Select.Content>
+              </Select.Root>
+            </Box>
+
+            {/* Times Row */}
+            <Grid columns="3" gap="3">
+              <Box>
+                <Text size="2" weight="bold" mb="2">Door Time</Text>
+                <TextField.Root
+                  type="time"
+                  value={producerDetailsForm.door_time}
+                  onChange={(e) => setProducerDetailsForm(prev => ({ ...prev, door_time: e.target.value }))}
+                />
+              </Box>
+              <Box>
+                <Text size="2" weight="bold" mb="2">Paint Time</Text>
+                <TextField.Root
+                  type="time"
+                  value={producerDetailsForm.paint_time}
+                  onChange={(e) => setProducerDetailsForm(prev => ({ ...prev, paint_time: e.target.value }))}
+                />
+              </Box>
+              <Box>
+                <Text size="2" weight="bold" mb="2">Showtime</Text>
+                <TextField.Root
+                  type="time"
+                  value={producerDetailsForm.showtime}
+                  onChange={(e) => setProducerDetailsForm(prev => ({ ...prev, showtime: e.target.value }))}
+                />
+              </Box>
+            </Grid>
+
+            {/* Flyer Details */}
+            <Box>
+              <Text size="2" weight="bold" mb="2">Flyer Details</Text>
+              <TextField.Root
+                value={producerDetailsForm.flyer_details}
+                onChange={(e) => setProducerDetailsForm(prev => ({ ...prev, flyer_details: e.target.value }))}
+                placeholder="e.g., Free drink with ticket, VIP seating available..."
+              />
+              <Text size="1" color="gray" mt="1">Short details to appear on event flyers</Text>
+            </Box>
+
+            {/* Description */}
+            <Box>
+              <Text size="2" weight="bold" mb="2">Event Description</Text>
+              <TextArea
+                value={producerDetailsForm.description}
+                onChange={(e) => setProducerDetailsForm(prev => ({ ...prev, description: e.target.value }))}
+                placeholder="Full event description..."
+                rows={4}
+              />
+            </Box>
+          </Flex>
+
+          <Flex gap="3" mt="4" justify="end">
+            <Dialog.Close>
+              <Button variant="soft" color="gray">Cancel</Button>
+            </Dialog.Close>
+            <Button
+              onClick={updateProducerDetails}
+              disabled={updatingProducerDetails}
+            >
+              {updatingProducerDetails ? 'Saving...' : 'Save Changes'}
+            </Button>
           </Flex>
         </Dialog.Content>
       </Dialog.Root>

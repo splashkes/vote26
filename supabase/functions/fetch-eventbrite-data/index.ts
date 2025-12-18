@@ -12,6 +12,7 @@ interface FetchRequest {
   eventbrite_id?: string;    // Eventbrite ID
   force_refresh?: boolean;   // Bypass cache
   fetch_reason?: string;     // 'billing', 'refresh', 'manual'
+  debug_raw?: boolean;       // Return raw API response for debugging
 }
 
 serve(async (req) => {
@@ -227,7 +228,39 @@ serve(async (req) => {
 
     if (salesReportResponse.ok) {
       const reportJson = await salesReportResponse.json();
-      console.log(`✅ Sales Report API response:`, JSON.stringify(reportJson).substring(0, 300));
+      console.log(`✅ Sales Report API response:`, JSON.stringify(reportJson).substring(0, 500));
+
+      // Debug mode: return raw API response including orders sample
+      if (input.debug_raw) {
+        // Also fetch a sample order to see what fields are available
+        let ordersSample = null;
+        try {
+          const ordersResponse = await fetch(
+            `https://www.eventbriteapi.com/v3/events/${event.eventbrite_id}/orders/?expand=costs`,
+            {
+              headers: { 'Authorization': `Bearer ${eventbriteToken}` }
+            }
+          );
+          if (ordersResponse.ok) {
+            const ordersJson = await ordersResponse.json();
+            // Get first 2 orders as sample
+            ordersSample = ordersJson.orders?.slice(0, 2) || [];
+          }
+        } catch (e) {
+          console.error('Error fetching orders for debug:', e);
+        }
+
+        return new Response(
+          JSON.stringify({
+            debug: true,
+            sales_report_raw: reportJson,
+            orders_sample: ordersSample,
+            event: { eid: event.eid, name: event.name, eventbrite_id: event.eventbrite_id }
+          }, null, 2),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       // Organization API returns: { totals: { gross, net, quantity, fees, currency }, data: [...] }
       if (reportJson.totals) {
         salesReportData = reportJson;
