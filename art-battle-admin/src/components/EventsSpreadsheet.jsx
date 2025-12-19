@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   useReactTable,
@@ -35,6 +35,7 @@ import {
   ExternalLinkIcon,
   MixerHorizontalIcon,
   GearIcon,
+  ResetIcon,
 } from '@radix-ui/react-icons';
 import { supabase } from '../lib/supabase';
 
@@ -488,8 +489,13 @@ const createColumns = (navigate) => [
   },
 ];
 
-// Storage key for column visibility
-const STORAGE_KEY = 'events-spreadsheet-columns';
+// Storage keys
+const STORAGE_KEY_VISIBILITY = 'events-spreadsheet-columns';
+const STORAGE_KEY_SIZING = 'events-spreadsheet-sizing';
+const STORAGE_KEY_ORDER = 'events-spreadsheet-order';
+
+// Default column order
+const DEFAULT_COLUMN_ORDER = ALL_COLUMNS.map(c => c.id);
 
 const EventsSpreadsheet = () => {
   const navigate = useNavigate();
@@ -501,10 +507,13 @@ const EventsSpreadsheet = () => {
   const [pendingChanges, setPendingChanges] = useState({});
   const [columnModalOpen, setColumnModalOpen] = useState(false);
 
+  // Drag state for column reordering
+  const [draggedColumn, setDraggedColumn] = useState(null);
+
   // Load saved column visibility from localStorage
   const [columnVisibility, setColumnVisibility] = useState(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      const saved = localStorage.getItem(STORAGE_KEY_VISIBILITY);
       if (saved) {
         return JSON.parse(saved);
       }
@@ -519,14 +528,58 @@ const EventsSpreadsheet = () => {
     return defaults;
   });
 
+  // Load saved column sizing from localStorage
+  const [columnSizing, setColumnSizing] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_SIZING);
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      console.error('Error loading column sizing:', e);
+    }
+    return {};
+  });
+
+  // Load saved column order from localStorage
+  const [columnOrder, setColumnOrder] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_ORDER);
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      console.error('Error loading column order:', e);
+    }
+    return DEFAULT_COLUMN_ORDER;
+  });
+
   // Save column visibility to localStorage
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(columnVisibility));
+      localStorage.setItem(STORAGE_KEY_VISIBILITY, JSON.stringify(columnVisibility));
     } catch (e) {
       console.error('Error saving column visibility:', e);
     }
   }, [columnVisibility]);
+
+  // Save column sizing to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_SIZING, JSON.stringify(columnSizing));
+    } catch (e) {
+      console.error('Error saving column sizing:', e);
+    }
+  }, [columnSizing]);
+
+  // Save column order to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_ORDER, JSON.stringify(columnOrder));
+    } catch (e) {
+      console.error('Error saving column order:', e);
+    }
+  }, [columnOrder]);
 
   const columns = useMemo(() => createColumns(navigate), [navigate]);
 
@@ -631,6 +684,49 @@ const EventsSpreadsheet = () => {
     }));
   };
 
+  // Handle column drag start
+  const handleDragStart = (e, columnId) => {
+    setDraggedColumn(columnId);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  // Handle column drag over
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  // Handle column drop
+  const handleDrop = (e, targetColumnId) => {
+    e.preventDefault();
+    if (!draggedColumn || draggedColumn === targetColumnId) {
+      setDraggedColumn(null);
+      return;
+    }
+
+    const newOrder = [...columnOrder];
+    const draggedIdx = newOrder.indexOf(draggedColumn);
+    const targetIdx = newOrder.indexOf(targetColumnId);
+
+    if (draggedIdx !== -1 && targetIdx !== -1) {
+      newOrder.splice(draggedIdx, 1);
+      newOrder.splice(targetIdx, 0, draggedColumn);
+      setColumnOrder(newOrder);
+    }
+    setDraggedColumn(null);
+  };
+
+  // Handle drag end (cleanup)
+  const handleDragEnd = () => {
+    setDraggedColumn(null);
+  };
+
+  // Reset column layout
+  const resetColumnLayout = () => {
+    setColumnOrder(DEFAULT_COLUMN_ORDER);
+    setColumnSizing({});
+  };
+
   const table = useReactTable({
     data: events,
     columns,
@@ -638,10 +734,15 @@ const EventsSpreadsheet = () => {
       sorting,
       globalFilter,
       columnVisibility,
+      columnSizing,
+      columnOrder,
     },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
     onColumnVisibilityChange: setColumnVisibility,
+    onColumnSizingChange: setColumnSizing,
+    onColumnOrderChange: setColumnOrder,
+    columnResizeMode: 'onChange',
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -719,6 +820,10 @@ const EventsSpreadsheet = () => {
           </Text>
         </Flex>
 
+        <Text size="1" color="gray">
+          Drag column headers to reorder. Drag column edges to resize.
+        </Text>
+
         {error && (
           <Card style={{ background: 'var(--red-a3)' }}>
             <Text color="red">{error}</Text>
@@ -732,21 +837,34 @@ const EventsSpreadsheet = () => {
           </Flex>
         ) : (
           <Box style={{ overflowX: 'auto' }}>
-            <Table.Root size="1">
+            <Table.Root size="1" style={{ tableLayout: 'fixed', width: table.getTotalSize() }}>
               <Table.Header>
                 {table.getHeaderGroups().map((headerGroup) => (
                   <Table.Row key={headerGroup.id}>
                     {headerGroup.headers.map((header) => (
                       <Table.ColumnHeaderCell
                         key={header.id}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, header.column.id)}
+                        onDragOver={handleDragOver}
+                        onDrop={(e) => handleDrop(e, header.column.id)}
+                        onDragEnd={handleDragEnd}
                         style={{
                           width: header.getSize(),
-                          cursor: header.column.getCanSort() ? 'pointer' : 'default',
+                          minWidth: header.getSize(),
+                          maxWidth: header.getSize(),
+                          cursor: 'grab',
                           userSelect: 'none',
+                          position: 'relative',
+                          background: draggedColumn === header.column.id ? 'var(--accent-a4)' : undefined,
                         }}
-                        onClick={header.column.getToggleSortingHandler()}
                       >
-                        <Flex align="center" gap="1">
+                        <Flex
+                          align="center"
+                          gap="1"
+                          onClick={header.column.getToggleSortingHandler()}
+                          style={{ cursor: header.column.getCanSort() ? 'pointer' : 'default' }}
+                        >
                           {flexRender(header.column.columnDef.header, header.getContext())}
                           {header.column.getCanSort() && (
                             header.column.getIsSorted() === 'asc' ? (
@@ -758,6 +876,32 @@ const EventsSpreadsheet = () => {
                             )
                           )}
                         </Flex>
+                        {/* Resize handle */}
+                        <div
+                          onMouseDown={header.getResizeHandler()}
+                          onTouchStart={header.getResizeHandler()}
+                          style={{
+                            position: 'absolute',
+                            right: 0,
+                            top: 0,
+                            height: '100%',
+                            width: '5px',
+                            cursor: 'col-resize',
+                            userSelect: 'none',
+                            touchAction: 'none',
+                            background: header.column.getIsResizing() ? 'var(--accent-9)' : 'transparent',
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!header.column.getIsResizing()) {
+                              e.currentTarget.style.background = 'var(--gray-a6)';
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!header.column.getIsResizing()) {
+                              e.currentTarget.style.background = 'transparent';
+                            }
+                          }}
+                        />
                       </Table.ColumnHeaderCell>
                     ))}
                   </Table.Row>
@@ -850,6 +994,21 @@ const EventsSpreadsheet = () => {
                   {preset.label}
                 </Button>
               ))}
+            </Flex>
+
+            <Separator size="4" mb="4" />
+
+            {/* Reset Layout Button */}
+            <Flex mb="4">
+              <Button
+                size="1"
+                variant="outline"
+                color="gray"
+                onClick={resetColumnLayout}
+              >
+                <ResetIcon />
+                Reset Column Order & Sizes
+              </Button>
             </Flex>
 
             <Separator size="4" mb="4" />
