@@ -64,7 +64,7 @@ export const emailTemplates = {
         <p><strong>Event Details:</strong></p>
         <ul>
           <li><strong>Event:</strong> ${data.eventEid} - ${data.eventName}</li>
-          <li><strong>Date:</strong> ${data.eventDate}</li>
+          <li><strong>Date:</strong> ${eventDate}</li>
           <li><strong>Location:</strong> ${data.eventVenue}</li>
           <li><strong>City:</strong> ${data.cityName}</li>
         </ul>
@@ -96,7 +96,7 @@ Thank you for applying to participate in ${data.eventName}!
 
 Event Details:
 - Event: ${data.eventEid} - ${data.eventName}
-- Date: ${data.eventDate}
+- Date: ${eventDate}
 - Location: ${data.eventVenue}
 - City: ${data.cityName}
 
@@ -141,7 +141,7 @@ artbattle.com
         <p><strong>Event Details:</strong></p>
         <ul>
           <li><strong>Event:</strong> ${data.eventEid} - ${data.eventName}</li>
-          <li><strong>Date:</strong> ${data.eventDate}</li>
+          <li><strong>Date:</strong> ${eventDate}</li>
           <li><strong>Location:</strong> ${data.eventVenue}</li>
           <li><strong>City:</strong> ${data.cityName}</li>
         </ul>
@@ -172,7 +172,7 @@ Congratulations! You have been invited to participate in ${data.eventName}!
 
 Event Details:
 - Event: ${data.eventEid} - ${data.eventName}
-- Date: ${data.eventDate}
+- Date: ${eventDate}
 - Location: ${data.eventVenue}
 - City: ${data.cityName}
 
@@ -224,7 +224,7 @@ artbattle.com
         <p><strong>Event Details:</strong></p>
         <ul>
           <li><strong>Event:</strong> ${data.eventEid} - ${data.eventName}</li>
-          <li><strong>Date:</strong> ${data.eventDate}</li>
+          <li><strong>Date:</strong> ${eventDate}</li>
           <li><strong>Location:</strong> ${data.eventVenue}</li>
           <li><strong>City:</strong> ${data.cityName}</li>
           <li><strong>Your Artist Number:</strong> #${data.artistNumber}</li>
@@ -262,7 +262,7 @@ Remember this number - you'll need it at the event!
 
 Event Details:
 - Event: ${data.eventEid} - ${data.eventName}
-- Date: ${data.eventDate}
+- Date: ${eventDate}
 - Location: ${data.eventVenue}
 - City: ${data.cityName}
 - Your Artist Number: #${data.artistNumber}
