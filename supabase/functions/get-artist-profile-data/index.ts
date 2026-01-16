@@ -33,11 +33,11 @@ serve(async (req) => {
 
     const now = new Date().toISOString();
 
-    // Get invitations/confirmations/applications across ALL profiles with same person_id OR phone number (handles duplicate profiles)
-    // First, get the phone number and person_id for this profile
+    // Get invitations/confirmations/applications across ALL profiles with same person_id OR phone number OR entry_id (handles duplicate profiles)
+    // First, get the phone number, person_id, and entry_id for this profile
     const { data: profileData, error: profileError } = await supabase
       .from('artist_profiles')
-      .select('phone, person_id')
+      .select('phone, person_id, entry_id')
       .eq('id', artist_profile_id)
       .single();
 
@@ -45,21 +45,32 @@ serve(async (req) => {
 
     const profilePhone = profileData?.phone;
     const profilePersonId = profileData?.person_id;
+    const profileEntryId = profileData?.entry_id;
     let invitationsRaw = [];
     let relatedProfileIds = []; // Declare at higher scope for use in confirmations
+    let relatedArtistNumbers = []; // Track artist numbers for invitation matching
 
-    // Collect all related profile IDs (same person_id OR same phone)
+    // Collect all related profile IDs (same person_id OR same phone OR same entry_id)
     const relatedProfileIdsSet = new Set([artist_profile_id]); // Start with current profile
+    const artistNumbersSet = new Set();
+
+    // Add current profile's entry_id
+    if (profileEntryId) {
+      artistNumbersSet.add(profileEntryId.toString());
+    }
 
     // Match by person_id (catches linked profiles)
     if (profilePersonId) {
       const { data: personProfiles, error: personError } = await supabase
         .from('artist_profiles')
-        .select('id')
+        .select('id, entry_id')
         .eq('person_id', profilePersonId);
 
       if (!personError && personProfiles) {
-        personProfiles.forEach(p => relatedProfileIdsSet.add(p.id));
+        personProfiles.forEach(p => {
+          relatedProfileIdsSet.add(p.id);
+          if (p.entry_id) artistNumbersSet.add(p.entry_id.toString());
+        });
       }
     }
 
@@ -69,17 +80,36 @@ serve(async (req) => {
 
       const { data: matchingProfiles, error: profilesError } = await supabase
         .from('artist_profiles')
-        .select('id, phone')
+        .select('id, phone, entry_id')
         .filter('phone', 'not.is', null);
 
       if (!profilesError && matchingProfiles) {
         matchingProfiles
           .filter(p => p.phone && p.phone.replace(/\D/g, '') === phoneDigitsOnly)
-          .forEach(p => relatedProfileIdsSet.add(p.id));
+          .forEach(p => {
+            relatedProfileIdsSet.add(p.id);
+            if (p.entry_id) artistNumbersSet.add(p.entry_id.toString());
+          });
+      }
+    }
+
+    // Match by entry_id (catches profiles with same artist number but different person/phone)
+    if (profileEntryId) {
+      const { data: entryIdProfiles, error: entryIdError } = await supabase
+        .from('artist_profiles')
+        .select('id, entry_id')
+        .eq('entry_id', profileEntryId);
+
+      if (!entryIdError && entryIdProfiles) {
+        entryIdProfiles.forEach(p => {
+          relatedProfileIdsSet.add(p.id);
+          if (p.entry_id) artistNumbersSet.add(p.entry_id.toString());
+        });
       }
     }
 
     relatedProfileIds = Array.from(relatedProfileIdsSet);
+    relatedArtistNumbers = Array.from(artistNumbersSet);
 
     // Get applications across ALL related profiles
     let applicationsRaw = [];
@@ -103,7 +133,7 @@ serve(async (req) => {
           // Use proper foreign key relationship for applications
           const { data: eventData, error: eventError } = await supabase
             .from('events')
-            .select('id, eid, name, event_start_datetime, event_end_datetime, venue, applications_open, winner_prize, winner_prize_currency, other_prizes, advances_to_event_eid, cities(name)')
+            .select('id, eid, name, event_start_datetime, event_end_datetime, venue, applications_open, winner_prize, winner_prize_currency, other_prizes, advances_to_event_eid, timezone_icann, cities(name)')
             .eq('id', app.event_id)
             .gte('event_start_datetime', now)
             .single();
@@ -121,19 +151,43 @@ serve(async (req) => {
       }
     }
 
-    // Get invitations for ALL related profiles
+    // Get invitations for ALL related profiles AND artist numbers
     // Include pending and expired statuses (show all active invitations)
+    // Query by BOTH profile IDs AND artist numbers to catch all related invitations
+    const invitationsByProfileId = [];
+    const invitationsByArtistNumber = [];
+
     if (relatedProfileIds.length > 0) {
-      const { data: allInvitations, error: invitationsError } = await supabase
+      const { data: profileInvitations, error: profileInvitationsError } = await supabase
         .from('artist_invitations')
         .select('*')
         .in('artist_profile_id', relatedProfileIds)
         .in('status', ['pending', 'expired'])
         .order('created_at', { ascending: false });
 
-      if (invitationsError) throw invitationsError;
-      invitationsRaw = allInvitations || [];
+      if (profileInvitationsError) throw profileInvitationsError;
+      invitationsByProfileId.push(...(profileInvitations || []));
     }
+
+    // ALSO query by artist_number field (catches invitations sent to artist number, regardless of profile)
+    if (relatedArtistNumbers.length > 0) {
+      const { data: numberInvitations, error: numberInvitationsError } = await supabase
+        .from('artist_invitations')
+        .select('*')
+        .in('artist_number', relatedArtistNumbers)
+        .in('status', ['pending', 'expired'])
+        .order('created_at', { ascending: false });
+
+      if (numberInvitationsError) throw numberInvitationsError;
+      invitationsByArtistNumber.push(...(numberInvitations || []));
+    }
+
+    // Combine both query results and remove duplicates by ID
+    const combinedInvitationsMap = new Map();
+    [...invitationsByProfileId, ...invitationsByArtistNumber].forEach(inv => {
+      combinedInvitationsMap.set(inv.id, inv);
+    });
+    invitationsRaw = Array.from(combinedInvitationsMap.values());
 
     // Deduplicate invitations by event_eid (keep most recent per event)
     const deduplicatedInvitations = [];
@@ -155,7 +209,7 @@ serve(async (req) => {
         if (invitation.event_eid && invitation.event_eid.trim()) {
           const { data: eventData, error: eventError } = await supabase
             .from('events')
-            .select('id, eid, name, event_start_datetime, event_end_datetime, venue, applications_open, winner_prize, winner_prize_currency, other_prizes, advances_to_event_eid, cities(name)')
+            .select('id, eid, name, event_start_datetime, event_end_datetime, venue, applications_open, winner_prize, winner_prize_currency, other_prizes, advances_to_event_eid, timezone_icann, cities(name)')
             .eq('eid', invitation.event_eid)
             .gte('event_start_datetime', now)
             .single();
@@ -210,7 +264,7 @@ serve(async (req) => {
         if (confirmation.event_eid && confirmation.event_eid.trim()) {
           const { data: eventData, error: eventError } = await supabase
             .from('events')
-            .select('id, eid, name, event_start_datetime, event_end_datetime, venue, applications_open, winner_prize, winner_prize_currency, other_prizes, advances_to_event_eid, cities(name)')
+            .select('id, eid, name, event_start_datetime, event_end_datetime, venue, applications_open, winner_prize, winner_prize_currency, other_prizes, advances_to_event_eid, timezone_icann, cities(name)')
             .eq('eid', confirmation.event_eid)
             .gte('event_start_datetime', now)
             .single();

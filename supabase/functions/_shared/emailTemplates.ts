@@ -1,12 +1,14 @@
 // Email templates for artist notifications
 
 // Utility function to convert UTC datetime to local venue time
-export const formatEventDateTime = (utcDateTime: string, cityName: string): string => {
+// Prefers timezoneIcann (e.g., 'America/Toronto') if provided, falls back to city name mapping
+export const formatEventDateTime = (utcDateTime: string, cityName: string, timezoneIcann?: string): string => {
   if (!utcDateTime) return 'TBD';
-  
-  const timezoneMap = {
+
+  // Fallback city-to-timezone map for backwards compatibility
+  const timezoneMap: Record<string, string> = {
     'Toronto': 'America/Toronto',
-    'Amsterdam': 'Europe/Amsterdam', 
+    'Amsterdam': 'Europe/Amsterdam',
     'Bangkok': 'Asia/Bangkok',
     'San Francisco': 'America/Los_Angeles',
     'Oakland': 'America/Los_Angeles',
@@ -18,9 +20,10 @@ export const formatEventDateTime = (utcDateTime: string, cityName: string): stri
     'Wilmington': 'America/New_York',
     'Lancaster': 'America/New_York'
   };
-  
-  const venueTimezone = timezoneMap[cityName] || 'UTC';
-  
+
+  // Use timezoneIcann if provided, otherwise fall back to city mapping
+  const venueTimezone = timezoneIcann || timezoneMap[cityName] || 'UTC';
+
   return new Date(utcDateTime).toLocaleString('en-US', {
     weekday: 'long',
     year: 'numeric',
@@ -42,8 +45,9 @@ export const emailTemplates = {
     eventStartDateTime: string
     eventVenue: string
     cityName: string
+    timezoneIcann?: string
   }) => {
-    const eventDate = formatEventDateTime(data.eventStartDateTime, data.cityName);
+    const eventDate = formatEventDateTime(data.eventStartDateTime, data.cityName, data.timezoneIcann);
     
     return ({
     subject: `Application Received - ${data.eventEid} ${data.cityName}`,
@@ -118,8 +122,9 @@ artbattle.com
     eventStartDateTime: string
     eventVenue: string
     cityName: string
+    timezoneIcann?: string
   }) => {
-    const eventDate = formatEventDateTime(data.eventStartDateTime, data.cityName);
+    const eventDate = formatEventDateTime(data.eventStartDateTime, data.cityName, data.timezoneIcann);
     
     return ({
     subject: `You're Invited! ${data.eventEid} ${data.cityName}`,
@@ -194,8 +199,9 @@ artbattle.com
     eventVenue: string
     cityName: string
     artistNumber: string
+    timezoneIcann?: string
   }) => {
-    const eventDate = formatEventDateTime(data.eventStartDateTime, data.cityName);
+    const eventDate = formatEventDateTime(data.eventStartDateTime, data.cityName, data.timezoneIcann);
     
     return ({
     subject: `Confirmed! ${data.eventEid} ${data.cityName} - Artist #${data.artistNumber}`,
@@ -285,8 +291,9 @@ artbattle.com
     eventStartDateTime: string
     eventVenue: string
     cityName: string
+    timezoneIcann?: string
   }) => {
-    const eventDate = formatEventDateTime(data.eventStartDateTime, data.cityName);
+    const eventDate = formatEventDateTime(data.eventStartDateTime, data.cityName, data.timezoneIcann);
     const cancellationDate = new Date().toLocaleString('en-US', {
       weekday: 'long',
       year: 'numeric',
@@ -371,6 +378,7 @@ artbattle.com
     eventStartDateTime: string
     eventVenue: string
     cityName: string
+    timezoneIcann?: string
     soldArtworks: Array<{
       art_code: string
       sale_price: number
@@ -385,7 +393,7 @@ artbattle.com
     hasUnpaidSales: boolean
     detailedArtworkList: string
   }) => {
-    const eventDate = formatEventDateTime(data.eventStartDateTime, data.cityName);
+    const eventDate = formatEventDateTime(data.eventStartDateTime, data.cityName, data.timezoneIcann);
 
     return ({
     subject: data.soldArtworks.length > 0 

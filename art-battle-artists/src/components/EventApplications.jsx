@@ -155,7 +155,8 @@ const EventApplications = () => {
           winner_prize,
           winner_prize_currency,
           other_prizes,
-          advances_to_event_eid
+          advances_to_event_eid,
+          timezone_icann
         `)
         .eq('enabled', true)
         .eq('show_in_app', true)
@@ -386,18 +387,22 @@ const EventApplications = () => {
     });
   };
 
-  const formatDateTime = (dateString) => {
+  const formatDateTime = (dateString, timezone) => {
     const date = new Date(dateString);
-    const dateStr = date.toLocaleDateString('en-US', {
+    const options = {
       weekday: 'short',
       month: 'short',
       day: 'numeric',
-    });
-    const timeStr = date.toLocaleTimeString('en-US', {
+      ...(timezone && { timeZone: timezone })
+    };
+    const dateStr = date.toLocaleDateString('en-US', options);
+    const timeOptions = {
       hour: 'numeric',
       minute: '2-digit',
-      hour12: true
-    });
+      hour12: true,
+      ...(timezone && { timeZone: timezone })
+    };
+    const timeStr = date.toLocaleTimeString('en-US', timeOptions);
     return `${dateStr} at ${timeStr}`;
   };
 
@@ -578,7 +583,7 @@ const EventApplications = () => {
 
                         <Flex direction="column" gap="1" mb="3">
                           <Text size="3" color="gray">
-                            📅 {formatDateTime(event.event_start_datetime)}
+                            📅 {formatDateTime(event.event_start_datetime, event.timezone_icann)}
                           </Text>
                           {event.venue && (
                             <Text size="3" color="gray">
@@ -680,7 +685,7 @@ const EventApplications = () => {
                       
                       <Flex direction="column" gap="1" mb="3">
                         <Text size="3" color="gray">
-                          📅 {formatDateTime(event.event_start_datetime)}
+                          📅 {formatDateTime(event.event_start_datetime, event.timezone_icann)}
                         </Text>
                         {event.venue && (
                           <Text size="3" color="gray">
@@ -880,7 +885,7 @@ const EventApplications = () => {
                 <Flex direction="column" gap="2">
                   <Text size="3" weight="bold">{selectedEvent.name}</Text>
                   <Text size="2" color="gray">
-                    📅 {formatDateTime(selectedEvent.event_start_datetime)}
+                    📅 {formatDateTime(selectedEvent.event_start_datetime, selectedEvent.timezone_icann)}
                   </Text>
                   {selectedEvent.venue && (
                     <Text size="2" color="gray">

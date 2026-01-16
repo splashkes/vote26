@@ -30,7 +30,7 @@ serve(async (req)=>{
     console.log('Populating email queue for event:', eventEid);
     // Get event details - COPY EXACT SCHEMA FROM WORKING FUNCTION
     const { data: event, error: eventError } = await supabase.from('events').select(`
-        id, name, eid, event_start_datetime, venue,
+        id, name, eid, event_start_datetime, venue, timezone_icann,
         cities!fk_events_city (
           name
         )
@@ -173,6 +173,7 @@ serve(async (req)=>{
         eventStartDateTime: event.event_start_datetime || '',
         eventVenue: event.venue || 'TBD',
         cityName: cityName,
+        timezoneIcann: event.timezone_icann || undefined,
         soldArtworks: soldArtworks,
         noBidArtworks: noBidArtworks,
         totalEarned: artistShare,

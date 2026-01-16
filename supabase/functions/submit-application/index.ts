@@ -55,6 +55,7 @@ serve(async (req)=>{
         name,
         event_start_datetime,
         venue,
+        timezone_icann,
         cities(name)
       `).eq('id', event_id).single();
     if (eventError) {
@@ -106,7 +107,8 @@ serve(async (req)=>{
           eventName: eventData.name || eventData.eid,
           eventStartDateTime: eventData.event_start_datetime || '',
           eventVenue: eventData.venue || 'TBD',
-          cityName: eventData.cities?.name || 'Unknown'
+          cityName: eventData.cities?.name || 'Unknown',
+          timezoneIcann: eventData.timezone_icann || undefined
         });
         // Call send-custom-email function
         const emailResponse = await fetch(`${supabaseUrl}/functions/v1/send-custom-email`, {

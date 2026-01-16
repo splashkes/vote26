@@ -129,13 +129,32 @@ Deno.serve(async (req)=>{
         status: 400
       });
     }
+
+    // Auto-lookup artist_profile_id from artist_number if not provided
+    let profileId = invitationData.artist_profile_id;
+    if (!profileId && invitationData.artist_number) {
+      console.log('Looking up artist_profile_id for artist_number:', invitationData.artist_number);
+      const { data: profile, error: profileError } = await supabase
+        .from('artist_profiles')
+        .select('id')
+        .eq('entry_id', invitationData.artist_number)
+        .maybeSingle();
+
+      if (profile) {
+        profileId = profile.id;
+        console.log('Found artist_profile_id:', profileId);
+      } else {
+        console.warn('No artist profile found for artist_number:', invitationData.artist_number, profileError);
+      }
+    }
+
     // Create the invitation
     console.log('Creating invitation...');
     const { data: newInvitation, error: insertError } = await supabase.from('artist_invitations').insert({
       artist_number: invitationData.artist_number,
       event_eid: invitationData.event_eid,
       message_from_producer: invitationData.message_from_producer,
-      artist_profile_id: invitationData.artist_profile_id || null,
+      artist_profile_id: profileId || null,
       status: 'pending',
       entry_date: new Date(),
       created_at: new Date(),
@@ -170,23 +189,24 @@ Deno.serve(async (req)=>{
         .eq('id', invitationData.artist_profile_id)
         .single();
       
-      // Get event data  
+      // Get event data
       const { data: eventData } = await supabase
         .from('events')
-        .select('eid, name, event_start_datetime, venue, cities(name)')
+        .select('eid, name, event_start_datetime, venue, timezone_icann, cities(name)')
         .eq('eid', invitationData.event_eid)
         .single();
-      
+
       if (profileData?.person?.email && eventData) {
         const { emailTemplates } = await import('../_shared/emailTemplates.ts');
-        
+
         const emailData = emailTemplates.artistInvited({
           artistName: profileData.name || 'Artist',
           eventEid: eventData.eid,
           eventName: eventData.name || eventData.eid,
           eventStartDateTime: eventData.event_start_datetime,
-          eventVenue: eventData.venue || 'TBD', 
-          cityName: eventData.cities?.name || 'Unknown'
+          eventVenue: eventData.venue || 'TBD',
+          cityName: eventData.cities?.name || 'Unknown',
+          timezoneIcann: eventData.timezone_icann || undefined
         });
         
         // Send email using send-custom-email function

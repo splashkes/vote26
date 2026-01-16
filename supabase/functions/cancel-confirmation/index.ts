@@ -101,6 +101,7 @@ serve(async (req)=>{
         event_start_datetime,
         venue,
         slack_channel,
+        timezone_icann,
         cities!city_id(name)
       `).eq('eid', confirmation.event_eid).single();
     // Combine the data
@@ -160,7 +161,8 @@ serve(async (req)=>{
           eventName: confirmationWithEvent.events.name || confirmationWithEvent.event_eid,
           eventStartDateTime: confirmationWithEvent.events.event_start_datetime || '',
           eventVenue: confirmationWithEvent.events.venue || 'TBD',
-          cityName: confirmationWithEvent.events.cities?.name || 'Unknown'
+          cityName: confirmationWithEvent.events.cities?.name || 'Unknown',
+          timezoneIcann: confirmationWithEvent.events.timezone_icann || undefined
         });
         // Call send-custom-email function
         const emailResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-custom-email`, {
@@ -190,7 +192,7 @@ serve(async (req)=>{
     }
     // Send Slack notification about the cancellation
     const eventDate = confirmationWithEvent.events?.event_start_datetime
-      ? formatEventDateTime(confirmationWithEvent.events.event_start_datetime, confirmationWithEvent.events.cities?.name || 'Unknown')
+      ? formatEventDateTime(confirmationWithEvent.events.event_start_datetime, confirmationWithEvent.events.cities?.name || 'Unknown', confirmationWithEvent.events.timezone_icann || undefined)
       : 'Unknown date';
     // Create rich Slack blocks format matching current confirmation style
     const blocks = [
