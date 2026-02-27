@@ -49,3 +49,20 @@ deployment-report.txt
 
 # Backups
 backups/
+supabase-backups/
+
+# Archives and data exports
+*.tar.gz
+*.zip
+*.csv
+
+# Claude Code
+.claude/
+
+# Package lock debug
+package-lock.json.*.bak
+
+# Compiled/minified output
+*.min.js
+*.min.css
+*.map
