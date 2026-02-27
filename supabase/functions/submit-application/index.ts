@@ -49,14 +49,15 @@ serve(async (req)=>{
         }
       });
     }
-    // Get event data with city information
+    // Get event data with city and venue information
     const { data: eventData, error: eventError } = await supabase.from('events').select(`
         eid,
         name,
         event_start_datetime,
         venue,
         timezone_icann,
-        cities(name)
+        cities(name),
+        venues(name)
       `).eq('id', event_id).single();
     if (eventError) {
       console.error('Event error:', eventError);
@@ -106,7 +107,7 @@ serve(async (req)=>{
           eventEid: eventData.eid,
           eventName: eventData.name || eventData.eid,
           eventStartDateTime: eventData.event_start_datetime || '',
-          eventVenue: eventData.venue || 'TBD',
+          eventVenue: eventData.venues?.name || eventData.venue || 'TBD',
           cityName: eventData.cities?.name || 'Unknown',
           timezoneIcann: eventData.timezone_icann || undefined
         });

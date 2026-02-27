@@ -38,13 +38,14 @@ const GlobalPaymentsOnboarding = ({ globalPaymentAccount, onAccountUpdate }) => 
       console.log('Starting Global Payments onboarding for person:', person);
       
       // Call Global Payments onboarding function
+      // Note: country and currency are derived from artist profile on the backend
+      // Do NOT pass country/currency here - the backend uses artistProfile.country
+      // and derives the correct currency (AU→AUD, CA→CAD, etc.)
       const { data, error } = await supabase.functions.invoke('stripe-global-payments-onboard', {
         body: {
           person_id: person.id,
           return_url: window.location.origin + '/profile?tab=payments&system=global&onboarding=success',
-          refresh_url: window.location.origin + '/profile?tab=payments&system=global&onboarding=refresh',
-          country: 'US', // Default, could be detected or user-selected
-          currency: 'USD'
+          refresh_url: window.location.origin + '/profile?tab=payments&system=global&onboarding=refresh'
         }
       });
 

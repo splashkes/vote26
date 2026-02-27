@@ -45,7 +45,7 @@ serve(async (req) => {
     // Fetch invitations
     const { data: invitations, error: invError } = await supabaseClient
       .from('artist_invitations')
-      .select('id, artist_number, event_eid, created_at, accepted_at')
+      .select('id, artist_number, event_eid, created_at, accepted_at, status')
       .eq('event_eid', eventEid)
       .order('created_at', { ascending: false });
 

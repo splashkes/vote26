@@ -413,13 +413,14 @@ const PaymentStatusBanner = ({ artistProfile, confirmations, hasRecentActivity, 
       // Set redirecting state immediately for instant UI feedback
       setRedirecting(true);
 
+      // Note: country and currency are derived from artist profile on the backend
+      // Do NOT pass country/currency here - the backend uses artistProfile.country
+      // and derives the correct currency (AU→AUD, CA→CAD, etc.)
       const { data, error } = await supabase.functions.invoke('stripe-global-payments-onboard', {
         body: {
           person_id: person.id,
           return_url: window.location.origin + '/profile?tab=payments&system=global&onboarding=success',
-          refresh_url: window.location.origin + '/profile?tab=payments&system=global&onboarding=refresh',
-          country: 'US',
-          currency: 'USD'
+          refresh_url: window.location.origin + '/profile?tab=payments&system=global&onboarding=refresh'
         }
       });
 

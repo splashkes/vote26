@@ -119,13 +119,18 @@ serve(async (req) => {
     console.log(`Fetching audience with ids_only=${ids_only}, maxRecords=${maxRecords}`);
 
     while (hasMoreData && allPeople.length < maxRecords) {
+      console.log(`=== Pagination Loop: offset=${offset}, allPeople.length=${allPeople.length}, maxRecords=${maxRecords}`);
+
+      const requestedLimit = Math.min(chunkSize, maxRecords - allPeople.length);
+      console.log(`Requesting ${requestedLimit} records from offset ${offset}`);
+
       const { data: pageData, error: queryError } = await serviceClient
         .rpc('get_sms_audience_paginated', {
           p_city_ids: city_ids.length > 0 ? city_ids : null,
           p_event_ids: event_ids.length > 0 ? event_ids : null,
           p_recent_message_hours: recent_message_hours,
           p_offset: offset,
-          p_limit: Math.min(chunkSize, maxRecords - allPeople.length) // Don't fetch more than needed
+          p_limit: requestedLimit
         });
 
       if (queryError) {
@@ -133,8 +138,10 @@ serve(async (req) => {
         throw new Error(`Database query failed: ${queryError.message}`);
       }
 
+      console.log(`RPC returned: ${pageData ? pageData.length : 'null'} records`);
+
       if (!pageData || pageData.length === 0) {
-        console.log(`No more data at offset ${offset}`);
+        console.log(`No more data at offset ${offset} - stopping pagination`);
         hasMoreData = false;
         break;
       }
@@ -146,27 +153,30 @@ serve(async (req) => {
       }
 
       allPeople = allPeople.concat(pageData);
-      console.log(`Fetched ${pageData.length} records, total so far: ${allPeople.length}`);
+      console.log(`✓ Concatenated ${pageData.length} records, total so far: ${allPeople.length}`);
 
       // Update offset for next iteration
       offset += pageData.length;
+      console.log(`✓ Updated offset to ${offset} for next iteration`);
 
       // Check if we should continue - ONLY stop if we got less than requested
       // Do NOT rely on total_count as it may be incorrect with complex filters
       if (pageData.length < chunkSize) {
-        console.log(`Got less than chunk size (${pageData.length} < ${chunkSize}), assuming no more data`);
+        console.log(`! Got ${pageData.length} records which is less than chunk size ${chunkSize} - stopping pagination (no more data)`);
         hasMoreData = false;
+      } else {
+        console.log(`✓ Got full chunk of ${pageData.length} records - will continue to next page`);
       }
 
       // Stop if we've reached our max
       if (allPeople.length >= maxRecords) {
-        console.log(`Reached max records limit of ${maxRecords}`);
+        console.log(`! Reached max records limit of ${maxRecords} - stopping pagination`);
         allPeople = allPeople.slice(0, maxRecords);
         hasMoreData = false;
       }
     }
 
-    console.log(`Final fetch complete: ${allPeople.length} records retrieved`);
+    console.log(`=== PAGINATION COMPLETE: ${allPeople.length} total records retrieved ===`);
 
     const people = allPeople;
 
@@ -262,6 +272,10 @@ serve(async (req) => {
     // If ids_only=true, return ONLY filtered people (not all people!)
     // This is for campaign creation - should match the filtered_count
     if (ids_only) {
+      console.log(`=== IDS_ONLY MODE RESPONSE ===`);
+      console.log(`Total records fetched: ${people.length}`);
+      console.log(`After filtering (non-blocked): ${filteredPeople.length}`);
+
       return new Response(JSON.stringify({
         success: true,
         total_count: totalCount,
@@ -269,7 +283,12 @@ serve(async (req) => {
         people: filteredPeople.map(p => ({
           id: p.id,
           blocked: p.message_blocked > 0
-        }))
+        })),
+        debug: { // Debug info visible in browser console
+          records_fetched: people.length,
+          records_after_filter: filteredPeople.length,
+          pagination_worked: people.length > 1000 ? 'YES' : (people.length === 1000 ? 'MAYBE - hit 1000 limit' : 'N/A')
+        }
       }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -286,7 +305,7 @@ serve(async (req) => {
       available_count: availableCount,
       rfm_ready_count: rfmReadyCount,
       filtered_count: estimatedFilteredCount,
-      needs_rfm_generation: rfm_filters && (rfmReadyCount < availableCount),
+      needs_rfm_generation: availableCount > 0 && (rfmReadyCount < availableCount),
       people: people.map(p => ({  // Return ALL people, not just filtered
         id: p.id,
         name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Unknown',

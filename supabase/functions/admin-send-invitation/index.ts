@@ -189,10 +189,10 @@ Deno.serve(async (req)=>{
         .eq('id', invitationData.artist_profile_id)
         .single();
       
-      // Get event data
+      // Get event data (venues lookup via venue_id, fallback to venue text field)
       const { data: eventData } = await supabase
         .from('events')
-        .select('eid, name, event_start_datetime, venue, timezone_icann, cities(name)')
+        .select('eid, name, event_start_datetime, venue, timezone_icann, cities(name), venues(name)')
         .eq('eid', invitationData.event_eid)
         .single();
 
@@ -204,7 +204,7 @@ Deno.serve(async (req)=>{
           eventEid: eventData.eid,
           eventName: eventData.name || eventData.eid,
           eventStartDateTime: eventData.event_start_datetime,
-          eventVenue: eventData.venue || 'TBD',
+          eventVenue: eventData.venues?.name || eventData.venue || 'TBD',
           cityName: eventData.cities?.name || 'Unknown',
           timezoneIcann: eventData.timezone_icann || undefined
         });

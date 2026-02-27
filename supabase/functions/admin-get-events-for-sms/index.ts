@@ -2,7 +2,7 @@
 // Replaces slow RPC calls with direct queries
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -49,9 +49,9 @@ serve(async (req) => {
     let result;
 
     if (city_id === 'GET_ALL_CITIES') {
-      // Get all cities with their event counts (events that have people)
+      // Get all cities with their event counts (ALL events, not filtered)
       const { data, error } = await supabase
-        .rpc('get_cities_with_event_people_counts', { p_min_people: min_registrations });
+        .rpc('get_cities_with_all_events');
 
       if (error) throw error;
 
@@ -84,15 +84,16 @@ serve(async (req) => {
         count: data || 0
       };
     } else {
-      // Get events for specific city WITH people counts
-      // Query combines registrations + QR scans
-      const { data, error } = await supabase
-        .rpc('get_events_with_people_counts_by_city', {
-          p_city_id: city_id,
-          p_min_people: min_registrations
-        });
+      // Get ALL events for specific city (don't filter by people count)
+      // Use raw SQL query to get people counts
+      const { data, error } = await supabase.rpc('get_events_for_city_all', {
+        p_city_id: city_id
+      });
 
-      if (error) throw error;
+      if (error) {
+        console.error('RPC error:', error);
+        throw error;
+      }
 
       result = {
         success: true,

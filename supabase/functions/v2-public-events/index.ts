@@ -45,7 +45,7 @@ const generatePublicEventsData = async () => {
     .from('events')
     .select('eid, name, description, event_start_datetime, venue')
     .order('event_start_datetime', { ascending: false })
-    .limit(50)
+    .limit(100)
   
   if (error) {
     throw new Error(`Events query failed: ${error.message}`)

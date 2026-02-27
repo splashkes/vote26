@@ -602,6 +602,7 @@ const PaymentsAdminTabbed = () => {
         // Add to payment attempts
         const newPaymentAttempt = {
           ...selectedArtist,
+          payment_id: data.payment_id,
           payment_amount: selectedArtist.estimated_balance,
           payment_status: 'processing',
           latest_payment_status: 'processing',
@@ -1246,9 +1247,9 @@ ${JSON.stringify(results.map(r => ({ data: r.data, error: r.error })), null, 2)}
       </Flex>
 
       {error && (
-        <Callout.Root color="red" mb="4">
+        <Callout.Root color={error.startsWith('✅') ? 'green' : 'red'} mb="4">
           <Callout.Icon>
-            <ExclamationTriangleIcon />
+            {error.startsWith('✅') ? <CheckCircledIcon /> : <ExclamationTriangleIcon />}
           </Callout.Icon>
           <Callout.Text>{error}</Callout.Text>
         </Callout.Root>

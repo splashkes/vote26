@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -18,6 +18,22 @@ import ArtistWorkflow from './ArtistWorkflow';
 import CityActivityCharts from './CityActivityCharts';
 import ArtistDetailModal from './ArtistDetailModal';
 import { getCountryFlag } from '../lib/countryFlags';
+
+// Memoized wrapper to prevent infinite re-renders from array prop changes
+const MemoizedArtistWorkflow = ({ events, cityName, upcomingEvents }) => {
+  const eventIds = useMemo(() => events.map(e => e.id), [events]);
+  const eventEids = useMemo(() => events.map(e => e.eid), [events]);
+
+  return (
+    <ArtistWorkflow
+      eventIds={eventIds}
+      eventEids={eventEids}
+      title={`Artist Management - ${cityName}`}
+      showEventInfo={true}
+      upcomingEvents={upcomingEvents}
+    />
+  );
+};
 
 const CityDetail = () => {
   const { cityId } = useParams();
@@ -505,11 +521,9 @@ const CityDetail = () => {
 
         {/* Artist Workflow - All events from this city */}
         {events.length > 0 && (
-          <ArtistWorkflow
-            eventIds={events.map(e => e.id)}
-            eventEids={events.map(e => e.eid)}
-            title={`Artist Management - ${cityInfo.name}`}
-            showEventInfo={true}
+          <MemoizedArtistWorkflow
+            events={events}
+            cityName={cityInfo?.name}
             upcomingEvents={upcomingEvents}
           />
         )}

@@ -85,7 +85,8 @@ serve(async (req) => {
       scheduled_timezone = null,
       scheduled_local_time = null,
       dry_run_mode = false,
-      dry_run_phone = null
+      dry_run_phone = null,
+      recent_message_hours = 72 // Anti-spam filter from UI
     } = await req.json();
 
     // Validate required fields
@@ -130,8 +131,10 @@ serve(async (req) => {
       console.log('DRY RUN MODE: Sending only to', dry_run_phone, 'with data:', validRecipients[0]);
     } else {
       // Get people details and filter out blocked users using RPC
-      // Need to fetch in chunks because Supabase client limits RPC results to 1000
-      const chunkSize = 5000; // Process IDs in chunks
+      // CRITICAL: Supabase client has HARD 1000-row limit on RPC responses
+      // Even if SQL returns 5000 rows, client will cap at 1000
+      // Solution: Keep chunks at 1000 or less to ensure we get all data
+      const chunkSize = 900; // Process IDs in chunks (900 to stay safely under 1000 limit)
       let allPeople = [];
 
       console.log(`Fetching ${person_ids.length} people in chunks of ${chunkSize}`);
@@ -232,7 +235,8 @@ serve(async (req) => {
           scheduled_timezone: scheduled_timezone,
           scheduled_local_time: scheduled_local_time,
           recipient_data: recipientData, // Store recipient data for background processing
-          estimated_segments: estimated_segments
+          estimated_segments: estimated_segments,
+          recent_message_hours: recent_message_hours // Store for send-time deduplication
         }
       })
       .select('id')

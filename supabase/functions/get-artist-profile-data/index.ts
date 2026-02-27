@@ -133,7 +133,7 @@ serve(async (req) => {
           // Use proper foreign key relationship for applications
           const { data: eventData, error: eventError } = await supabase
             .from('events')
-            .select('id, eid, name, event_start_datetime, event_end_datetime, venue, applications_open, winner_prize, winner_prize_currency, other_prizes, advances_to_event_eid, timezone_icann, cities(name)')
+            .select('id, eid, name, event_start_datetime, event_end_datetime, venue, applications_open, winner_prize, winner_prize_currency, other_prizes, advances_to_event_eid, timezone_icann, cities(name), venues(name)')
             .eq('id', app.event_id)
             .gte('event_start_datetime', now)
             .single();
@@ -143,7 +143,8 @@ serve(async (req) => {
               ...app,
               event: {
                 ...eventData,
-                city: eventData.cities?.name || null
+                city: eventData.cities?.name || null,
+                venue: eventData.venues?.name || eventData.venue || null
               }
             });
           }
@@ -209,7 +210,7 @@ serve(async (req) => {
         if (invitation.event_eid && invitation.event_eid.trim()) {
           const { data: eventData, error: eventError } = await supabase
             .from('events')
-            .select('id, eid, name, event_start_datetime, event_end_datetime, venue, applications_open, winner_prize, winner_prize_currency, other_prizes, advances_to_event_eid, timezone_icann, cities(name)')
+            .select('id, eid, name, event_start_datetime, event_end_datetime, venue, applications_open, winner_prize, winner_prize_currency, other_prizes, advances_to_event_eid, timezone_icann, cities(name), venues(name)')
             .eq('eid', invitation.event_eid)
             .gte('event_start_datetime', now)
             .single();
@@ -219,7 +220,8 @@ serve(async (req) => {
               ...invitation,
               event: {
                 ...eventData,
-                city: eventData.cities?.name || null
+                city: eventData.cities?.name || null,
+                venue: eventData.venues?.name || eventData.venue || null
               }
             });
           }
@@ -264,7 +266,7 @@ serve(async (req) => {
         if (confirmation.event_eid && confirmation.event_eid.trim()) {
           const { data: eventData, error: eventError } = await supabase
             .from('events')
-            .select('id, eid, name, event_start_datetime, event_end_datetime, venue, applications_open, winner_prize, winner_prize_currency, other_prizes, advances_to_event_eid, timezone_icann, cities(name)')
+            .select('id, eid, name, event_start_datetime, event_end_datetime, venue, applications_open, winner_prize, winner_prize_currency, other_prizes, advances_to_event_eid, timezone_icann, cities(name), venues(name)')
             .eq('eid', confirmation.event_eid)
             .gte('event_start_datetime', now)
             .single();
@@ -274,7 +276,8 @@ serve(async (req) => {
               ...confirmation,
               event: {
                 ...eventData,
-                city: eventData.cities?.name || null
+                city: eventData.cities?.name || null,
+                venue: eventData.venues?.name || eventData.venue || null
               }
             });
           }

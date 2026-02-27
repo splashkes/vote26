@@ -359,7 +359,8 @@ serve(async (req) => {
           default_currency: finalCurrency.toLowerCase(), // CRITICAL: Set account currency based on country
           capabilities: {
             transfers: { requested: true },
-            // Express accounts automatically get appropriate capabilities
+            card_payments: { requested: false }, // CRITICAL: Disable charge capability - payouts only
+            us_bank_account_ach_payments: { requested: false }, // Disable additional charge methods
           },
           business_type: 'individual',
           individual: {

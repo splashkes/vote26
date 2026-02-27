@@ -408,14 +408,14 @@ serve(async (req)=>{
     try {
       // Get artist profile and event data for email
       const { data: profileData } = await supabase.from('artist_profiles').select('name, entry_id, person:people(email)').eq('id', submissionData.artistProfileId).single();
-      const { data: eventData } = await supabase.from('events').select('eid, name, event_start_datetime, venue, timezone_icann, cities(name)').eq('eid', submissionData.eventEid).single();
+      const { data: eventData } = await supabase.from('events').select('eid, name, event_start_datetime, venue, timezone_icann, cities(name), venues(name)').eq('eid', submissionData.eventEid).single();
       if (profileData?.person?.email && eventData) {
         const emailData = emailTemplates.artistConfirmed({
           artistName: profileData.name || submissionData.confirmationData.legalName || 'Artist',
           eventEid: eventData.eid,
           eventName: eventData.name || eventData.eid,
           eventStartDateTime: eventData.event_start_datetime,
-          eventVenue: eventData.venue || 'TBD',
+          eventVenue: eventData.venues?.name || eventData.venue || 'TBD',
           cityName: eventData.cities?.name || 'Unknown',
           artistNumber: profileData.entry_id?.toString() || submissionData.artistNumber || 'TBD',
           timezoneIcann: eventData.timezone_icann || undefined

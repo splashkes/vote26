@@ -279,9 +279,9 @@ serve(async (req) => {
         if (isPaid) {
           // Stripe payment (online)
           if (hasStripePayment) {
-            const amountWithTax = parseFloat(stripePayment.amount_with_tax) || parseFloat(stripePayment.amount) || winningBid;
+            const amount = parseFloat(stripePayment.amount) || winningBid;
             const taxAmount = parseFloat(stripePayment.tax_amount) || 0;
-            totalPaidOnline += amountWithTax;
+            totalPaidOnline += amount; // Use pre-tax amount only
             taxCollectedOnline += taxAmount;
             paidOnlineCount++;
           }

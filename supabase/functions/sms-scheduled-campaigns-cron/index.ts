@@ -90,6 +90,7 @@ Deno.serve(async (req) => {
 
         const message = campaign.metadata?.message_template;
         const recipientData = campaign.metadata?.recipient_data || [];
+        const recentMessageHours = campaign.metadata?.recent_message_hours || 72; // Default to 72 if not set
 
         if (!message || recipientData.length === 0) {
           throw new Error('Missing message template or recipient data');
@@ -110,8 +111,10 @@ Deno.serve(async (req) => {
 
         let sentCount = 0;
         let failedCount = 0;
+        let skippedCount = 0; // Track duplicates prevented
         const newlyAttemptedIds = [];
         const failureDetails = campaign.metadata?.failure_details || [];
+        const duplicatesSkipped = campaign.metadata?.duplicates_skipped || [];
 
         // Send messages one by one (with rate limiting in send-marketing-sms)
         for (const person of batchRecipients) {
@@ -127,6 +130,7 @@ Deno.serve(async (req) => {
                 to: person.phone,
                 message: message,
                 campaign_id: campaign.id,
+                recent_message_hours: recentMessageHours, // Pass anti-spam filter value
                 metadata: {
                   campaign_name: campaign.name,
                   scheduled_campaign: true
@@ -138,7 +142,21 @@ Deno.serve(async (req) => {
 
             if (sendResponse.ok && sendResult.success) {
               sentCount++;
+            } else if (sendResponse.ok && sendResult.skipped) {
+              // Message skipped due to duplicate prevention
+              skippedCount++;
+              console.log(`Duplicate skipped for ${person.phone}: ${sendResult.reason}`);
+              duplicatesSkipped.push({
+                person_id: person.id,
+                phone: person.phone,
+                name: `${person.first_name || ''} ${person.last_name || ''}`.trim(),
+                reason: sendResult.reason,
+                last_message_at: sendResult.last_message_at,
+                last_campaign_id: sendResult.last_campaign_id,
+                timestamp: new Date().toISOString()
+              });
             } else {
+              // Actual failure
               failedCount++;
               const errorMsg = sendResult.error || 'Unknown error';
               console.error(`Failed to send to ${person.phone}:`, errorMsg);
@@ -168,6 +186,7 @@ Deno.serve(async (req) => {
         const allAttemptedIds = [...attemptedIds, ...newlyAttemptedIds];
         const totalSent = (campaign.messages_sent || 0) + sentCount;
         const totalFailed = (campaign.messages_failed || 0) + failedCount;
+        const totalSkipped = (campaign.metadata?.duplicates_prevented || 0) + skippedCount;
         const isComplete = allAttemptedIds.length >= recipientData.length;
 
         await supabase
@@ -180,12 +199,14 @@ Deno.serve(async (req) => {
             metadata: {
               ...campaign.metadata,
               attempted_recipient_ids: allAttemptedIds,
-              failure_details: failureDetails
+              failure_details: failureDetails,
+              duplicates_skipped: duplicatesSkipped,
+              duplicates_prevented: totalSkipped // Total count for UI display
             }
           })
           .eq('id', campaign.id);
 
-        console.log(`Campaign ${campaign.name}: sent ${sentCount}, failed ${failedCount}, total progress: ${allAttemptedIds.length}/${recipientData.length} (${totalSent} sent, ${totalFailed} failed)`);
+        console.log(`Campaign ${campaign.name}: sent ${sentCount}, failed ${failedCount}, skipped ${skippedCount} (duplicates), total progress: ${allAttemptedIds.length}/${recipientData.length} (${totalSent} sent, ${totalFailed} failed, ${totalSkipped} duplicates prevented)`);
 
         results.push({
           campaign_id: campaign.id,
@@ -193,7 +214,10 @@ Deno.serve(async (req) => {
           success: true,
           batch_sent: sentCount,
           batch_failed: failedCount,
+          batch_skipped: skippedCount,
           total_sent: totalSent,
+          total_failed: totalFailed,
+          total_skipped: totalSkipped,
           total_recipients: recipientData.length,
           status: isComplete ? 'completed' : 'in_progress'
         });

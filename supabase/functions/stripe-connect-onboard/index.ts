@@ -79,7 +79,9 @@ serve(async (req)=>{
         capabilities: {
           transfers: {
             requested: true
-          }
+          },
+          card_payments: { requested: false }, // CRITICAL: Disable charge capability - payouts only
+          us_bank_account_ach_payments: { requested: false }, // Disable additional charge methods
         },
         business_type: 'individual',
         individual: {

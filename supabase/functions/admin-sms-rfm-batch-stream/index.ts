@@ -82,18 +82,16 @@ serve(async (req) => {
       });
     }
 
-    // Check which people need RFM updates - do this in batches to handle large datasets
-    console.log(`Checking RFM cache for ${person_ids.length} people`);
+    // Check which people need RFM updates using direct SQL in batches
+    console.log(`Checking RFM cache for ${person_ids.length} people using direct SQL`);
     const existingScoreMap = new Map();
-    const cacheCheckBatchSize = 1000; // Check cache in batches of 1000
-    
+    const cacheCheckBatchSize = 1000; // Check in batches to respect row limits
+
     for (let i = 0; i < person_ids.length; i += cacheCheckBatchSize) {
       const batch = person_ids.slice(i, i + cacheCheckBatchSize);
-      
+
       const { data: existingScores, error: cacheError } = await serviceClient
-        .from('rfm_score_cache')
-        .select('person_id, calculated_at')
-        .in('person_id', batch);
+        .rpc('check_rfm_cache_batch', { p_person_ids: batch });
 
       if (cacheError) {
         console.error('Error checking RFM cache batch:', cacheError);
@@ -104,42 +102,38 @@ serve(async (req) => {
         existingScores.forEach(score => {
           existingScoreMap.set(score.person_id, score.calculated_at);
         });
+        console.log(`Batch ${Math.floor(i / cacheCheckBatchSize) + 1}: Found ${existingScores.length} existing scores out of ${batch.length} people`);
       }
-      
-      console.log(`Checked cache for batch ${i / cacheCheckBatchSize + 1}, found ${existingScores?.length || 0} existing scores`);
     }
-    
+
     console.log(`Total existing RFM scores found: ${existingScoreMap.size} out of ${person_ids.length} people`);
 
-    // Determine which people need RFM processing
+    // Determine which people need RFM processing (in deterministic order for consistent progress)
     const needsUpdate = [];
-    const currentTime = Date.now();
     let noCacheCount = 0;
-    let expiredCount = 0;
     let validCacheCount = 0;
-    
+
     for (const personId of person_ids) {
       if (force_refresh) {
         needsUpdate.push(personId);
       } else {
         const existingTimestamp = existingScoreMap.get(personId);
         if (!existingTimestamp) {
+          // No cache - needs calculation
           needsUpdate.push(personId);
           noCacheCount++;
         } else {
-          const cacheAge = currentTime - new Date(existingTimestamp).getTime();
-          const isExpired = cacheAge > (CACHE_TTL_MINUTES * 60 * 1000);
-          if (isExpired) {
-            needsUpdate.push(personId);
-            expiredCount++;
-          } else {
-            validCacheCount++;
-          }
+          // Has cache - use it (don't check expiration unless force_refresh is true)
+          validCacheCount++;
         }
       }
     }
-    
-    console.log(`Cache analysis: ${noCacheCount} no cache, ${expiredCount} expired, ${validCacheCount} valid cache, ${needsUpdate.length} total need updates`);
+
+    // Sort to ensure consistent ordering across runs
+    needsUpdate.sort();
+
+    console.log(`Cache analysis: ${noCacheCount} no cache, ${validCacheCount} valid cache, ${needsUpdate.length} total need updates`);
+    console.log(`Will send to frontend: total_requested=${person_ids.length}, needed_updates=${needsUpdate.length}`);
 
     if (needsUpdate.length === 0) {
       return new Response(JSON.stringify({
@@ -172,7 +166,7 @@ serve(async (req) => {
         controller.enqueue(encoder.encode(`data: ${initialData}\n\n`));
         
         // Process RFM scores in batches with progress updates
-        const batchSize = 50;
+        const batchSize = 500; // Large batches - SQL is fast enough to handle this
         const results = {
           processed: 0,
           errors: 0,
@@ -184,30 +178,22 @@ serve(async (req) => {
             for (let i = 0; i < needsUpdate.length; i += batchSize) {
               const batch = needsUpdate.slice(i, i + batchSize);
               
-              // Process batch in parallel
+              // Process batch in parallel using direct SQL function
               const batchPromises = batch.map(async (personId) => {
                 try {
-                  // Call the existing RFM scoring function (using GET with query params and user token)
-                  const rfmResponse = await fetch(`${supabaseUrl}/functions/v1/rfm-scoring?person_id=${personId}`, {
-                    method: 'GET',
-                    headers: {
-                      'Authorization': `Bearer ${userToken}`,
-                      'Content-Type': 'application/json'
-                    }
-                  });
+                  // Use the SQL function directly instead of HTTP calls
+                  const { data, error } = await serviceClient
+                    .rpc('calculate_rfm_score_for_person', { p_person_id: personId });
 
-                  if (!rfmResponse.ok) {
-                    const errorText = await rfmResponse.text();
-                    throw new Error(`RFM scoring failed for person ${personId}: ${errorText}`);
+                  if (error) {
+                    throw new Error(`RFM scoring failed: ${error.message}`);
                   }
 
-                  const rfmResult = await rfmResponse.json();
-                  // GET request returns { success: true, data: rfmScore } format (like the working version)
-                  if (rfmResult.success && rfmResult.data) {
+                  if (data && data.length > 0) {
                     results.processed++;
                     return { personId, success: true };
                   } else {
-                    throw new Error(`RFM scoring returned error for person ${personId}: ${rfmResult.error || 'No data returned'}`);
+                    throw new Error('No RFM data returned');
                   }
                 } catch (error) {
                   results.errors++;
@@ -222,23 +208,20 @@ serve(async (req) => {
 
               await Promise.allSettled(batchPromises);
               
-              // Send progress update after each batch
-              const progressPercent = Math.round(((i + batchSize) / needsUpdate.length) * 100);
-              const progressData = JSON.stringify({
-                type: 'progress',
-                total_requested: person_ids.length,
-                needed_updates: needsUpdate.length,
-                processed: results.processed,
-                errors: results.errors,
-                progress_percent: Math.min(progressPercent, 100),
-                batch_completed: i + batchSize,
-                status: i + batchSize >= needsUpdate.length ? 'completed' : 'processing'
-              });
-              controller.enqueue(encoder.encode(`data: ${progressData}\n\n`));
-              
-              // Small delay between batches
-              if (i + batchSize < needsUpdate.length) {
-                await new Promise(resolve => setTimeout(resolve, 100));
+              // Send progress update every 5 batches to reduce overhead
+              if (i % (batchSize * 5) === 0 || i + batchSize >= needsUpdate.length) {
+                const progressPercent = Math.round(((i + batchSize) / needsUpdate.length) * 100);
+                const progressData = JSON.stringify({
+                  type: 'progress',
+                  total_requested: person_ids.length,
+                  needed_updates: needsUpdate.length,
+                  processed: results.processed,
+                  errors: results.errors,
+                  progress_percent: Math.min(progressPercent, 100),
+                  batch_completed: i + batchSize,
+                  status: i + batchSize >= needsUpdate.length ? 'completed' : 'processing'
+                });
+                controller.enqueue(encoder.encode(`data: ${progressData}\n\n`));
               }
             }
 

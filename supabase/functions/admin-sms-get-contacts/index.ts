@@ -138,14 +138,25 @@ serve(async (req) => {
       });
     }
 
-    // Batch fetch people data
-    const { data: peopleData, error: peopleError } = await supabase
-      .from('people')
-      .select('id, phone, phone_number, first_name, last_name, email, message_blocked')
-      .or(phoneNumbers.map(p => `phone.eq.${p}`).join(',') + ',' +
-          phoneNumbers.map(p => `phone_number.eq.${p}`).join(','));
+    // Batch fetch people data in chunks to avoid URL length limits
+    const BATCH_SIZE = 50; // Process 50 phone numbers at a time
+    const allPeopleData = [];
 
-    if (peopleError) throw peopleError;
+    for (let i = 0; i < phoneNumbers.length; i += BATCH_SIZE) {
+      const batch = phoneNumbers.slice(i, i + BATCH_SIZE);
+      const orQuery = batch.map(p => `phone.eq.${p}`).join(',') + ',' +
+                      batch.map(p => `phone_number.eq.${p}`).join(',');
+
+      const { data, error } = await supabase
+        .from('people')
+        .select('id, phone, phone_number, first_name, last_name, email, message_blocked')
+        .or(orQuery);
+
+      if (error) throw error;
+      if (data) allPeopleData.push(...data);
+    }
+
+    const peopleData = allPeopleData;
 
     // Create people lookup map
     const peopleMap = new Map();
@@ -178,6 +189,8 @@ serve(async (req) => {
         last_message: contact.last_message?.substring(0, 100), // Truncate for preview
         last_message_at: contact.last_activity,
         unread_count,
+        inbound_count: contact.inbound_count,
+        outbound_count: contact.outbound_count,
         total_messages: contact.inbound_count + contact.outbound_count
       };
     });

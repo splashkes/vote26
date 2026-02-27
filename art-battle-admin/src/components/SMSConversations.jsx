@@ -37,9 +37,6 @@ const SMSConversations = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedContact, setSelectedContact] = useState(null);
   const [loadingContacts, setLoadingContacts] = useState(true);
-  const [contactsPage, setContactsPage] = useState(1);
-  const [hasMoreContacts, setHasMoreContacts] = useState(true);
-  const [loadingMoreContacts, setLoadingMoreContacts] = useState(false);
 
   // State for conversation
   const [messages, setMessages] = useState([]);
@@ -53,10 +50,19 @@ const SMSConversations = () => {
   const [blockingInProgress, setBlockingInProgress] = useState(false);
   const [blockStatus, setBlockStatus] = useState(null); // { type: 'success' | 'error', message: string }
 
+  // State for conversation status (done/undone)
+  const [conversationStatus, setConversationStatus] = useState(null); // { is_done, marked_by_email, marked_at, notes }
+  const [statusHistory, setStatusHistory] = useState([]);
+  const [togglingStatus, setTogglingStatus] = useState(false);
+  const [contactStatuses, setContactStatuses] = useState(new Map()); // Map of phone -> is_done
+
+  // State for resizable panels
+  const [leftPanelWidth, setLeftPanelWidth] = useState(400); // pixels
+  const [isResizing, setIsResizing] = useState(false);
+
   // Refs
   const messagesEndRef = useRef(null);
   const messageInputRef = useRef(null);
-  const contactsListRef = useRef(null);
 
   // Realtime subscription refs
   const realtimeSubscription = useRef(null);
@@ -88,6 +94,35 @@ const SMSConversations = () => {
     scrollToBottom();
   }, [messages]);
 
+  // Handle resizing
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (!isResizing) return;
+      const newWidth = e.clientX;
+      if (newWidth >= 300 && newWidth <= window.innerWidth - 400) {
+        setLeftPanelWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizing]);
+
   const loadContacts = async () => {
     setLoadingContacts(true);
     try {
@@ -116,90 +151,55 @@ const SMSConversations = () => {
 
       const result = await response.json();
       setContacts(result.contacts || []);
+
+      // Load status for all contacts
+      await loadContactStatuses(result.contacts || []);
     } catch (error) {
       console.error('Error loading contacts:', error);
-      // Fallback to direct query if edge function fails
-      await loadContactsFallback();
+      setContacts([]);
     } finally {
       setLoadingContacts(false);
     }
   };
 
-  const loadContactsFallback = async () => {
+  const loadContactStatuses = async (contactsList) => {
     try {
-      // Get recent conversations by combining inbound and outbound messages
-      const [inboundResult, outboundResult] = await Promise.all([
-        supabase
-          .from('sms_inbound')
-          .select('from_phone, message_body, created_at')
-          .order('created_at', { ascending: false })
-          .limit(100),
-        supabase
-          .from('sms_outbound')
-          .select('to_phone, message_body, created_at')
-          .order('created_at', { ascending: false })
-          .limit(100)
-      ]);
+      if (contactsList.length === 0) return;
 
-      // Combine and dedupe phone numbers
-      const phoneMap = new Map();
+      const phoneNumbers = contactsList.map(c => c.phone).filter(Boolean);
+      if (phoneNumbers.length === 0) return;
 
-      // Process inbound messages
-      inboundResult.data?.forEach(msg => {
-        const existing = phoneMap.get(msg.from_phone);
-        if (!existing || new Date(msg.created_at) > new Date(existing.last_message_at)) {
-          phoneMap.set(msg.from_phone, {
-            phone: msg.from_phone,
-            last_message: msg.message_body,
-            last_message_at: msg.created_at,
-            unread_count: existing ? existing.unread_count + 1 : 1
-          });
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      // Use edge function for batch status loading
+      const response = await fetch(
+        'https://xsqdkubgyqwpyvfltnrf.supabase.co/functions/v1/admin-sms-get-conversation-status',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({ phone_numbers: phoneNumbers })
         }
-      });
-
-      // Process outbound messages
-      outboundResult.data?.forEach(msg => {
-        const existing = phoneMap.get(msg.to_phone);
-        if (!existing || new Date(msg.created_at) > new Date(existing.last_message_at)) {
-          phoneMap.set(msg.to_phone, {
-            phone: msg.to_phone,
-            last_message: msg.message_body,
-            last_message_at: msg.created_at,
-            unread_count: 0 // Outbound messages don't count as unread
-          });
-        }
-      });
-
-      // Convert to array and enrich with people data
-      const phoneNumbers = Array.from(phoneMap.keys());
-      const { data: peopleData } = await supabase
-        .from('people')
-        .select('id, phone, phone_number, first_name, last_name, email, message_blocked')
-        .or(`phone.in.(${phoneNumbers.join(',')}),phone_number.in.(${phoneNumbers.join(',')})`);
-
-      // Merge people data with phone map
-      const contactsList = Array.from(phoneMap.values()).map(contact => {
-        const person = peopleData?.find(p =>
-          p.phone === contact.phone || p.phone_number === contact.phone
-        );
-        return {
-          ...contact,
-          person_id: person?.id,
-          name: person ? `${person.first_name || ''} ${person.last_name || ''}`.trim() : null,
-          email: person?.email,
-          blocked: person?.message_blocked === 1
-        };
-      });
-
-      // Sort by most recent
-      contactsList.sort((a, b) =>
-        new Date(b.last_message_at) - new Date(a.last_message_at)
       );
 
-      setContacts(contactsList);
+      if (!response.ok) {
+        throw new Error('Failed to load conversation statuses');
+      }
+
+      const result = await response.json();
+
+      // Convert object to Map
+      const statusMap = new Map();
+      Object.entries(result.statuses || {}).forEach(([phone, isDone]) => {
+        statusMap.set(phone, isDone);
+      });
+
+      setContactStatuses(statusMap);
     } catch (error) {
-      console.error('Error in fallback contact loading:', error);
-      setContacts([]);
+      console.error('Error loading contact statuses:', error);
     }
   };
 
@@ -242,11 +242,88 @@ const SMSConversations = () => {
       // Set messages from the edge function response - already sorted by the edge function
       const allMessages = result.messages || [];
       setMessages(allMessages);
+
+      // Load conversation status and history
+      await loadConversationStatus(contact.phone);
     } catch (error) {
       console.error('Error loading conversation:', error);
       setMessages([]);
     } finally {
       setLoadingMessages(false);
+    }
+  };
+
+  const loadConversationStatus = async (phoneNumber) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      // Use edge function to load status and history
+      const response = await fetch(
+        'https://xsqdkubgyqwpyvfltnrf.supabase.co/functions/v1/admin-sms-get-conversation-status',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({
+            phone_number: phoneNumber,
+            include_history: true
+          })
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to load conversation status');
+      }
+
+      const result = await response.json();
+
+      setConversationStatus(result.current_status);
+      setStatusHistory(result.history || []);
+    } catch (error) {
+      console.error('Error loading conversation status:', error);
+      setConversationStatus(null);
+      setStatusHistory([]);
+    }
+  };
+
+  const toggleConversationStatus = async () => {
+    if (!selectedContact || togglingStatus) return;
+
+    setTogglingStatus(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const newStatus = !conversationStatus?.is_done;
+
+      // Insert new status record
+      const { error } = await supabase
+        .from('sms_conversation_status')
+        .insert({
+          phone_number: selectedContact.phone,
+          is_done: newStatus,
+          marked_by_email: user.email,
+          marked_at: new Date().toISOString()
+        });
+
+      if (error) throw error;
+
+      // Update the contact statuses map
+      setContactStatuses(prev => {
+        const newMap = new Map(prev);
+        newMap.set(selectedContact.phone, newStatus);
+        return newMap;
+      });
+
+      // Reload status to get updated state
+      await loadConversationStatus(selectedContact.phone);
+    } catch (error) {
+      console.error('Error toggling conversation status:', error);
+    } finally {
+      setTogglingStatus(false);
     }
   };
 
@@ -281,54 +358,6 @@ const SMSConversations = () => {
       .subscribe();
   };
 
-  const loadMoreContacts = async () => {
-    if (!hasMoreContacts || loadingMoreContacts) return;
-
-    setLoadingMoreContacts(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-
-      const response = await fetch(
-        'https://xsqdkubgyqwpyvfltnrf.supabase.co/functions/v1/admin-sms-get-contacts',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`
-          },
-          body: JSON.stringify({
-            days: 90, // Load older messages
-            offset: contacts.length // Pagination offset
-          })
-        }
-      );
-
-      if (!response.ok) return;
-
-      const result = await response.json();
-      const newContacts = result.contacts || [];
-
-      if (newContacts.length === 0) {
-        setHasMoreContacts(false);
-      } else {
-        setContacts(prev => [...prev, ...newContacts]);
-      }
-    } catch (error) {
-      console.error('Error loading more contacts:', error);
-    } finally {
-      setLoadingMoreContacts(false);
-    }
-  };
-
-  const handleContactsScroll = (e) => {
-    const element = e.target;
-    const scrolledToBottom = element.scrollHeight - element.scrollTop <= element.clientHeight + 50;
-
-    if (scrolledToBottom && hasMoreContacts && !loadingMoreContacts) {
-      loadMoreContacts();
-    }
-  };
 
   const setupRealtimeSubscription = () => {
     // Remove existing subscription
@@ -349,7 +378,7 @@ const SMSConversations = () => {
           table: 'sms_inbound',
           filter: `from_phone=eq.${selectedContact.phone}`
         },
-        (payload) => {
+        async (payload) => {
           const newMessage = {
             ...payload.new,
             type: 'inbound',
@@ -363,6 +392,34 @@ const SMSConversations = () => {
               ? { ...c, last_message: payload.new.message_body, last_message_at: payload.new.created_at }
               : c
           ));
+
+          // Auto-undone: Mark conversation as not done when inbound message arrives
+          try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+              // Insert new status record with is_done: false
+              await supabase
+                .from('sms_conversation_status')
+                .insert({
+                  phone_number: selectedContact.phone,
+                  is_done: false,
+                  marked_by_email: 'system',
+                  notes: 'Auto-undone on inbound message'
+                });
+
+              // Update the contact statuses map
+              setContactStatuses(prev => {
+                const newMap = new Map(prev);
+                newMap.set(selectedContact.phone, false);
+                return newMap;
+              });
+
+              // Reload conversation status to update UI
+              await loadConversationStatus(selectedContact.phone);
+            }
+          } catch (error) {
+            console.error('Error auto-undoning conversation:', error);
+          }
         }
       )
       .on(
@@ -574,6 +631,34 @@ const SMSConversations = () => {
     });
   };
 
+  // Combine messages and status history into a single timeline
+  const getCombinedTimeline = () => {
+    const timeline = [];
+
+    // Add messages
+    messages.forEach(msg => {
+      timeline.push({
+        type: 'message',
+        timestamp: msg.timestamp,
+        data: msg
+      });
+    });
+
+    // Add status changes
+    statusHistory.forEach(status => {
+      timeline.push({
+        type: 'status',
+        timestamp: status.marked_at,
+        data: status
+      });
+    });
+
+    // Sort by timestamp
+    timeline.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+    return timeline;
+  };
+
   // Group contacts by time range
   const groupContactsByTime = (contactsList) => {
     const now = new Date();
@@ -613,9 +698,21 @@ const SMSConversations = () => {
     return Object.entries(groups).filter(([_, contacts]) => contacts.length > 0);
   };
 
-  // Filter contacts based on search
+  // Filter contacts based on search and engagement
   const filteredContacts = contacts.filter(contact => {
+    // Only show conversations with engagement:
+    // - At least one inbound message (they replied), OR
+    // - More than one message total (conversation exists)
+    const inboundCount = contact.inbound_count || 0;
+    const totalMessages = contact.total_messages || 0;
+    const hasEngagement = (inboundCount > 0) || (totalMessages > 1);
+
+    if (!hasEngagement) return false;
+
+    // Then apply search filter
     const query = searchQuery.toLowerCase();
+    if (!query) return true;
+
     return (
       contact.phone?.toLowerCase().includes(query) ||
       contact.name?.toLowerCase().includes(query) ||
@@ -628,9 +725,9 @@ const SMSConversations = () => {
   const groupedContacts = groupContactsByTime(filteredContacts);
 
   return (
-    <Flex style={{ height: 'calc(100vh - 100px)', width: '100%' }}>
+    <Flex style={{ height: 'calc(100vh - 100px)', width: '100%', position: 'relative' }}>
       {/* Left Panel - Contact List */}
-      <Card style={{ width: '40%', margin: 0, borderRadius: 0 }}>
+      <Card style={{ width: `${leftPanelWidth}px`, margin: 0, borderRadius: 0, flexShrink: 0 }}>
         <Flex direction="column" style={{ height: '100%' }}>
           {/* Search Bar */}
           <Box p="4" style={{ borderBottom: '1px solid var(--gray-4)' }}>
@@ -656,7 +753,7 @@ const SMSConversations = () => {
           </Box>
 
           {/* Contacts List */}
-          <ScrollArea style={{ flex: 1 }} ref={contactsListRef} onScroll={handleContactsScroll}>
+          <ScrollArea style={{ flex: 1 }}>
             {loadingContacts ? (
               <Flex justify="center" align="center" p="4">
                 <Spinner />
@@ -699,15 +796,38 @@ const SMSConversations = () => {
                             color={getAvatarColor(contact)}
                           />
 
-                          <Box style={{ flex: 1 }}>
-                            <Flex justify="between" align="center">
-                              <Text size="2" weight="bold">
-                                {contact.name || 'Unknown'}
-                                {contact.blocked && (
-                                  <Badge color="red" size="1" ml="2">Blocked</Badge>
+                          <Box style={{ flex: 1, minWidth: 0 }}>
+                            <Flex justify="between" align="center" gap="2">
+                              <Flex align="center" gap="2" style={{ minWidth: 0, flex: 1 }}>
+                                <Text
+                                  size="2"
+                                  weight="bold"
+                                  style={{
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap'
+                                  }}
+                                >
+                                  {contact.name || 'Unknown'}
+                                  {contact.blocked && (
+                                    <Badge color="red" size="1" ml="2">Blocked</Badge>
+                                  )}
+                                </Text>
+                                {contactStatuses.has(contact.phone) && (
+                                  <Tooltip content={contactStatuses.get(contact.phone) ? "Marked as Done" : "Not Done"}>
+                                    <CheckCircledIcon
+                                      color={contactStatuses.get(contact.phone) ? "green" : "gray"}
+                                      style={{
+                                        opacity: contactStatuses.get(contact.phone) ? 1 : 0.3,
+                                        width: '16px',
+                                        height: '16px',
+                                        flexShrink: 0
+                                      }}
+                                    />
+                                  </Tooltip>
                                 )}
-                              </Text>
-                              <Text size="1" color="gray">
+                              </Flex>
+                              <Text size="1" color="gray" style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
                                 {formatTime(contact.last_message_at)}
                               </Text>
                             </Flex>
@@ -736,27 +856,31 @@ const SMSConversations = () => {
                     ))}
                   </Box>
                 ))}
-
-                {/* Loading more indicator */}
-                {loadingMoreContacts && (
-                  <Flex justify="center" p="3">
-                    <Spinner size="2" />
-                  </Flex>
-                )}
-
-                {!hasMoreContacts && filteredContacts.length > 10 && (
-                  <Text size="1" color="gray" style={{ padding: '1rem', textAlign: 'center' }}>
-                    No more conversations
-                  </Text>
-                )}
               </Box>
             )}
           </ScrollArea>
         </Flex>
       </Card>
 
+      {/* Resize Handle */}
+      <Box
+        onMouseDown={() => setIsResizing(true)}
+        style={{
+          width: '4px',
+          cursor: 'col-resize',
+          backgroundColor: 'var(--gray-4)',
+          flexShrink: 0,
+          transition: 'background-color 0.2s',
+          '&:hover': {
+            backgroundColor: 'var(--accent-9)'
+          }
+        }}
+        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--accent-9)'}
+        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--gray-4)'}
+      />
+
       {/* Right Panel - Conversation */}
-      <Box style={{ flex: 1, borderLeft: '1px solid var(--gray-4)' }}>
+      <Box style={{ flex: 1 }}>
         {selectedContact ? (
           <Flex direction="column" style={{ height: '100%' }}>
             {/* Contact Header */}
@@ -786,16 +910,29 @@ const SMSConversations = () => {
                 </Box>
 
                 <Flex direction="column" align="end" gap="2">
-                  <Tooltip content={selectedContact.blocked ? "Unblock Contact" : "Block Contact"}>
-                    <IconButton
-                      size="2"
-                      color={selectedContact.blocked ? "green" : "red"}
-                      variant="soft"
-                      onClick={() => setBlockDialogOpen(true)}
-                    >
-                      {selectedContact.blocked ? <LockOpen1Icon /> : <LockClosedIcon />}
-                    </IconButton>
-                  </Tooltip>
+                  <Flex gap="2">
+                    <Tooltip content={conversationStatus?.is_done ? "Mark as Not Done" : "Mark as Done"}>
+                      <IconButton
+                        size="2"
+                        color={conversationStatus?.is_done ? "green" : "gray"}
+                        variant={conversationStatus?.is_done ? "solid" : "soft"}
+                        onClick={toggleConversationStatus}
+                        disabled={togglingStatus}
+                      >
+                        {conversationStatus?.is_done ? <CheckCircledIcon /> : <CheckCircledIcon />}
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip content={selectedContact.blocked ? "Unblock Contact" : "Block Contact"}>
+                      <IconButton
+                        size="2"
+                        color={selectedContact.blocked ? "green" : "red"}
+                        variant="soft"
+                        onClick={() => setBlockDialogOpen(true)}
+                      >
+                        {selectedContact.blocked ? <LockOpen1Icon /> : <LockClosedIcon />}
+                      </IconButton>
+                    </Tooltip>
+                  </Flex>
                   {blockStatus && (
                     <Flex align="center" gap="1" style={{ fontSize: '12px' }}>
                       {blockStatus.type === 'success' ? (
@@ -818,50 +955,94 @@ const SMSConversations = () => {
                 <Flex justify="center" align="center" style={{ height: '100%' }}>
                   <Spinner />
                 </Flex>
-              ) : messages.length === 0 ? (
+              ) : messages.length === 0 && statusHistory.length === 0 ? (
                 <Text size="2" color="gray" style={{ textAlign: 'center' }}>
                   No messages yet. Start a conversation!
                 </Text>
               ) : (
                 <Flex direction="column" gap="3">
-                  {messages.map((message, index) => (
-                    <Flex
-                      key={message.id || index}
-                      justify={message.type === 'outbound' ? 'end' : 'start'}
-                    >
-                      <Card
-                        style={{
-                          maxWidth: '70%',
-                          backgroundColor: message.type === 'outbound'
-                            ? 'var(--accent-3)'
-                            : 'var(--gray-3)',
-                          padding: '0.75rem',
-                          margin: 0
-                        }}
-                      >
-                        <Text size="2" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                          {message.message_body}
-                        </Text>
-                        <Flex justify="between" align="center" mt="2" gap="2">
-                          <Text size="1" color="gray">
-                            {formatMessageTime(message.timestamp)}
-                          </Text>
-                          {message.type === 'outbound' && (
-                            <Badge
-                              size="1"
-                              color={
-                                message.status === 'delivered' ? 'green' :
-                                message.status === 'sent' ? 'blue' :
-                                message.status === 'failed' ? 'red' : 'gray'
-                              }
-                            >
-                              {message.status || 'sending'}
-                            </Badge>
-                          )}
+                  {getCombinedTimeline().map((item, index) => {
+                    if (item.type === 'status') {
+                      // Render status change
+                      const status = item.data;
+                      return (
+                        <Flex key={`status-${status.id || index}`} justify="center">
+                          <Card
+                            style={{
+                              backgroundColor: 'var(--amber-2)',
+                              borderLeft: `3px solid var(--amber-9)`,
+                              padding: '0.5rem 1rem',
+                              margin: '0.5rem 0',
+                              maxWidth: '80%'
+                            }}
+                          >
+                            <Flex direction="column" gap="1">
+                              <Flex align="center" gap="2">
+                                {status.is_done ? (
+                                  <CheckCircledIcon color="green" />
+                                ) : (
+                                  <CrossCircledIcon color="orange" />
+                                )}
+                                <Text size="2" weight="bold">
+                                  {status.is_done ? 'Marked as Done' : 'Marked as Not Done'}
+                                </Text>
+                              </Flex>
+                              <Text size="1" color="gray">
+                                by {status.marked_by_email === 'system' ? 'System' : status.marked_by_email}
+                                {' at '}{formatMessageTime(status.marked_at)}
+                              </Text>
+                              {status.notes && (
+                                <Text size="1" style={{ fontStyle: 'italic' }}>
+                                  {status.notes}
+                                </Text>
+                              )}
+                            </Flex>
+                          </Card>
                         </Flex>
-                      </Card>
-                    </Flex>
-                  ))}
+                      );
+                    } else {
+                      // Render message
+                      const message = item.data;
+                      return (
+                        <Flex
+                          key={`message-${message.id || index}`}
+                          justify={message.type === 'outbound' ? 'end' : 'start'}
+                        >
+                          <Card
+                            style={{
+                              maxWidth: '70%',
+                              backgroundColor: message.type === 'outbound'
+                                ? 'var(--accent-3)'
+                                : 'var(--gray-3)',
+                              padding: '0.75rem',
+                              margin: 0
+                            }}
+                          >
+                            <Text size="2" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                              {message.message_body}
+                            </Text>
+                            <Flex justify="between" align="center" mt="2" gap="2">
+                              <Text size="1" color="gray">
+                                {formatMessageTime(message.timestamp)}
+                              </Text>
+                              {message.type === 'outbound' && (
+                                <Badge
+                                  size="1"
+                                  color={
+                                    message.status === 'delivered' ? 'green' :
+                                    message.status === 'sent' ? 'blue' :
+                                    message.status === 'failed' ? 'red' : 'gray'
+                                  }
+                                >
+                                  {message.status || 'sending'}
+                                </Badge>
+                              )}
+                            </Flex>
+                          </Card>
+                        </Flex>
+                      );
+                    }
+                  })}
                   <div ref={messagesEndRef} />
                 </Flex>
               )}

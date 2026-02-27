@@ -98,6 +98,11 @@ const PromotionSystem = () => {
   const [audiencePeople, setAudiencePeople] = useState([]);
   const [audienceSearchFilter, setAudienceSearchFilter] = useState('');
 
+  // Telnyx balance state
+  const [telnyxBalance, setTelnyxBalance] = useState(null);
+  const [balanceLoading, setBalanceLoading] = useState(true);
+  const [balanceError, setBalanceError] = useState(null);
+
   // Temporary event selection state
   const [tempSelectedEvents, setTempSelectedEvents] = useState([]);
   const [eventSearchFilter, setEventSearchFilter] = useState('');
@@ -115,6 +120,7 @@ const PromotionSystem = () => {
     loadCitiesAndEvents();
     loadFutureEvents();
     loadScheduledCampaigns();
+    loadTelnyxBalance();
   }, []);
 
   // Reload events when city changes
@@ -192,12 +198,48 @@ const PromotionSystem = () => {
     };
   }, [scheduledCampaigns.length > 0]);
 
+  const loadTelnyxBalance = async () => {
+    try {
+      setBalanceLoading(true);
+      setBalanceError(null);
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('No active session');
+      }
+
+      const response = await fetch(
+        'https://xsqdkubgyqwpyvfltnrf.supabase.co/functions/v1/admin-telnyx-get-balance',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          }
+        }
+      );
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to fetch balance');
+      }
+
+      setTelnyxBalance(result.balance);
+    } catch (error) {
+      console.error('Error loading Telnyx balance:', error);
+      setBalanceError(error.message);
+    } finally {
+      setBalanceLoading(false);
+    }
+  };
+
   const loadCitiesAndEvents = async () => {
     try {
-      // Get all cities with accurate event counts (only events with people)
+      // Get all cities with event counts (ALL events, not filtered)
       const { data: citiesResult, error: citiesError } = await supabase.functions.invoke(
         'admin-get-events-for-sms',
-        { body: { city_id: 'GET_ALL_CITIES', min_registrations: 1 } }
+        { body: { city_id: 'GET_ALL_CITIES' } }
       );
 
       if (citiesError) throw citiesError;
@@ -240,7 +282,7 @@ const PromotionSystem = () => {
       // Use edge function for all queries
       const { data: result, error: eventsError } = await supabase.functions.invoke(
         'admin-get-events-for-sms',
-        { body: { city_id: cityId, min_registrations: 1 } }
+        { body: { city_id: cityId, min_registrations: cityId === 'NO_CITY' ? 1 : undefined } }
       );
 
       if (eventsError) throw eventsError;
@@ -434,11 +476,11 @@ const PromotionSystem = () => {
         throw new Error('No people found in audience to process RFM scores');
       }
 
-      // Initial progress - total people to check
+      // Initial progress - checking cache first
       console.log(`Starting RFM processing for ${personIds.length} people`);
       setRfmProgress({
         processed: 0,
-        total: personIds.length,
+        total: 0, // Will be updated with needed_updates from edge function
         progress_percent: 0,
         status: 'Checking existing RFM scores...',
         totalPeople: personIds.length
@@ -504,11 +546,17 @@ const PromotionSystem = () => {
               const jsonStr = line.slice(6).trim();
               if (jsonStr) {
                 const data = JSON.parse(jsonStr);
-                
+
                 if (data.type === 'progress') {
+                  console.log('RFM Progress received:', {
+                    needed_updates: data.needed_updates,
+                    total_requested: data.total_requested,
+                    processed: data.processed,
+                    prev_total: rfmProgress?.total
+                  });
                   setRfmProgress(prev => ({
                     processed: data.processed,
-                    total: data.needed_updates || prev.total,
+                    total: data.needed_updates !== undefined ? data.needed_updates : prev.total,
                     progress_percent: data.progress_percent,
                     errors: data.errors,
                     status: data.status,
@@ -745,7 +793,8 @@ const PromotionSystem = () => {
           scheduled_timezone: scheduleTimezone,
           scheduled_local_time: scheduledAt,
           dry_run_mode: dryRunMode,
-          dry_run_phone: dryRunMode ? '+14163025959' : null
+          dry_run_phone: dryRunMode ? '+14163025959' : null,
+          recent_message_hours: recentMessageHours // Pass anti-spam filter value
         })
       });
 
@@ -868,7 +917,26 @@ const PromotionSystem = () => {
   return (
     <>
       <Flex direction="column" gap="6" p="6">
-        <Heading size="8">SMS Marketing</Heading>
+        <Flex justify="between" align="center">
+          <Heading size="8">SMS Marketing</Heading>
+          <Flex align="center" gap="2">
+            {balanceLoading ? (
+              <Flex align="center" gap="2">
+                <Spinner size="1" />
+                <Text size="2" color="gray">Loading balance...</Text>
+              </Flex>
+            ) : balanceError ? (
+              <Text size="2" color="red">Error loading balance</Text>
+            ) : telnyxBalance ? (
+              <Flex direction="column" align="end">
+                <Text size="1" color="gray">Telnyx Balance</Text>
+                <Text size="4" weight="bold" color="green">
+                  ${parseFloat(telnyxBalance.balance).toFixed(2)} {telnyxBalance.currency}
+                </Text>
+              </Flex>
+            ) : null}
+          </Flex>
+        </Flex>
 
       {/* Scheduled Campaigns Section */}
       <Card>
@@ -1349,17 +1417,17 @@ const PromotionSystem = () => {
                             <Box mb="2">
                               <Flex justify="between" mb="1">
                                 <Text size="2">
-                                  {rfmProgress.totalPeople ? (
+                                  {rfmProgress.total > 0 ? (
                                     <>
                                       Updating: {rfmProgress.processed} / {rfmProgress.total}
-                                      {rfmProgress.total < rfmProgress.totalPeople && (
+                                      {rfmProgress.totalPeople && rfmProgress.total < rfmProgress.totalPeople && (
                                         <Text size="1" color="gray">
                                           {' '}({rfmProgress.totalPeople - rfmProgress.total} already cached)
                                         </Text>
                                       )}
                                     </>
                                   ) : (
-                                    <>Processed: {rfmProgress.processed} / {rfmProgress.total}</>
+                                    <>{rfmProgress.status || 'Initializing...'}</>
                                   )}
                                 </Text>
                                 <Text size="2" color="blue">

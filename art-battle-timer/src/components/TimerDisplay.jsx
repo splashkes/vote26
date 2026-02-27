@@ -13,7 +13,7 @@ export default function TimerDisplay() {
 
   const refreshData = async () => {
     try {
-      const data = await fetchTimerData(eid)
+      const data = await fetchTimerData(eid.toUpperCase())
       setTimerData(data)
       setError(null)
     } catch (error) {

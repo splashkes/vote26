@@ -100,24 +100,17 @@ serve(async (req) => {
 
     // Determine which people need RFM processing
     const needsUpdate = [];
-    const currentTime = Date.now();
-    
+
     for (const personId of person_ids) {
       if (force_refresh) {
         needsUpdate.push(personId);
       } else {
         const existingTimestamp = existingScoreMap.get(personId);
         if (!existingTimestamp) {
-          // No existing score
+          // No cache - needs calculation
           needsUpdate.push(personId);
-        } else {
-          // Check if existing score is expired
-          const cacheAge = currentTime - new Date(existingTimestamp).getTime();
-          const isExpired = cacheAge > (CACHE_TTL_MINUTES * 60 * 1000);
-          if (isExpired) {
-            needsUpdate.push(personId);
-          }
         }
+        // Has cache - use it (don't check expiration unless force_refresh is true)
       }
     }
 

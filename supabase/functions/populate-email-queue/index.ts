@@ -33,6 +33,9 @@ serve(async (req)=>{
         id, name, eid, event_start_datetime, venue, timezone_icann,
         cities!fk_events_city (
           name
+        ),
+        venues (
+          name
         )
       `).eq('eid', eventEid).single();
     if (eventError) {
@@ -171,7 +174,7 @@ serve(async (req)=>{
         eventEid: event.eid,
         eventName: event.name || event.eid,
         eventStartDateTime: event.event_start_datetime || '',
-        eventVenue: event.venue || 'TBD',
+        eventVenue: event.venues?.name || event.venue || 'TBD',
         cityName: cityName,
         timezoneIcann: event.timezone_icann || undefined,
         soldArtworks: soldArtworks,

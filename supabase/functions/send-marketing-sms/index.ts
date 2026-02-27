@@ -31,6 +31,7 @@ serve(async (req) => {
       from,
       template_id,
       campaign_id,
+      recent_message_hours = 72, // Anti-spam filter from campaign
       metadata = {}
     } = await req.json();
 
@@ -84,6 +85,43 @@ serve(async (req) => {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
+    }
+
+    // CRITICAL: Check for recent messages (send-time deduplication)
+    // This prevents duplicates when multiple campaigns target the same person
+    if (recent_message_hours > 0) {
+      const cutoffTime = new Date(Date.now() - recent_message_hours * 60 * 60 * 1000).toISOString();
+
+      const { data: recentMessages, error: recentCheckError } = await supabase
+        .from('sms_outbound')
+        .select('id, sent_at, campaign_id')
+        .eq('to_phone', toFormatted)
+        .gte('sent_at', cutoffTime)
+        .order('sent_at', { ascending: false })
+        .limit(1);
+
+      if (recentCheckError) {
+        console.error('Error checking recent messages:', recentCheckError);
+        // Don't fail the send, just log the error
+      } else if (recentMessages && recentMessages.length > 0) {
+        const lastMessage = recentMessages[0];
+        const hoursSince = Math.round((Date.now() - new Date(lastMessage.sent_at).getTime()) / (60 * 60 * 1000));
+
+        console.log(`DUPLICATE PREVENTED: ${toFormatted} received message ${hoursSince}h ago (threshold: ${recent_message_hours}h)`);
+
+        return new Response(JSON.stringify({
+          success: false,
+          skipped: true,
+          error: 'Duplicate message prevented',
+          reason: `Phone received message ${hoursSince} hour(s) ago (within ${recent_message_hours}h threshold)`,
+          phone: toFormatted,
+          last_message_at: lastMessage.sent_at,
+          last_campaign_id: lastMessage.campaign_id
+        }), {
+          status: 200, // Return 200 so cron doesn't retry
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
     }
 
     // Look up person data for variable substitution

@@ -124,6 +124,30 @@ serve(async (req) => {
     // DEBIT: Positive amount (decreases balance owed, represents payment OUT)
     const storedAmount = adjustment_type === 'credit' ? -Math.abs(amount) : Math.abs(amount);
 
+    // Mark any pending/failed automated payments for this artist as superseded
+    // This prevents them from showing up in "in progress" after manual payment
+    const { data: supersededPayments, error: supersededError } = await supabaseClient
+      .from('artist_payments')
+      .update({
+        status: 'cancelled',
+        metadata: {
+          superseded_by_manual_payment: true,
+          superseded_at: new Date().toISOString(),
+          superseded_by_admin: user.email
+        }
+      })
+      .eq('artist_profile_id', artist_profile_id)
+      .eq('payment_type', 'automated')
+      .in('status', ['pending', 'processing', 'failed'])
+      .select('id, status, gross_amount');
+
+    if (supersededError) {
+      console.warn('Warning: Could not supersede old payments:', supersededError.message);
+      // Don't fail - continue with manual payment creation
+    } else if (supersededPayments && supersededPayments.length > 0) {
+      console.log(`Superseded ${supersededPayments.length} automated payment attempts for artist ${artist_profile_id}`);
+    }
+
     // Create manual adjustment record
     const { data: adjustment, error: insertError } = await supabaseClient
       .from('artist_payments')
@@ -147,7 +171,8 @@ serve(async (req) => {
           created_via: 'admin-add-manual-adjustment',
           created_at: new Date().toISOString(),
           admin_user_id: user.id,
-          admin_email: user.email
+          admin_email: user.email,
+          superseded_payment_count: supersededPayments?.length || 0
         }
       })
       .select()
@@ -194,8 +219,9 @@ serve(async (req) => {
           created_at: adjustment.created_at,
           status: adjustment.status
         },
+        superseded_payments: supersededPayments?.length || 0,
         current_balance: currentBalance,
-        message: `Manual ${adjustment_type} of ${currency} ${Math.abs(amount)} created successfully for ${artist.name}`
+        message: `Manual ${adjustment_type} of ${currency} ${Math.abs(amount)} created successfully for ${artist.name}${supersededPayments && supersededPayments.length > 0 ? ` (${supersededPayments.length} failed payment attempts cleared)` : ''}`
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

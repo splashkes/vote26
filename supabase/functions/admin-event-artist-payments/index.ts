@@ -123,7 +123,8 @@ serve(async (req) => {
       paymentInvitationsResult,
       paymentSetupInvitationsResult,
       paymentRequestsResult,
-      manualPaymentRequestsResult
+      manualPaymentRequestsResult,
+      globalArtSalesResult
     ] = await Promise.all([
 
       // Get all payments IN (from buyers) for this event - Stripe payments
@@ -140,10 +141,10 @@ serve(async (req) => {
         .in('art_id', artworkIds)
         .eq('payment_type', 'admin_marked'),
 
-      // Get all payments OUT (to artists) - don't filter by status, we'll skip cancelled ones later
+      // Get all payments OUT (to artists) - we'll filter by event relevance later
       supabaseClient
         .from('artist_payments')
-        .select('artist_profile_id, art_id, gross_amount, net_amount, status, payment_type, payment_method, paid_at, created_at')
+        .select('artist_profile_id, art_id, gross_amount, net_amount, currency, status, payment_type, payment_method, paid_at, created_at')
         .in('artist_profile_id', artistIds),
 
       // Get bids for all artworks in this event
@@ -177,7 +178,23 @@ serve(async (req) => {
         .from('artist_manual_payment_requests')
         .select('artist_profile_id, payment_method, country_code, status, created_at')
         .in('artist_profile_id', artistIds)
-        .order('created_at', { ascending: false })
+        .order('created_at', { ascending: false }),
+
+      // Get ALL art sales for these artists across ALL events (for global balance calculation)
+      // Only count 'paid' status - 'sold' means buyer hasn't paid yet
+      supabaseClient
+        .from('art')
+        .select(`
+          artist_id,
+          current_bid,
+          final_price,
+          status,
+          events!inner(
+            artist_auction_portion
+          )
+        `)
+        .in('artist_id', artistIds)
+        .eq('status', 'paid')
     ]);
 
     const { data: paymentsIn, error: payInError } = paymentsInResult;
@@ -199,6 +216,22 @@ serve(async (req) => {
     if (bidsError) {
       console.error('Error fetching bids:', bidsError);
     }
+
+    const { data: globalArtSales, error: globalArtError } = globalArtSalesResult;
+    if (globalArtError) {
+      console.error('Error fetching global art sales:', globalArtError);
+    }
+
+    // Calculate global earnings per artist (across ALL events)
+    const globalEarningsByArtist = new Map<string, number>();
+    globalArtSales?.forEach(art => {
+      const saleAmount = parseFloat(art.final_price) || parseFloat(art.current_bid) || 0;
+      const artistPortion = art.events?.artist_auction_portion || 0.5;
+      const artistEarning = saleAmount * artistPortion;
+
+      const currentTotal = globalEarningsByArtist.get(art.artist_id) || 0;
+      globalEarningsByArtist.set(art.artist_id, currentTotal + artistEarning);
+    });
 
     const { data: paymentInvitations, error: invitationsError } = paymentInvitationsResult;
     if (invitationsError) {
@@ -387,7 +420,8 @@ serve(async (req) => {
             amount: parseFloat(paymentIn.amount_with_tax) || parseFloat(paymentIn.amount),
             amount_before_tax: salePrice,
             paid_at: paymentIn.completed_at,
-            method: paymentIn.payment_method
+            method: paymentIn.payment_method,
+            source: paymentIn.source
           } : null,
           artist_earnings: artistEarnings
         };
@@ -401,6 +435,7 @@ serve(async (req) => {
       const paymentsToArtist = artistPaymentsAll.map(payment => ({
         art_id: payment.art_id,
         amount: parseFloat(payment.net_amount),
+        currency: payment.currency,
         payment_type: payment.payment_type,
         payment_method: payment.payment_method,
         status: payment.status,
@@ -413,7 +448,8 @@ serve(async (req) => {
       const noBidArtworks = artworkDetails.filter(a => !a.is_paid && a.winning_bid === 0);
 
       // Calculate totals - count all payments that aren't failed/cancelled
-      const totalEarned = paidArtworks.reduce((sum, art) => sum + art.artist_earnings, 0);
+      const totalEarnedThisEvent = paidArtworks.reduce((sum, art) => sum + art.artist_earnings, 0);
+      const totalEarnedGlobal = globalEarningsByArtist.get(artistId) || 0;
       const countedPayments = paymentsToArtist.filter(p =>
         p.status !== 'failed' && p.status !== 'cancelled'
       );
@@ -424,10 +460,11 @@ serve(async (req) => {
         .filter(p => p.payment_type === 'manual')
         .reduce((sum, p) => sum + p.amount, 0);
       const totalPaid = totalPaidStripe + totalPaidManual;
-      const amountOwed = totalEarned - totalPaid;
+      // Use GLOBAL earnings for balance calculation (not just this event)
+      const globalBalance = totalEarnedGlobal - totalPaid;
 
-      // Update summary totals
-      totalOwedToArtists += amountOwed;
+      // Update summary totals (use global balance)
+      totalOwedToArtists += globalBalance;
       totalPaidToArtistsStripe += totalPaidStripe;
       totalPaidToArtistsManual += totalPaidManual;
 
@@ -464,11 +501,14 @@ serve(async (req) => {
         payment_account_status: paymentAccount?.status || (invitation?.status === 'completed' ? 'pending' : 'not_invited'),
         stripe_recipient_id: paymentAccount?.stripe_recipient_id || null,
         totals: {
-          total_earned: totalEarned,
+          total_earned: totalEarnedGlobal,  // Use global for backwards compat
+          total_earned_this_event: totalEarnedThisEvent,
+          total_earned_global: totalEarnedGlobal,
           total_paid_stripe: totalPaidStripe,
           total_paid_manual: totalPaidManual,
           total_paid: totalPaid,
-          amount_owed: amountOwed
+          amount_owed: globalBalance,  // Use global balance for backwards compat
+          global_balance: globalBalance
         }
       };
     });

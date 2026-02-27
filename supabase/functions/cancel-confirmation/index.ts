@@ -102,7 +102,8 @@ serve(async (req)=>{
         venue,
         slack_channel,
         timezone_icann,
-        cities!city_id(name)
+        cities!city_id(name),
+        venues(name)
       `).eq('eid', confirmation.event_eid).single();
     // Combine the data
     const confirmationWithEvent = {
@@ -160,7 +161,7 @@ serve(async (req)=>{
           eventEid: confirmationWithEvent.event_eid,
           eventName: confirmationWithEvent.events.name || confirmationWithEvent.event_eid,
           eventStartDateTime: confirmationWithEvent.events.event_start_datetime || '',
-          eventVenue: confirmationWithEvent.events.venue || 'TBD',
+          eventVenue: confirmationWithEvent.events.venues?.name || confirmationWithEvent.events.venue || 'TBD',
           cityName: confirmationWithEvent.events.cities?.name || 'Unknown',
           timezoneIcann: confirmationWithEvent.events.timezone_icann || undefined
         });
