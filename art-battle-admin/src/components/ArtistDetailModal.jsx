@@ -294,11 +294,18 @@ const ArtistDetailModal = ({
 
   const loadAllEvents = async () => {
     try {
+      // Include recent + upcoming active events so near-term events aren't pushed out
+      // by far-future/test records.
+      const inviteEventCutoff = new Date();
+      inviteEventCutoff.setDate(inviteEventCutoff.getDate() - 14);
+
       const { data, error } = await supabase
         .from('events')
         .select('id, name, eid, event_start_datetime, cities(name, countries(name))')
-        .order('event_start_datetime', { ascending: false})
-        .limit(50);
+        .eq('enabled', true)
+        .gte('event_start_datetime', inviteEventCutoff.toISOString())
+        .order('event_start_datetime', { ascending: true })
+        .limit(300);
 
       if (!error && data) {
         setAllEvents(data);
