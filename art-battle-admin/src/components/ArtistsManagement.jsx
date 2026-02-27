@@ -122,8 +122,28 @@ const ArtistsManagement = () => {
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [inviteLoading, setInviteLoading] = useState(false);
   const [selectedEventForInvite, setSelectedEventForInvite] = useState('');
+  const [eventFilterQuery, setEventFilterQuery] = useState('');
   const [inviteMessage, setInviteMessage] = useState('');
   const [events, setEvents] = useState([]);
+
+  const filteredInviteEvents = events.filter((event) => {
+    const query = eventFilterQuery.trim().toLowerCase();
+    if (!query) return true;
+
+    const eventDateText = event.event_start_datetime
+      ? new Date(event.event_start_datetime).toLocaleDateString()
+      : '';
+
+    const searchable = [
+      event.name,
+      event.eid,
+      event.cities?.name,
+      event.cities?.countries?.name,
+      eventDateText
+    ].filter(Boolean).join(' ').toLowerCase();
+
+    return searchable.includes(query);
+  });
 
   useEffect(() => {
     fetchAllArtistsData();
@@ -647,6 +667,7 @@ const ArtistsManagement = () => {
 
   // Handle inviting artist to event
   const handleInviteArtist = () => {
+    setEventFilterQuery('');
     setInviteMessage(`Hi ${selectedArtist?.artist_profiles?.name || 'there'},
 
 You're invited to participate in our upcoming Art Battle event! 
@@ -692,6 +713,7 @@ Art Battle Team`);
         alert('Invitation sent successfully!');
         setInviteModalOpen(false);
         setSelectedEventForInvite('');
+        setEventFilterQuery('');
         setInviteMessage('');
         // Refresh artist data to show new invitation
         fetchAllArtistsData();
@@ -1476,7 +1498,13 @@ Art Battle Team`);
       </Dialog.Root>
 
       {/* Invite Artist to Event Modal */}
-      <Dialog.Root open={inviteModalOpen} onOpenChange={setInviteModalOpen}>
+      <Dialog.Root
+        open={inviteModalOpen}
+        onOpenChange={(open) => {
+          setInviteModalOpen(open);
+          if (!open) setEventFilterQuery('');
+        }}
+      >
         <Dialog.Content style={{ maxWidth: 600 }}>
           <Dialog.Title>
             <Flex align="center" justify="between">
@@ -1511,10 +1539,16 @@ Art Battle Team`);
                 <Text size="2" weight="medium" mb="2" style={{ display: 'block' }}>
                   Select Event
                 </Text>
+                <TextField.Root
+                  placeholder="Type to filter events..."
+                  value={eventFilterQuery}
+                  onChange={(e) => setEventFilterQuery(e.target.value)}
+                  mb="2"
+                />
                 <Select.Root value={selectedEventForInvite} onValueChange={setSelectedEventForInvite}>
                   <Select.Trigger style={{ width: '100%' }} placeholder="Choose an event..." />
                   <Select.Content>
-                    {events.map((event) => (
+                    {filteredInviteEvents.map((event) => (
                       <Select.Item key={event.id} value={event.id}>
                         {event.name || event.eid} - {event.cities?.name ? `${event.cities.name}, ${event.cities.countries?.name}` : 'Location TBD'} 
                         {event.event_start_datetime && (
@@ -1524,6 +1558,11 @@ Art Battle Team`);
                         )}
                       </Select.Item>
                     ))}
+                    {filteredInviteEvents.length === 0 && (
+                      <Select.Item value="__no_results__" disabled>
+                        No events match your filter.
+                      </Select.Item>
+                    )}
                   </Select.Content>
                 </Select.Root>
               </Box>
@@ -1547,7 +1586,10 @@ Art Battle Team`);
                 <Button 
                   variant="soft" 
                   color="gray" 
-                  onClick={() => setInviteModalOpen(false)}
+                  onClick={() => {
+                    setInviteModalOpen(false);
+                    setEventFilterQuery('');
+                  }}
                   disabled={inviteLoading}
                 >
                   Cancel
