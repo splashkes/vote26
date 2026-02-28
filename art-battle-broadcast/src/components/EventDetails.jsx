@@ -226,10 +226,12 @@ const EventDetails = () => {
 
                     if (finalArtwork) {
                       const topBid = data.bids[0]?.amount || 0;
+                      const existingBidData = publicDataManager.getEventState(eventId).currentBids[finalArtwork.id] || {};
                       console.log(`💰 Bid update: ${data.bids.length} bids, top: $${topBid}`);
                       // GLOBAL STATE UPDATE: Update global state instead of local
                       publicDataManager.updateBidHistory(eventId, finalArtwork.id, data.bids);
                       publicDataManager.updateCurrentBids(eventId, finalArtwork.id, {
+                        ...existingBidData,
                         amount: topBid,
                         count: data.bids.length,
                         time: data.bids[0]?.created_at
@@ -1071,9 +1073,9 @@ const EventDetails = () => {
       }
       
       // GLOBAL STATE: Update bid history state
-      const currentState = publicDataManager.getEventState(eventEid || eventId);
+      const currentState = publicDataManager.getEventState(eventId);
       const updatedBidHistory = { ...currentState.bidHistory, ...historyByArt };
-      publicDataManager.updateEventState(eventEid || eventId, { bidHistory: updatedBidHistory });
+      publicDataManager.updateEventState(eventId, { bidHistory: updatedBidHistory });
     } catch (error) {
       console.error('❌ [V2-BROADCAST] Error in fetchBidHistory:', error);
     }
@@ -1123,7 +1125,7 @@ const EventDetails = () => {
       });
       
       // GLOBAL STATE: Update round winners
-      publicDataManager.updateEventState(eventEid || eventId, { roundWinners: winnersByRound });
+      publicDataManager.updateEventState(eventId, { roundWinners: winnersByRound });
     } catch (error) {
       console.error('Error fetching winners from round_contestants:', error);
     }
@@ -1613,10 +1615,11 @@ const EventDetails = () => {
       }
 
       // GLOBAL STATE: Update current bids with the new format including currency info
-      const currentState = publicDataManager.getEventState(eventEid || eventId);
+      const currentState = publicDataManager.getEventState(eventId);
       const currentBidData = currentState.currentBids[confirmBid.artId] || { count: 0 };
 
-      publicDataManager.updateCurrentBids(eventEid || eventId, confirmBid.artId, {
+      publicDataManager.updateCurrentBids(eventId, confirmBid.artId, {
+        ...currentBidData,
         amount: data.amount || confirmBid.amount,
         count: currentBidData.count + 1,
         time: new Date().toISOString()
@@ -1712,7 +1715,7 @@ const EventDetails = () => {
         
         if (bidData && bidData.bids) {
           // GLOBAL STATE: Update bid history
-          publicDataManager.updateBidHistory(eventEid || eventId, artwork.id, bidData.bids);
+          publicDataManager.updateBidHistory(eventId, artwork.id, bidData.bids);
           console.log(`✅ [V2-BROADCAST] Loaded ${bidData.bids.length} bids for artwork ${artwork.round}-${artwork.easel}`);
         }
       } catch (bidError) {
@@ -1720,6 +1723,47 @@ const EventDetails = () => {
       }
     }
   };
+
+  // Self-heal for weak connections: refresh bids for the currently open artwork dialog.
+  // This prevents users from needing a full page refresh to see latest bid data.
+  useEffect(() => {
+    if (!selectedArt || !event?.eid) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    const refreshSelectedArtBids = async () => {
+      try {
+        const bidData = await publicDataManager.getArtworkBids(event.eid, selectedArt.round, selectedArt.easel);
+        if (isCancelled || !bidData?.bids) {
+          return;
+        }
+
+        publicDataManager.updateBidHistory(eventId, selectedArt.id, bidData.bids);
+
+        const topBid = bidData.bids[0]?.amount || 0;
+        const currentBidData = publicDataManager.getEventState(eventId).currentBids[selectedArt.id] || {};
+        publicDataManager.updateCurrentBids(eventId, selectedArt.id, {
+          ...currentBidData,
+          amount: topBid,
+          count: bidData.bids.length,
+          time: bidData.bids[0]?.created_at
+        });
+      } catch (error) {
+        console.warn(`⚠️ [V2-BROADCAST] Selected artwork bid refresh failed:`, error);
+      }
+    };
+
+    // Refresh immediately when dialog opens, then continue at a light interval.
+    refreshSelectedArtBids();
+    const intervalId = setInterval(refreshSelectedArtBids, 15000);
+
+    return () => {
+      isCancelled = true;
+      clearInterval(intervalId);
+    };
+  }, [selectedArt?.id, selectedArt?.round, selectedArt?.easel, event?.eid, eventId]);
 
   const handleDeleteMedia = async (mediaId) => {
     try {
@@ -2488,7 +2532,7 @@ const EventDetails = () => {
                 eid={event?.eid}
                 artworksByRound={artworksByRound}
                 roundWinners={roundWinners}
-                setRoundWinners={(winners) => publicDataManager.updateEventState(eventEid || eventId, { roundWinners: winners })}
+                setRoundWinners={(winners) => publicDataManager.updateEventState(eventId, { roundWinners: winners })}
                 artworks={artworks}
                 currentTime={currentTime}
                 user={user}
