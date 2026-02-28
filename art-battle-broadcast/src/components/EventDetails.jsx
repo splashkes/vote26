@@ -2550,7 +2550,19 @@ const EventDetails = () => {
 
       {/* Selected Artwork Dialog */}
       <Dialog.Root open={!!selectedArt} onOpenChange={(open) => !open && closeArtDialog()}>
-        <Dialog.Content style={{ maxWidth: '90vw', maxHeight: '90vh', overflow: 'auto' }}>
+        <Dialog.Content
+          style={{
+            maxWidth: '90vw',
+            width: 'min(90vw, 920px)',
+            maxHeight: 'calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px)',
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            WebkitOverflowScrolling: 'touch',
+            overscrollBehavior: 'contain',
+            touchAction: 'pan-y',
+            paddingBottom: 'max(16px, env(safe-area-inset-bottom))'
+          }}
+        >
           {selectedArt && (() => {
             // Handle multiple images if available
             const allMedia = selectedArt.media || [];
