@@ -322,11 +322,35 @@ export class BroadcastCacheManager {
       case 'bid_placed':
         // Bid changes affect main event endpoint and specific bid endpoint
         endpoints.push(this.endpointPatterns.event(eventId));
-        
-        // If we have round/easel info, also invalidate specific bid endpoint
-        if (payload.new?.art_id) {
-          // We'd need to resolve art_id to round/easel, for now invalidate all bid endpoints
-          endpoints.push(`/live/event/${eventId}/bids`); // Generic bid endpoint
+
+        // Prefer precise bid endpoint invalidation when we can derive round/easel.
+        // This avoids invalidating non-existent generic bid routes.
+        {
+          const payloadData = payload?.new || payload || {};
+          const parsedRound = Number.parseInt(
+            payloadData.round ?? payloadData.round_number ?? payloadData.art_round,
+            10
+          );
+          const parsedEasel = Number.parseInt(
+            payloadData.easel ?? payloadData.easel_number ?? payloadData.art_easel,
+            10
+          );
+
+          let round = Number.isInteger(parsedRound) && parsedRound > 0 ? parsedRound : null;
+          let easel = Number.isInteger(parsedEasel) && parsedEasel > 0 ? parsedEasel : null;
+
+          // Fallback: parse art code shape like AB3028-2-3
+          if ((!round || !easel) && typeof payloadData.art_code === 'string') {
+            const codeMatch = payloadData.art_code.match(/^.+-(\d+)-(\d+)$/);
+            if (codeMatch) {
+              round = Number.parseInt(codeMatch[1], 10);
+              easel = Number.parseInt(codeMatch[2], 10);
+            }
+          }
+
+          if (round && easel) {
+            endpoints.push(this.endpointPatterns.bids(eventId, round, easel));
+          }
         }
         break;
         
@@ -416,8 +440,8 @@ export class BroadcastCacheManager {
         { pattern: /^https:\/\/artb\.art\/live\/event\/([^\/]+)\/artists$/, keyFn: (match) => `event-artists-${match[1]}` },
 
         // Bid endpoints
-        { pattern: /^\/live\/event\/([^-]+)-(\d+)-(\d+)\/bids$/, keyFn: (match) => `artwork-bids-${match[1]}-${match[2]}-${match[3]}` },
-        { pattern: /^https:\/\/artb\.art\/live\/event\/([^-]+)-(\d+)-(\d+)\/bids$/, keyFn: (match) => `artwork-bids-${match[1]}-${match[2]}-${match[3]}` }
+        { pattern: /^\/live\/event\/(.+)-(\d+)-(\d+)\/bids$/, keyFn: (match) => `artwork-bids-${match[1]}-${match[2]}-${match[3]}` },
+        { pattern: /^https:\/\/artb\.art\/live\/event\/(.+)-(\d+)-(\d+)\/bids$/, keyFn: (match) => `artwork-bids-${match[1]}-${match[2]}-${match[3]}` }
       ];
 
       for (const mapping of cacheKeyMappings) {

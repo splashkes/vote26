@@ -203,7 +203,7 @@ const EventDetails = () => {
                   console.log(`🔍 [BID-DEBUG] Bid data received:`, data);
 
                   // Handle bid endpoint updates
-                  const match = endpoint.match(/\/live\/event\/[^-]+-(\d+)-(\d+)\/bids/);
+                  const match = endpoint.match(/\/live\/event\/.+-(\d+)-(\d+)\/bids/);
                   console.log(`🔍 [BID-DEBUG] Regex match result:`, match);
 
                   // CLOSURE FIX: Use current artworks from ref instead of stale closure variable
@@ -228,8 +228,8 @@ const EventDetails = () => {
                       const topBid = data.bids[0]?.amount || 0;
                       console.log(`💰 Bid update: ${data.bids.length} bids, top: $${topBid}`);
                       // GLOBAL STATE UPDATE: Update global state instead of local
-                      publicDataManager.updateBidHistory(eventEid, finalArtwork.id, data.bids);
-                      publicDataManager.updateCurrentBids(eventEid, finalArtwork.id, {
+                      publicDataManager.updateBidHistory(eventId, finalArtwork.id, data.bids);
+                      publicDataManager.updateCurrentBids(eventId, finalArtwork.id, {
                         amount: topBid,
                         count: data.bids.length,
                         time: data.bids[0]?.created_at
@@ -240,7 +240,7 @@ const EventDetails = () => {
                   }
                 } else if (endpoint.includes('/media')) {
                   // Handle media endpoint updates
-                  console.log(`📸 Refreshing media data for event ${eventEid}`);
+                  console.log(`📸 Refreshing media data for event ${eventId}`);
 
                   // Update media data specifically when media endpoint is invalidated
                   if (data && data.media && Array.isArray(data.media)) {
@@ -264,7 +264,7 @@ const EventDetails = () => {
 
                     // Update artworks with new media data
                     // GLOBAL STATE: Update artworks with new media data, preserving recent optimistic uploads
-                    const currentState = publicDataManager.getEventState(eventEid);
+                    const currentState = publicDataManager.getEventState(eventId);
                     const updated = currentState.artworks.map(artwork => {
                       const freshMedia = mediaByArt[artwork.id];
                       const currentMedia = artwork.media || [];
@@ -294,10 +294,13 @@ const EventDetails = () => {
                     });
 
                     // CRITICAL: Also update selectedArt if it's currently open, preserving optimistic uploads
-                    if (selectedArt && mediaByArt[selectedArt.id]) {
-                      const freshMedia = mediaByArt[selectedArt.id];
-                      const currentMedia = selectedArt.media || [];
+                    setSelectedArt((prevSelectedArt) => {
+                      if (!prevSelectedArt || !mediaByArt[prevSelectedArt.id]) {
+                        return prevSelectedArt;
+                      }
 
+                      const freshMedia = mediaByArt[prevSelectedArt.id];
+                      const currentMedia = prevSelectedArt.media || [];
                       let finalMedia = freshMedia;
 
                       // CHROME FIX: Same logic for selectedArt
@@ -309,17 +312,16 @@ const EventDetails = () => {
                         );
 
                         if (optimisticMedia.length > 0) {
-                          console.log(`🔧 [CHROME-FIX] Preserving ${optimisticMedia.length} optimistic uploads for selectedArt ${selectedArt.id}`);
+                          console.log(`🔧 [CHROME-FIX] Preserving ${optimisticMedia.length} optimistic uploads for selectedArt ${prevSelectedArt.id}`);
                           finalMedia = [...freshMedia, ...optimisticMedia];
                         }
                       }
 
-                      const updatedSelectedArt = {
-                        ...selectedArt,
+                      return {
+                        ...prevSelectedArt,
                         media: finalMedia
                       };
-                      setSelectedArt(updatedSelectedArt);
-                    }
+                    });
 
                     // CRITICAL: Also update artworksByRound for main grid display
                     const regrouped = updated.reduce((acc, artwork) => {
@@ -331,7 +333,7 @@ const EventDetails = () => {
                       return acc;
                     }, {});
 
-                    publicDataManager.updateArtworks(eventEid, updated, regrouped);
+                    publicDataManager.updateArtworks(eventId, updated, regrouped);
                   } else {
                     console.log(`⚠️ [DEBUG] No media data in response:`, data);
                   }
@@ -342,18 +344,31 @@ const EventDetails = () => {
 
                   // GLOBAL STATE: Update main event data surgically instead of full reload
                   if (data && data.event) {
-                    publicDataManager.updateEventState(eventEid, { event: data.event });
+                    publicDataManager.updateEventState(eventId, { event: data.event });
                     console.log(`✅ [V2-BROADCAST] Updated event data surgically`);
                   }
 
                   // GLOBAL STATE: Update round winners from broadcast
                   if (data && data.round_winners) {
-                    publicDataManager.updateRoundWinners(eventEid, data.round_winners);
+                    publicDataManager.updateRoundWinners(eventId, data.round_winners);
                     console.log(`✅ [V2-BROADCAST] Updated round winners surgically from broadcast`);
+                  }
+                  if (data && data.current_bids) {
+                    const bidsByArt = {};
+                    data.current_bids.forEach(bid => {
+                      bidsByArt[bid.art_id] = {
+                        amount: bid.current_bid,
+                        count: bid.bid_count || 0,
+                        time: bid.bid_time,
+                        buyer_person_id: bid.buyer_person_id,
+                        closing_time: bid.closing_time
+                      };
+                    });
+                    publicDataManager.updateEventState(eventId, { currentBids: bidsByArt });
                   }
                   if (data && data.artworks) {
                     // GLOBAL STATE: Preserve existing media data when updating artworks
-                    const currentState = publicDataManager.getEventState(eventEid);
+                    const currentState = publicDataManager.getEventState(eventId);
                     const updatedArtworks = data.artworks.map(newArtwork => {
                       // Find existing artwork to preserve its media data
                       const existingArtwork = currentState.artworks.find(prev => prev.id === newArtwork.id);
@@ -375,7 +390,17 @@ const EventDetails = () => {
                         return acc;
                       }, {});
 
-                      publicDataManager.updateArtworks(eventEid, updatedArtworks, regrouped);
+                      publicDataManager.updateArtworks(eventId, updatedArtworks, regrouped);
+                      setSelectedArt((prevSelectedArt) => {
+                        if (!prevSelectedArt) return prevSelectedArt;
+                        const refreshedSelectedArt = updatedArtworks.find(artwork => artwork.id === prevSelectedArt.id);
+                        if (!refreshedSelectedArt) return prevSelectedArt;
+                        return {
+                          ...prevSelectedArt,
+                          ...refreshedSelectedArt,
+                          media: prevSelectedArt.media || refreshedSelectedArt.media || []
+                        };
+                      });
 
                       console.log(`✅ [V2-BROADCAST] Updated ${updatedArtworks.length} artworks and regrouped by rounds surgically (media preserved):`, Object.keys(regrouped).map(r => `Round ${r}: ${regrouped[r].length} artworks`));
                     } catch (error) {
@@ -398,7 +423,7 @@ const EventDetails = () => {
         console.error(`❌ [V2-BROADCAST] Failed to refresh data:`, error);
         optimizer.trackError?.(error, 'broadcast-refresh');
       }
-    }, [eventEid, publicDataManager]); // GLOBAL STATE: Dependencies updated for global state
+    }, [eventId, publicDataManager]); // GLOBAL STATE: Dependencies updated for global state
 
   const { clearEventCache } = useBroadcastCache(
     eventEid, // Use EID for broadcast subscription, not UUID
