@@ -11,6 +11,52 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, GET, OPTIONS'
 };
 
+async function getResponderPersonIdsForCampaign(serviceClient: any, campaignId: string): Promise<Set<string>> {
+  const { data, error } = await serviceClient.rpc('sql', {
+    query: `
+      WITH first_sends AS (
+        SELECT
+          to_phone,
+          MIN(COALESCE(sent_at, created_at)) AS first_sent_at
+        FROM sms_outbound
+        WHERE campaign_id = $1
+          AND to_phone IS NOT NULL
+        GROUP BY to_phone
+      ),
+      campaign_responders AS (
+        SELECT DISTINCT i.from_phone
+        FROM sms_inbound i
+        JOIN first_sends s ON s.to_phone = i.from_phone
+        WHERE i.from_phone IS NOT NULL
+          AND i.created_at >= s.first_sent_at
+      ),
+      normalized_responders AS (
+        SELECT DISTINCT regexp_replace(from_phone, '\\D', '', 'g') AS phone_digits
+        FROM campaign_responders
+      )
+      SELECT DISTINCT p.id::text AS person_id
+      FROM people p
+      JOIN normalized_responders r
+        ON regexp_replace(COALESCE(NULLIF(p.phone, ''), NULLIF(p.phone_number, ''), ''), '\\D', '', 'g') = r.phone_digits
+      WHERE r.phone_digits <> ''
+    `,
+    params: [campaignId]
+  });
+
+  if (error) {
+    throw new Error(`Failed to fetch campaign responders: ${error.message}`);
+  }
+
+  const responderIds = new Set<string>();
+  for (const row of data || []) {
+    if (row?.person_id) {
+      responderIds.add(row.person_id);
+    }
+  }
+
+  return responderIds;
+}
+
 serve(async (req) => {
   try {
     // Handle preflight OPTIONS request
@@ -83,13 +129,15 @@ serve(async (req) => {
     }
 
     // Parse request body
-    let city_ids = [], event_ids = [], rfm_filters = null, recent_message_hours = 72;
+    let city_ids = [], event_ids = [], rfm_filters = null, recent_message_hours = 72, ids_only = false, responded_campaign_id = null;
     try {
       const body = await req.json();
       city_ids = body.city_ids || [];
       event_ids = body.event_ids || [];
       rfm_filters = body.rfm_filters || null;
       recent_message_hours = body.recent_message_hours || 72;
+      ids_only = body.ids_only || false; // For campaign creation - return all IDs without details
+      responded_campaign_id = body.responded_campaign_id || null; // Optional: restrict to people who replied to a prior campaign
     } catch (parseError) {
       return new Response(JSON.stringify({
         success: false,
@@ -106,25 +154,85 @@ serve(async (req) => {
       });
     }
 
-    // Use smart pagination: get total count + limited sample for UI display
-    // For RFM processing, we'll get full dataset in chunks only when needed
-    const sampleSize = 10000; // Show up to 10k people in UI for performance
-    
-    const { data: pageData, error: queryError } = await serviceClient
-      .rpc('get_sms_audience_paginated', {
-        p_city_ids: city_ids.length > 0 ? city_ids : null,
-        p_event_ids: event_ids.length > 0 ? event_ids : null,
-        p_recent_message_hours: recent_message_hours,
-        p_offset: 0,
-        p_limit: sampleSize
-      });
+    // Use pagination to fetch all results (Supabase JS client has internal limits)
+    // Fetch in chunks of 1000 to avoid timeouts
+    const chunkSize = 1000;
+    const maxRecords = (ids_only || responded_campaign_id) ? 100000 : 10000; // For IDs-only and responder cohorts, fetch full set
+    let allPeople = [];
+    let offset = 0;
+    let totalCount = 0;
+    let hasMoreData = true;
 
-    if (queryError) {
-      throw new Error(`Database query failed: ${queryError.message}`);
+    console.log(`Fetching audience with ids_only=${ids_only}, maxRecords=${maxRecords}`);
+
+    while (hasMoreData && allPeople.length < maxRecords) {
+      console.log(`=== Pagination Loop: offset=${offset}, allPeople.length=${allPeople.length}, maxRecords=${maxRecords}`);
+
+      const requestedLimit = Math.min(chunkSize, maxRecords - allPeople.length);
+      console.log(`Requesting ${requestedLimit} records from offset ${offset}`);
+
+      const { data: pageData, error: queryError } = await serviceClient
+        .rpc('get_sms_audience_paginated', {
+          p_city_ids: city_ids.length > 0 ? city_ids : null,
+          p_event_ids: event_ids.length > 0 ? event_ids : null,
+          p_recent_message_hours: recent_message_hours,
+          p_offset: offset,
+          p_limit: requestedLimit
+        });
+
+      if (queryError) {
+        console.error(`Database query failed at offset ${offset}:`, queryError);
+        throw new Error(`Database query failed: ${queryError.message}`);
+      }
+
+      console.log(`RPC returned: ${pageData ? pageData.length : 'null'} records`);
+
+      if (!pageData || pageData.length === 0) {
+        console.log(`No more data at offset ${offset} - stopping pagination`);
+        hasMoreData = false;
+        break;
+      }
+
+      // Get total count from first record (all records have this) - for display only
+      if (totalCount === 0 && pageData.length > 0 && pageData[0].total_count) {
+        totalCount = pageData[0].total_count;
+        console.log(`Total count from DB: ${totalCount}`);
+      }
+
+      allPeople = allPeople.concat(pageData);
+      console.log(`✓ Concatenated ${pageData.length} records, total so far: ${allPeople.length}`);
+
+      // Update offset for next iteration
+      offset += pageData.length;
+      console.log(`✓ Updated offset to ${offset} for next iteration`);
+
+      // Check if we should continue - ONLY stop if we got less than requested
+      // Do NOT rely on total_count as it may be incorrect with complex filters
+      if (pageData.length < chunkSize) {
+        console.log(`! Got ${pageData.length} records which is less than chunk size ${chunkSize} - stopping pagination (no more data)`);
+        hasMoreData = false;
+      } else {
+        console.log(`✓ Got full chunk of ${pageData.length} records - will continue to next page`);
+      }
+
+      // Stop if we've reached our max
+      if (allPeople.length >= maxRecords) {
+        console.log(`! Reached max records limit of ${maxRecords} - stopping pagination`);
+        allPeople = allPeople.slice(0, maxRecords);
+        hasMoreData = false;
+      }
     }
-    
-    const people = pageData || [];
-    const totalCount = people.length > 0 ? people[0].total_count : 0;
+
+    console.log(`=== PAGINATION COMPLETE: ${allPeople.length} total records retrieved ===`);
+
+    let people = allPeople;
+
+    if (responded_campaign_id) {
+      const responderPersonIds = await getResponderPersonIdsForCampaign(serviceClient, responded_campaign_id);
+      people = people.filter((p) => responderPersonIds.has(String(p.id)));
+      totalCount = people.length; // Exact count for responder-scoped audience
+      console.log(`Responder filter applied: campaign=${responded_campaign_id}, matched_people=${people.length}`);
+    }
 
     if (!people || people.length === 0) {
       return new Response(JSON.stringify({
@@ -148,44 +256,102 @@ serve(async (req) => {
     const sampleCount = people.length;
     const blockedCountInSample = people.filter(p => p.message_blocked > 0).length;
     const availableCountInSample = people.filter(p => p.message_blocked === 0).length;
-    
-    // Estimate proportions from sample, but use actual total count
-    const blockedCount = sampleCount > 0 ? Math.round((blockedCountInSample / sampleCount) * totalCount) : 0;
+    const blockedCount = responded_campaign_id
+      ? blockedCountInSample // Exact when responder filter is active
+      : (sampleCount > 0 ? Math.round((blockedCountInSample / sampleCount) * totalCount) : 0);
+
+    // Calculate how many people were excluded due to recent messages
+    // Query again WITHOUT the recent message filter to get the difference
+    let recentMessageCount = 0;
+    if (recent_message_hours > 0 && !responded_campaign_id) {
+      const { data: withoutRecent, error: withoutRecentError } = await serviceClient
+        .rpc('get_sms_audience_paginated', {
+          p_city_ids: city_ids.length > 0 ? city_ids : null,
+          p_event_ids: event_ids.length > 0 ? event_ids : null,
+          p_recent_message_hours: 0, // Disable the recent message filter
+          p_offset: 0,
+          p_limit: 1
+        });
+
+      if (!withoutRecentError && withoutRecent && withoutRecent.length > 0) {
+        const totalWithoutFilter = withoutRecent[0].total_count;
+        recentMessageCount = Math.max(0, totalWithoutFilter - totalCount);
+      }
+    }
+
     const availableCount = totalCount - blockedCount;
-    
-    // Note: recent_message_count is not directly available since the DB function already filtered them out
-    // We'll estimate it as the difference between what we would have gotten vs what we got
-    const recentMessageCount = 0; // DB function already excluded these
 
     // Check RFM readiness if filters specified
     let rfmReadyCount = 0;
-    let filteredPeople = people.filter(p => p.message_blocked === 0); // Start with available people
+    const availablePeople = people.filter(p => p.message_blocked === 0);
+    let filteredPeople = availablePeople; // For count, only available people
+    let estimatedFilteredCount = availableCount; // Start with all available people
 
     if (rfm_filters) {
-      const { 
+      const {
         recency_min = 1, recency_max = 5,
-        frequency_min = 1, frequency_max = 5, 
-        monetary_min = 1, monetary_max = 5 
+        frequency_min = 1, frequency_max = 5,
+        monetary_min = 1, monetary_max = 5
       } = rfm_filters;
 
       // Count people with current RFM scores (available people only)
-      rfmReadyCount = filteredPeople.filter(p => {
-        return p.has_rfm && 
+      rfmReadyCount = availablePeople.filter(p => {
+        return p.has_rfm &&
                p.rfm_recency_score >= recency_min && p.rfm_recency_score <= recency_max &&
                p.rfm_frequency_score >= frequency_min && p.rfm_frequency_score <= frequency_max &&
                p.rfm_monetary_score >= monetary_min && p.rfm_monetary_score <= monetary_max;
       }).length;
 
-      // Filter people based on RFM criteria
-      filteredPeople = filteredPeople.filter(p => {
+      // Filter people based on RFM criteria (available only)
+      filteredPeople = availablePeople.filter(p => {
         if (!p.has_rfm) return false;
-        
+
         return p.rfm_recency_score >= recency_min && p.rfm_recency_score <= recency_max &&
                p.rfm_frequency_score >= frequency_min && p.rfm_frequency_score <= frequency_max &&
                p.rfm_monetary_score >= monetary_min && p.rfm_monetary_score <= monetary_max;
       });
+
+      // Estimate actual filtered count from sample proportion
+      if (availableCountInSample > 0) {
+        const rfmFilteredProportion = filteredPeople.length / availableCountInSample;
+        estimatedFilteredCount = Math.round(availableCount * rfmFilteredProportion);
+      } else {
+        estimatedFilteredCount = 0;
+      }
     }
 
+    // Return ALL people (both blocked and available) for display in modal
+    // But filtered_count only includes available people who match criteria
+
+    // If ids_only=true, return ONLY filtered people (not all people!)
+    // This is for campaign creation - should match the filtered_count
+    if (ids_only) {
+      console.log(`=== IDS_ONLY MODE RESPONSE ===`);
+      console.log(`Total records fetched: ${people.length}`);
+      console.log(`After filtering (non-blocked): ${filteredPeople.length}`);
+
+      return new Response(JSON.stringify({
+        success: true,
+        total_count: totalCount,
+        filtered_count: filteredPeople.length, // Use actual filtered count, not estimated
+        people: filteredPeople.map(p => ({
+          id: p.id,
+          blocked: p.message_blocked > 0
+        })),
+        debug: { // Debug info visible in browser console
+          records_fetched: people.length,
+          records_after_filter: filteredPeople.length,
+          responder_filter_applied: !!responded_campaign_id,
+          responder_campaign_id: responded_campaign_id,
+          pagination_worked: people.length > 1000 ? 'YES' : (people.length === 1000 ? 'MAYBE - hit 1000 limit' : 'N/A')
+        }
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Full response for UI display
     return new Response(JSON.stringify({
       success: true,
       total_count: totalCount,
@@ -194,9 +360,9 @@ serve(async (req) => {
       recent_message_hours: recent_message_hours,
       available_count: availableCount,
       rfm_ready_count: rfmReadyCount,
-      filtered_count: filteredPeople.length,
-      needs_rfm_generation: rfm_filters && (rfmReadyCount < availableCount),
-      people: filteredPeople.map(p => ({
+      filtered_count: estimatedFilteredCount,
+      needs_rfm_generation: availableCount > 0 && (rfmReadyCount < availableCount),
+      people: people.map(p => ({  // Return ALL people, not just filtered
         id: p.id,
         name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Unknown',
         phone: p.phone,

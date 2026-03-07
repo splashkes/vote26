@@ -92,6 +92,10 @@ const PromotionSystem = () => {
   const [scheduledCampaigns, setScheduledCampaigns] = useState([]);
   const [loadingScheduled, setLoadingScheduled] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState(null);
+  const [responderFilterEnabled, setResponderFilterEnabled] = useState(false);
+  const [responderCampaignId, setResponderCampaignId] = useState('');
+  const [responderCampaigns, setResponderCampaigns] = useState([]);
+  const [loadingResponderCampaigns, setLoadingResponderCampaigns] = useState(false);
 
   // Modal state
   const [showAudienceModal, setShowAudienceModal] = useState(false);
@@ -120,6 +124,7 @@ const PromotionSystem = () => {
     loadCitiesAndEvents();
     loadFutureEvents();
     loadScheduledCampaigns();
+    loadResponderCampaigns();
     loadTelnyxBalance();
   }, []);
 
@@ -153,7 +158,7 @@ const PromotionSystem = () => {
     }, 500); // Debounce 500ms
 
     return () => clearTimeout(delayedUpdate);
-  }, [selectedEvents, rfmFilters, recentMessageHours]);
+  }, [selectedEvents, rfmFilters, recentMessageHours, responderFilterEnabled, responderCampaignId]);
 
   // Calculate message segments when message changes
   useEffect(() => {
@@ -374,8 +379,44 @@ const PromotionSystem = () => {
     }
   };
 
+  const loadResponderCampaigns = async () => {
+    setLoadingResponderCampaigns(true);
+    try {
+      const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+      const { data, error } = await supabase
+        .from('sms_marketing_campaigns')
+        .select('id, name, created_at, status, messages_sent, total_recipients')
+        .gte('created_at', ninetyDaysAgo)
+        .gt('messages_sent', 0)
+        .order('created_at', { ascending: false })
+        .limit(200);
+
+      if (error) throw error;
+
+      setResponderCampaigns(data || []);
+    } catch (error) {
+      console.error('Error loading responder campaigns:', error);
+      setResponderCampaigns([]);
+    } finally {
+      setLoadingResponderCampaigns(false);
+    }
+  };
+
   const calculateAudience = async () => {
     if (loading) return;
+    if (responderFilterEnabled && !responderCampaignId) {
+      setAudienceError('Select a campaign to use the responder filter');
+      setAudienceData({
+        total_count: 0,
+        blocked_count: 0,
+        recent_message_count: 0,
+        available_count: 0,
+        rfm_ready_count: 0,
+        filtered_count: 0,
+        needs_rfm_generation: false
+      });
+      return;
+    }
 
     setLoading(true);
     setAudienceError(null);
@@ -384,6 +425,7 @@ const PromotionSystem = () => {
         city_ids: [], // Don't use city filter, only use selected events
         event_ids: selectedEvents,
         recent_message_hours: recentMessageHours,
+        responded_campaign_id: responderFilterEnabled ? responderCampaignId : null,
         rfm_filters: rfmFilters.enabled ? {
           recency_min: rfmFilters.recency[0],
           recency_max: rfmFilters.recency[1],
@@ -651,6 +693,7 @@ const PromotionSystem = () => {
           event_ids: selectedEvents,
           ids_only: true, // Critical: fetch all IDs for campaign, not just sample
           recent_message_hours: recentMessageHours, // Add this to match the normal audience call
+          responded_campaign_id: responderFilterEnabled ? responderCampaignId : null,
           rfm_filters: rfmFilters.enabled ? {
             recency_min: rfmFilters.recency[0],
             recency_max: rfmFilters.recency[1],
@@ -1275,6 +1318,64 @@ const PromotionSystem = () => {
             <Text size="1" color="gray" mt="1">
               Set to 0 to disable anti-spam filtering and allow sending to same people repeatedly
             </Text>
+          </Box>
+
+          {/* Responder Campaign Filter */}
+          <Box>
+            <Flex align="center" justify="between" mb="2">
+              <Text size="3" weight="bold">Responder Segment</Text>
+              <Button
+                size="1"
+                variant="soft"
+                onClick={loadResponderCampaigns}
+                disabled={loadingResponderCampaigns}
+              >
+                <ReloadIcon />
+                Refresh Campaigns
+              </Button>
+            </Flex>
+
+            <Flex direction="column" gap="2">
+              <Flex align="center" gap="2">
+                <Checkbox
+                  checked={responderFilterEnabled}
+                  onCheckedChange={(checked) => {
+                    const enabled = !!checked;
+                    setResponderFilterEnabled(enabled);
+                    if (enabled && !responderCampaignId && responderCampaigns.length > 0) {
+                      setResponderCampaignId(responderCampaigns[0].id);
+                    }
+                    if (!enabled) {
+                      setResponderCampaignId('');
+                    }
+                  }}
+                />
+                <Text size="2">Only include people who replied to a previous campaign</Text>
+              </Flex>
+
+              {responderFilterEnabled && (
+                <>
+                  <Select.Root
+                    value={responderCampaignId}
+                    onValueChange={setResponderCampaignId}
+                  >
+                    <Select.Trigger
+                      placeholder={loadingResponderCampaigns ? 'Loading campaigns...' : 'Select a campaign'}
+                    />
+                    <Select.Content>
+                      {responderCampaigns.map(campaign => (
+                        <Select.Item key={campaign.id} value={campaign.id}>
+                          {campaign.name} - {new Date(campaign.created_at).toLocaleDateString()} ({formatNumber(campaign.messages_sent || 0)} sent)
+                        </Select.Item>
+                      ))}
+                    </Select.Content>
+                  </Select.Root>
+                  <Text size="1" color="gray">
+                    Audience will be intersected with people who replied after receiving the selected campaign.
+                  </Text>
+                </>
+              )}
+            </Flex>
           </Box>
 
           {/* Audience Summary */}

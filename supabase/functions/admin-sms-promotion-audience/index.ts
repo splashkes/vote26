@@ -11,6 +11,52 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, GET, OPTIONS'
 };
 
+async function getResponderPersonIdsForCampaign(serviceClient: any, campaignId: string): Promise<Set<string>> {
+  const { data, error } = await serviceClient.rpc('sql', {
+    query: `
+      WITH first_sends AS (
+        SELECT
+          to_phone,
+          MIN(COALESCE(sent_at, created_at)) AS first_sent_at
+        FROM sms_outbound
+        WHERE campaign_id = $1
+          AND to_phone IS NOT NULL
+        GROUP BY to_phone
+      ),
+      campaign_responders AS (
+        SELECT DISTINCT i.from_phone
+        FROM sms_inbound i
+        JOIN first_sends s ON s.to_phone = i.from_phone
+        WHERE i.from_phone IS NOT NULL
+          AND i.created_at >= s.first_sent_at
+      ),
+      normalized_responders AS (
+        SELECT DISTINCT regexp_replace(from_phone, '\\D', '', 'g') AS phone_digits
+        FROM campaign_responders
+      )
+      SELECT DISTINCT p.id::text AS person_id
+      FROM people p
+      JOIN normalized_responders r
+        ON regexp_replace(COALESCE(NULLIF(p.phone, ''), NULLIF(p.phone_number, ''), ''), '\\D', '', 'g') = r.phone_digits
+      WHERE r.phone_digits <> ''
+    `,
+    params: [campaignId]
+  });
+
+  if (error) {
+    throw new Error(`Failed to fetch campaign responders: ${error.message}`);
+  }
+
+  const responderIds = new Set<string>();
+  for (const row of data || []) {
+    if (row?.person_id) {
+      responderIds.add(row.person_id);
+    }
+  }
+
+  return responderIds;
+}
+
 serve(async (req) => {
   try {
     // Handle preflight OPTIONS request
@@ -83,7 +129,7 @@ serve(async (req) => {
     }
 
     // Parse request body
-    let city_ids = [], event_ids = [], rfm_filters = null, recent_message_hours = 72, ids_only = false;
+    let city_ids = [], event_ids = [], rfm_filters = null, recent_message_hours = 72, ids_only = false, responded_campaign_id = null;
     try {
       const body = await req.json();
       city_ids = body.city_ids || [];
@@ -91,6 +137,7 @@ serve(async (req) => {
       rfm_filters = body.rfm_filters || null;
       recent_message_hours = body.recent_message_hours || 72;
       ids_only = body.ids_only || false; // For campaign creation - return all IDs without details
+      responded_campaign_id = body.responded_campaign_id || null; // Optional: restrict to people who replied to a prior campaign
     } catch (parseError) {
       return new Response(JSON.stringify({
         success: false,
@@ -110,7 +157,7 @@ serve(async (req) => {
     // Use pagination to fetch all results (Supabase JS client has internal limits)
     // Fetch in chunks of 1000 to avoid timeouts
     const chunkSize = 1000;
-    const maxRecords = ids_only ? 100000 : 10000; // For IDs only, allow up to 100k; for UI display cap at 10k
+    const maxRecords = (ids_only || responded_campaign_id) ? 100000 : 10000; // For IDs-only and responder cohorts, fetch full set
     let allPeople = [];
     let offset = 0;
     let totalCount = 0;
@@ -178,7 +225,14 @@ serve(async (req) => {
 
     console.log(`=== PAGINATION COMPLETE: ${allPeople.length} total records retrieved ===`);
 
-    const people = allPeople;
+    let people = allPeople;
+
+    if (responded_campaign_id) {
+      const responderPersonIds = await getResponderPersonIdsForCampaign(serviceClient, responded_campaign_id);
+      people = people.filter((p) => responderPersonIds.has(String(p.id)));
+      totalCount = people.length; // Exact count for responder-scoped audience
+      console.log(`Responder filter applied: campaign=${responded_campaign_id}, matched_people=${people.length}`);
+    }
 
     if (!people || people.length === 0) {
       return new Response(JSON.stringify({
@@ -202,14 +256,14 @@ serve(async (req) => {
     const sampleCount = people.length;
     const blockedCountInSample = people.filter(p => p.message_blocked > 0).length;
     const availableCountInSample = people.filter(p => p.message_blocked === 0).length;
-    
-    // Estimate proportions from sample, but use actual total count
-    const blockedCount = sampleCount > 0 ? Math.round((blockedCountInSample / sampleCount) * totalCount) : 0;
+    const blockedCount = responded_campaign_id
+      ? blockedCountInSample // Exact when responder filter is active
+      : (sampleCount > 0 ? Math.round((blockedCountInSample / sampleCount) * totalCount) : 0);
 
     // Calculate how many people were excluded due to recent messages
     // Query again WITHOUT the recent message filter to get the difference
     let recentMessageCount = 0;
-    if (recent_message_hours > 0) {
+    if (recent_message_hours > 0 && !responded_campaign_id) {
       const { data: withoutRecent, error: withoutRecentError } = await serviceClient
         .rpc('get_sms_audience_paginated', {
           p_city_ids: city_ids.length > 0 ? city_ids : null,
@@ -287,6 +341,8 @@ serve(async (req) => {
         debug: { // Debug info visible in browser console
           records_fetched: people.length,
           records_after_filter: filteredPeople.length,
+          responder_filter_applied: !!responded_campaign_id,
+          responder_campaign_id: responded_campaign_id,
           pagination_worked: people.length > 1000 ? 'YES' : (people.length === 1000 ? 'MAYBE - hit 1000 limit' : 'N/A')
         }
       }), {
