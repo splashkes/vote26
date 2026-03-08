@@ -698,9 +698,17 @@ const EventDetails = () => {
     }
   }, [person, eventId]);
 
-  // Update current time for countdown and check for expired timers
+  // Keep countdown updates coarse on the public tabs and only use 1s ticks in admin.
   useEffect(() => {
+    const hasTimedArtworks = artworks.some(artwork => artwork.closing_time);
+    const isAdminTimingActive = activeTab === 'admin' && adminTabLoaded;
+
+    if (!hasTimedArtworks && !isAdminTimingActive) {
+      return;
+    }
+
     let lastExpiredCheck = new Set();
+    const tickIntervalMs = isAdminTimingActive ? 1000 : 60000;
     
     countdownInterval.current = setInterval(() => {
       const now = Date.now();
@@ -726,14 +734,14 @@ const EventDetails = () => {
       }
       
       lastExpiredCheck = currentlyExpired;
-    }, 1000);
+    }, tickIntervalMs);
 
     return () => {
       if (countdownInterval.current) {
         clearInterval(countdownInterval.current);
       }
     };
-  }, [artworks]);
+  }, [activeTab, adminTabLoaded, artworks]);
 
   // Check for auto payment modal when all dependencies are ready
   // ALSO check when roundWinners changes (from broadcast) to catch real-time wins
@@ -2115,7 +2123,7 @@ const EventDetails = () => {
                 
                 return (
                   <Card
-                    key={`${artwork.id}-${currentBids[artwork.id]?.amount || 0}-${currentBids[artwork.id]?.time || Date.now()}`} 
+                    key={artwork.id}
                     size="2" 
                     style={{ 
                       cursor: 'pointer',
