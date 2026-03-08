@@ -1,98 +1,80 @@
-# Art Battle Vote App
+# Art Battle Vote26
 
-A beautiful, mobile-optimized web application for Art Battle voting and bidding, built with React, Radix UI Themes, and Supabase.
+Multi-app platform for Art Battle live painting competitions — voting, bidding, artist management, event hosting, and administration. Built with React/Vite and Supabase.
 
-## Features
+## SPA Applications
 
-- **Mobile-First Design**: Optimized for mobile devices with touch-friendly interfaces
-- **Event Management**: View active, recent, and upcoming Art Battle events
-- **Real-time Voting**: Vote for your favorite artists in each round
-- **Live Bidding**: Place bids on artwork during auctions
-- **Beautiful UI**: Built with Radix UI Themes for a consistent, accessible design
+Each app is a standalone React/Vite SPA with its own `deploy.sh`:
 
-## Tech Stack
+| App | Purpose |
+|-----|---------|
+| `art-battle-mui/` | Main public vote & bid app (mobile-first) |
+| `art-battle-admin/` | Admin dashboard — event management, SMS campaigns, payments |
+| `art-battle-artists/` | Artist portal — profiles, invitations, payment setup |
+| `art-battle-broadcast/` | Live event broadcast display |
+| `art-battle-host/` | Event host control panel |
+| `art-battle-timer/` | Auction countdown timer display |
+| `art-battle-results/` | Event results and winner displays |
+| `art-battle-qr/` | QR code scanning and validation |
+| `art-battle-promo-materials/` | Promotional material generation |
+| `art-battle-promo-offers/` | Promotional offers and discounts |
+| `art-battle-sponsorship/` | Sponsor management portal |
+| `art-battle-external/` | External/embed widgets |
+| `art-battle-ios/` | iOS app integration layer |
 
-- **Frontend**: React 18 with Vite
-- **UI Library**: Radix UI Themes
-- **Database**: Supabase (PostgreSQL)
-- **Routing**: React Router v6
-- **Styling**: CSS with Radix UI Themes
+## Backend
 
-## Getting Started
+- **Database**: Supabase (PostgreSQL) with 280+ migrations
+- **Edge Functions**: 185+ Supabase Edge Functions in `supabase/functions/`
+- **Integrations**: Stripe payments, Telnyx/Twilio SMS, AWS SES email, Eventbrite, Slack, Grafana, Meta Ads
 
-1. Clone the repository
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
+## Deployment
 
-3. Set up environment variables:
-   - Copy `.env.example` to `.env`
-   - Add your Supabase URL and anon key
+Each SPA deploys independently via its `deploy.sh` to DigitalOcean Spaces CDN:
+```bash
+cd art-battle-<app> && ./deploy.sh
+```
 
-4. Run the development server:
-   ```bash
-   npm run dev
-   ```
+Edge functions deploy via:
+```bash
+supabase functions deploy <function-name>
+```
 
-5. Open [http://localhost:5173](http://localhost:5173) in your browser
+Database migrations:
+```bash
+PGPASSWORD=$(cat ~/creds/supabase/db-password) psql -h db.xsqdkubgyqwpyvfltnrf.supabase.co -p 5432 -d postgres -U postgres -f migrations/<file>.sql
+```
 
 ## Project Structure
 
 ```
-src/
-├── components/
-│   ├── EventList.jsx      # Main event listing page
-│   └── EventDetails.jsx   # Event details with art/voting
-├── lib/
-│   └── supabase.js       # Supabase client configuration
-├── App.jsx               # Main app component with routing
-├── App.css              # Custom styles
-└── main.jsx             # App entry point
+vote26/
+├── art-battle-*/          # 13 SPA applications (each with src/, deploy.sh)
+├── supabase/functions/    # Canonical edge function source
+├── supabase-functions/    # Backup copy of deployed functions
+├── migrations/            # 280+ SQL migration files
+├── scripts/               # Utility scripts (JS, SH, SQL)
+├── config/                # nginx and grafana configs
+├── docs/                  # Organized documentation
+│   ├── architecture/      # System design, competition rules, data access
+│   ├── auth/              # Authentication guides
+│   ├── payments/          # Payment system docs
+│   ├── sms/               # SMS/Telnyx/Twilio docs
+│   ├── deployment/        # Deploy guides, Slack, cron setup
+│   ├── security/          # Security guides and reports
+│   ├── integrations/      # Grafana, QR, email, Cloudflare, iOS
+│   └── archive/           # Historical session logs and incident reports
+├── ai-context/            # AI agent context files
+├── CLAUDE.md              # Claude Code project instructions
+└── EDGE_FUNCTION_DEBUGGING_SECRET.md  # Edge function debugging reference
 ```
 
-## Features Overview
+## Tech Stack
 
-### Event List View
-- Displays events categorized as:
-  - **Active Events**: Currently happening (12 hours before to 18 hours after start)
-  - **Recent Events**: Past 10 days
-  - **Future Events**: Next 2 months
-- Expandable cards show event details
-- One-click navigation to event details
-
-### Event Details View
-- View all rounds and artworks
-- See artist information and bios
-- Vote for favorite artworks
-- Place bids during auctions
-- Filter by round using tabs
-- Real-time vote counts and bid amounts
-
-## Mobile Optimizations
-
-- Viewport meta tags prevent zooming
-- Touch-optimized button sizes (44px minimum)
-- Sticky headers for easy navigation
-- Smooth scrolling with momentum
-- Pull-to-refresh prevention
-- Safe area insets for modern phones
-
-## Database Schema
-
-The app uses the following main tables from Supabase:
-- `events`: Event information
-- `rounds`: Competition rounds
-- `art`: Artwork entries
-- `artist_profiles`: Artist information
-- `votes`: User votes
-- `bids`: Auction bids
-- `media_files`: Artwork images
-
-## Future Enhancements
-
-- User authentication for persistent voting
-- Push notifications for live events
-- Artist profile pages
-- Social sharing features
-- Offline support with service workers
+- **Frontend**: React 18, Vite, Radix UI Themes
+- **Database**: Supabase (PostgreSQL), Realtime subscriptions
+- **Payments**: Stripe Connect (artist payouts), Stripe Checkout
+- **SMS**: Telnyx (primary), Twilio (legacy)
+- **Email**: AWS SES
+- **CDN**: DigitalOcean Spaces, Cloudflare
+- **Monitoring**: Grafana dashboards
