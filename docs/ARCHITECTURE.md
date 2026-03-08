@@ -9,13 +9,36 @@
 
 vote26 is a multi-SPA platform for Art Battle live painting competitions. It provides voting, live auction bidding, artist management, event hosting, SMS marketing, payment processing, and administration across 13 independent frontend applications backed by Supabase (PostgreSQL + Edge Functions).
 
+## Network Topology
+
+- **Primary domain**: `artb.art` → `138.197.174.128`
+- **CDN**: `artb.tor1.cdn.digitaloceanspaces.com` (DigitalOcean Spaces bucket `artb`, tor1)
+- **Supabase project**: `xsqdkubgyqwpyvfltnrf.supabase.co`
+- **DB proxy**: `db.artb.art` (CNAME → Supabase)
+- **Media CDN**: `imagedelivery.net` (Cloudflare Images)
+- **Image upload worker**: `art-battle-image-upload-production.simon-867.workers.dev`
+- **Stripe webhook**: `webhook.artb.art/stripe/webhook` → `stripe-webhook-handler` edge function
+
+### Nginx Live Endpoints (cached polling)
+
+- `artb.art/live/events` — event list
+- `artb.art/live/event/{eventId}` — single event
+- `artb.art/live/bids/{eventEid}` — bids for event
+- `artb.art/live/votes/{eventEid}` — votes for event
+
+### API Pathways
+
+- **Supabase Functions (canonical)**: `https://xsqdkubgyqwpyvfltnrf.supabase.co/functions/v1`
+- **Functions via proxy**: `https://db.artb.art/functions/v1`
+- **Supabase REST API**: `https://db.artb.art/rest/v1`
+
 ## SPA Applications & Deployment Map
 
 All SPAs deploy to **DigitalOcean Spaces** bucket `artb` (tor1 region) via individual `deploy.sh` scripts. Public domain: `artb.art`.
 
 | SPA | CDN Path | URL | Purpose |
 |-----|----------|-----|---------|
-| art-battle-broadcast | `vote26/` | artb.art/vote26/ | Main public voting & bidding app |
+| art-battle-broadcast | `vote26/` | artb.art/ (root) | Main public voting & bidding app |
 | art-battle-admin | `admin/` | artb.art/admin/ | Admin dashboard, SMS campaigns, payments |
 | art-battle-artists | `profile/` | artb.art/profile/ | Artist portal, invitations, payment setup |
 | art-battle-host | `host/` | artb.art/host/ | Event host control panel |
@@ -30,6 +53,26 @@ All SPAs deploy to **DigitalOcean Spaces** bucket `artb` (tor1 region) via indiv
 | art-battle-ios | — | — | iOS app integration layer |
 
 **Cache strategy** (all SPAs): `index.html` no-cache; JS/CSS assets 1yr immutable with version query params.
+
+### Main App Routes (art-battle-broadcast)
+
+- `/` — event list
+- `/e/:eid` and `/e/:eid/:tab` — event resolver by short EID
+- `/event/:eventId` — event details by UUID
+- `/upgrade/:qrCode` — QR upgrade flow
+- `/payment/:sessionId` — payment status
+
+### Promo Offers Routes (art-battle-promo-offers)
+
+- `artb.art/o/{HASH}` — public offer page
+- `artb.art/o/admin` — offer admin UI
+
+## Media Pipeline
+
+- **Uploads**: Browser → Cloudflare Worker (`art-battle-image-upload-production.simon-867.workers.dev`) → Cloudflare Images
+- Worker validates Supabase JWT before accepting uploads
+- **Delivery**: `https://imagedelivery.net/{account}/{id}/{variant}` (variants: `public`, `thumbnail`, `original`)
+- **Static assets** (app shells, branding): DigitalOcean CDN under app-specific subpaths
 
 ## Shared Tech Stack
 
