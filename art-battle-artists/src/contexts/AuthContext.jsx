@@ -153,22 +153,44 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const signInWithOtp = async (phone) => {
-    const { data, error } = await supabase.auth.signInWithOtp({
-      phone: phone,
-      options: {
-        channel: 'sms',
-      }
-    });
+  const signInWithOtp = async (value, method = 'phone') => {
+    let response;
+
+    if (method === 'email') {
+      response = await supabase.auth.signInWithOtp({
+        email: value,
+      });
+    } else {
+      response = await supabase.auth.signInWithOtp({
+        phone: value,
+        options: {
+          channel: 'sms',
+        }
+      });
+    }
+
+    const { data, error } = response;
     return { data, error };
   };
 
-  const verifyOtp = async (phone, token) => {
-    const { data, error } = await supabase.auth.verifyOtp({
-      phone: phone,
-      token: token,
-      type: 'sms'
-    });
+  const verifyOtp = async (value, token, method = 'phone') => {
+    let response;
+
+    if (method === 'email') {
+      response = await supabase.auth.verifyOtp({
+        email: value,
+        token: token,
+        type: 'email'
+      });
+    } else {
+      response = await supabase.auth.verifyOtp({
+        phone: value,
+        token: token,
+        type: 'sms'
+      });
+    }
+
+    const { data, error } = response;
     
     // Custom Access Token Hook now handles JWT claims automatically
     // No manual session refresh needed - prevents cascading token refresh loops
