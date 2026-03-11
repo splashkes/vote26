@@ -54,6 +54,10 @@ All SPAs deploy to **DigitalOcean Spaces** bucket `artb` (tor1 region) via indiv
 
 **Cache strategy** (all SPAs): `index.html` no-cache; JS/CSS assets 1yr immutable with version query params.
 
+Deployment constraint:
+- The repo assumes DigitalOcean Spaces bucket `artb`, but some local environments also use `s3cmd` for Cloudflare R2.
+- SPA deploy scripts must select the DO Spaces config explicitly or verify bucket access before uploading.
+
 ### Main App Routes (art-battle-broadcast)
 
 - `/` — event list
@@ -120,6 +124,14 @@ Core operations go through PostgreSQL RPC functions, not direct table access:
 - **Admin permissions**: `check_event_admin_permission()`
 - **Auction control**: `manage_auction_timer()`, `check_and_close_expired_auctions()`
 - **Config**: `get_cloudflare_config()` — used by admin, artists, broadcast
+
+### Payment Read Model Notes
+
+- Event payment admin views are not sourced from a single function. They are composed from event-specific RPCs plus edge-function reshaping.
+- `events.currency` is the canonical event payment currency. UI components should display it directly rather than inferring event-level amounts from location joins.
+- `cities.countries.currency_code` is a useful creation-time derivation source, but not the live read-model source of truth.
+- A stale RPC can make production look like a stale edge function even when deployed bundles match local code. `get_event_ready_to_pay(uuid)` is a known example.
+- Event payment writes should link to both `artist_profile_id` and an event-specific `art_id` where possible so event-scoped payment attempts reconcile correctly.
 
 ## External Services
 

@@ -18,11 +18,13 @@ This project uses AI agents (Claude Code) as a primary development tool, with MC
 
 ### Key Rules for AI Agents
 1. **Never use `supabase functions logs`** — they don't work. Debug via response body (see `EDGE_FUNCTION_DEBUGGING_SECRET.md`)
-2. **Always deploy via deploy.sh** — never manual s3cmd or build separately
+2. **Always deploy via `deploy.sh`** — never manual `s3cmd` or build separately. On machines with multiple `s3cmd` configs, verify the script is targeting DigitalOcean Spaces (`~/.s3cfg-do-spaces`), not Cloudflare R2.
 3. **Supabase functions go in `supabase/functions/` only** — not `supabase-functions/` or anywhere else
 4. **Database migrations**: use the psql command from CLAUDE.md with password from `~/creds/supabase/db-password`
 5. **Admin edge functions**: always prefix with `admin-`
 6. **Complex queries in edge functions**: create a PostgreSQL function via migration first, then call via `.rpc()`
+7. **For event currency, backend is the source of truth** — SPA surfaces should display `events.currency` and not infer live payment currency from `cities.countries.currency_code` or UI fallbacks.
+8. **For event payment bugs, check stale RPCs as well as stale edge functions** — `get_event_ready_to_pay(uuid)` and `get_event_payment_attempts(uuid, days)` can drift independently of deployed function bundles.
 
 ## MCP Context Directory
 
@@ -89,6 +91,14 @@ Reference: `docs/architecture/AB_SKILL_AREAS_REFERENCE.md` — comprehensive ref
 3. Deploy: `supabase functions deploy <name>`
 4. Update backup copy in `supabase-functions/` if keeping it synced
 5. Test via browser console or curl — debug info comes in response body
+
+### Payment incident notes
+- Event-specific admin payments are a joined read model:
+  - edge function: `event-admin-payments`
+  - RPCs: `get_event_artists_owed`, `get_event_ready_to_pay`, `get_event_payment_attempts`, `get_event_payment_summary`
+- If artists appear in both `Ready to Pay` and `In Progress`, suspect stale DB function logic before assuming the edge function is wrong.
+- If an event in Canada/Australia/EU shows payout currency as `USD`, compare `events.currency` to `cities -> countries.currency_code` and validate checkout truth in `payment_processing`.
+- The create-event path has historically drifted from the update path; verify new-event defaults separately from edit behavior.
 
 ### SPA changes
 1. Modify source in `art-battle-<app>/src/`

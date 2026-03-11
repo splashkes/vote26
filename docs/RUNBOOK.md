@@ -17,6 +17,11 @@ cd art-battle-<app> && ./deploy.sh
 
 Deploy scripts: build via Vite, cache-bust `index.html`, sync to DigitalOcean Spaces (`s3://artb/<path>/`).
 
+Operational note:
+- On some developer machines `s3cmd` defaults to Cloudflare R2 via `~/.s3cfg`.
+- For SPA deploys, force or auto-select the DigitalOcean config (`~/.s3cfg-do-spaces`) before upload.
+- Fail fast if `s3://artb/` is not reachable with the active `s3cmd` config.
+
 ### Edge Function Deployment
 
 ```bash
@@ -117,6 +122,28 @@ Rate limit: 10/batch, 300/hour.
 - Checkout: `stripe-create-checkout` → `stripe-payment-success`
 - Artist payouts: `stripe-connect-onboard` → `stripe-global-payments-payout`
 - Instant payouts: `check-instant-payout-eligibility` → `process-instant-payout`
+
+### Event Payment Incident Pattern
+
+If an event payment screen shows artists in both `Ready to Pay` and `In Progress`, or event-scoped `Pay Now` does nothing:
+
+1. Check `events.currency` first.
+2. Compare it to `cities -> countries.currency_code` and to `payment_processing.currency` for paid art.
+3. Verify the event payment RPCs directly:
+   - `get_event_ready_to_pay(uuid)`
+   - `get_event_payment_attempts(uuid, days)`
+4. Verify the event payment edge function payload:
+   - `event-admin-payments`
+5. Verify the write path:
+   - SPA payload includes the correct `artist_profile_id`
+   - SPA payload includes `event_id`
+   - `process-artist-payment` stores a representative `art_id` for the event
+
+Ottawa incident learnings:
+- `admin-create-event` had hardcoded new events to `USD`
+- `get_event_ready_to_pay(uuid)` was stale and did not exclude active attempts
+- event payment UI sent the wrong artist identifier and omitted `event_id`
+- fixing only one layer was not sufficient; data, RPCs, edge functions, and SPA all had to align
 
 ## SMS Campaigns
 
