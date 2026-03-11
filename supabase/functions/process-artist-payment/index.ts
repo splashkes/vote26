@@ -1,7 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import Stripe from 'https://esm.sh/stripe@13.0.0?target=deno';
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -22,6 +20,7 @@ serve(async (req) => {
       artist_profile_id,
       amount,
       currency = 'USD',
+      event_id = null,
       payment_type = 'automated',
       description = 'Artist payment'
     } = await req.json();
@@ -33,8 +32,12 @@ serve(async (req) => {
       );
     }
 
-    // Get current admin user
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+    // Get current admin user when a bearer token is available.
+    const authHeader = req.headers.get('Authorization');
+    const token = authHeader?.replace('Bearer ', '');
+    const { data: { user } } = token
+      ? await supabaseClient.auth.getUser(token)
+      : { data: { user: null } };
     const adminEmail = user?.email || 'admin@artbattle.com';
 
     // Get artist information
@@ -63,11 +66,36 @@ serve(async (req) => {
       throw new Error(`Artist payment account not ready for payments. Status: ${paymentAccount.status}`);
     }
 
+    let representativeArt = null;
+
+    if (event_id) {
+      const { data: eventArt, error: eventArtError } = await supabaseClient
+        .from('art')
+        .select('id, art_code')
+        .eq('event_id', event_id)
+        .eq('artist_id', artist_profile_id)
+        .eq('status', 'paid')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (eventArtError) {
+        throw new Error(`Failed to find event artwork: ${eventArtError.message}`);
+      }
+
+      if (!eventArt) {
+        throw new Error('No paid artwork found for this artist in the selected event');
+      }
+
+      representativeArt = eventArt;
+    }
+
     // Create payment record in artist_payments table
     const { data: paymentRecord, error: insertError } = await supabaseClient
       .from('artist_payments')
       .insert({
         artist_profile_id: artist_profile_id,
+        art_id: representativeArt?.id || null,
         gross_amount: amount,
         net_amount: amount, // Full amount for automated payments
         platform_fee: 0.00,
@@ -80,7 +108,10 @@ serve(async (req) => {
           created_via: 'admin_panel',
           created_by: adminEmail,
           created_at: new Date().toISOString(),
-          stripe_account_id: paymentAccount.stripe_recipient_id
+          stripe_account_id: paymentAccount.stripe_recipient_id,
+          event_id: event_id,
+          representative_art_id: representativeArt?.id || null,
+          representative_art_code: representativeArt?.art_code || null
         }
       })
       .select()

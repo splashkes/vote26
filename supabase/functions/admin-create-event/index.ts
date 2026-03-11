@@ -221,6 +221,46 @@ Deno.serve(async (req) => {
     const startTimestamp = convertToTimestampTz(eventData.event_start_datetime, eventData.timezone_icann);
     const endTimestamp = convertToTimestampTz(eventData.event_end_datetime, eventData.timezone_icann);
 
+    let resolvedCurrency = eventData.currency?.trim?.().toUpperCase?.() || null;
+
+    if (!resolvedCurrency && eventData.city_id) {
+      const { data: cityData, error: cityError } = await supabase
+        .from('cities')
+        .select('countries(currency_code)')
+        .eq('id', eventData.city_id)
+        .maybeSingle();
+
+      if (cityError) {
+        console.error('Error resolving city currency:', cityError);
+      } else if (cityData?.countries?.currency_code) {
+        resolvedCurrency = cityData.countries.currency_code;
+      }
+    }
+
+    if (!resolvedCurrency && eventData.country_id) {
+      const { data: countryData, error: countryError } = await supabase
+        .from('countries')
+        .select('currency_code')
+        .eq('id', eventData.country_id)
+        .maybeSingle();
+
+      if (countryError) {
+        console.error('Error resolving country currency:', countryError);
+      } else if (countryData?.currency_code) {
+        resolvedCurrency = countryData.currency_code;
+      }
+    }
+
+    if (!resolvedCurrency) {
+      return new Response(JSON.stringify({
+        error: 'Currency could not be resolved from the event data',
+        details: 'Select a city or country with a configured currency, or provide currency explicitly.'
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400
+      });
+    }
+
     // Prepare insert data for Supabase
     const insertData = {
       eid: eventData.eid,
@@ -243,7 +283,7 @@ Deno.serve(async (req) => {
       enable_auction: eventData.enable_auction ?? true,
       auction_start_bid: eventData.auction_start_bid ?? 50,
       min_bid_increment: eventData.min_bid_increment ?? 5,
-      currency: 'USD' // Default currency
+      currency: resolvedCurrency
     };
 
     console.log('Insert data prepared:', {
