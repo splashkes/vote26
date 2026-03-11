@@ -1,0 +1,4 @@
+interface:
+  display_name: "AB Data Diagnostics & Repair"
+  short_description: "Diagnose and repair AB payment/data anomalies safely."
+  default_prompt: "Investigate AB data anomalies, prove root cause with SQL evidence, apply safe repairs, and verify end-to-end."

@@ -28,6 +28,20 @@ Each app is a standalone React/Vite SPA with its own `deploy.sh`:
 - **Edge Functions**: 185+ Supabase Edge Functions in `supabase/functions/`
 - **Integrations**: Stripe payments, Telnyx/Twilio SMS, AWS SES email, Eventbrite, Slack, Grafana, Meta Ads
 
+## Agent Skills
+
+Repo-owned AI/agent skills live in `agent-skills/`.
+
+- Canonical source: `agent-skills/<skill-name>/`
+- Runtime install target: `$CODEX_HOME/skills/`
+- Install/sync command:
+
+```bash
+./scripts/install-agent-skills.sh
+```
+
+Use `./scripts/install-agent-skills.sh link` if you want `$CODEX_HOME/skills` to symlink back to the repo copy during local development.
+
 ## Deployment
 
 Each SPA deploys independently via its `deploy.sh` to DigitalOcean Spaces CDN:
@@ -54,6 +68,7 @@ vote26/
 ├── supabase-functions/    # Backup copy of deployed functions
 ├── migrations/            # 280+ SQL migration files
 ├── scripts/               # Utility scripts (JS, SH, SQL)
+├── agent-skills/          # Canonical repo-owned agent skills
 ├── config/                # nginx and grafana configs
 ├── docs/                  # Organized documentation
 │   ├── architecture/      # System design, competition rules, data access

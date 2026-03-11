@@ -1,0 +1,4 @@
+interface:
+  display_name: "AB SPA Webapp Interactions"
+  short_description: "Diagnose and fix Art Battle SPA UI flows"
+  default_prompt: "Use $ab-spa-webapp-interactions to triage and fix an AB admin SPA interaction bug end-to-end."

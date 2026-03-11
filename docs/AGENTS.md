@@ -15,6 +15,7 @@ This project uses AI agents (Claude Code) as a primary development tool, with MC
 - `CLAUDE.md` (root) — database credentials, migration commands, deployment rules
 - `art-battle-admin/CLAUDE.md` — admin function naming (`admin-*` prefix), deploy workflow
 - `.claude/` directories in individual SPAs may contain additional context
+- Repo-owned skills live in `agent-skills/`; install them into `$CODEX_HOME/skills` with `./scripts/install-agent-skills.sh`
 
 ### Key Rules for AI Agents
 1. **Never use `supabase functions logs`** — they don't work. Debug via response body (see `EDGE_FUNCTION_DEBUGGING_SECRET.md`)
