@@ -5,6 +5,68 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+async function getCampaignOutboundStats(supabase: any, campaignId: string) {
+  const { data, error } = await supabase
+    .from('sms_outbound')
+    .select('status')
+    .eq('campaign_id', campaignId);
+
+  if (error) {
+    throw new Error(`Failed to load outbound stats: ${error.message}`);
+  }
+
+  let sent = 0;
+  let failed = 0;
+
+  for (const row of data || []) {
+    if (row.status === 'sent') {
+      sent += 1;
+    } else if (row.status === 'failed') {
+      failed += 1;
+    }
+  }
+
+  return { sent, failed };
+}
+
+async function getOutboundAttemptedRecipientIds(supabase: any, campaignId: string) {
+  const attemptedIds = new Set<string>();
+  const pageSize = 1000;
+  let from = 0;
+
+  while (true) {
+    const to = from + pageSize - 1;
+    const { data, error } = await supabase
+      .from('sms_outbound')
+      .select('metadata')
+      .eq('campaign_id', campaignId)
+      .range(from, to);
+
+    if (error) {
+      throw new Error(`Failed to hydrate attempted recipient ids: ${error.message}`);
+    }
+
+    if (!data || data.length === 0) {
+      break;
+    }
+
+    for (const row of data) {
+      const personId = row?.metadata?.recipient_person_id;
+      if (personId) {
+        attemptedIds.add(String(personId));
+      }
+    }
+
+    if (data.length < pageSize) {
+      break;
+    }
+
+    from += pageSize;
+  }
+
+  return attemptedIds;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -88,9 +150,19 @@ Deno.serve(async (req) => {
           })
           .eq('id', campaign.id);
 
-        const message = campaign.metadata?.message_template;
-        const recipientData = campaign.metadata?.recipient_data || [];
-        const recentMessageHours = campaign.metadata?.recent_message_hours || 72; // Default to 72 if not set
+        const { data: currentCampaign, error: currentCampaignError } = await supabase
+          .from('sms_marketing_campaigns')
+          .select('*')
+          .eq('id', campaign.id)
+          .single();
+
+        if (currentCampaignError || !currentCampaign) {
+          throw new Error(`Failed to reload campaign state: ${currentCampaignError?.message || 'Campaign not found'}`);
+        }
+
+        const message = currentCampaign.metadata?.message_template;
+        const recipientData = currentCampaign.metadata?.recipient_data || [];
+        const recentMessageHours = currentCampaign.metadata?.recent_message_hours || 72; // Default to 72 if not set
 
         if (!message || recipientData.length === 0) {
           throw new Error('Missing message template or recipient data');
@@ -100,8 +172,13 @@ Deno.serve(async (req) => {
         // Send messages directly instead of calling bulk function
         const BATCH_SIZE = 100; // Process 100 messages per cron run
 
-        // Get list of already attempted recipient IDs (don't retry failures)
-        const attemptedIds = new Set(campaign.metadata?.attempted_recipient_ids || []);
+        // Get list of already attempted recipient IDs (don't retry failures).
+        // Also hydrate from outbound logs so counters survive a retry after a partial run.
+        const attemptedIds = new Set<string>(currentCampaign.metadata?.attempted_recipient_ids || []);
+        const outboundAttemptedIds = await getOutboundAttemptedRecipientIds(supabase, campaign.id);
+        for (const personId of outboundAttemptedIds) {
+          attemptedIds.add(personId);
+        }
 
         // Filter to only recipients that haven't been attempted yet
         const remainingRecipients = recipientData.filter(person => !attemptedIds.has(person.id));
@@ -113,8 +190,8 @@ Deno.serve(async (req) => {
         let failedCount = 0;
         let skippedCount = 0; // Track duplicates prevented
         const newlyAttemptedIds = [];
-        const failureDetails = campaign.metadata?.failure_details || [];
-        const duplicatesSkipped = campaign.metadata?.duplicates_skipped || [];
+        const failureDetails = currentCampaign.metadata?.failure_details || [];
+        const duplicatesSkipped = currentCampaign.metadata?.duplicates_skipped || [];
 
         // Send messages one by one (with rate limiting in send-marketing-sms)
         for (const person of batchRecipients) {
@@ -133,7 +210,8 @@ Deno.serve(async (req) => {
                 recent_message_hours: recentMessageHours, // Pass anti-spam filter value
                 metadata: {
                   campaign_name: campaign.name,
-                  scheduled_campaign: true
+                  scheduled_campaign: true,
+                  recipient_person_id: person.id
                 }
               })
             });
@@ -183,10 +261,12 @@ Deno.serve(async (req) => {
 
         // Update campaign progress
         // Add newly attempted IDs to the tracking list
-        const allAttemptedIds = [...attemptedIds, ...newlyAttemptedIds];
-        const totalSent = (campaign.messages_sent || 0) + sentCount;
-        const totalFailed = (campaign.messages_failed || 0) + failedCount;
-        const totalSkipped = (campaign.metadata?.duplicates_prevented || 0) + skippedCount;
+        const allAttemptedIds = Array.from(new Set([
+          ...attemptedIds,
+          ...newlyAttemptedIds.map((id) => String(id))
+        ]));
+        const { sent: totalSent, failed: totalFailed } = await getCampaignOutboundStats(supabase, campaign.id);
+        const totalSkipped = duplicatesSkipped.length;
         const isComplete = allAttemptedIds.length >= recipientData.length;
 
         await supabase
@@ -197,7 +277,7 @@ Deno.serve(async (req) => {
             messages_failed: totalFailed,
             completed_at: isComplete ? new Date().toISOString() : null,
             metadata: {
-              ...campaign.metadata,
+              ...currentCampaign.metadata,
               attempted_recipient_ids: allAttemptedIds,
               failure_details: failureDetails,
               duplicates_skipped: duplicatesSkipped,
