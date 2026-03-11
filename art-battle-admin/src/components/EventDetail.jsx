@@ -3073,7 +3073,7 @@ The Art Battle Team`);
                     <>
                       <Text size="2">Winner Prize:</Text>
                       <Text size="2" weight="bold">
-                        {event.winner_prize_currency || event.cities?.countries?.currency_code || 'USD'} {event.cities?.countries?.currency_symbol || '$'}{event.winner_prize.toFixed(2)}
+                        {(event.winner_prize_currency || event.currency)} {getCurrencySymbol(event.winner_prize_currency || event.currency)}{event.winner_prize.toFixed(2)}
                       </Text>
                     </>
                   )}
@@ -3116,6 +3116,11 @@ The Art Battle Team`);
 
               {/* Details Grid */}
               <Flex direction="column" gap="2">
+                <Flex gap="2" wrap="wrap" align="center">
+                  <Text size="2">Currency:</Text>
+                  <Badge variant="soft">{event.currency}</Badge>
+                </Flex>
+
                 {/* Public Event Links */}
                 <Flex gap="3" wrap="wrap" align="center">
                   {/* Art Battle Link */}
@@ -3226,7 +3231,7 @@ The Art Battle Team`);
                     <Text size="2">Auction:</Text>
                     <Text size="2">starts at</Text>
                     <Text size="2" weight="bold">
-                      {event.cities?.countries?.currency_code || 'USD'} {event.cities?.countries?.currency_symbol || '$'}{event.auction_start_bid?.toFixed(2) || '0.00'}
+                      {event.currency} {getCurrencySymbol(event.currency)}{event.auction_start_bid?.toFixed(2) || '0.00'}
                     </Text>
                     {editingTaxRate ? (
                       <>
@@ -3299,7 +3304,7 @@ The Art Battle Team`);
                         <Text size="2">•</Text>
                         <Text size="2">min bid increment:</Text>
                         <Text size="2" weight="bold">
-                          {event.cities?.countries?.currency_symbol || '$'}{event.min_bid_increment?.toFixed(2) || '5.00'}
+                          {event.currency} {getCurrencySymbol(event.currency)}{event.min_bid_increment?.toFixed(2) || '5.00'}
                         </Text>
                       </>
                     )}

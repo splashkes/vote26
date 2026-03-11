@@ -118,9 +118,10 @@ const EventPaymentDashboard = ({ eventId, eventName }) => {
       // Create automated payment via Stripe
       const { data, error } = await supabase.functions.invoke('process-artist-payment', {
         body: {
-          artist_profile_id: selectedArtist.artist_id,
+          artist_profile_id: selectedArtist.artist_profiles?.id,
           amount: balance,
           currency: currency,
+          event_id: eventId,
           payment_type: 'automated',
           description: `Event payment for ${eventName || 'event'} - ${currency} balance`
         }

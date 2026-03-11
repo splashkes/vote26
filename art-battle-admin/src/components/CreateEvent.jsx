@@ -968,10 +968,10 @@ const CreateEvent = () => {
                           </Text>
                           <Flex gap="2">
                             <Select.Root
-                              value={formData.winner_prize_currency || formData.cities?.countries?.currency_code || 'USD'}
+                              value={formData.winner_prize_currency || undefined}
                               onValueChange={(value) => handleInputChange('winner_prize_currency', value)}
                             >
-                              <Select.Trigger style={{ width: '80px' }} />
+                              <Select.Trigger placeholder="Currency" style={{ width: '100px' }} />
                               <Select.Content>
                                 <Select.Item value="USD">USD</Select.Item>
                                 <Select.Item value="CAD">CAD</Select.Item>
