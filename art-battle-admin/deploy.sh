@@ -3,7 +3,7 @@
 # Art Battle Admin Deployment Script
 # Based on the deployment pattern used in other vote26 apps
 
-set -e
+set -euo pipefail
 
 echo "🚀 Starting Art Battle Admin deployment..."
 
@@ -71,6 +71,25 @@ if ! command -v s3cmd &> /dev/null; then
     exit 1
 fi
 
+DEPLOY_BUCKET="${DEPLOY_BUCKET:-artb}"
+DEFAULT_DO_CONFIG="$HOME/.s3cfg-do-spaces"
+
+# Prefer the DigitalOcean Spaces config on machines that also use s3cmd for other providers.
+if [ -z "${S3CMD_CONFIG:-}" ] && [ -f "$DEFAULT_DO_CONFIG" ]; then
+    export S3CMD_CONFIG="$DEFAULT_DO_CONFIG"
+fi
+
+if [ -n "${S3CMD_CONFIG:-}" ]; then
+    print_status "Using s3cmd config: $S3CMD_CONFIG"
+fi
+
+print_status "Verifying access to s3://$DEPLOY_BUCKET/..."
+if ! s3cmd ls "s3://$DEPLOY_BUCKET" > /dev/null 2>&1; then
+    print_error "Unable to access s3://$DEPLOY_BUCKET/ with the current s3cmd configuration."
+    print_error "Set S3CMD_CONFIG to the DigitalOcean Spaces config and retry."
+    exit 1
+fi
+
 # Generate cache-busting version based on current timestamp
 CACHE_VERSION=$(date +%s)
 print_status "Cache version: $CACHE_VERSION"
@@ -81,7 +100,7 @@ sed "s/\.js/.js?v=$CACHE_VERSION/g; s/\.css/.css?v=$CACHE_VERSION/g" dist/index.
 mv dist/index_temp.html dist/index.html
 
 # Deploy all files to admin subdirectory
-print_status "Uploading files to s3://artb/admin/..."
+print_status "Uploading files to s3://$DEPLOY_BUCKET/admin/..."
 
 # Upload with proper MIME types and cache invalidation headers
 # Upload CSS files with correct MIME type
@@ -90,7 +109,7 @@ find dist -name "*.css" -exec basename {} \; | while read file; do
         --acl-public \
         --add-header="Cache-Control:no-cache, must-revalidate" \
         --mime-type="text/css" \
-        "s3://artb/admin/assets/$file"
+        "s3://$DEPLOY_BUCKET/admin/assets/$file"
 done
 
 # Upload JS files with correct MIME type  
@@ -99,7 +118,7 @@ find dist -name "*.js" -exec basename {} \; | while read file; do
         --acl-public \
         --add-header="Cache-Control:no-cache, must-revalidate" \
         --mime-type="application/javascript" \
-        "s3://artb/admin/assets/$file"
+        "s3://$DEPLOY_BUCKET/admin/assets/$file"
 done
 
 # Upload remaining files (HTML, SVG, etc.) with auto-detection
@@ -110,7 +129,7 @@ s3cmd sync \
     --exclude="*.js" \
     --guess-mime-type \
     dist/ \
-    s3://artb/admin/
+    "s3://$DEPLOY_BUCKET/admin/"
 
 if [ $? -ne 0 ]; then
     print_error "Deployment failed!"
