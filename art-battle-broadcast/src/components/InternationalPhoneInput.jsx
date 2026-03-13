@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, forwardRef } from 'react';
 import { Flex, Text, Badge, Select, TextField } from '@radix-ui/themes';
-import { parsePhoneNumber, isPossiblePhoneNumber, getCountries, getCountryCallingCode } from 'libphonenumber-js';
+import { parsePhoneNumber } from 'libphonenumber-js';
 import { supabase } from '../lib/supabase';
 
 const InternationalPhoneInput = forwardRef(({ 
@@ -19,6 +19,65 @@ const InternationalPhoneInput = forwardRef(({
   const [selectedCountry, setSelectedCountry] = useState('CA'); // Start with Canada since user is detected there
   const validationTimeoutRef = useRef(null);
   const inputRef = useRef(null);
+
+  const buildPhoneForValidation = (inputValue, countryToUse) => {
+    if (!inputValue) return '';
+
+    const cleanedInput = inputValue.replace(/[^\d\s\-\(\)\+]/g, '');
+    if (cleanedInput.startsWith('+')) {
+      return cleanedInput;
+    }
+
+    const selectedCountryData = countryData.find(c => c.code === countryToUse);
+    if (!selectedCountryData) {
+      return cleanedInput;
+    }
+
+    const digitsOnly = cleanedInput.replace(/\D/g, '');
+    const countryDialCode = selectedCountryData.dialCode.replace('+', '');
+
+    if (digitsOnly.startsWith(countryDialCode)) {
+      return `+${digitsOnly}`;
+    }
+
+    return `${selectedCountryData.dialCode}${digitsOnly}`;
+  };
+
+  const getBasicPhoneValidation = (inputValue, countryToUse) => {
+    const candidate = buildPhoneForValidation(inputValue, countryToUse);
+    if (!candidate) {
+      return {
+        inputValue,
+        phone: '',
+        nationalFormat: inputValue,
+        e164Format: '',
+        isValid: false,
+      };
+    }
+
+    try {
+      const parsed = parsePhoneNumber(candidate);
+      if (parsed?.isValid()) {
+        return {
+          inputValue,
+          phone: parsed.number,
+          nationalFormat: parsed.formatNational(),
+          e164Format: parsed.number,
+          isValid: true,
+        };
+      }
+    } catch (error) {
+      console.log('📱 Basic phone parse failed:', error);
+    }
+
+    return {
+      inputValue,
+      phone: '',
+      nationalFormat: inputValue,
+      e164Format: '',
+      isValid: false,
+    };
+  };
 
   // Country data for dropdown
   const countryData = [
@@ -75,7 +134,7 @@ const InternationalPhoneInput = forwardRef(({
   }, []);
 
   // Enhanced validation using Supabase edge function 
-  const callEnhancedValidation = async (phoneNumber, countryCode) => {
+  const callEnhancedValidation = async (phoneNumber, countryCode, basicValidation) => {
     // Must be at least 7 digits before sending to API
     const digitsOnly = phoneNumber.replace(/\D/g, '');
     if (!phoneNumber || digitsOnly.length < 7) {
@@ -94,6 +153,15 @@ const InternationalPhoneInput = forwardRef(({
 
       if (error) {
         console.log('Enhanced validation error:', error);
+        setValidationResult({
+          valid: basicValidation.isValid,
+          phoneNumber: basicValidation.e164Format || phoneNumber,
+          nationalFormat: basicValidation.nationalFormat || phone,
+          countryCode: countryCode || selectedCountry,
+          source: 'basic',
+          confidence: 'medium',
+          degradedReason: 'edge_function_error'
+        });
         return;
       }
 
@@ -133,6 +201,15 @@ const InternationalPhoneInput = forwardRef(({
       }
     } catch (error) {
       console.log('Enhanced validation failed:', error);
+      setValidationResult({
+        valid: basicValidation.isValid,
+        phoneNumber: basicValidation.e164Format || phoneNumber,
+        nationalFormat: basicValidation.nationalFormat || phone,
+        countryCode: countryCode || selectedCountry,
+        source: 'basic',
+        confidence: 'medium',
+        degradedReason: 'invoke_exception'
+      });
     } finally {
       setValidationLoading(false);
     }
@@ -146,6 +223,8 @@ const InternationalPhoneInput = forwardRef(({
     // Clean input but keep basic formatting chars
     const cleanedInput = inputValue.replace(/[^\d\s\-\(\)\+]/g, '');
     setPhone(cleanedInput); // Show what user typed until Twilio formats it
+    const countryToUse = overrideCountry || selectedCountry;
+    const basicValidation = getBasicPhoneValidation(cleanedInput, countryToUse);
     
     // Clear any existing timeout
     if (validationTimeoutRef.current) {
@@ -157,7 +236,6 @@ const InternationalPhoneInput = forwardRef(({
     if (digitsOnly.length >= 7) {
       validationTimeoutRef.current = setTimeout(() => {
         let phoneForTwilio;
-        const countryToUse = overrideCountry || selectedCountry;
         // console.log('📱 Using country for validation:', countryToUse, 'override:', overrideCountry, 'selected:', selectedCountry); // REMOVED: Too verbose
         
         if (cleanedInput.startsWith('+')) {
@@ -186,7 +264,7 @@ const InternationalPhoneInput = forwardRef(({
           }
         }
         
-        callEnhancedValidation(phoneForTwilio, null);
+        callEnhancedValidation(phoneForTwilio, null, basicValidation);
       }, 1000); // 1 second debounce
     }
     
@@ -194,13 +272,19 @@ const InternationalPhoneInput = forwardRef(({
     if (onChange) {
       onChange({
         target: { value: cleanedInput },
-        phone: '', // Will be filled by Twilio validation
-        country: selectedCountry,
+        phone: basicValidation.phone,
+        country: countryToUse,
         inputValue: cleanedInput,
-        isValid: false, // Will be determined by Twilio
-        nationalFormat: cleanedInput,
-        e164Format: '',
-        validationResult: null
+        isValid: basicValidation.isValid,
+        nationalFormat: basicValidation.nationalFormat,
+        e164Format: basicValidation.e164Format,
+        validationResult: basicValidation.isValid ? {
+          valid: true,
+          phoneNumber: basicValidation.e164Format,
+          nationalFormat: basicValidation.nationalFormat,
+          source: 'basic',
+          confidence: 'medium'
+        } : null
       });
     }
   };

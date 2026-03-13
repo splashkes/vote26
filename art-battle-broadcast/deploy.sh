@@ -117,8 +117,9 @@ print_status "Using version: $GIT_HASH"
 
 # Update index.html to add cache-busting to assets
 print_status "Adding cache-busting parameters to index.html..."
-sed -i "s/\(\.js\)\"/\1?v=$GIT_HASH\"/g" dist/index.html
-sed -i "s/\(\.css\)\"/\1?v=$GIT_HASH\"/g" dist/index.html
+sed -i.bak "s/\(\.js\)\"/\1?v=$GIT_HASH\"/g" dist/index.html
+sed -i.bak "s/\(\.css\)\"/\1?v=$GIT_HASH\"/g" dist/index.html
+rm -f dist/index.html.bak
 
 # Deploy to CDN
 print_status "Deploying to CDN..."

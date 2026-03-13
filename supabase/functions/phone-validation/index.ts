@@ -1,5 +1,25 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from '../_shared/cors.ts';
+
+const jsonHeaders = {
+  ...corsHeaders,
+  'Content-Type': 'application/json'
+};
+
+function buildBasicValidation(phoneNumber: string, degradedReason?: string) {
+  const digitsOnly = phoneNumber.replace(/\D/g, '');
+  const normalizedPhone = phoneNumber.startsWith('+') ? phoneNumber : `+${digitsOnly}`;
+
+  return {
+    valid: digitsOnly.length >= 10,
+    phoneNumber: normalizedPhone,
+    nationalFormat: phoneNumber,
+    source: 'basic',
+    confidence: 'low',
+    degradedReason
+  };
+}
+
 serve(async (req)=>{
   // Handle CORS
   if (req.method === 'OPTIONS') {
@@ -8,16 +28,37 @@ serve(async (req)=>{
     });
   }
   try {
-    const { phoneNumber, countryCode } = await req.json();
+    const rawBody = await req.text();
+    if (!rawBody.trim()) {
+      return new Response(JSON.stringify({
+        error: 'Phone number is required',
+        details: 'Empty request body'
+      }), {
+        status: 400,
+        headers: jsonHeaders
+      });
+    }
+
+    let parsedBody;
+    try {
+      parsedBody = JSON.parse(rawBody);
+    } catch (_error) {
+      return new Response(JSON.stringify({
+        error: 'Invalid JSON body',
+        details: 'Request body must be valid JSON'
+      }), {
+        status: 400,
+        headers: jsonHeaders
+      });
+    }
+
+    const { phoneNumber, countryCode } = parsedBody;
     if (!phoneNumber) {
       return new Response(JSON.stringify({
         error: 'Phone number is required'
       }), {
         status: 400,
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json'
-        }
+        headers: jsonHeaders
       });
     }
     // Get Twilio credentials from environment
@@ -25,17 +66,12 @@ serve(async (req)=>{
     const twilioAuthToken = Deno.env.get('TWILIO_AUTH_TOKEN');
     if (!twilioAccountSid || !twilioAuthToken) {
       // Fallback to basic validation if Twilio not configured
-      return new Response(JSON.stringify({
-        valid: phoneNumber.length >= 10,
-        phoneNumber: phoneNumber,
-        source: 'basic',
-        confidence: 'low'
-      }), {
+      return new Response(JSON.stringify(buildBasicValidation(
+        phoneNumber,
+        'twilio_credentials_missing'
+      )), {
         status: 200,
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json'
-        }
+        headers: jsonHeaders
       });
     }
     // Call Twilio Lookup API v2
@@ -62,6 +98,17 @@ serve(async (req)=>{
     if (!response.ok) {
       const errorText = await response.text();
       console.log('❌ Twilio error response:', errorText);
+
+      if (response.status === 401 || response.status === 403) {
+        return new Response(JSON.stringify(buildBasicValidation(
+          phoneNumber,
+          `twilio_lookup_auth_failed:${response.status}`
+        )), {
+          status: 200,
+          headers: jsonHeaders
+        });
+      }
+
       throw new Error(`Twilio API error: ${response.status} - ${errorText}`);
     }
     const data = await response.json();
@@ -81,10 +128,7 @@ serve(async (req)=>{
     };
     return new Response(JSON.stringify(result), {
       status: 200,
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'application/json'
-      }
+      headers: jsonHeaders
     });
   } catch (error) {
     console.error('Phone validation error:', error);
@@ -93,10 +137,7 @@ serve(async (req)=>{
       details: error.message
     }), {
       status: 500,
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'application/json'
-      }
+      headers: jsonHeaders
     });
   }
 });
