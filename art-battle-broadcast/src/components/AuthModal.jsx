@@ -15,10 +15,13 @@ import { useNavigate } from 'react-router-dom';
 import InternationalPhoneInput from './InternationalPhoneInput';
 
 const AuthModal = ({ open, onOpenChange, redirectTo = null }) => {
+  const [loginMethod, setLoginMethod] = useState('phone');
   const [phone, setPhone] = useState('');
   const [rawPhone, setRawPhone] = useState(''); // Store E.164 formatted phone
+  const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
-  const [step, setStep] = useState('phone'); // 'phone' or 'otp'
+  const [emailOtpType, setEmailOtpType] = useState('email');
+  const [step, setStep] = useState('target'); // 'target' or 'otp'
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [phoneValid, setPhoneValid] = useState(false);
@@ -34,22 +37,24 @@ const AuthModal = ({ open, onOpenChange, redirectTo = null }) => {
     if (open) {
       const focusActiveInput = () => {
         try {
-          if (step === 'phone') {
+          if (step === 'target') {
             // Multiple strategies to find and focus the phone input
             let inputElement = null;
-            
-            // Strategy 1: Use container class
-            const phoneContainer = document.querySelector('.phone-input-container');
-            if (phoneContainer) {
-              inputElement = phoneContainer.querySelector('input[type="tel"]');
-            }
-            
-            // Strategy 2: Find all tel inputs and use the last one
-            if (!inputElement) {
-              const telInputs = document.querySelectorAll('input[type="tel"]');
-              if (telInputs.length > 0) {
-                inputElement = telInputs[telInputs.length - 1];
+
+            if (loginMethod === 'phone') {
+              const phoneContainer = document.querySelector('.phone-input-container');
+              if (phoneContainer) {
+                inputElement = phoneContainer.querySelector('input[type="tel"]');
               }
+
+              if (!inputElement) {
+                const telInputs = document.querySelectorAll('input[type="tel"]');
+                if (telInputs.length > 0) {
+                  inputElement = telInputs[telInputs.length - 1];
+                }
+              }
+            } else {
+              inputElement = document.querySelector('input[type="email"]');
             }
             
             if (inputElement && inputElement.focus) {
@@ -68,23 +73,49 @@ const AuthModal = ({ open, onOpenChange, redirectTo = null }) => {
       setTimeout(focusActiveInput, 300);
       setTimeout(focusActiveInput, 500);
     }
-  }, [open, step]);
+  }, [loginMethod, open, step]);
+
+  const resetForm = () => {
+    setPhone('');
+    setRawPhone('');
+    setEmail('');
+    setOtp('');
+    setEmailOtpType('email');
+    setStep('target');
+    setError('');
+    setPhoneValid(false);
+    setLoading(false);
+  };
+
+  const isValidEmail = (value) => /\S+@\S+\.\S+/.test(value.trim());
 
   const handleSendOtp = async () => {
     setLoading(true);
     setError('');
     
     try {
-      // Use the E.164 formatted phone number from the international input
-      const phoneToUse = rawPhone || phone;
-      
-      if (!phoneToUse.startsWith('+')) {
-        throw new Error('Please select a country and enter a valid phone number');
+      if (loginMethod === 'email') {
+        const emailToUse = email.trim().toLowerCase();
+        if (!isValidEmail(emailToUse)) {
+          throw new Error('Enter a valid email address');
+        }
+
+        const { data, error } = await signInWithOtp(emailToUse, 'email', {
+          redirectTo: redirectTo || window.location.href
+        });
+        if (error) throw error;
+        setEmailOtpType(data?.verificationType || 'email');
+      } else {
+        const phoneToUse = rawPhone || phone;
+        
+        if (!phoneToUse.startsWith('+')) {
+          throw new Error('Please select a country and enter a valid phone number');
+        }
+        
+        const { error } = await signInWithOtp(phoneToUse, 'phone');
+        if (error) throw error;
       }
-      
-      const { error } = await signInWithOtp(phoneToUse);
-      if (error) throw error;
-      
+
       setStep('otp');
     } catch (err) {
       setError(err.message);
@@ -98,23 +129,28 @@ const AuthModal = ({ open, onOpenChange, redirectTo = null }) => {
     setError('');
     
     try {
-      // Use the same E.164 phone format as sendOtp
-      const phoneToUse = rawPhone || phone;
-      
-      if (!phoneToUse.startsWith('+')) {
-        throw new Error('Phone number format error');
+      if (loginMethod === 'email') {
+        const emailToUse = email.trim().toLowerCase();
+        if (!isValidEmail(emailToUse)) {
+          throw new Error('Email format error');
+        }
+
+        const { error } = await verifyOtp(emailToUse, otp, 'email', emailOtpType);
+        if (error) throw error;
+      } else {
+        const phoneToUse = rawPhone || phone;
+        
+        if (!phoneToUse.startsWith('+')) {
+          throw new Error('Phone number format error');
+        }
+        
+        const { error } = await verifyOtp(phoneToUse, otp, 'phone');
+        if (error) throw error;
       }
-      
-      const { error } = await verifyOtp(phoneToUse, otp);
-      if (error) throw error;
-      
+
       // Success - close modal
       onOpenChange(false);
-      setPhone('');
-      setRawPhone('');
-      setOtp('');
-      setStep('phone');
-      setPhoneValid(false);
+      resetForm();
       
       // Redirect to intended URL if provided
       if (redirectTo) {
@@ -140,6 +176,9 @@ const AuthModal = ({ open, onOpenChange, redirectTo = null }) => {
     // console.log('📞 AuthModal: Phone state updated:', { phoneValid: newValid, display: data.nationalFormat, backend: data.e164Format }); // REMOVED: Too verbose
   };
 
+  const targetLabel = loginMethod === 'email' ? email.trim().toLowerCase() : (rawPhone || phone);
+  const sendDisabled = loading || (loginMethod === 'email' ? !isValidEmail(email) : !phoneValid);
+
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Content 
@@ -153,9 +192,11 @@ const AuthModal = ({ open, onOpenChange, redirectTo = null }) => {
         </Dialog.Title>
         
         <Dialog.Description size="2" mb="4">
-          {step === 'phone' 
-            ? 'Enter your phone to get your boost code'
-            : 'Enter the code we just texted you'
+          {step === 'target' 
+            ? loginMethod === 'email'
+              ? 'Enter your email to get your boost code'
+              : 'Enter your phone to get your boost code'
+            : `Enter the code we sent to your ${loginMethod === 'email' ? 'email' : 'phone'}`
           }
         </Dialog.Description>
 
@@ -169,26 +210,66 @@ const AuthModal = ({ open, onOpenChange, redirectTo = null }) => {
             </Callout.Root>
           )}
 
-          {step === 'phone' ? (
+          {step === 'target' ? (
             <>
+              <Flex gap="2">
+                <Button
+                  size="2"
+                  variant={loginMethod === 'phone' ? 'solid' : 'soft'}
+                  onClick={() => {
+                    setLoginMethod('phone');
+                    setStep('target');
+                    setOtp('');
+                    setError('');
+                  }}
+                  disabled={loading}
+                >
+                  Phone
+                </Button>
+                <Button
+                  size="2"
+                  variant={loginMethod === 'email' ? 'solid' : 'soft'}
+                  onClick={() => {
+                    setLoginMethod('email');
+                    setStep('target');
+                    setOtp('');
+                    setError('');
+                  }}
+                  disabled={loading}
+                >
+                  Email
+                </Button>
+              </Flex>
               <Box>
                 <Text size="2" weight="medium" mb="2">
-                  Phone Number
+                  {loginMethod === 'email' ? 'Email Address' : 'Phone Number'}
                 </Text>
-                <InternationalPhoneInput
-                  ref={phoneInputRef}
-                  value={phone}
-                  onChange={handlePhoneChange}
-                  onKeyPress={(e) => e.key === 'Enter' && phoneValid && handleSendOtp()}
-                  placeholder="Enter your phone number"
-                  autoComplete="tel"
-                />
+                {loginMethod === 'email' ? (
+                  <TextField.Root
+                    size="3"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && !sendDisabled && handleSendOtp()}
+                    placeholder="you@example.com"
+                    autoComplete="email"
+                  />
+                ) : (
+                  <InternationalPhoneInput
+                    ref={phoneInputRef}
+                    value={phone}
+                    onChange={handlePhoneChange}
+                    onKeyPress={(e) => e.key === 'Enter' && phoneValid && handleSendOtp()}
+                    placeholder="Enter your phone number"
+                    autoComplete="tel"
+                  />
+                )}
               </Box>
               
               <Button 
                 size="3" 
                 onClick={handleSendOtp}
-                disabled={loading || !phoneValid}
+                disabled={sendDisabled}
                 loading={loading}
               >
                 Send Verification Code
@@ -213,7 +294,7 @@ const AuthModal = ({ open, onOpenChange, redirectTo = null }) => {
                   style={{ maxWidth: '150px', margin: '0 auto' }}
                 />
                 <Text size="1" color="gray" mt="1" style={{ display: 'block' }}>
-                  Code sent to {rawPhone || phone}
+                  Code sent to {targetLabel}
                 </Text>
               </Box>
               
@@ -231,16 +312,13 @@ const AuthModal = ({ open, onOpenChange, redirectTo = null }) => {
                   size="2" 
                   variant="ghost"
                   onClick={() => {
-                    setStep('phone');
+                    setStep('target');
                     setOtp('');
                     setError('');
-                    setPhone('');
-                    setRawPhone('');
-                    setPhoneValid(false);
                   }}
                   disabled={loading}
                 >
-                  Use Different Number
+                  {loginMethod === 'email' ? 'Use Different Email' : 'Use Different Number'}
                 </Button>
               </Flex>
             </>
