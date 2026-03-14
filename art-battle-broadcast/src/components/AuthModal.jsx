@@ -14,6 +14,9 @@ import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import InternationalPhoneInput from './InternationalPhoneInput';
 
+const OTP_MIN_LENGTH = 6;
+const OTP_MAX_LENGTH = 8;
+
 const AuthModal = ({ open, onOpenChange, redirectTo = null }) => {
   const [loginMethod, setLoginMethod] = useState('phone');
   const [phone, setPhone] = useState('');
@@ -284,9 +287,9 @@ const AuthModal = ({ open, onOpenChange, redirectTo = null }) => {
                 <TextField.Root
                   ref={otpInputRef}
                   size="3"
-                  placeholder="123456"
+                  placeholder="12345678"
                   value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, OTP_MAX_LENGTH))}
                   onKeyPress={(e) => e.key === 'Enter' && handleVerifyOtp()}
                   type="tel"
                   inputMode="numeric"
@@ -294,7 +297,7 @@ const AuthModal = ({ open, onOpenChange, redirectTo = null }) => {
                   style={{ maxWidth: '150px', margin: '0 auto' }}
                 />
                 <Text size="1" color="gray" mt="1" style={{ display: 'block' }}>
-                  Code sent to {targetLabel}
+                  Enter the {OTP_MIN_LENGTH}-{OTP_MAX_LENGTH} digit code sent to {targetLabel}
                 </Text>
               </Box>
               
@@ -302,7 +305,7 @@ const AuthModal = ({ open, onOpenChange, redirectTo = null }) => {
                 <Button 
                   size="3" 
                   onClick={handleVerifyOtp}
-                  disabled={loading || otp.length !== 6}
+                  disabled={loading || otp.length < OTP_MIN_LENGTH}
                   loading={loading}
                 >
                   Verify Code
