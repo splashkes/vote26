@@ -28,5 +28,8 @@ verify_jwt = false
 [functions.auth-metrics]
 verify_jwt = false
 
+[functions.auth-send-sms]
+verify_jwt = false
+
 [functions.broadcast-send-email-otp]
 verify_jwt = false
